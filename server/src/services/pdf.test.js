@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import pdfParse from 'pdf-parse';
-import { generateReportPdf } from './pdf.js';
+import { generateReportPdf, splitBoldSegments } from './pdf.js';
 
 async function pdfText(buf) {
   const { text } = await pdfParse(buf);
@@ -51,6 +51,22 @@ Bu bir test raporudur.
     const text = await pdfText(buf);
     expect(text).not.toContain('####');
     expect(text).toContain('Aktörler ve Niyetler');
+  });
+
+  it('splitBoldSegments applies bold to the right segment, not just the right count', () => {
+    // Regression test: filtering empty strings before mapping index parity
+    // to bold status re-indexes the array and scrambles which segment is
+    // bold. This must assert on the *specific* segment, not just presence.
+    expect(splitBoldSegments('**Etiket:** açıklama')).toEqual([
+      { text: 'Etiket:', bold: true },
+      { text: ' açıklama', bold: false },
+    ]);
+    expect(splitBoldSegments('**Tümü kalın**')).toEqual([
+      { text: 'Tümü kalın', bold: true },
+    ]);
+    expect(splitBoldSegments('normal metin')).toEqual([
+      { text: 'normal metin', bold: false },
+    ]);
   });
 
   it('strips ** markers from mid-line bold instead of showing literal asterisks', async () => {

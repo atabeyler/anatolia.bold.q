@@ -7,6 +7,19 @@ async function documentXml(buf) {
   return zip.file('word/document.xml').async('string');
 }
 
+// Extracts [{ text, bold }] per <w:r> run, in document order, so a test can
+// assert bold is on the *specific* run it belongs to -- not just that a
+// <w:b/> exists somewhere earlier in the XML (a loose match like that let a
+// real bug -- bold applied to the wrong split segment -- pass unnoticed).
+function runs(xml) {
+  const matches = [...xml.matchAll(/<w:r>(?:(?!<w:r>).)*?<\/w:r>/gs)];
+  return matches.map((m) => {
+    const chunk = m[0];
+    const text = [...chunk.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/gs)].map((t) => t[1]).join('');
+    return { text, bold: /<w:b\/>/.test(chunk) };
+  });
+}
+
 describe('generateReportDocx', () => {
   it('produces a valid .docx (ZIP) buffer from markdown content', async () => {
     const content = `## YÖNETİCİ ÖZETİ
@@ -62,7 +75,9 @@ Bu bir test raporudur.
     });
     const xml = await documentXml(buf);
     expect(xml).not.toContain('**');
-    expect(xml).toMatch(/<w:b\/>[\s\S]*?Rosatom:/);
+    const bodyRuns = runs(xml).filter((r) => r.text.includes('Rosatom') || r.text.includes('uzun vadeli'));
+    expect(bodyRuns.find((r) => r.text === 'Rosatom:')?.bold).toBe(true);
+    expect(bodyRuns.find((r) => r.text.includes('uzun vadeli'))?.bold).toBe(false);
   });
 
   it('renders a standalone --- divider as a rule instead of literal dashes', async () => {
@@ -74,7 +89,7 @@ Bu bir test raporudur.
     expect(xml).not.toMatch(/<w:t[^>]*>-{3,}<\/w:t>/);
   });
 
-  it('strips ** markers inside table cells and bullets', async () => {
+  it('strips ** markers inside table cells and bullets, applying bold to the right run', async () => {
     const content = `| Senaryo | Olasılık |
 |---|---|
 | **SENARYO-A** | %50 |
@@ -86,7 +101,9 @@ Bu bir test raporudur.
     });
     const xml = await documentXml(buf);
     expect(xml).not.toContain('**');
-    expect(xml).toContain('SENARYO-A');
-    expect(xml).toContain('Etiket:');
+    const allRuns = runs(xml);
+    expect(allRuns.find((r) => r.text === 'SENARYO-A')?.bold).toBe(true);
+    expect(allRuns.find((r) => r.text === 'Etiket:')?.bold).toBe(true);
+    expect(allRuns.find((r) => r.text.includes('açıklama'))?.bold).toBe(false);
   });
 });

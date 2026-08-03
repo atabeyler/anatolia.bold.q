@@ -29,10 +29,14 @@ function styledRun(text, opts = {}) {
 // mid-line markdown bold (e.g. "**Etiket:** açıklama devamı") renders as
 // actual Word bold instead of the literal asterisks showing up in the text.
 function inlineRuns(text, opts = {}) {
-  const parts = text.split(/\*\*(.+?)\*\*/g);
-  return parts
-    .filter((part) => part.length)
-    .map((part, i) => styledRun(part, { ...opts, bold: opts.bold || i % 2 === 1 }));
+  // Odd split indices are the captured **bold** groups -- determine bold
+  // status per part *before* dropping empty strings, otherwise filtering
+  // first re-indexes the array and scrambles which parts are bold.
+  return text
+    .split(/\*\*(.+?)\*\*/g)
+    .map((part, i) => ({ part, bold: opts.bold || i % 2 === 1 }))
+    .filter(({ part }) => part.length)
+    .map(({ part, bold }) => styledRun(part, { ...opts, bold }));
 }
 
 function p(text, opts = {}) {

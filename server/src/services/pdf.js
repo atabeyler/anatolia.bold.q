@@ -54,14 +54,25 @@ function drawCoverPage(doc, { category, title, userCode, aiProvider }) {
   doc.addPage();
 }
 
+// Splits a line on **bold** spans into [{ text, bold }] parts. Odd split
+// indices are the captured **bold** groups -- bold status must be
+// determined per part *before* dropping empty strings, otherwise filtering
+// first re-indexes the array and scrambles which parts are bold.
+export function splitBoldSegments(text) {
+  return String(text)
+    .split(/\*\*(.+?)\*\*/g)
+    .map((part, i) => ({ text: part, bold: i % 2 === 1 }))
+    .filter((seg) => seg.text.length);
+}
+
 // Writes a line with mid-line **bold** spans as alternating normal/bold
 // font runs (pdfkit continued-text chaining), instead of literal asterisks.
 function writeInline(doc, text, { size = 10.5, color = COLORS.black, align } = {}) {
-  const parts = String(text).split(/\*\*(.+?)\*\*/g).filter((s) => s.length);
+  const parts = splitBoldSegments(text);
   if (!parts.length) { doc.text('', { align }); return; }
-  parts.forEach((part, i) => {
+  parts.forEach(({ text: part, bold }, i) => {
     const isLast = i === parts.length - 1;
-    doc.font(i % 2 === 1 ? FONT_BOLD : FONT).fontSize(size).fillColor(color)
+    doc.font(bold ? FONT_BOLD : FONT).fontSize(size).fillColor(color)
       .text(part, { continued: !isLast, align });
   });
 }
