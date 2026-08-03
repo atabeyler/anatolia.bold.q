@@ -1,0 +1,67 @@
+services:
+  - type: web
+    name: anatolia-q
+    runtime: node
+    plan: free
+    buildCommand: "rm -rf client/dist client/node_modules/.vite && npm install --prefix server && npm install --prefix client && npm run build --prefix client && pip3 install -r server/quantum/requirements.txt"
+    startCommand: "npm run start --prefix server"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Pins the Python build toolchain Render provisions. Without this,
+      # Render's default Python (currently 3.14) has no prebuilt wheel for
+      # qiskit's symengine dependency, so pip falls back to compiling it
+      # from source -- which then fails because the SymEngine C++ library
+      # itself isn't installed. 3.11 has long had working symengine wheels
+      # (it's what both the original Render setup and the later Fly.io
+      # Docker image, via Debian bookworm's system python3, used).
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Reuses the existing "anatolia-dbs" Postgres instance (Render's free
+      # plan allows only one active free database per account) instead of
+      # provisioning a new one here — set this to its Internal Database URL
+      # from the Render dashboard.
+      - key: DATABASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CENTER_EMAIL
+        value: info@boldkimya.com.tr
+      - key: SHARED_PASSWORD
+        sync: false
+      - key: APP_URL
+        sync: false
+      # Aşağıdakiler opsiyonel — tanımlanmazsa uygulama otomatik olarak
+      # bellek/yerel disk tabanlı davranışa düşer, hiçbir şey bozulmaz.
+      - key: REDIS_URL
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: IBM_QUANTUM_TOKEN
+        sync: false
+      - key: IBM_QUANTUM_INSTANCE
+        sync: false
+      - key: IBM_QUANTUM_WAIT_SECONDS
+        value: "60"

@@ -1,0 +1,103 @@
+﻿import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'path';
+import pinoHttp from 'pino-http';
+import { fileURLToPath } from 'url';
+import { logger } from './lib/logger.js';
+import { attachSentryErrorHandler } from './lib/sentry.js';
+import { initDatabase, initMemoryTables } from './services/database.js';
+import { initSocketHandlers } from './services/socket.js';
+import authRoutes from './routes/auth.js';
+import analysisRoutes from './routes/analysis.js';
+import emergencyRoutes from './routes/emergency.js';
+import historyRoutes from './routes/history.js';
+import voiceRoutes from './routes/voice.js';
+import memoryRoutes from './routes/memory.js';
+import filesRoutes from './routes/files.js';
+import weatherRoutes from './routes/weather.js';
+import { startMorningBriefScheduler } from './services/morningBrief.js';
+import { startSelfPing } from './services/selfPing.js';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// In production, restrict cross-origin access to the app's own deployed
+// origin (APP_URL) instead of reflecting any origin. Locally (no APP_URL /
+// non-production) all origins are still allowed for developer convenience.
+const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL] : true;
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
+
+app.use(cors({ origin: allowedOrigins }));
+app.use(pinoHttp({ logger }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health check (for UptimeRobot)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', uptime: process.uptime(), timestamp: Date.now() });
+});
+
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/analysis', analysisRoutes);
+app.use('/api/emergency', emergencyRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/voice',
+  express.raw({ type: ['audio/*', 'application/octet-stream'], limit: '25mb' }),
+  voiceRoutes
+);
+app.use('/api/memory', memoryRoutes);
+app.use('/api/files', filesRoutes);
+app.use('/api/weather', weatherRoutes);
+
+// Socket.IO handlers
+initSocketHandlers(io);
+app.set('io', io);
+
+// Keeps the Render free-tier instance warm (see services/selfPing.js) — no-op off Render
+startSelfPing();
+
+// After all routes — forwards uncaught errors to Sentry (no-op if SENTRY_DSN is unset)
+attachSentryErrorHandler(app);
+
+// Production: serve React build
+if (process.env.NODE_ENV === 'production') {
+  const clientBuildPath = path.join(__dirname, '../../client/dist');
+  app.use(express.static(clientBuildPath));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+}
+
+const PORT = process.env.PORT || 10000;
+
+// The HTTP port is opened immediately, independent of DB startup, so a slow
+// or unreachable database never delays (or fails) the platform's readiness
+// probe -- DB-backed routes already guard on isDbConfigured()/getDb() being
+// null and degrade gracefully until initDatabase() below resolves.
+server.listen(PORT, () => {
+  logger.info({ port: PORT }, 'ANATOLIA-Q server running');
+});
+
+initDatabase()
+  .then(() => initMemoryTables())
+  .then(() => {
+    startMorningBriefScheduler();
+    logger.info('Database ready');
+  })
+  .catch(err => {
+    logger.error({ err }, 'Database initialization failed — continuing without DB');
+  });
+

@@ -1,0 +1,18 @@
+name: Keep Render Instance Awake
+
+on:
+  schedule:
+    # Offset from the top of the hour (:00/:10/:20...) since GitHub Actions
+    # schedules are most likely to be delayed or dropped right at those marks.
+    - cron: "4,14,24,34,44,54 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping health endpoint
+        # --retry survives a cold start: the first request can take 30-60s
+        # to wake the instance, well past a single request's reasonable timeout.
+        run: curl -fsS --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors https://anatolia-q.onrender.com/api/health

@@ -1,0 +1,19 @@
+﻿node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+*.log
+.env
+server/.env
+__pycache__/
+*.pyc
+
+# Desktop (Tauri) — Rust build output and CI-staged sidecar binaries.
+# The sidecars (bundled Node server + PyInstaller quantum worker) are built
+# fresh per platform in .github/workflows/desktop-release.yml, never committed.
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/src-tauri/binaries/*
+!desktop/src-tauri/binaries/.gitkeep
+desktop/src-tauri/resources/
+desktop/node_modules/
