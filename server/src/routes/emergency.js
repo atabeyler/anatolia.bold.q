@@ -1,10 +1,12 @@
 import express from 'express';
-import { sendEmergencyAlert } from '../services/email.js';
+import { sendEmergencyAlert, sendEmergencyBroadcastEmail } from '../services/email.js';
 import { getDb, isDbConfigured } from '../db/client.js';
+import { getUserEmailRecipients } from '../services/database.js';
 import { emergencyLogs } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getOptionalUserCode } from '../lib/optionalAuth.js';
 import { publicActionLimiter } from '../middleware/rateLimit.js';
+import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -62,6 +64,13 @@ router.post('/users', authMiddleware, publicActionLimiter, async (req, res) => {
         timestamp: Date.now()
       });
     }
+
+    // Also email every registered user with an address on file, active or
+    // not -- socket broadcast alone only reaches whoever happens to be
+    // connected right now, and an inactive user has no other way to see it.
+    getUserEmailRecipients()
+      .then((recipients) => recipients.length && sendEmergencyBroadcastEmail(userCode, message, recipients))
+      .catch((err) => logger.warn({ err }, '[Emergency] Broadcast email failed'));
 
     res.json({ success: true, message: 'Tüm kullanıcılara iletildi.' });
   } catch (err) {

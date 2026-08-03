@@ -156,12 +156,12 @@ export const api = {
 
 export const adminApi = {
   listUsers: () => req('/api/auth/admin/users'),
-  addUser: (userCode, password, nickname, isAdmin = false) =>
-    req('/api/auth/admin/users', { method: 'POST', body: JSON.stringify({ userCode, password, nickname, isAdmin }) }),
+  addUser: (userCode, password, nickname, isAdmin = false, email = '') =>
+    req('/api/auth/admin/users', { method: 'POST', body: JSON.stringify({ userCode, password, nickname, isAdmin, email }) }),
   setBlocked: (userCode, blocked) =>
     req(`/api/auth/admin/users/${userCode}`, { method: 'PATCH', body: JSON.stringify({ blocked }) }),
-  updateUser: (userCode, { nickname, password, isAdmin } = {}) =>
-    req(`/api/auth/admin/users/${userCode}`, { method: 'PATCH', body: JSON.stringify({ nickname, password, isAdmin }) }),
+  updateUser: (userCode, { nickname, password, isAdmin, email } = {}) =>
+    req(`/api/auth/admin/users/${userCode}`, { method: 'PATCH', body: JSON.stringify({ nickname, password, isAdmin, email }) }),
   deleteUser: (userCode) =>
     req(`/api/auth/admin/users/${userCode}`, { method: 'DELETE' }),
   auditLog: () => req('/api/auth/admin/audit-log'),

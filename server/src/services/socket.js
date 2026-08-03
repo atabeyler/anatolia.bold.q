@@ -2,7 +2,8 @@ import { and, asc, eq, or } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { messages } from '../db/schema.js';
-import { sendVideoMeetingStartedAlert } from './email.js';
+import { sendVideoMeetingStartedAlert, sendDirectMessageEmail, sendVideoMeetingStartedToUsers } from './email.js';
+import { getUserEmailByNickname, getUserEmailRecipients } from './database.js';
 import * as onlineState from '../lib/onlineState.js';
 import { logger } from '../lib/logger.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
@@ -66,7 +67,15 @@ export function initSocketHandlers(io) {
       const payload = { from, message, timestamp: Date.now() };
       if (to) {
         const targetSocket = await onlineState.getOnlineSocketId(to);
-        if (targetSocket) io.to(targetSocket).emit('chat:receive', payload);
+        if (targetSocket) {
+          io.to(targetSocket).emit('chat:receive', payload);
+        } else {
+          // Recipient isn't connected right now -- their only other way to
+          // see this message is email, so notify them there instead.
+          getUserEmailByNickname(to)
+            .then((email) => email && sendDirectMessageEmail(email, to, from, message))
+            .catch((err) => logger.warn({ err }, '[Socket] DM email notify failed'));
+        }
       } else {
         socket.broadcast.emit('chat:receive', payload);
       }
@@ -128,6 +137,11 @@ export function initSocketHandlers(io) {
       const roomId = 'acil-toplanti';
       const startedAt = Date.now();
       sendVideoMeetingStartedAlert(socket.nickname).catch(() => {});
+      // Also email every registered user (active or not) -- the socket/UI
+      // notifications below only reach clients that are currently connected.
+      getUserEmailRecipients()
+        .then((recipients) => recipients.length && sendVideoMeetingStartedToUsers(socket.nickname, recipients))
+        .catch((err) => logger.warn({ err }, '[Socket] Meeting-start email failed'));
       activeMeetingByRoom.set(roomId, {
         host: socket.nickname,
         startedAt,

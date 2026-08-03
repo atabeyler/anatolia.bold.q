@@ -46,6 +46,7 @@ function AuditLogTab() {
 
 function EditRow({ u, onCancel, onSaved, setError }) {
   const [nickname, setNickname] = useState(u.nickname || '');
+  const [email, setEmail] = useState(u.email || '');
   const [isAdmin, setIsAdmin] = useState(!!u.is_admin);
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -57,6 +58,7 @@ function EditRow({ u, onCancel, onSaved, setError }) {
     try {
       await adminApi.updateUser(u.user_code, {
         nickname,
+        email,
         isAdmin,
         password: password || undefined,
       });
@@ -78,6 +80,9 @@ function EditRow({ u, onCancel, onSaved, setError }) {
         <input type="password" placeholder="Yeni şifre (opsiyonel)" value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-1.5 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
+        <input type="email" placeholder="E-posta (bildirimler için)" value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="col-span-2 bg-black/30 border border-cyan-300/20 rounded px-2.5 py-1.5 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
       </div>
       <label className="flex items-center gap-2 text-sm text-cyan-100/80">
         <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
@@ -103,7 +108,7 @@ export default function UserManagementModal({ onClose }) {
   const [error, setError] = useState('');
   const [busyCode, setBusyCode] = useState(null);
   const [editingCode, setEditingCode] = useState(null);
-  const [form, setForm] = useState({ userCode: '', password: '', nickname: '', isAdmin: false });
+  const [form, setForm] = useState({ userCode: '', password: '', nickname: '', email: '', isAdmin: false });
   const [adding, setAdding] = useState(false);
   const [tab, setTab] = useState('users');
 
@@ -128,8 +133,8 @@ export default function UserManagementModal({ onClose }) {
     setAdding(true);
     setError('');
     try {
-      await adminApi.addUser(form.userCode, form.password, form.nickname, form.isAdmin);
-      setForm({ userCode: '', password: '', nickname: '', isAdmin: false });
+      await adminApi.addUser(form.userCode, form.password, form.nickname, form.isAdmin, form.email);
+      setForm({ userCode: '', password: '', nickname: '', email: '', isAdmin: false });
       await load();
     } catch (e) {
       setError(e.message);
@@ -210,12 +215,19 @@ export default function UserManagementModal({ onClose }) {
             <input placeholder="Rumuz (opsiyonel)" value={form.nickname}
               onChange={(e) => setForm({ ...form, nickname: e.target.value })}
               className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-2 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
+            <input type="email" placeholder="E-posta (bildirimler için)" value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-2 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
             <label className="flex items-center gap-2 text-sm text-cyan-100/80 px-1">
               <input type="checkbox" checked={form.isAdmin}
                 onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} />
               Admin yetkisi
             </label>
           </div>
+          <p className="text-[10px] text-gold/40 mt-2 leading-relaxed">
+            E-posta girilirse, bu kullanıcı çevrimdışıyken de acil durum bildirimleri, mesajlar ve
+            görüntülü toplantı başlatma uyarıları e-posta ile iletilir.
+          </p>
           <button type="submit" disabled={adding}
             className="mt-2.5 w-full sm:w-auto px-4 py-2 text-xs tracking-widest uppercase rounded bg-cyan-500/20 border border-cyan-300/40 text-cyan-100 hover:bg-cyan-500/30 transition disabled:opacity-50">
             {adding ? 'Ekleniyor…' : 'Ekle'}
@@ -240,6 +252,9 @@ export default function UserManagementModal({ onClose }) {
                     {u.is_admin && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">ADMIN</span>}
                     {u.blocked && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-400/30">ENGELLİ</span>}
                   </div>
+                  {u.email
+                    ? <div className="text-[10px] text-cyan-100/40 font-mono mt-0.5">{u.email}</div>
+                    : <div className="text-[10px] text-amber-400/60 mt-0.5">E-posta yok — bildirimler iletilemez</div>}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button onClick={() => setEditingCode(u.user_code)} disabled={busyCode === u.user_code}

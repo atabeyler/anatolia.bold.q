@@ -97,8 +97,9 @@ export async function initDatabase() {
     );
   `);
 
-  // auth_users may already exist from before the "blocked" column was added.
+  // auth_users may already exist from before the "blocked"/"email" columns were added.
   await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE;`);
+  await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email VARCHAR(255);`);
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -128,6 +129,35 @@ export async function initDatabase() {
 export async function query(text, params) {
   const p = getPool();
   return p.query(text, params);
+}
+
+// Email notification recipients -- users who are offline/inactive still need
+// a way to see emergency broadcasts, direct messages, and meeting-start
+// alerts, so these back the "also email everyone, active or not" behavior
+// in routes/emergency.js and services/socket.js.
+export async function getUserEmailRecipients() {
+  if (!process.env.DATABASE_URL) return [];
+  try {
+    const { rows } = await query("SELECT user_code, nickname, email FROM auth_users WHERE email IS NOT NULL AND email <> ''");
+    return rows;
+  } catch (err) {
+    logger.warn({ err }, '[Database] Failed to load user email recipients');
+    return [];
+  }
+}
+
+export async function getUserEmailByNickname(nickname) {
+  if (!process.env.DATABASE_URL || !nickname) return null;
+  try {
+    const { rows } = await query(
+      "SELECT email FROM auth_users WHERE nickname = $1 AND email IS NOT NULL AND email <> '' LIMIT 1",
+      [nickname]
+    );
+    return rows[0]?.email || null;
+  } catch (err) {
+    logger.warn({ err }, '[Database] Failed to load user email by nickname');
+    return null;
+  }
 }
 
 // Best-effort admin action trail -- never blocks the action it's logging on failure.

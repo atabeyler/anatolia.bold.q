@@ -40,6 +40,7 @@ export const authUsers = pgTable('auth_users', {
   userCode: varchar('user_code', { length: 50 }).notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   nickname: varchar('nickname', { length: 100 }),
+  email: varchar('email', { length: 255 }),
   isAdmin: boolean('is_admin').default(false),
   blocked: boolean('blocked').default(false),
   createdAt: timestamp('created_at').defaultNow(),

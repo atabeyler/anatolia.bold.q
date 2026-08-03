@@ -4,8 +4,21 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
 const sendEmergencyAlertMock = vi.fn(async () => {});
-vi.mock('../services/email.js', () => ({ sendEmergencyAlert: (...args) => sendEmergencyAlertMock(...args) }));
+const sendEmergencyBroadcastEmailMock = vi.fn(async () => {});
+const getUserEmailRecipientsMock = vi.fn(async () => []);
+vi.mock('../services/email.js', () => ({
+  sendEmergencyAlert: (...args) => sendEmergencyAlertMock(...args),
+  sendEmergencyBroadcastEmail: (...args) => sendEmergencyBroadcastEmailMock(...args),
+}));
+vi.mock('../services/database.js', () => ({ getUserEmailRecipients: (...args) => getUserEmailRecipientsMock(...args) }));
 vi.mock('../db/client.js', () => ({ isDbConfigured: () => false, getDb: () => { throw new Error('not used when isDbConfigured() is false'); } }));
+// Rate limiting isn't what these tests exercise -- and its key/bucketing
+// behavior for supertest's synthetic requests isn't fully deterministic
+// (varies with IPv4 vs IPv6 loopback), so mock it out to a no-op here.
+vi.mock('../middleware/rateLimit.js', () => ({
+  publicActionLimiter: (req, res, next) => next(),
+  uploadLimiter: (req, res, next) => next(),
+}));
 
 const { default: emergencyRouter } = await import('./emergency.js');
 const { JWT_SECRET } = await import('../lib/jwtSecret.js');
@@ -26,7 +39,14 @@ function token(userCode = 'BOLD-001') {
 
 beforeEach(() => {
   sendEmergencyAlertMock.mockClear();
+  sendEmergencyBroadcastEmailMock.mockClear();
+  getUserEmailRecipientsMock.mockClear();
+  getUserEmailRecipientsMock.mockResolvedValue([]);
 });
+
+async function flushMicrotasks() {
+  await new Promise((resolve) => setImmediate(resolve));
+}
 
 describe('POST /api/emergency/center (no auth required)', () => {
   it('accepts a message with no Authorization header, attributed to ANONİM', async () => {
@@ -88,6 +108,33 @@ describe('POST /api/emergency/users (requires login -- broadcasts to every conne
     const app = buildApp();
     const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token()}`).send({ message: '   ' });
     expect(res.status).toBe(400);
+  });
+
+  it('also emails every registered user with an email on file, active or not', async () => {
+    getUserEmailRecipientsMock.mockResolvedValue([
+      { user_code: 'BOLD-003', nickname: 'BOLD-003', email: 'u3@example.com' },
+      { user_code: 'BOLD-004', nickname: 'BOLD-004', email: 'u4@example.com' },
+    ]);
+    const app = buildApp();
+    const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token('BOLD-002')}`).send({ message: 'herkese haber' });
+    expect(res.status).toBe(200);
+    await flushMicrotasks();
+    expect(sendEmergencyBroadcastEmailMock).toHaveBeenCalledWith(
+      'BOLD-002',
+      'herkese haber',
+      [
+        { user_code: 'BOLD-003', nickname: 'BOLD-003', email: 'u3@example.com' },
+        { user_code: 'BOLD-004', nickname: 'BOLD-004', email: 'u4@example.com' },
+      ]
+    );
+  });
+
+  it('does not attempt to email anyone when no users have an email on file', async () => {
+    getUserEmailRecipientsMock.mockResolvedValue([]);
+    const app = buildApp();
+    await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token()}`).send({ message: 'test' });
+    await flushMicrotasks();
+    expect(sendEmergencyBroadcastEmailMock).not.toHaveBeenCalled();
   });
 });
 

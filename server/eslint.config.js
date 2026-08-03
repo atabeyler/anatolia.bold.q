@@ -15,6 +15,7 @@ export default tseslint.config(
         __dirname: 'readonly',
         setTimeout: 'readonly',
         setInterval: 'readonly',
+        setImmediate: 'readonly',
         clearTimeout: 'readonly',
         clearInterval: 'readonly',
         global: 'writable',

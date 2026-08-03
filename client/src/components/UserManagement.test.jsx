@@ -62,7 +62,7 @@ describe('UserManagementModal', () => {
     fireEvent.change(screen.getByPlaceholderText('Şifre (min 8 karakter)'), { target: { value: 'longenough' } });
     fireEvent.click(screen.getByText('Ekle'));
 
-    await waitFor(() => expect(adminApi.addUser).toHaveBeenCalledWith('NEW1', 'longenough', '', false));
+    await waitFor(() => expect(adminApi.addUser).toHaveBeenCalledWith('NEW1', 'longenough', '', false, ''));
     expect(adminApi.listUsers).toHaveBeenCalledTimes(2); // initial load + reload after add
   });
 
@@ -101,7 +101,7 @@ describe('UserManagementModal', () => {
     fireEvent.change(nicknameInput, { target: { value: 'YENİ-ADI' } });
     fireEvent.click(screen.getByText('Kaydet'));
 
-    await waitFor(() => expect(adminApi.updateUser).toHaveBeenCalledWith('U1', { nickname: 'YENİ-ADI', isAdmin: false, password: undefined }));
+    await waitFor(() => expect(adminApi.updateUser).toHaveBeenCalledWith('U1', { nickname: 'YENİ-ADI', email: '', isAdmin: false, password: undefined }));
   });
 
   it('switches to the audit-log tab and lists entries', async () => {

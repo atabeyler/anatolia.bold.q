@@ -147,6 +147,119 @@ export async function sendEmergencyAlert(userCode, message, region = null) {
   });
 }
 
+/**
+ * Emergency broadcast ("Kullanıcılara Bildir") also emailed to every
+ * registered user with an email on file -- not just whoever happens to be
+ * online at that moment, since an inactive user has no other way to see it.
+ * Sent as individual messages (not one email with everyone in the To/Cc
+ * list) so recipients don't see each other's addresses.
+ */
+export async function sendEmergencyBroadcastEmail(fromUserCode, message, recipients) {
+  if (!resend || !recipients?.length) return { skipped: true };
+  const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+
+  const html = (nickname) => `
+<!DOCTYPE html>
+<html><body style="margin:0;background:#0a0e1a;font-family:'Times New Roman',serif;color:#e8e8e8;">
+  <div style="max-width:600px;margin:40px auto;background:#1a0a0a;border:2px solid #ff4444;border-radius:8px;padding:30px;">
+    <h1 style="color:#ff4444;margin:0 0 16px;text-align:center;letter-spacing:3px;">🚨 ACİL DURUM BİLDİRİMİ 🚨</h1>
+    <p style="font-size:14px;">Sayın ${escapeHtml(nickname || '')},</p>
+    <table style="width:100%;font-size:14px;line-height:1.8;background:#11172a;padding:16px;border-radius:4px;">
+      <tr><td><strong>Gönderen:</strong></td><td>${escapeHtml(fromUserCode || 'ANONİM')}</td></tr>
+      <tr><td><strong>Tarih/Saat:</strong></td><td>${now}</td></tr>
+    </table>
+    <div style="margin-top:20px;background:#11172a;padding:16px;border-left:4px solid #ff4444;">
+      <strong style="color:#ff4444;">MESAJ:</strong>
+      <p style="white-space:pre-wrap;margin:10px 0 0;font-size:15px;">${escapeHtml(message)}</p>
+    </div>
+    <p style="margin-top:20px;font-size:12px;color:#aaa;">
+      Bu bildirimi sistemde o an çevrimiçi olmasanız bile aldınız -- ANATOLIA-Q acil durum
+      bildirimlerini tüm kayıtlı kullanıcılara e-posta ile de iletir.
+    </p>
+    <p style="margin-top:30px;font-size:11px;color:#666;text-align:center;">
+      Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
+    </p>
+  </div>
+</body></html>`;
+
+  return Promise.allSettled(
+    recipients.map((r) => resend.emails.send({
+      from: FROM,
+      to: r.email,
+      subject: '🚨 [ACİL] ANATOLIA-Q — Kullanıcılara Bildirim',
+      html: html(r.nickname),
+    }))
+  );
+}
+
+/**
+ * Direct-message fallback: if the recipient isn't currently connected via
+ * socket, they'd otherwise never see the message until their next login --
+ * email them instead so they know to check the messaging panel.
+ */
+export async function sendDirectMessageEmail(toEmail, toNickname, fromNickname, message) {
+  if (!resend || !toEmail) return { skipped: true };
+  const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+
+  const html = `
+<!DOCTYPE html>
+<html><body style="margin:0;background:#0a0e1a;font-family:'Times New Roman',serif;color:#e8e8e8;">
+  <div style="max-width:600px;margin:40px auto;background:#11172a;border:1px solid #d4af37;border-radius:8px;padding:28px;">
+    <h2 style="color:#d4af37;margin:0 0 12px;letter-spacing:1px;">ANATOLIA-Q — YENİ MESAJ</h2>
+    <p style="margin:0 0 10px;font-size:14px;">Sayın ${escapeHtml(toNickname || '')},</p>
+    <p style="margin:0 0 10px;font-size:14px;"><strong>${escapeHtml(fromNickname)}</strong> size bir mesaj gönderdi
+      (şu an sistemde çevrimdışısınız):</p>
+    <div style="margin-top:10px;background:#0d1424;padding:16px;border-left:4px solid #d4af37;">
+      <p style="white-space:pre-wrap;margin:0;font-size:15px;">${escapeHtml(message)}</p>
+    </div>
+    <p style="margin-top:16px;font-size:12px;color:#aaa;">Tarih/Saat: ${now}</p>
+    <p style="margin-top:20px;font-size:12px;color:#aaa;">
+      Yanıtlamak için sisteme giriş yapıp Acil Merkez &gt; Mesajlaşma panelini kullanınız.
+    </p>
+  </div>
+</body></html>`;
+
+  return resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `[ANATOLIA-Q] ${fromNickname} size mesaj gönderdi`,
+    html,
+  });
+}
+
+/**
+ * Meeting-start notification to every registered user (active or not) --
+ * mirrors sendVideoMeetingStartedAlert (which only goes to the center
+ * mailbox) but reaches everyone who might want to join.
+ */
+export async function sendVideoMeetingStartedToUsers(hostNickname, recipients) {
+  if (!resend || !recipients?.length) return { skipped: true };
+  const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+
+  const html = (nickname) => `
+<!DOCTYPE html>
+<html><body style="margin:0;background:#0a0e1a;font-family:'Times New Roman',serif;color:#e8e8e8;">
+  <div style="max-width:600px;margin:40px auto;background:#11172a;border:1px solid #d4af37;border-radius:8px;padding:28px;">
+    <h2 style="color:#d4af37;margin:0 0 12px;letter-spacing:1px;">ANATOLIA-Q GÖRÜNTÜLÜ TOPLANTI BİLDİRİMİ</h2>
+    <p style="margin:0 0 10px;font-size:14px;">Sayın ${escapeHtml(nickname || '')},</p>
+    <p style="margin:0 0 10px;font-size:14px;"><strong>${escapeHtml(hostNickname || 'BOLD')}</strong> bir görüntülü toplantı başlattı.</p>
+    <p style="margin:0 0 10px;font-size:14px;"><strong>Tarih/Saat:</strong> ${now}</p>
+    <p style="margin:14px 0 0;font-size:14px;color:#d7dbe6;">
+      Katılmak için sisteme giriş yapıp Acil Merkez &gt; Mesajlaşma panelinden "Toplantıya Katıl" düğmesini kullanınız.
+    </p>
+  </div>
+</body></html>`;
+
+  return Promise.allSettled(
+    recipients.map((r) => resend.emails.send({
+      from: FROM,
+      to: r.email,
+      subject: `[ANATOLIA-Q] Görüntülü Toplantı Başlatıldı — ${hostNickname || 'BOLD'}`,
+      html: html(r.nickname),
+    }))
+  );
+}
+
 export async function sendVideoMeetingStartedAlert(hostUserCode) {
   if (!resend) return { skipped: true };
   const now = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });

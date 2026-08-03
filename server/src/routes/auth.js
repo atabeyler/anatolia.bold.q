@@ -214,10 +214,14 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function validEmail(email) {
+  return email === undefined || email === null || email === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 router.get('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { rows } = await query(
-      'SELECT user_code, nickname, is_admin, blocked, created_at FROM auth_users ORDER BY created_at ASC'
+      'SELECT user_code, nickname, email, is_admin, blocked, created_at FROM auth_users ORDER BY created_at ASC'
     );
     res.json(rows);
   } catch (err) {
@@ -227,21 +231,24 @@ router.get('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
 
 router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    const { userCode, password, nickname, isAdmin } = req.body;
+    const { userCode, password, nickname, isAdmin, email } = req.body;
     if (!userCode || !password) {
       return res.status(400).json({ error: 'Kullanıcı kodu ve şifre zorunlu' });
     }
     if (password.length < 8) {
       return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı' });
     }
+    if (!validEmail(email)) {
+      return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await query(
-      `INSERT INTO auth_users (user_code, password_hash, nickname, is_admin)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_code) DO NOTHING
-       RETURNING user_code, nickname, is_admin, blocked, created_at`,
-      [userCode, passwordHash, nickname || userCode, !!isAdmin]
+       RETURNING user_code, nickname, email, is_admin, blocked, created_at`,
+      [userCode, passwordHash, nickname || userCode, !!isAdmin, email || null]
     );
     if (rows.length === 0) {
       return res.status(409).json({ error: 'Bu kullanıcı kodu zaten kayıtlı' });
@@ -256,10 +263,13 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
 router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { userCode } = req.params;
-    const { password, nickname, isAdmin, blocked } = req.body;
+    const { password, nickname, isAdmin, blocked, email } = req.body;
 
     if (blocked === true && userCode === req.user.userCode) {
       return res.status(400).json({ error: 'Kendi hesabınızı engelleyemezsiniz' });
+    }
+    if (!validEmail(email)) {
+      return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
     }
 
     const sets = [];
@@ -273,6 +283,10 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
       params.push(nickname);
       sets.push(`nickname = $${params.length}`);
     }
+    if (email !== undefined) {
+      params.push(email || null);
+      sets.push(`email = $${params.length}`);
+    }
     if (isAdmin !== undefined) {
       params.push(!!isAdmin);
       sets.push(`is_admin = $${params.length}`);
@@ -285,7 +299,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
 
     params.push(userCode);
     const r = await query(
-      `UPDATE auth_users SET ${sets.join(', ')} WHERE user_code = $${params.length} RETURNING user_code, nickname, is_admin, blocked, created_at`,
+      `UPDATE auth_users SET ${sets.join(', ')} WHERE user_code = $${params.length} RETURNING user_code, nickname, email, is_admin, blocked, created_at`,
       params
     );
     if (r.rowCount === 0) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
@@ -294,6 +308,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
     const auditDetails = {};
     if (password) auditDetails.passwordChanged = true;
     if (nickname !== undefined) auditDetails.nickname = nickname;
+    if (email !== undefined) auditDetails.email = email;
     if (isAdmin !== undefined) auditDetails.isAdmin = !!isAdmin;
     if (blocked !== undefined) auditDetails.blocked = !!blocked;
     await logAuditEvent(

@@ -20,7 +20,7 @@ function resetFakeDb() {
 }
 
 function publicUserFields(row) {
-  return { user_code: row.user_code, nickname: row.nickname, is_admin: row.is_admin, blocked: row.blocked, created_at: row.created_at };
+  return { user_code: row.user_code, nickname: row.nickname, email: row.email ?? null, is_admin: row.is_admin, blocked: row.blocked, created_at: row.created_at };
 }
 
 const queryMock = vi.fn(async (sql, params = []) => {
@@ -35,10 +35,10 @@ const queryMock = vi.fn(async (sql, params = []) => {
   // Checked before the shorter seed-insert pattern below, since both share
   // the same "INSERT INTO auth_users (...) VALUES (...) ON CONFLICT" prefix
   // and only differ in whether a RETURNING clause follows.
-  if (s.startsWith('INSERT INTO auth_users (user_code, password_hash, nickname, is_admin)') && s.includes('RETURNING')) {
-    const [userCode, password_hash, nickname, is_admin] = params;
+  if (s.startsWith('INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email)') && s.includes('RETURNING')) {
+    const [userCode, password_hash, nickname, is_admin, email] = params;
     if (authUsers.has(userCode)) return { rows: [], rowCount: 0 };
-    const row = { user_code: userCode, password_hash, nickname, is_admin, blocked: false, created_at: new Date() };
+    const row = { user_code: userCode, password_hash, nickname, is_admin, email: email ?? null, blocked: false, created_at: new Date() };
     authUsers.set(userCode, row);
     return { rows: [publicUserFields(row)], rowCount: 1 };
   }
@@ -53,16 +53,19 @@ const queryMock = vi.fn(async (sql, params = []) => {
     const row = authUsers.get(params[0]);
     return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
   }
-  if (s.startsWith('SELECT user_code, nickname, is_admin, blocked, created_at FROM auth_users ORDER BY')) {
+  if (s.startsWith('SELECT user_code, nickname, email, is_admin, blocked, created_at FROM auth_users ORDER BY')) {
     return { rows: [...authUsers.values()].map(publicUserFields), rowCount: authUsers.size };
   }
   if (s.startsWith('UPDATE auth_users SET')) {
     const userCode = params[params.length - 1];
     const row = authUsers.get(userCode);
     if (!row) return { rows: [], rowCount: 0 };
+    // Order must match the SET-clause construction order in routes/auth.js's
+    // PATCH handler: password_hash, nickname, email, is_admin, blocked.
     const setFields = [];
     if (s.includes('password_hash = $')) setFields.push('password_hash');
     if (s.includes('nickname = $')) setFields.push('nickname');
+    if (s.includes('email = $')) setFields.push('email');
     if (s.includes('is_admin = $')) setFields.push('is_admin');
     if (s.includes('blocked = $')) setFields.push('blocked');
     setFields.forEach((field, i) => { row[field] = params[i]; });
@@ -309,6 +312,43 @@ describe('admin user-management routes', () => {
     expect(res.status).toBe(201);
     expect(authUsers.has('NEW2')).toBe(true);
     expect(logAuditEventMock).toHaveBeenCalledWith(expect.objectContaining({ userCode: 'ADMIN-1' }), 'user_added', 'NEW2', expect.anything());
+  });
+
+  it('creates a user with an email and returns it in the list', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken('ADMIN-1', 'BOLD')}`)
+      .send({ userCode: 'NEW3', password: 'longenough', nickname: 'BOLD-EMAIL', email: 'user@example.com' });
+    expect(res.status).toBe(201);
+    expect(res.body.email).toBe('user@example.com');
+
+    const list = await request(app).get('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`);
+    expect(list.body.find((u) => u.user_code === 'NEW3').email).toBe('user@example.com');
+  });
+
+  it('rejects an invalid email format when creating a user', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ userCode: 'NEW4', password: 'longenough', email: 'not-an-email' });
+    expect(res.status).toBe(400);
+    expect(authUsers.has('NEW4')).toBe(false);
+  });
+
+  it('updates a user email via PATCH', async () => {
+    await seedUser({ userCode: 'U12', password: 'x', nickname: 'BOLD-012' });
+    const app = buildApp();
+    const res = await request(app).patch('/api/auth/admin/users/U12').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ email: 'u12@example.com' });
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe('u12@example.com');
+    expect(authUsers.get('U12').email).toBe('u12@example.com');
+  });
+
+  it('rejects an invalid email format on PATCH', async () => {
+    await seedUser({ userCode: 'U13', password: 'x', nickname: 'BOLD-013' });
+    const app = buildApp();
+    const res = await request(app).patch('/api/auth/admin/users/U13').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ email: 'nope' });
+    expect(res.status).toBe(400);
   });
 
   it('rejects creating a duplicate user code with 409', async () => {
