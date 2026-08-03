@@ -68,7 +68,7 @@ beforeEach(() => {
   getUserEmailRecipientsMock.mockResolvedValue([]);
 });
 
-describe('chat:send (offline recipient email fallback)', () => {
+describe('chat:send (always emails the recipient, active or not)', () => {
   it('emails the recipient when they are not currently connected', async () => {
     getOnlineSocketIdMock.mockResolvedValue(undefined);
     getUserEmailByNicknameMock.mockResolvedValue('offline@example.com');
@@ -86,8 +86,9 @@ describe('chat:send (offline recipient email fallback)', () => {
     expect(sendDirectMessageEmailMock).toHaveBeenCalledWith('offline@example.com', 'BOLD-002', 'BOLD-001', 'merhaba');
   });
 
-  it('does not email when the recipient is online (delivered over the socket instead)', async () => {
+  it('also emails the recipient when they are online (app may be backgrounded)', async () => {
     getOnlineSocketIdMock.mockResolvedValue('their-socket-id');
+    getUserEmailByNicknameMock.mockResolvedValue('online@example.com');
 
     const { io, connect } = createFakeIo();
     initSocketHandlers(io);
@@ -98,10 +99,10 @@ describe('chat:send (offline recipient email fallback)', () => {
     await handlers['chat:send']({ to: 'BOLD-002', message: 'merhaba' });
     await flushMicrotasks();
 
-    expect(sendDirectMessageEmailMock).not.toHaveBeenCalled();
+    expect(sendDirectMessageEmailMock).toHaveBeenCalledWith('online@example.com', 'BOLD-002', 'BOLD-001', 'merhaba');
   });
 
-  it('does not attempt to email when the offline recipient has no email on file', async () => {
+  it('does not attempt to email when the recipient has no email on file', async () => {
     getOnlineSocketIdMock.mockResolvedValue(undefined);
     getUserEmailByNicknameMock.mockResolvedValue(null);
 

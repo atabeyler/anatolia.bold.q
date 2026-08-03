@@ -202,7 +202,6 @@ function UsersPanel() {
 
   return (
     <div>
-      <div className="bg-gold/10 border border-gold/40 rounded p-3 mb-3 text-sm text-gold/90">{t('usersNote')}</div>
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-[10px] text-gold/40 tracking-widest uppercase">{t('attachFileLabel')}</span>
         <FileAttach onFile={(f) => f && setAttachedFiles((prev) => [...prev, f])} compact />

@@ -207,8 +207,7 @@ export async function sendDirectMessageEmail(toEmail, toNickname, fromNickname, 
   <div style="max-width:600px;margin:40px auto;background:#11172a;border:1px solid #d4af37;border-radius:8px;padding:28px;">
     <h2 style="color:#d4af37;margin:0 0 12px;letter-spacing:1px;">ANATOLIA-Q — YENİ MESAJ</h2>
     <p style="margin:0 0 10px;font-size:14px;">Sayın ${escapeHtml(toNickname || '')},</p>
-    <p style="margin:0 0 10px;font-size:14px;"><strong>${escapeHtml(fromNickname)}</strong> size bir mesaj gönderdi
-      (şu an sistemde çevrimdışısınız):</p>
+    <p style="margin:0 0 10px;font-size:14px;"><strong>${escapeHtml(fromNickname)}</strong> size bir mesaj gönderdi:</p>
     <div style="margin-top:10px;background:#0d1424;padding:16px;border-left:4px solid #d4af37;">
       <p style="white-space:pre-wrap;margin:0;font-size:15px;">${escapeHtml(message)}</p>
     </div>

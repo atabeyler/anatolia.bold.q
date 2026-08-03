@@ -69,13 +69,13 @@ export function initSocketHandlers(io) {
         const targetSocket = await onlineState.getOnlineSocketId(to);
         if (targetSocket) {
           io.to(targetSocket).emit('chat:receive', payload);
-        } else {
-          // Recipient isn't connected right now -- their only other way to
-          // see this message is email, so notify them there instead.
-          getUserEmailByNickname(to)
-            .then((email) => email && sendDirectMessageEmail(email, to, from, message))
-            .catch((err) => logger.warn({ err }, '[Socket] DM email notify failed'));
         }
+        // Also email the recipient regardless of online status -- the app
+        // can sit backgrounded/neglected even while "active", so socket
+        // delivery alone isn't a reliable way to reach them.
+        getUserEmailByNickname(to)
+          .then((email) => email && sendDirectMessageEmail(email, to, from, message))
+          .catch((err) => logger.warn({ err }, '[Socket] DM email notify failed'));
       } else {
         socket.broadcast.emit('chat:receive', payload);
       }
