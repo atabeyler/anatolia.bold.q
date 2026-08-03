@@ -91,7 +91,7 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
       const jwtToken = jwt.sign(
         { userCode: user.user_code, nickname: user.nickname, isAdmin: true },
         JWT_SECRET,
-        { expiresIn: '12h' }
+        { expiresIn: '4h' }
       );
       return res.json({ status: 'approved', jwt: jwtToken, userCode: user.user_code, nickname: user.nickname, isAdmin: true });
     }
@@ -163,7 +163,7 @@ router.get('/check/:token', async (req, res) => {
       return res.status(403).json({ status: 'blocked', error: 'Hesabınız engellenmiş' });
     }
     const nickname = user?.nickname || t.user_code;
-    const jwtToken = jwt.sign({ userCode: t.user_code, nickname }, JWT_SECRET, { expiresIn: '8h' });
+    const jwtToken = jwt.sign({ userCode: t.user_code, nickname }, JWT_SECRET, { expiresIn: '2h' });
     res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -270,7 +270,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
     );
 
     // Force out an active session immediately when blocking -- otherwise the
-    // user's existing JWT (up to 12h) would keep working until it expires,
+    // user's existing JWT (up to 4h) would keep working until it expires,
     // since "blocked" is only checked at login.
     if (blocked === true && updated.nickname) {
       const io = req.app.get('io');
