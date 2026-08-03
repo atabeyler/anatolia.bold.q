@@ -8,6 +8,21 @@ async function pdfText(buf) {
 }
 
 describe('generateReportPdf', () => {
+  it('renders Turkish special characters correctly instead of garbling them', async () => {
+    // Regression test: pdfkit's built-in standard fonts (Times-Roman etc.)
+    // only support WinAnsiEncoding, which doesn't contain ğ/ş/ı/İ/ö/ü/ç --
+    // those bytes (and everything after them on the line) came out as
+    // corrupted symbols. Fonts must be embedded (see registerFonts in
+    // pdf.js) for these to render as the actual Turkish letters.
+    const content = 'Ğüşıöç Ğüşıöç Ğüşıöç: Rosatom\'un payı Türkiye\'nin egemenlik haklarını sınırlandırmaktadır.';
+    const buf = await generateReportPdf({
+      category: 'enerji', title: 'Test', content, userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const text = await pdfText(buf);
+    expect(text).toContain('Ğüşıöç');
+    expect(text).toContain('Rosatom\'un payı Türkiye\'nin egemenlik haklarını sınırlandırmaktadır.');
+  });
+
   it('produces a valid PDF buffer from markdown content', async () => {
     const content = `## YÖNETİCİ ÖZETİ
 Bu bir test raporudur.

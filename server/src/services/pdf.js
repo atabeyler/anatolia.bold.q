@@ -1,4 +1,9 @@
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONTS_DIR = path.join(__dirname, '..', '..', 'assets', 'fonts');
 
 const COLORS = {
   gold: '#D4AF37',
@@ -8,10 +13,24 @@ const COLORS = {
   gray: '#666666',
 };
 
-const FONT = 'Times-Roman';
+// pdfkit's built-in standard fonts (Times-Roman etc.) only support
+// WinAnsiEncoding, which doesn't include Turkish ğ/ş/ı/İ -- those
+// characters (and everything after them on the line) render as garbage.
+// Liberation Serif/Mono are metric-compatible with Times New Roman/Courier
+// New and cover the full Turkish alphabet, so embed them instead.
+const FONT = 'Times';
 const FONT_BOLD = 'Times-Bold';
 const FONT_ITALIC = 'Times-Italic';
+const FONT_BOLD_ITALIC = 'Times-BoldItalic';
 const CODE_FONT = 'Courier';
+
+function registerFonts(doc) {
+  doc.registerFont(FONT, path.join(FONTS_DIR, 'LiberationSerif-Regular.ttf'));
+  doc.registerFont(FONT_BOLD, path.join(FONTS_DIR, 'LiberationSerif-Bold.ttf'));
+  doc.registerFont(FONT_ITALIC, path.join(FONTS_DIR, 'LiberationSerif-Italic.ttf'));
+  doc.registerFont(FONT_BOLD_ITALIC, path.join(FONTS_DIR, 'LiberationSerif-BoldItalic.ttf'));
+  doc.registerFont(CODE_FONT, path.join(FONTS_DIR, 'LiberationMono-Regular.ttf'));
+}
 
 function drawCoverPage(doc, { category, title, userCode, aiProvider }) {
   const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -201,6 +220,7 @@ export async function generateReportPdf({ category, title, content, userCode, ai
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margins: { top: 56, bottom: 56, left: 56, right: 56 }, bufferPages: true });
+      registerFonts(doc);
       const chunks = [];
       doc.on('data', (c) => chunks.push(c));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
