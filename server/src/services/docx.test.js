@@ -58,6 +58,24 @@ Bu bir test raporudur.
     expect(buf.subarray(0, 2).toString('ascii')).toBe('PK');
   });
 
+  it('sets tblGrid column widths to match the actual cell widths', async () => {
+    // Regression test: docx-js defaults tblGrid to near-zero-width columns
+    // when the Table isn't given an explicit columnWidths, independent of
+    // the per-cell width set on each TableCell. Viewers that lay out
+    // columns from tblGrid (rather than cell width) then wrap every word
+    // one character per line. The cover-page table (customWidthsPct
+    // [32, 68] of the 9360 DXA text width) is the reproduction case.
+    const buf = await generateReportDocx({
+      category: 'enerji', title: 'Test', content: 'Metin.',
+      userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const xml = await documentXml(buf);
+    const grid = xml.match(/<w:tblGrid>((?:<w:gridCol w:w="\d+"\/>)+)<\/w:tblGrid>/);
+    expect(grid).not.toBeNull();
+    const widths = [...grid[1].matchAll(/w:w="(\d+)"/g)].map((m) => Number(m[1]));
+    expect(widths).toEqual([2995, 6365]);
+  });
+
   it('renders #### as a real heading instead of literal hashes', async () => {
     const buf = await generateReportDocx({
       category: 'enerji', title: 'Test', content: '#### Aktörler ve Niyetler\nMetin.',

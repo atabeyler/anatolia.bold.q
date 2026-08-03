@@ -181,6 +181,7 @@ function buildTable(headers, rows, customWidthsPct = null) {
 
   return new Table({
     width: { size: PAGE_TEXT_WIDTH_DXA, type: WidthType.DXA },
+    columnWidths: colWidths,
     rows: [headerRow, ...dataRows],
     borders: {
       top: { style: BorderStyle.SINGLE, size: 4, color: COLORS.darkBlue },
