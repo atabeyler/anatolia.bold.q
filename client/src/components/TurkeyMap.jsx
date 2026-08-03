@@ -67,7 +67,7 @@ function RegionEmergencyModal({ city, onClose }) {
       <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()} className="bg-navy-light gold-glow-strong rounded-lg w-full max-w-lg overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-crimson/40 bg-gradient-to-r from-crimson/30 to-transparent">
           <div className="flex items-center gap-3"><MapPin className="text-crimson w-5 h-5" /><h2 className=" text-lg text-gold tracking-widest">{city.name.toUpperCase()}</h2></div>
-          <button onClick={onClose} className="text-gold/60 hover:text-gold"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-gold/60 hover:text-gold" aria-label="Kapat"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-6">
           <p className="text-xs text-gold/50 mb-3">{city.name} {t('regionNote')}</p>

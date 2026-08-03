@@ -5,22 +5,23 @@ import { messages } from '../db/schema.js';
 import { sendVideoMeetingStartedAlert } from './email.js';
 import * as onlineState from '../lib/onlineState.js';
 import { logger } from '../lib/logger.js';
+import { JWT_SECRET } from '../lib/jwtSecret.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const adminSockets = new Set();
 const activeMeetingByRoom = new Map();
 
-// isAdmin must never be taken from client-supplied data (register payload) --
-// it is only ever true when derived here from a server-signed JWT, so a
-// client cannot self-declare admin powers (kick/mute, live locations, meeting
-// control) by sending {isAdmin: true} over the socket.
-function verifyAdmin(token) {
-  if (!token) return false;
+// Both nickname and isAdmin must never be taken from client-supplied data
+// (register payload) -- they are only ever derived here from a server-signed
+// JWT (which already carries the correct nickname for the logged-in user,
+// see routes/auth.js), so a client cannot register under someone else's
+// nickname (hijacking their presence/DMs) or self-declare admin powers by
+// sending {nickname: 'someone-else', isAdmin: true} over the socket.
+function verifyToken(token) {
+  if (!token) return null;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return !!decoded.isAdmin;
+    return jwt.verify(token, JWT_SECRET);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -29,10 +30,12 @@ export function initSocketHandlers(io) {
     logger.info({ socketId: socket.id }, 'New connection');
 
     socket.on('register', async (payload) => {
-      const nickname = typeof payload === 'string' ? payload : payload?.nickname;
       const token = typeof payload === 'string' ? socket.handshake.auth?.token : (payload?.token || socket.handshake.auth?.token);
-      const isAdmin = verifyAdmin(token);
-      if (!nickname) return;
+      const decoded = verifyToken(token);
+      if (!decoded?.nickname) return;
+
+      const nickname = decoded.nickname;
+      const isAdmin = !!decoded.isAdmin;
 
       await onlineState.setOnline(nickname, socket.id);
       socket.nickname = nickname;

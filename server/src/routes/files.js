@@ -50,6 +50,13 @@ const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router();
 
+// Extensions the browser would otherwise render/execute as active content if
+// opened directly (same-origin stored XSS) instead of treating as inert data
+// -- these are forced to download rather than open inline. Everything else
+// (images, PDF, DOCX, etc.) keeps the existing inline-preview behavior that
+// the chat/report UI already depends on (see FileMessageContent).
+const ACTIVE_CONTENT_EXTS = /\.(html?|xhtml|svg|xml|mhtml|js|mjs)$/i;
+
 router.post('/upload', authMiddleware, uploadLimiter, upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
@@ -79,10 +86,12 @@ router.post('/upload', authMiddleware, uploadLimiter, upload.single('file'), asy
 
 router.get('/:filename', async (req, res) => {
   const name = path.basename(req.params.filename);
+  const forceAttachment = ACTIVE_CONTENT_EXTS.test(name);
+  res.set('X-Content-Type-Options', 'nosniff');
 
   if (USE_S3) {
     try {
-      const url = await getPresignedDownloadUrl(name);
+      const url = await getPresignedDownloadUrl(name, 300, forceAttachment);
       return res.redirect(url);
     } catch (err) {
       return res.status(404).json({ error: 'Dosya bulunamadı' });
@@ -91,6 +100,9 @@ router.get('/:filename', async (req, res) => {
 
   const filePath = path.join(UPLOAD_DIR, name);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Dosya bulunamadı' });
+  if (forceAttachment) {
+    return res.download(filePath, name);
+  }
   res.sendFile(filePath);
 });
 

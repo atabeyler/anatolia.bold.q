@@ -105,7 +105,7 @@ export function RadarModal({ onClose, lang }) {
             <motion.span animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1.2, repeat: Infinity }}
               className="w-2 h-2 rounded-full bg-emerald-400" />
           </div>
-          <button onClick={onClose} className="text-cyan-400/50 hover:text-cyan-300 p-1">
+          <button onClick={onClose} className="text-cyan-400/50 hover:text-cyan-300 p-1" aria-label="Kapat">
             <X className="w-4 h-4" />
           </button>
         </div>

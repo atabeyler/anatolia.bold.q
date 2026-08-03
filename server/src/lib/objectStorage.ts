@@ -37,7 +37,11 @@ export async function uploadObject(key: string, body: Buffer, contentType: strin
   );
 }
 
-export async function getPresignedDownloadUrl(key: string, expiresInSeconds = 300): Promise<string> {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+export async function getPresignedDownloadUrl(key: string, expiresInSeconds = 300, forceAttachment = false): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    ...(forceAttachment ? { ResponseContentDisposition: 'attachment' } : {}),
+  });
   return getSignedUrl(getClient(), command, { expiresIn: expiresInSeconds });
 }

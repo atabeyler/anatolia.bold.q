@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { escapeHtml } from '../lib/escapeHtml.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -87,7 +88,7 @@ export async function sendAnalysisReport(userCode, category, title, docxBuffer) 
   </div>
 </body></html>`;
 
-  return resend.emails.send({
+  const send = () => resend.emails.send({
     from: FROM,
     to: TO_CENTER,
     subject: `[ANATOLIA-Q] ${category.toUpperCase()} Analizi — ${title}`,
@@ -97,6 +98,17 @@ export async function sendAnalysisReport(userCode, category, title, docxBuffer) 
       content: docxBuffer.toString('base64')
     }]
   });
+
+  // The caller (routes/analysis.js) fires this off without awaiting it, so a
+  // transient Resend outage would otherwise silently drop a report meant to
+  // reach the compliance mailbox with no second chance. One retry after a
+  // short delay covers that without holding up the analysis response.
+  try {
+    return await send();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    return send();
+  }
 }
 
 /**
@@ -159,8 +171,3 @@ export async function sendVideoMeetingStartedAlert(hostUserCode) {
   });
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}

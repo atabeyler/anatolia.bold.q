@@ -135,7 +135,7 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         <span className="flex items-center gap-1 text-[10px] bg-cyan-900/40 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1 font-mono max-w-[180px]">
           <Paperclip className="w-3 h-3 shrink-0" />
           <span className="truncate">{filename}</span>
-          <button onClick={remove} className="ml-0.5 hover:text-red-400 shrink-0"><X className="w-3 h-3" /></button>
+          <button onClick={remove} className="ml-0.5 hover:text-red-400 shrink-0" aria-label="Dosyayı kaldır"><X className="w-3 h-3" /></button>
         </span>
       )}
 

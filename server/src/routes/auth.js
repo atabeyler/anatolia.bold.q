@@ -7,10 +7,11 @@ import { sendApprovalEmail } from '../services/email.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { publicActionLimiter } from '../middleware/rateLimit.js';
 import * as onlineState from '../lib/onlineState.js';
+import { JWT_SECRET } from '../lib/jwtSecret.js';
+import { escapeHtml } from '../lib/escapeHtml.js';
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const APP_URL = process.env.APP_URL || 'http://localhost:10000';
 
 // One-time migration data: the user codes that used to be hardcoded here.
@@ -116,8 +117,28 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
   }
 });
 
-// Step 2: the approval button coming from the email
+// Step 2: the approval link coming from the email.
+// GET only renders a confirmation page with a button that POSTs the actual
+// action -- corporate mail-security link scanners/prefetchers auto-fetch
+// GET links, which would otherwise silently approve a login before a human
+// ever looked at the email (defeating the whole point of mail approval).
 router.get('/approve/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const r = await query(
+      'SELECT 1 FROM approval_tokens WHERE token = $1 AND expires_at > NOW() AND approved = FALSE',
+      [token]
+    );
+    if (r.rowCount === 0) {
+      return res.status(400).send(htmlPage('error', 'Token geçersiz veya süresi dolmuş'));
+    }
+    res.send(confirmPage('approve', token, 'Girişi Onayla', 'Bu kullanıcının sisteme girişini onaylamak istediğinize emin misiniz?'));
+  } catch (err) {
+    res.status(500).send(htmlPage('error', err.message));
+  }
+});
+
+router.post('/approve/:token', async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -136,6 +157,19 @@ router.get('/approve/:token', async (req, res) => {
 });
 
 router.get('/reject/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const r = await query('SELECT 1 FROM approval_tokens WHERE token = $1', [token]);
+    if (r.rowCount === 0) {
+      return res.status(400).send(htmlPage('error', 'Token geçersiz veya süresi dolmuş'));
+    }
+    res.send(confirmPage('reject', token, 'Girişi Reddet', 'Bu kullanıcının giriş talebini reddetmek istediğinize emin misiniz?'));
+  } catch (err) {
+    res.status(500).send(htmlPage('error', err.message));
+  }
+});
+
+router.post('/reject/:token', async (req, res) => {
   try {
     const { token } = req.params;
     await query('DELETE FROM approval_tokens WHERE token = $1', [token]);
@@ -349,7 +383,33 @@ function htmlPage(type, message) {
   <body><div class="box">
     <div class="icon">${c.icon}</div>
     <h1>ANATOLIA-Q</h1>
-    <p>${message}</p>
+    <p>${escapeHtml(message)}</p>
+    <div class="footer">Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.<br>Tüm Hakları Saklıdır</div>
+  </div></body></html>`;
+}
+
+// GET confirmation step for approve/reject: a mail-security prefetch will
+// only ever hit this idempotent read-only page, never the POST below that
+// actually performs the action.
+function confirmPage(action, token, buttonLabel, message) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ANATOLIA-Q</title>
+  <style>
+    body{margin:0;background:#0a0e1a;font-family:'Times New Roman',serif;color:#e8e8e8;
+         display:flex;align-items:center;justify-content:center;min-height:100vh;}
+    .box{background:#11172a;border:1px solid #d4af37;border-radius:8px;padding:50px;max-width:500px;text-align:center;}
+    h1{color:#d4af37;letter-spacing:2px;margin:0 0 16px;}
+    p{font-size:16px;line-height:1.6;}
+    button{margin-top:20px;padding:12px 32px;background:#d4af37;color:#0a0e1a;border:none;border-radius:6px;
+           font-family:'Times New Roman',serif;font-size:16px;font-weight:bold;cursor:pointer;letter-spacing:1px;}
+    button:hover{background:#e8c458;}
+    .footer{margin-top:30px;font-size:11px;color:#666;}
+  </style></head>
+  <body><div class="box">
+    <h1>ANATOLIA-Q</h1>
+    <p>${escapeHtml(message)}</p>
+    <form method="POST" action="/api/auth/${action}/${encodeURIComponent(token)}">
+      <button type="submit">${escapeHtml(buttonLabel)}</button>
+    </form>
     <div class="footer">Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.<br>Tüm Hakları Saklıdır</div>
   </div></body></html>`;
 }

@@ -15,6 +15,9 @@ export function getPool() {
       // initDatabase() from ever settling, and index.js never reached
       // server.listen() (see the 2026-07-21 outage). Back to false, which
       // still gets an encrypted connection, just without CA verification.
+      // TRACKED TECH DEBT: pin Render's actual CA bundle instead of disabling
+      // verification outright once it's confirmed stable, rather than leaving
+      // this as the permanent state.
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30000,
@@ -114,6 +117,8 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_messages_users ON messages(from_user, to_user);
     CREATE INDEX IF NOT EXISTS idx_tokens_token ON approval_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON admin_audit_log(created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON admin_audit_log(actor_user_code);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_target ON admin_audit_log(target_user_code);
     CREATE INDEX IF NOT EXISTS idx_auth_users_code ON auth_users(user_code);
   `);
 

@@ -22,6 +22,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    chunkSizeWarningLimit: 900
+    // Raised just enough to cover the main bundle post-code-splitting (see
+    // App.jsx's lazy(DashboardPage/ButtonShowcasePage)) without silencing a
+    // warning entirely -- WorldGlobe's three.js-heavy chunk (~860KB) still
+    // warns, which is an accurate signal that it could use further splitting.
+    chunkSizeWarningLimit: 600
   }
 });

@@ -38,7 +38,7 @@ function MenuPanel({ t, onClose, onOpenGuide, onOpenInfo }) {
               <div className="text-[9px] text-gold/50 tracking-widest uppercase">{t('appSubtitle')}</div>
             </div>
           </div>
-          <button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" title={t('menuTooltip')}>
+          <button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" title={t('menuTooltip')} aria-label="Kapat">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -88,7 +88,7 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
             <span className="w-1 h-4 bg-cyan-400 rounded-full" />
             <div className="text-[11px] tracking-widest uppercase text-cyan-200">{t('settingsTitle')}</div>
           </div>
-          <button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" title={t('settingsTitle')}>
+          <button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" title={t('settingsTitle')} aria-label="Kapat">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -185,7 +185,7 @@ function InfoModal({ panel, t, onClose }) {
       <motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }} onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-lg overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{content.title}</h3>
-          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Kapat"><X className="w-5 h-5" /></button>
         </div>
         {content.body}
       </motion.div>
@@ -454,7 +454,7 @@ function GuideModal({ onClose, t, lang }) {
       <motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }} onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-2xl h-[88vh] sm:h-auto sm:max-h-[85vh] overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{t('usageGuideTitle')}</h3>
-          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Kapat"><X className="w-5 h-5" /></button>
         </div>
         <p className="text-xs sm:text-sm text-gold/70 mb-4">{t('usageGuideIntro')}</p>
         <div className="space-y-4">

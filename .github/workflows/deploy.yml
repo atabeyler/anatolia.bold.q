@@ -1,17 +1,25 @@
 name: Deploy to Render
 
+# Gated on the CI workflow's own outcome for the same push -- previously this
+# triggered directly off `push: main`, racing independently of ci.yml, so a
+# push that failed lint/tests could still deploy if the two workflows
+# happened to finish in the wrong order.
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
 
     - name: Deploy to Render
       uses: johnbeynon/render-deploy-action@v0.0.8

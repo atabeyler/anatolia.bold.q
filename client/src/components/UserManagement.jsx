@@ -174,7 +174,7 @@ export default function UserManagementModal({ onClose }) {
         className="w-full sm:max-w-2xl h-[88vh] sm:h-auto sm:max-h-[85vh] overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">KULLANICI YÖNETİMİ</h3>
-          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Kapat"><X className="w-5 h-5" /></button>
         </div>
 
         <div className="flex gap-1 mb-4 border-b border-cyan-300/15">

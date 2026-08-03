@@ -2,6 +2,7 @@
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
 import pinoHttp from 'pino-http';
@@ -40,7 +41,17 @@ const io = new Server(server, {
 });
 
 app.use(cors({ origin: allowedOrigins }));
-app.use(pinoHttp({ logger }));
+// CSP is left disabled: the client is a Vite SPA served from this same
+// server (see the static-file block below) and hasn't been audited for a
+// restrictive script/style CSP -- enabling it blind risks breaking the app.
+// The other baseline headers (X-Frame-Options, X-Content-Type-Options, HSTS,
+// etc.) are still valuable on their own.
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(pinoHttp({
+  logger,
+  // Authorization headers (raw JWTs) must never land in log output.
+  redact: ['req.headers.authorization', 'res.headers["set-cookie"]'],
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
