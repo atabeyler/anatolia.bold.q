@@ -177,6 +177,10 @@ export function getCurrentUser() {
   if (!jwt) return null;
   try {
     const payload = JSON.parse(atob(jwt.split('.')[1]));
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      setJWT(null);
+      return null;
+    }
     return payload;
   } catch { return null; }
 }
