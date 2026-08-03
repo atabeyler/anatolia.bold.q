@@ -108,10 +108,67 @@ const STATE_KNOWLEDGE_BASE = `
 
 const FRAUD_CATEGORIES = new Set(['bddk', 'btk']);
 
-function buildMasterSystemPrompt(category: string, quantumMode = false, hasRealTransactions = false): string {
+interface RealDataFlags {
+  hasRealTransactions?: boolean;
+  hasRealScenarios?: boolean;
+  hasRealOptimization?: boolean;
+}
+
+function buildMasterSystemPrompt(category: string, quantumMode = false, realData: RealDataFlags = {}): string {
+  const { hasRealTransactions = false, hasRealScenarios = false, hasRealOptimization = false } = realData;
   const today = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
   const todayISO = new Date().toISOString().split('T')[0];
   const isFraudCategory = FRAUD_CATEGORIES.has(category);
+
+  const scenarioSection = hasRealScenarios ? `
+## SENARYO OLASILIK MATRISI
+Kullanici GERCEK senaryo verilerini bir belge olarak yukledi -- bu senaryolar asagida "[YUKLENEN GERCEK SENARYO
+VERISI]" basligi altinda sana verilecek. BU SENARYOLARI KESINLIKLE YENIDEN URETME, UYDURMA VEYA DEGISTIRME --
+verilen senaryolardan birincil olanini sec ve tam raporu onun uzerine kur, digerlerini SENARYO-A/B/C... olarak
+alternatif sun.
+` : `
+1. **DALLANMA YAPISI** -- En az 3, en fazla 5 bagimsiz senaryoyu ayri subeler olarak hesapla
+2. **OLASILIK ATANMASI** -- Her senaryoya istatistiksel olasilik yuzdesi ver (toplam %100)
+3. **KASKAT etki** -- Her senaryonun yan alanlara (ekonomi, savunma, enerji, toplumsal) etkisini matris formunda goster
+4. **ZAMAN CIZELGESI** -- Senaryolarin kisa vade (0-6 ay), orta vade (6-24 ay), uzun vade (2-10 yil) zaman ufuklari
+5. **KRITIK DEGISKENLER** -- Hangi faktorlerin senaryoyu bir daldan digerine tasiyacagini belirt
+6. **ANA SENARYO + ALTERNATIFLER** -- Ana raporu birincil senaryo uzerine kur; digerleri SENARYO-A, SENARYO-B, SENARYO-C...
+
+Format:
+\`\`\`
+## KUANTUM OLASILIK MATRISI
+| Senaryo | Olasilik | Zaman Ufku | Kritik Tetikleyici |
+|---|---|---|---|
+| SENARYO-A (Birincil) | %42 | 0-12 ay | ... |
+| SENARYO-B | %31 | 6-24 ay | ... |
+| SENARYO-C | %18 | 12-36 ay | ... |
+| SENARYO-D | %9 | 24+ ay | ... |
+\`\`\`
+Ardindan birincil senaryo uzerine tam rapor.
+`;
+
+  const optimizationSection = hasRealOptimization ? `
+## OPTIMIZASYON PROBLEMI
+Kullanici GERCEK bir kaynak tahsisi tablosunu belge olarak yukledi -- bu tablo asagida "[YUKLENEN GERCEK
+OPTIMIZASYON VERISI]" basligi altinda sana verilecek. BU TABLOYU KESINLIKLE YENIDEN URETME, UYDURMA VEYA
+DEGISTIRME -- raporunda bu gercek kalem/deger/maliyet verilerine dayanarak yorum yap; kuantum optimizasyon
+motoru (QAOA) bu gercek tablo uzerinde calisacaktir.
+` : `
+Eger konu, sinirli bir butce/kaynak altinda birden fazla aday proje/yatirim/onlem arasindan secim yapmayi
+GERCEKTEN icreriyorsa (kaynak tahsisi kararidir -- her konu icin degil), EK OLARAK asagidaki formatta bir
+optimizasyon problemi tablosu da uret; bu, gercek bir kuantum optimizasyon devresiyle (QAOA) cozulecek:
+\`\`\`
+## OPTIMIZASYON PROBLEMI
+Butce: %60
+
+| Kalem | Deger (0-100) | Maliyet (0-100) |
+|---|---|---|
+| Proje-A | 35 | 30 |
+| Proje-B | 28 | 25 |
+\`\`\`
+En az 3, en fazla 8 kalem. "Deger": stratejik/ekonomik onem puani. "Maliyet": butcenin/kaynagin ne kadarini
+tuketecegi. Konu buna uygun degilse bu tabloyu hic uretme.
+`;
 
   const quantumInstructions = quantumMode && isFraudCategory && hasRealTransactions ? `
 
@@ -142,41 +199,8 @@ Ardindan bu kayitlara dayanan bir uyum/denetim raporu yaz -- hangi kayitlarin ne
 
 ## KUANTUM OLASILIK ANALIZ MOTORU
 Sen ANATOLIA-Q'nun Kuantum Olasilik Modulusun. Her analiz icin:
-
-1. **DALLANMA YAPISI** -- En az 3, en fazla 5 bagimsiz senaryoyu ayri subeler olarak hesapla
-2. **OLASILIK ATANMASI** -- Her senaryoya istatistiksel olasilik yuzdesi ver (toplam %100)
-3. **KASKAT etki** -- Her senaryonun yan alanlara (ekonomi, savunma, enerji, toplumsal) etkisini matris formunda goster
-4. **ZAMAN CIZELGESI** -- Senaryolarin kisa vade (0-6 ay), orta vade (6-24 ay), uzun vade (2-10 yil) zaman ufuklari
-5. **KRITIK DEGISKENLER** -- Hangi faktorlerin senaryoyu bir daldan digerine tasiyacagini belirt
-6. **ANA SENARYO + ALTERNATIFLER** -- Ana raporu birincil senaryo uzerine kur; digerleri SENARYO-A, SENARYO-B, SENARYO-C...
-
-Format:
-\`\`\`
-## KUANTUM OLASILIK MATRISI
-| Senaryo | Olasilik | Zaman Ufku | Kritik Tetikleyici |
-|---|---|---|---|
-| SENARYO-A (Birincil) | %42 | 0-12 ay | ... |
-| SENARYO-B | %31 | 6-24 ay | ... |
-| SENARYO-C | %18 | 12-36 ay | ... |
-| SENARYO-D | %9 | 24+ ay | ... |
-\`\`\`
-Ardindan birincil senaryo uzerine tam rapor.
-
-Eger konu, sinirli bir butce/kaynak altinda birden fazla aday proje/yatirim/onlem arasindan secim yapmayi
-GERCEKTEN icreriyorsa (kaynak tahsisi kararidir -- her konu icin degil), EK OLARAK asagidaki formatta bir
-optimizasyon problemi tablosu da uret; bu, gercek bir kuantum optimizasyon devresiyle (QAOA) cozulecek:
-\`\`\`
-## OPTIMIZASYON PROBLEMI
-Butce: %60
-
-| Kalem | Deger (0-100) | Maliyet (0-100) |
-|---|---|---|
-| Proje-A | 35 | 30 |
-| Proje-B | 28 | 25 |
-\`\`\`
-En az 3, en fazla 8 kalem. "Deger": stratejik/ekonomik onem puani. "Maliyet": butcenin/kaynagin ne kadarini
-tuketecegi. Konu buna uygun degilse bu tabloyu hic uretme.
-` : '';
+${scenarioSection}
+${optimizationSection}` : '';
 
   return `Sen ANATOLIA-Q sistemisin -- Turkiye Cumhuriyeti'nin Kuantum Tabanli Ulusal Karar Destek Sistemi.
 BOLD Askeri Teknoloji ve Savunma Sanayi A.S. tarafindan gelistirilmistir.
@@ -467,8 +491,8 @@ export function getSystemPromptForCategory(category: string): string {
   return buildMasterSystemPrompt(category, false);
 }
 
-export function getQuantumSystemPrompt(category: string, hasRealTransactions = false): string {
-  return buildMasterSystemPrompt(category, true, hasRealTransactions);
+export function getQuantumSystemPrompt(category: string, realData: RealDataFlags = {}): string {
+  return buildMasterSystemPrompt(category, true, realData);
 }
 
 export function getScenarioDeepDivePrompt(category: string, scenarioId: string, scenarioSummary: string): string {

@@ -11,7 +11,7 @@
  * same shape (return { transactions, warnings }) to plug into the exact
  * same downstream pipeline unchanged.
  */
-import * as XLSX from 'xlsx';
+import { normalizeHeader, findColumn, toBool01, toNumber, extractHour, readSheetRows } from './tableParsing.js';
 
 const MAX_ROWS = 500;
 
@@ -25,37 +25,8 @@ const COLUMN_ALIASES = {
   id: ['işlem id', 'islem id', 'id', 'txn', 'transaction id'],
 };
 
-function normalizeHeader(h) {
-  return String(h ?? '').trim().toLowerCase();
-}
-
-function findColumn(headers, field) {
-  const aliases = COLUMN_ALIASES[field];
-  return headers.findIndex((h) => aliases.includes(normalizeHeader(h)));
-}
-
-function toBool01(v) {
-  const s = String(v ?? '').trim().toLowerCase();
-  if (['1', 'evet', 'yes', 'true', 'var'].includes(s)) return 1;
-  if (['0', 'hayır', 'hayir', 'no', 'false', 'yok', ''].includes(s)) return 0;
-  const n = Number(s);
-  return Number.isFinite(n) && n !== 0 ? 1 : 0;
-}
-
-function toNumber(v) {
-  if (typeof v === 'number') return v;
-  const n = Number(String(v ?? '').replace(',', '.').replace(/[^\d.-]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function extractHour(timestampValue) {
-  if (typeof timestampValue === 'number') {
-    // XLSX serial date/time
-    const parsed = XLSX.SSF.parse_date_code(timestampValue);
-    if (parsed?.H !== undefined) return parsed.H;
-  }
-  const d = new Date(timestampValue);
-  return Number.isNaN(d.getTime()) ? 0 : d.getHours();
+function findTxCol(headers, field) {
+  return findColumn(headers, COLUMN_ALIASES[field]);
 }
 
 /**
@@ -70,25 +41,24 @@ export function parseTransactionFile(buffer, filename) {
 
   let rows;
   try {
-    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    rows = readSheetRows(buffer);
   } catch {
     return null;
   }
   if (!rows.length) return null;
 
   const headers = rows[0].map(normalizeHeader);
-  const dataRows = rows.slice(1, 1 + MAX_ROWS).filter((r) => r.some((c) => String(c).trim() !== ''));
+  const allDataRows = rows.slice(1).filter((r) => r.some((c) => String(c).trim() !== ''));
+  const dataRows = allDataRows.slice(0, MAX_ROWS);
   if (!dataRows.length) return null;
 
-  const idCol = findColumn(headers, 'id');
-  const amountCol = findColumn(headers, 'amount');
-  const hourCol = findColumn(headers, 'hour');
-  const timestampCol = findColumn(headers, 'timestamp');
-  const freqCol = findColumn(headers, 'frequency');
-  const newCounterpartyCol = findColumn(headers, 'newCounterparty');
-  const crossBorderCol = findColumn(headers, 'crossBorder');
+  const idCol = findTxCol(headers, 'id');
+  const amountCol = findTxCol(headers, 'amount');
+  const hourCol = findTxCol(headers, 'hour');
+  const timestampCol = findTxCol(headers, 'timestamp');
+  const freqCol = findTxCol(headers, 'frequency');
+  const newCounterpartyCol = findTxCol(headers, 'newCounterparty');
+  const crossBorderCol = findTxCol(headers, 'crossBorder');
 
   // Require at least the amount column plus one of hour/timestamp to
   // consider this a genuine transaction table rather than an unrelated CSV.
@@ -98,6 +68,7 @@ export function parseTransactionFile(buffer, filename) {
   if (freqCol === -1) warnings.push('Sıklık sütunu bulunamadı — varsayılan 1 kullanıldı.');
   if (newCounterpartyCol === -1) warnings.push('Yeni Taraf sütunu bulunamadı — varsayılan 0 kullanıldı.');
   if (crossBorderCol === -1) warnings.push('Sınır Ötesi sütunu bulunamadı — varsayılan 0 kullanıldı.');
+  if (allDataRows.length > MAX_ROWS) warnings.push(`Dosyada ${allDataRows.length} kayıt var, ilk ${MAX_ROWS} kayıt işlendi.`);
 
   const transactions = dataRows.map((row, i) => ({
     id: idCol !== -1 && row[idCol] ? String(row[idCol]) : `TXN-${i + 1}`,

@@ -21,6 +21,8 @@ import { computeQuantumProbabilities, mergeQuantumResults } from '../services/qu
 import { computeFraudRiskScores, mergeFraudResults } from '../services/fraudDetection.js';
 import { computeOptimalAllocation, mergeOptimizerResults } from '../services/portfolioOptimizer.js';
 import { parseTransactionFile } from '../services/transactionSource.js';
+import { parseScenarioFile, parseOptimizationFile } from '../services/scenarioDataSource.js';
+import { sheetToText } from '../services/tableParsing.js';
 import { isWeatherQuery, getLiveWeatherReply } from '../services/weather.js';
 import { researchWeb, formatResearchContext } from '../services/webResearch.js';
 import { logger } from '../lib/logger.js';
@@ -51,21 +53,52 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 
     const name = (file.originalname || '').toLowerCase();
 
-    // BDDK/BTK real transaction data: a CSV/XLSX recognized as a genuine
-    // transaction table skips the AI's invented-sample-records path entirely
-    // -- see transactionSource.js and the realTransactions handling below.
+    // Real-data upload paths: a CSV/XLSX recognized as a genuine transaction,
+    // scenario, or optimization table skips the AI's invented-sample-data
+    // path entirely -- see transactionSource.js / scenarioDataSource.js and
+    // the realTransactions/realScenarios/realOptimization handling below.
     if (/\.(csv|xlsx|xls)$/.test(name)) {
-      const parsed = parseTransactionFile(file.buffer, file.originalname);
-      if (parsed) {
+      const txParsed = parseTransactionFile(file.buffer, file.originalname);
+      if (txParsed) {
         return res.json({
           type: 'transactions',
-          transactions: parsed.transactions,
-          warnings: parsed.warnings,
-          recordCount: parsed.transactions.length,
+          transactions: txParsed.transactions,
+          warnings: txParsed.warnings,
+          recordCount: txParsed.transactions.length,
           filename: file.originalname,
         });
       }
-      return res.status(400).json({ error: 'Dosya bir işlem tablosu olarak tanınamadı. En az "Tutar" ve "Saat"/"Tarih" sütunları gereklidir.' });
+
+      const scenarioParsed = parseScenarioFile(file.buffer, file.originalname);
+      if (scenarioParsed) {
+        return res.json({
+          type: 'scenarios',
+          scenarios: scenarioParsed.scenarios,
+          warnings: scenarioParsed.warnings,
+          recordCount: scenarioParsed.scenarios.length,
+          filename: file.originalname,
+        });
+      }
+
+      const optimizationParsed = parseOptimizationFile(file.buffer, file.originalname);
+      if (optimizationParsed) {
+        return res.json({
+          type: 'optimization',
+          items: optimizationParsed.items,
+          budgetPercent: optimizationParsed.budgetPercent,
+          warnings: optimizationParsed.warnings,
+          recordCount: optimizationParsed.items.length,
+          filename: file.originalname,
+        });
+      }
+
+      // Not a recognized structured table -- still usable as generic document context.
+      try {
+        const csvText = sheetToText(file.buffer);
+        return res.json({ type: 'text', text: csvText.slice(0, 15000), length: csvText.length, filename: file.originalname });
+      } catch (e) {
+        return res.status(400).json({ error: 'Dosya okunamadı: ' + e.message });
+      }
     }
 
     let text = '';
@@ -103,17 +136,29 @@ function isRealTransactionArray(v) {
   return Array.isArray(v) && v.length >= 3 && v.every((t) => t && typeof t.amount !== 'undefined');
 }
 
+function isRealScenarioArray(v) {
+  return Array.isArray(v) && v.length >= 2 && v.every((s) => s && s.title && typeof s.probability !== 'undefined');
+}
+
+function isRealOptimizationProblem(v) {
+  return v && Array.isArray(v.items) && v.items.length >= 2 && v.items.every((it) => it && typeof it.value !== 'undefined' && typeof it.cost !== 'undefined');
+}
+
 /**
  * Standard Analysis — quantum mode optional
- * Body: { category, title, prompt, quantumMode?, documentContext?, realTransactions? }
- * realTransactions: BDDK/BTK only — real records parsed from an uploaded
- * CSV/XLSX (see transactionSource.js). When present, the AI is told NOT to
- * invent sample records and the quantum kernel scores these real rows
- * directly instead of AI-fabricated ones.
+ * Body: { category, title, prompt, quantumMode?, documentContext?, realTransactions?, realScenarios?, realOptimization? }
+ * realTransactions/realScenarios/realOptimization: real records parsed from
+ * an uploaded CSV/XLSX (see transactionSource.js / scenarioDataSource.js).
+ * When present, the AI is told NOT to invent the corresponding table and the
+ * quantum engine computes on these real rows directly instead of ones the
+ * AI fabricated.
  */
 router.post('/generate', authMiddleware, async (req, res) => {
   try {
-    const { category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null } = req.body;
+    const {
+      category, title, prompt, quantumMode = false, documentContext = null, imageData = null,
+      realTransactions = null, realScenarios = null, realOptimization = null,
+    } = req.body;
     const userCode = req.user.userCode;
 
     if (!category || !prompt) {
@@ -122,9 +167,11 @@ router.post('/generate', authMiddleware, async (req, res) => {
 
     const fraudCategory = isFraudCategory(category);
     const hasRealTransactions = fraudCategory && isRealTransactionArray(realTransactions);
+    const hasRealScenarios = !fraudCategory && isRealScenarioArray(realScenarios);
+    const hasRealOptimization = !fraudCategory && isRealOptimizationProblem(realOptimization);
 
     const systemPrompt = quantumMode
-      ? getQuantumSystemPrompt(category, hasRealTransactions)
+      ? getQuantumSystemPrompt(category, { hasRealTransactions, hasRealScenarios, hasRealOptimization })
       : getSystemPromptForCategory(category);
 
     const basePrompt = `${prompt}
@@ -143,15 +190,28 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
         (realTransactions.length > 20 ? `\n... (+${realTransactions.length - 20} kayıt daha)` : '') + '\n\n'
       : '';
 
-    const enrichedPrompt = documentContext || hasRealTransactions
-      ? `[YÜKLENEN KAYNAK BELGE]\n${documentContext || ''}\n\n${realTransactionsNote}[ANALİZ TALEBİ]\n${basePrompt}`
+    const realScenariosNote = hasRealScenarios
+      ? `[YÜKLENEN GERÇEK SENARYO VERİSİ -- ${realScenarios.length} senaryo, kullanıcı tarafından yüklenen dosyadan çıkarıldı. BUNLARI UYDURMA/DEĞİŞTİRME, birincil senaryoyu bunlardan seç ve tam raporu buna göre yaz:]\n` +
+        realScenarios.map((s) => `${s.title}: ${s.probability}${s.timeframe ? `, ${s.timeframe}` : ''}${s.trigger ? `, tetikleyici: ${s.trigger}` : ''}`).join('\n') + '\n\n'
+      : '';
+
+    const realOptimizationNote = hasRealOptimization
+      ? `[YÜKLENEN GERÇEK OPTİMİZASYON VERİSİ -- Bütçe %${realOptimization.budgetPercent}, ${realOptimization.items.length} kalem, kullanıcı tarafından yüklenen dosyadan çıkarıldı. BU TABLOYU UYDURMA/DEĞİŞTİRME:]\n` +
+        realOptimization.items.map((it) => `${it.id}: değer ${it.value}, maliyet ${it.cost}`).join('\n') + '\n\n'
+      : '';
+
+    const hasRealData = hasRealTransactions || hasRealScenarios || hasRealOptimization;
+    const enrichedPrompt = documentContext || hasRealData
+      ? `[YÜKLENEN KAYNAK BELGE]\n${documentContext || ''}\n\n${realTransactionsNote}${realScenariosNote}${realOptimizationNote}[ANALİZ TALEBİ]\n${basePrompt}`
       : basePrompt;
 
     const result = imageData?.base64
       ? await generateAnalysisWithVision(systemPrompt, enrichedPrompt, imageData.base64, imageData.mimetype)
       : await generateAnalysis(systemPrompt, enrichedPrompt);
 
-    let scenarios = quantumMode && !fraudCategory ? parseScenarios(result.content) : null;
+    let scenarios = quantumMode && !fraudCategory
+      ? (hasRealScenarios ? realScenarios : parseScenarios(result.content))
+      : null;
     let quantumComputation = null;
     let fraudComputation = null;
     let optimizerComputation = null;
@@ -173,6 +233,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       if (scenarios?.length) {
         quantumComputation = await computeQuantumProbabilities(scenarios);
         if (quantumComputation) {
+          quantumComputation.dataSource = hasRealScenarios ? 'uploaded' : 'ai-generated';
           const merged = mergeQuantumResults(scenarios, quantumComputation);
           scenarios = merged.scenarios;
           if (merged.note) finalContent += merged.note;
@@ -182,11 +243,13 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       }
 
       // Independent of the scenario matrix: only present when the topic is
-      // shaped like a budget-constrained resource-allocation decision.
-      const optimizationProblem = parseOptimizationProblem(result.content);
+      // shaped like a budget-constrained resource-allocation decision, or
+      // when the user uploaded one directly.
+      const optimizationProblem = hasRealOptimization ? realOptimization : parseOptimizationProblem(result.content);
       if (optimizationProblem?.items?.length) {
         optimizerComputation = await computeOptimalAllocation(optimizationProblem.items, optimizationProblem.budgetPercent);
         if (optimizerComputation) {
+          optimizerComputation.dataSource = hasRealOptimization ? 'uploaded' : 'ai-generated';
           const note = mergeOptimizerResults(optimizerComputation);
           if (note) finalContent += note;
         } else {
@@ -236,6 +299,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             shots: quantumComputation.shots,
             batches: quantumComputation.batches,
             circuitDepth: quantumComputation.circuitDepth,
+            dataSource: quantumComputation.dataSource,
           }
         : null,
       fraud: fraudComputation
@@ -259,6 +323,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             totalCost: optimizerComputation.totalCost,
             budgetPercent: optimizerComputation.budgetPercent,
             items: optimizerComputation.items,
+            dataSource: optimizerComputation.dataSource,
           }
         : null
     });

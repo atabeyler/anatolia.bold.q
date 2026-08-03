@@ -36,6 +36,28 @@ export function FileMessageContent({ text, className = '' }) {
   );
 }
 
+// Turns a structured /analysis/upload result (transactions/scenarios/optimization —
+// see server/src/services/{transactionSource,scenarioDataSource}.js) into plain
+// text so any consumer that only understands text context (e.g. ConsultChat)
+// can still use it, without needing to know about each structured shape.
+export function describeStructuredUpload(file) {
+  if (!file) return '';
+  if (file.type === 'text') return file.text;
+  if (file.type === 'transactions') {
+    return `[Yüklenen gerçek işlem kayıtları: ${file.filename}]\n` +
+      file.transactions.map((t) => `${t.id}: ${t.amount} TL, saat ${t.hour}, sıklık ${t.frequency}, yeni taraf ${t.newCounterparty ? 'evet' : 'hayır'}, sınır ötesi ${t.crossBorder ? 'evet' : 'hayır'}`).join('\n');
+  }
+  if (file.type === 'scenarios') {
+    return `[Yüklenen gerçek senaryo verisi: ${file.filename}]\n` +
+      file.scenarios.map((s) => `${s.title}: ${s.probability}${s.timeframe ? `, ${s.timeframe}` : ''}${s.trigger ? `, tetikleyici: ${s.trigger}` : ''}`).join('\n');
+  }
+  if (file.type === 'optimization') {
+    return `[Yüklenen gerçek optimizasyon verisi: ${file.filename}, bütçe %${file.budgetPercent}]\n` +
+      file.items.map((it) => `${it.id}: değer ${it.value}, maliyet ${it.cost}`).join('\n');
+  }
+  return `[Eklenen dosya: ${file.filename}]\n${window.location.origin}${file.url}`;
+}
+
 function readBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

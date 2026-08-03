@@ -22,6 +22,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const [documentContexts, setDocumentContexts] = useState([]); // [{ filename, text }]
   const [imageFiles, setImageFiles] = useState([]);
   const [realTransactions, setRealTransactions] = useState(null); // { filename, transactions, warnings }
+  const [realScenarios, setRealScenarios] = useState(null); // { filename, scenarios, warnings }
+  const [realOptimization, setRealOptimization] = useState(null); // { filename, items, budgetPercent, warnings }
   const [quantumMode, setQuantumMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingScenario, setLoadingScenario] = useState(null);
@@ -38,6 +40,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const handleAIFile = (file) => {
     if (!file) {
       setRealTransactions(null);
+      setRealScenarios(null);
+      setRealOptimization(null);
       return;
     }
     if (file.type === 'image') {
@@ -46,6 +50,14 @@ export default function AnalysisView({ category, onCategoryChange }) {
     }
     if (file.type === 'transactions') {
       setRealTransactions({ filename: file.filename, transactions: file.transactions, warnings: file.warnings || [] });
+      return;
+    }
+    if (file.type === 'scenarios') {
+      setRealScenarios({ filename: file.filename, scenarios: file.scenarios, warnings: file.warnings || [] });
+      return;
+    }
+    if (file.type === 'optimization') {
+      setRealOptimization({ filename: file.filename, items: file.items, budgetPercent: file.budgetPercent, warnings: file.warnings || [] });
       return;
     }
     if (file.type === 'text') {
@@ -68,7 +80,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
     try {
       const aiImageData = imageFiles[0] ? { base64: imageFiles[0].base64, mimetype: imageFiles[0].mimetype } : null;
       const mergedContext = documentContexts.length ? documentContexts.map((d) => d.text).join('\n\n') : null;
-      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null);
+      const realOptimizationPayload = realOptimization ? { items: realOptimization.items, budgetPercent: realOptimization.budgetPercent } : null;
+      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload);
       setResult(r);
     } catch (e) {
       setError(e.message);
@@ -110,6 +123,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
     setDocumentContexts([]);
     setImageFiles([]);
     setRealTransactions(null);
+    setRealScenarios(null);
+    setRealOptimization(null);
   };
 
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;
@@ -139,10 +154,11 @@ export default function AnalysisView({ category, onCategoryChange }) {
             {(documentContexts.length > 0 || imageFiles.length > 0) && <span className="text-[10px] text-emerald-400 font-mono">✓ {documentContexts.length + imageFiles.length} kaynak dosya eklendi</span>}
           </div>
 
-          {isFraudCategory && (
+          {quantumMode && (
             <p className="text-[10px] text-gold/40 leading-relaxed">
-              BDDK/BTK için gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz;
-              yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.
+              {isFraudCategory
+                ? 'Gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz; yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.'
+                : 'Gerçek senaryo verisi ("Senaryo"/"Olasılık" sütunları) veya kaynak tahsisi tablosu ("Kalem"/"Değer"/"Maliyet" sütunları) yükleyebilirsiniz; yüklenirse kuantum motoru YZ tahmini yerine bu gerçek verileri kullanır.'}
             </p>
           )}
 
@@ -153,6 +169,30 @@ export default function AnalysisView({ category, onCategoryChange }) {
               </span>
               <button type="button" onClick={() => setRealTransactions(null)} className="text-xs text-red-300">×</button>
               {realTransactions.warnings.map((w, i) => (
+                <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
+              ))}
+            </div>
+          )}
+
+          {realScenarios && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
+                ✓ {realScenarios.scenarios.length} gerçek senaryo yüklendi ({realScenarios.filename})
+              </span>
+              <button type="button" onClick={() => setRealScenarios(null)} className="text-xs text-red-300">×</button>
+              {realScenarios.warnings.map((w, i) => (
+                <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
+              ))}
+            </div>
+          )}
+
+          {realOptimization && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
+                ✓ {realOptimization.items.length} gerçek kalem yüklendi, bütçe %{realOptimization.budgetPercent} ({realOptimization.filename})
+              </span>
+              <button type="button" onClick={() => setRealOptimization(null)} className="text-xs text-red-300">×</button>
+              {realOptimization.warnings.map((w, i) => (
                 <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
               ))}
             </div>

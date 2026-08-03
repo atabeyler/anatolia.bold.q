@@ -104,11 +104,15 @@ export function mergeOptimizerResults(optimizerResult) {
       ? ' Gerçek donanıma gönderim denendi ancak kuyruk/zaman aşımı nedeniyle yerel simülatöre düşüldü.'
       : '';
 
+  const sourceNote = optimizerResult.dataSource === 'uploaded'
+    ? ' Kalem/değer/maliyet tablosu kullanıcı tarafından yüklenen bir dosyadan (CSV/XLSX) çıkarılan GERÇEK verilerdir.'
+    : ' Gerçek veri sağlanmadığından bu tablo YZ tarafından üretilmiştir.';
+
   const note = `\n## KUANTUM KAYNAK TAHSİSİ OPTİMİZASYONU (QAOA)\n` +
     `Aşağıdaki seçim, ${optimizerResult.qubits}-kübitlik bir QAOA (Quantum Approximate Optimization Algorithm) devresiyle ` +
     `gerçek bir kısıtlı optimizasyon problemi olarak çözülmüştür — bütçe kısıtı (%${optimizerResult.budgetPercent}) kayan (slack) kübitlerle ` +
     `devreye tam olarak kodlanmış, klasik bir COBYLA optimizasyon döngüsü devrenin parametrelerini ayarlamıştır. ` +
-    `Sonuç, bütçeyi aşmayan (fizibıl) ölçümler arasından en yüksek değerli olanıdır.${hardwareNote}\n\n` +
+    `Sonuç, bütçeyi aşmayan (fizibıl) ölçümler arasından en yüksek değerli olanıdır.${hardwareNote}${sourceNote}\n\n` +
     `**Toplam değer: ${optimizerResult.totalValue} · Toplam maliyet: %${optimizerResult.totalCost} / %${optimizerResult.budgetPercent} bütçe**\n\n` +
     `| Kalem | Değer | Maliyet | Durum |\n|---|---|---|---|\n${rows}\n\n` +
     `### QAOA Devresi\n\`\`\`\n${optimizerResult.circuitDiagram}\n\`\`\`\n`;

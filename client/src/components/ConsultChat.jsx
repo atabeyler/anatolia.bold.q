@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { Send, Trash2, Loader2, User, Bot, MessageSquare } from 'lucide-react';
 import { api } from '../services/api.js';
 import VoiceButton from './VoiceButton.jsx';
-import FileAttach from './FileAttach.jsx';
+import FileAttach, { describeStructuredUpload } from './FileAttach.jsx';
 import { useLang } from '../services/langContext.jsx';
 
 const STORAGE_KEY = 'aq_consult_history';
@@ -66,7 +66,7 @@ export default function ConsultChat() {
       const imageApiData = firstImageForApi ? { base64: firstImageForApi.base64, mimetype: firstImageForApi.mimetype } : null;
       const docContext = currentFiles
         .filter((f) => f.type !== 'image')
-        .map((f) => (f.type === 'text' ? f.text : `[Eklenen dosya: ${f.filename}]\n${window.location.origin}${f.url}`))
+        .map(describeStructuredUpload)
         .join('\n\n');
 
       let streamingStarted = false;

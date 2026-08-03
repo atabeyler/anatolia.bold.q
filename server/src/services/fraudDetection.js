@@ -28,6 +28,8 @@ const MAX_TRANSACTIONS = 60;
 export function computeFraudRiskScores(transactions) {
   if (!Array.isArray(transactions) || transactions.length < 3) return Promise.resolve(null);
 
+  const originalCount = transactions.length;
+  const truncated = originalCount > MAX_TRANSACTIONS;
   const payload = JSON.stringify({ transactions: transactions.slice(0, MAX_TRANSACTIONS) });
 
   return new Promise((resolve) => {
@@ -75,6 +77,10 @@ export function computeFraudRiskScores(transactions) {
           logger.warn({ kernelError: parsed.error }, '[FraudDetection] Kernel error');
           return finish(null);
         }
+        if (truncated) {
+          parsed.truncated = true;
+          parsed.originalCount = originalCount;
+        }
         finish(parsed);
       } catch (e) {
         logger.warn({ err: e }, '[FraudDetection] Failed to parse output');
@@ -104,9 +110,13 @@ export function mergeFraudResults(fraudResult) {
     ? 'Bu kayıtlar kullanıcı tarafından yüklenen bir dosyadan (CSV/XLSX) çıkarılan GERÇEK işlem verileridir.'
     : 'Gerçek veri sağlanmadığından bu kayıtlar senaryoyu temsil eden ÖRNEK/yapay veridir (bkz. yukarıdaki üretim notu).';
 
+  const truncationNote = fraudResult.truncated
+    ? ` **Not:** Yüklenen/üretilen ${fraudResult.originalCount} kayıttan yalnızca ilk ${fraudResult.transactionCount} tanesi (kernel'in O(n²) karmaşıklığı nedeniyle) taranmıştır.`
+    : '';
+
   const note = `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n` +
     `${fraudResult.transactionCount} işlem kaydı, ${fraudResult.qubits}-kübitlik bir öznitelik-haritalama (feature-map) devresine kodlanıp ` +
-    `her işlem çifti arasındaki kuantum çakışma (fidelity) değeri hesaplanarak bir kuantum çekirdek (kernel) matrisi oluşturulmuştur. ` +
+    `her işlem çifti arasındaki kuantum çakışma (fidelity) değeri hesaplanarak bir kuantum çekirdek (kernel) matrisi oluşturulmuştur.${truncationNote} ` +
     `Bir işlemin risk skoru, bu kuantum uzayında diğer tüm işlemlere olan ortalama benzerliğinin tersidir — ortalamadan istatistiksel olarak sapan işlemler işaretlenmiştir. ` +
     `${sourceNote}\n` +
     `Backend: ${fraudResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${fraudResult.circuitDepth} — gerçek banka/operatör sistemlerine canlı bağlantı yoktur, bu bölüm sadece sağlanan/üretilen kayıtları puanlar).\n\n` +
