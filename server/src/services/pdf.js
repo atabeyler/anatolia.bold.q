@@ -54,6 +54,22 @@ function drawCoverPage(doc, { category, title, userCode, aiProvider }) {
   doc.addPage();
 }
 
+// Writes a line with mid-line **bold** spans as alternating normal/bold
+// font runs (pdfkit continued-text chaining), instead of literal asterisks.
+function writeInline(doc, text, { size = 10.5, color = COLORS.black, align } = {}) {
+  const parts = String(text).split(/\*\*(.+?)\*\*/g).filter((s) => s.length);
+  if (!parts.length) { doc.text('', { align }); return; }
+  parts.forEach((part, i) => {
+    const isLast = i === parts.length - 1;
+    doc.font(i % 2 === 1 ? FONT_BOLD : FONT).fontSize(size).fillColor(color)
+      .text(part, { continued: !isLast, align });
+  });
+}
+
+function stripBoldMarkers(text) {
+  return String(text ?? '').replace(/\*\*(.+?)\*\*/g, '$1');
+}
+
 function drawTable(doc, headers, rows) {
   const startX = doc.page.margins.left;
   const tableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -63,7 +79,7 @@ function drawTable(doc, headers, rows) {
   const rowHeight = (cells) => {
     let max = 0;
     for (let i = 0; i < cells.length; i++) {
-      const h = doc.heightOfString(String(cells[i] ?? ''), { width: colWidth - rowPad * 2 });
+      const h = doc.heightOfString(stripBoldMarkers(cells[i]), { width: colWidth - rowPad * 2 });
       if (h > max) max = h;
     }
     return max + rowPad * 2;
@@ -78,7 +94,7 @@ function drawTable(doc, headers, rows) {
     }
     doc.font(opts.header ? FONT_BOLD : FONT).fontSize(9).fillColor(opts.header ? '#FFFFFF' : COLORS.black);
     for (let i = 0; i < cells.length; i++) {
-      doc.text(String(cells[i] ?? ''), startX + i * colWidth + rowPad, y + rowPad, { width: colWidth - rowPad * 2 });
+      doc.text(stripBoldMarkers(cells[i]), startX + i * colWidth + rowPad, y + rowPad, { width: colWidth - rowPad * 2 });
     }
     doc.y = y + h;
     doc.moveTo(startX, doc.y).lineTo(startX + tableWidth, doc.y).strokeColor(COLORS.gray).lineWidth(0.5).stroke();
@@ -128,8 +144,23 @@ function parseAndDraw(doc, md) {
       continue;
     }
 
+    // Thematic break ("---", "***", "___" alone on a line) used as a
+    // section divider -- drawn as a rule, not literal dashes.
+    if (line.trim().match(/^(-{3,}|\*{3,}|_{3,})$/)) {
+      ensureSpace(10);
+      const startX = doc.page.margins.left;
+      const endX = doc.page.width - doc.page.margins.right;
+      doc.moveTo(startX, doc.y).lineTo(endX, doc.y).strokeColor(COLORS.gray).lineWidth(0.5).stroke();
+      doc.moveDown(0.4);
+      i++;
+      continue;
+    }
+
     ensureSpace();
-    if (line.startsWith('### ')) {
+    if (line.startsWith('#### ')) {
+      doc.font(FONT_BOLD).fontSize(11).fillColor(COLORS.darkBlue).text(line.slice(5).trim());
+      doc.moveDown(0.25);
+    } else if (line.startsWith('### ')) {
       doc.font(FONT_ITALIC).fontSize(12).fillColor(COLORS.black).text(line.slice(4).trim());
       doc.moveDown(0.3);
     } else if (line.startsWith('## ')) {
@@ -141,13 +172,13 @@ function parseAndDraw(doc, md) {
       doc.font(FONT_BOLD).fontSize(15).fillColor(COLORS.darkBlue).text(line.slice(2).trim().toUpperCase());
       doc.moveDown(0.4);
     } else if (line.match(/^[-*]\s+/)) {
-      doc.font(FONT).fontSize(10).fillColor(COLORS.black).text(`•  ${line.replace(/^[-*]\s+/, '')}`, { indent: 12 });
+      doc.font(FONT).fontSize(10).fillColor(COLORS.black).text('•  ', { indent: 12, continued: true });
+      writeInline(doc, line.replace(/^[-*]\s+/, ''), { size: 10 });
     } else if (line.match(/^\d+\.\s+/)) {
-      doc.font(FONT).fontSize(10).fillColor(COLORS.black).text(`•  ${line.replace(/^\d+\.\s+/, '')}`, { indent: 12 });
+      doc.font(FONT).fontSize(10).fillColor(COLORS.black).text('•  ', { indent: 12, continued: true });
+      writeInline(doc, line.replace(/^\d+\.\s+/, ''), { size: 10 });
     } else if (line.trim()) {
-      const bold = line.startsWith('**') && line.endsWith('**');
-      const text = line.replace(/\*\*(.+?)\*\*/g, '$1');
-      doc.font(bold ? FONT_BOLD : FONT).fontSize(10.5).fillColor(COLORS.black).text(text, { align: 'justify' });
+      writeInline(doc, line, { size: 10.5, align: 'justify' });
     } else {
       doc.moveDown(0.4);
     }

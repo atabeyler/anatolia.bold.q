@@ -25,11 +25,31 @@ function styledRun(text, opts = {}) {
   });
 }
 
+// Splits a line on **bold** spans and returns one TextRun per span, so
+// mid-line markdown bold (e.g. "**Etiket:** açıklama devamı") renders as
+// actual Word bold instead of the literal asterisks showing up in the text.
+function inlineRuns(text, opts = {}) {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts
+    .filter((part) => part.length)
+    .map((part, i) => styledRun(part, { ...opts, bold: opts.bold || i % 2 === 1 }));
+}
+
 function p(text, opts = {}) {
   return new Paragraph({
     spacing: { before: 120, after: 120, line: 276 }, // 1.15 line spacing
     alignment: opts.alignment || AlignmentType.JUSTIFIED,
-    children: [styledRun(text, opts)]
+    children: inlineRuns(text, opts)
+  });
+}
+
+// Thematic break ("---", "***", "___" on their own line) -- rendered as a
+// paragraph bottom border instead of literal dashes.
+function hr() {
+  return new Paragraph({
+    spacing: { before: 120, after: 240 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: COLORS.gray, space: 1 } },
+    children: []
   });
 }
 
@@ -76,11 +96,24 @@ function h3(text) {
   });
 }
 
+function h4(text) {
+  return new Paragraph({
+    spacing: { before: 160, after: 80 },
+    children: [new TextRun({
+      text,
+      font: FONT,
+      size: 22,
+      bold: true,
+      color: COLORS.darkBlue
+    })]
+  });
+}
+
 function bullet(text) {
   return new Paragraph({
     spacing: { before: 60, after: 60, line: 276 },
     bullet: { level: 0 },
-    children: [styledRun(text)]
+    children: inlineRuns(text)
   });
 }
 
@@ -120,7 +153,7 @@ function buildTable(headers, rows, customWidthsPct = null) {
     margins: cellMargins,
     children: [new Paragraph({
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: h, font: FONT, size: 20, bold: true, color: 'FFFFFF' })]
+      children: inlineRuns(h, { size: 20, bold: true, color: 'FFFFFF' })
     })]
   }));
 
@@ -136,7 +169,7 @@ function buildTable(headers, rows, customWidthsPct = null) {
         margins: cellMargins,
         children: [new Paragraph({
           alignment: AlignmentType.LEFT,
-          children: [new TextRun({ text: String(cell), font: FONT, size: 20 })]
+          children: inlineRuns(String(cell), { size: 20 })
         })]
       }))
     });
@@ -197,16 +230,17 @@ function parseMarkdown(md) {
       continue;
     }
 
-    if (line.startsWith('### ')) elements.push(h3(line.slice(4).trim()));
+    // Thematic break ("---", "***", "___" alone on a line) used as a
+    // section divider -- rendered as a rule, not literal dashes.
+    if (line.trim().match(/^(-{3,}|\*{3,}|_{3,})$/)) elements.push(hr());
+    else if (line.startsWith('#### ')) elements.push(h4(line.slice(5).trim()));
+    else if (line.startsWith('### ')) elements.push(h3(line.slice(4).trim()));
     else if (line.startsWith('## ')) elements.push(h2(line.slice(3).trim()));
     else if (line.startsWith('# ')) elements.push(h1(line.slice(2).trim()));
     else if (line.match(/^[-*]\s+/)) elements.push(bullet(line.replace(/^[-*]\s+/, '')));
     else if (line.match(/^\d+\.\s+/)) elements.push(bullet(line.replace(/^\d+\.\s+/, '')));
     else if (line.trim()) {
-      // Bold ** ** support
-      elements.push(p(line.replace(/\*\*(.+?)\*\*/g, '$1'), {
-        bold: line.startsWith('**') && line.endsWith('**')
-      }));
+      elements.push(p(line));
     } else {
       elements.push(p(''));
     }

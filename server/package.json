@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-server",
-  "version": "2.1.57",
+  "version": "2.1.59",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -53,6 +53,7 @@
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
+    "jszip": "^3.10.1",
     "nodemon": "^3.1.7",
     "prettier": "^3.9.5",
     "supertest": "^7.1.1",
