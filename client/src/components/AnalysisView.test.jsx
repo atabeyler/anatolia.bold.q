@@ -6,7 +6,9 @@ import { api } from '../services/api.js';
 
 vi.mock('../services/api.js', () => ({
   api: {
-    generateAnalysis: vi.fn(async () => ({ success: true, content: '# Rapor', docxBase64: btoa('docx-bytes'), quantumMode: false })),
+    generateAnalysis: vi.fn(async () => ({
+      success: true, content: '# Rapor', docxBase64: btoa('docx-bytes'), pdfBase64: btoa('pdf-bytes'), quantumMode: false,
+    })),
     scenarioDeepDive: vi.fn(async () => ({ content: '# Alt senaryo' })),
   },
 }));
@@ -128,5 +130,41 @@ describe('AnalysisView', () => {
 
     fireEvent.click(screen.getByText('Ana Rapora Dön'));
     expect(screen.queryByText('Alt senaryo')).not.toBeInTheDocument();
+  });
+
+  it('downloads the PDF as a client-side blob (no extra network call, since it comes back with the analysis)', async () => {
+    renderView({ category: 'ekonomi' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'brief' } });
+    fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
+    await screen.findByText('Rapor');
+
+    fireEvent.click(screen.getByRole('button', { name: /\.PDF İNDİR/i }));
+    expect(URL.createObjectURL).toHaveBeenCalled();
+  });
+
+  it('shares the report via the Web Share API when the platform supports file sharing', async () => {
+    const shareMock = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { ...navigator, canShare: () => true, share: shareMock });
+    renderView({ category: 'ekonomi' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'brief' } });
+    fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
+    await screen.findByText('Rapor');
+
+    fireEvent.click(screen.getByRole('button', { name: /PAYLAŞ/i }));
+    await waitFor(() => expect(shareMock).toHaveBeenCalled());
+  });
+
+  it('falls back to a plain download when sharing when the platform has no file-share support', async () => {
+    vi.stubGlobal('navigator', { ...navigator, canShare: undefined, share: undefined });
+    renderView({ category: 'ekonomi' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'brief' } });
+    fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
+    await screen.findByText('Rapor');
+
+    fireEvent.click(screen.getByRole('button', { name: /PAYLAŞ/i }));
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
   });
 });

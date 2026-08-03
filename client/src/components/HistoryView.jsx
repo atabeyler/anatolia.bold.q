@@ -2,9 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Download, FileText, Eye, Loader2, Search, FileDown } from 'lucide-react';
+import { Download, FileText, Eye, Loader2, Search, FileDown, Share2 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
+import { shareOrDownloadBlob } from '../services/shareFile.js';
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function HistoryView({ showTitle = true }) {
   const { t } = useLang();
@@ -48,12 +58,31 @@ export default function HistoryView({ showTitle = true }) {
     }
   };
 
-  const download = (id) => {
-    window.open(api.historyDownloadUrl(id), '_blank');
+  const download = async (id) => {
+    try {
+      const { blob, filename } = await api.historyDownloadBlob(id);
+      triggerDownload(blob, filename || `ANATOLIA-Q_${id}.docx`);
+    } catch (e) {
+      alert(`${t('errorPrefix')}: ${e.message}`);
+    }
   };
 
-  const downloadPdf = (id) => {
-    window.open(api.historyDownloadPdfUrl(id), '_blank');
+  const downloadPdf = async (id) => {
+    try {
+      const { blob, filename } = await api.historyDownloadPdfBlob(id);
+      triggerDownload(blob, filename || `ANATOLIA-Q_${id}.pdf`);
+    } catch (e) {
+      alert(`${t('errorPrefix')}: ${e.message}`);
+    }
+  };
+
+  const share = async (id, title) => {
+    try {
+      const { blob, filename } = await api.historyDownloadPdfBlob(id);
+      await shareOrDownloadBlob(blob, filename || `ANATOLIA-Q_${id}.pdf`, 'application/pdf', title || 'ANATOLIA-Q Raporu');
+    } catch (e) {
+      alert(`${t('errorPrefix')}: ${e.message}`);
+    }
   };
 
   return (
@@ -140,6 +169,13 @@ export default function HistoryView({ showTitle = true }) {
                 >
                   <FileDown className="w-3 h-3" />
                 </button>
+                <button
+                  onClick={() => share(item.id, item.title)}
+                  title={t('share')}
+                  className="border border-gold/40 text-gold px-2.5 py-1.5 rounded text-xs tracking-widest hover:bg-gold/10 flex items-center justify-center"
+                >
+                  <Share2 className="w-3 h-3" />
+                </button>
               </div>
             </motion.div>
           ))}
@@ -170,6 +206,12 @@ export default function HistoryView({ showTitle = true }) {
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{selected.content}</ReactMarkdown>
             </div>
             <div className="p-3 border-t border-gold/30 flex justify-end gap-2">
+              <button
+                onClick={() => share(selected.id, selected.title)}
+                className="border border-gold/40 text-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2 hover:bg-gold/10"
+              >
+                <Share2 className="w-4 h-4" /> {t('share')}
+              </button>
               <button
                 onClick={() => downloadPdf(selected.id)}
                 className="border border-gold/40 text-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2 hover:bg-gold/10"

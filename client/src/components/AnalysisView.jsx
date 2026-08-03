@@ -4,12 +4,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Sparkles, Download, Loader2, Atom,
-  BarChart3, ArrowLeft
+  BarChart3, ArrowLeft, Share2, FileDown
 } from 'lucide-react';
 import { CATEGORIES } from './CategorySidebar.jsx';
 import { api } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 import { reportTitleExamples } from '../services/i18n.js';
+import { base64ToBlob, shareOrDownloadBlob } from '../services/shareFile.js';
 import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
 import FileAttach from './FileAttach.jsx';
@@ -112,6 +113,23 @@ export default function AnalysisView({ category, onCategoryChange }) {
     a.download = `ANATOLIA-Q_${category}_${Date.now()}.docx`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadPdf = (res = result) => {
+    if (!res?.pdfBase64) return;
+    const blob = base64ToBlob(res.pdfBase64, 'application/pdf');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ANATOLIA-Q_${category}_${Date.now()}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const shareReport = (res = result) => {
+    if (!res?.pdfBase64) return;
+    const blob = base64ToBlob(res.pdfBase64, 'application/pdf');
+    shareOrDownloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf', res.title || 'ANATOLIA-Q Raporu');
   };
 
   const reset = () => {
@@ -265,6 +283,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
             <div className="flex gap-2 flex-wrap items-center">
               <VoiceButton mode="output" text={result.content} size="sm" />
               <button onClick={() => downloadDocx(result)} className="btn-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2"><Download className="w-4 h-4" /> {t('downloadDocx')}</button>
+              <button onClick={() => downloadPdf(result)} className="btn-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2"><FileDown className="w-4 h-4" /> {t('downloadPdf')}</button>
+              <button onClick={() => shareReport(result)} className="border border-gold/40 text-gold px-4 py-2 rounded text-xs tracking-widest hover:bg-gold/10 flex items-center gap-2"><Share2 className="w-4 h-4" /> {t('share')}</button>
               <button onClick={reset} className="border border-gold/40 text-gold px-4 py-2 rounded text-xs tracking-widest hover:bg-gold/10">{t('newAnalysisBtn')}</button>
             </div>
           </div>
@@ -285,6 +305,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
             <button onClick={() => setScenarioResult(null)} className="text-gold/60 hover:text-gold flex items-center gap-1 text-xs"><ArrowLeft className="w-4 h-4" /> {t('backToMain')}</button>
             <div className="flex-1 text-center"><span className="text-gold font-display text-sm tracking-widest">{t('altScenario')}: {scenarioResult.scenarioLabel}</span></div>
             <button onClick={() => downloadDocx(scenarioResult)} className="btn-gold px-3 py-1.5 rounded text-xs tracking-widest flex items-center gap-2"><Download className="w-3 h-3" /> .DOCX</button>
+            <button onClick={() => downloadPdf(scenarioResult)} className="btn-gold px-3 py-1.5 rounded text-xs tracking-widest flex items-center gap-2"><FileDown className="w-3 h-3" /> .PDF</button>
+            <button onClick={() => shareReport(scenarioResult)} className="border border-gold/40 text-gold px-3 py-1.5 rounded text-xs tracking-widest hover:bg-gold/10 flex items-center gap-2"><Share2 className="w-3 h-3" /> {t('share')}</button>
           </div>
           <div className="bg-navy-light/70 border border-gold/50 rounded-lg p-8 report-content max-h-[70vh] overflow-auto"><ReactMarkdown remarkPlugins={[remarkGfm]}>{scenarioResult.content}</ReactMarkdown></div>
         </motion.div>
@@ -336,9 +358,3 @@ function CategoryPicker({ onSelect }) {
   );
 }
 
-function base64ToBlob(b64, mime) {
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
-}

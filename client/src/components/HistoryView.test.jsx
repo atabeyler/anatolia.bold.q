@@ -8,8 +8,8 @@ vi.mock('../services/api.js', () => ({
   api: {
     historyList: vi.fn(async () => []),
     historyGet: vi.fn(async (id) => ({ id, title: 'Detay', category: 'ekonomi', content: '# Rapor' })),
-    historyDownloadUrl: vi.fn((id) => `/api/history/${id}/docx`),
-    historyDownloadPdfUrl: vi.fn((id) => `/api/history/${id}/pdf`),
+    historyDownloadBlob: vi.fn(async (id) => ({ blob: new Blob(['docx']), filename: `ANATOLIA-Q_${id}.docx` })),
+    historyDownloadPdfBlob: vi.fn(async (id) => ({ blob: new Blob(['pdf']), filename: `ANATOLIA-Q_${id}.pdf` })),
   },
 }));
 
@@ -26,6 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('open', vi.fn());
   vi.stubGlobal('alert', vi.fn());
+  vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:mock'), revokeObjectURL: vi.fn() });
 });
 
 describe('HistoryView', () => {
@@ -85,11 +86,41 @@ describe('HistoryView', () => {
     await waitFor(() => expect(window.alert).toHaveBeenCalled());
   });
 
-  it('opens the docx download URL in a new tab', async () => {
+  it('downloads the docx via an authenticated blob fetch, not an unauthenticated window.open', async () => {
     api.historyList.mockResolvedValue(ITEMS);
     renderHistory();
     await screen.findByText('Ekonomi Raporu');
     fireEvent.click(screen.getAllByText('İNDİR')[0]);
-    expect(window.open).toHaveBeenCalledWith('/api/history/1/docx', '_blank');
+    await waitFor(() => expect(api.historyDownloadBlob).toHaveBeenCalledWith(1));
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  it('downloads the PDF via an authenticated blob fetch', async () => {
+    api.historyList.mockResolvedValue(ITEMS);
+    renderHistory();
+    await screen.findByText('Ekonomi Raporu');
+    fireEvent.click(screen.getAllByTitle('PDF indir')[0]);
+    await waitFor(() => expect(api.historyDownloadPdfBlob).toHaveBeenCalledWith(1));
+  });
+
+  it('shares the PDF via the Web Share API when the platform supports file sharing', async () => {
+    const shareMock = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { ...navigator, canShare: () => true, share: shareMock });
+    api.historyList.mockResolvedValue(ITEMS);
+    renderHistory();
+    await screen.findByText('Ekonomi Raporu');
+    fireEvent.click(screen.getAllByTitle('PAYLAŞ')[0]);
+    await waitFor(() => expect(api.historyDownloadPdfBlob).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(shareMock).toHaveBeenCalled());
+  });
+
+  it('falls back to a plain download when the platform has no file-share support', async () => {
+    vi.stubGlobal('navigator', { ...navigator, canShare: undefined, share: undefined });
+    api.historyList.mockResolvedValue(ITEMS);
+    renderHistory();
+    await screen.findByText('Ekonomi Raporu');
+    fireEvent.click(screen.getAllByTitle('PAYLAŞ')[0]);
+    await waitFor(() => expect(api.historyDownloadPdfBlob).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
   });
 });

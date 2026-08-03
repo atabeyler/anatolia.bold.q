@@ -14,6 +14,7 @@ import {
   isFraudCategory
 } from '../services/ai.js';
 import { generateReportDocx } from '../services/docx.js';
+import { generateReportPdf } from '../services/pdf.js';
 import { sendAnalysisReport } from '../services/email.js';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { analyses, messages } from '../db/schema.js';
@@ -280,6 +281,13 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       userCode,
       aiProvider: result.provider
     });
+    const pdfBuffer = await generateReportPdf({
+      category,
+      title: title || prompt.slice(0, 80),
+      content: finalContent,
+      userCode,
+      aiProvider: result.provider
+    });
 
     sendAnalysisReport(userCode, category, title || prompt.slice(0, 80), docxBuffer)
       .catch(e => logger.error({ err: e }, 'Mail error'));
@@ -290,6 +298,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       provider: result.provider,
       content: finalContent,
       docxBase64: docxBuffer.toString('base64'),
+      pdfBase64: pdfBuffer.toString('base64'),
       quantumMode,
       scenarios,
       quantum: quantumComputation
@@ -368,6 +377,13 @@ router.post('/scenario-deep-dive', authMiddleware, async (req, res) => {
       userCode,
       aiProvider: result.provider
     });
+    const pdfBuffer = await generateReportPdf({
+      category,
+      title: `ALTERNATİF SENARYO: ${scenarioId}`,
+      content: result.content,
+      userCode,
+      aiProvider: result.provider
+    });
 
     res.json({
       success: true,
@@ -375,6 +391,7 @@ router.post('/scenario-deep-dive', authMiddleware, async (req, res) => {
       provider: result.provider,
       content: result.content,
       docxBase64: docxBuffer.toString('base64'),
+      pdfBase64: pdfBuffer.toString('base64'),
       scenarioId
     });
   } catch (err) {

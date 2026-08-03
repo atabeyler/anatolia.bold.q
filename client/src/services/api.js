@@ -29,6 +29,18 @@ async function req(path, options = {}) {
   return res.json();
 }
 
+async function reqBlob(path) {
+  const jwt = getJWT();
+  const headers = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+  const res = await fetch(baseFor(path) + path, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'API hatası');
+  }
+  const filename = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1];
+  return { blob: await res.blob(), filename };
+}
+
 export const api = {
   loginRequest: (userCode, password) =>
     req('/api/auth/login-request', { method: 'POST', body: JSON.stringify({ userCode, password }) }),
@@ -147,8 +159,12 @@ export const api = {
   morningBriefList: () => req('/api/history/morning-brief/list'),
   morningBriefByDate: (date) => req(`/api/history/morning-brief/date/${date}`),
   historyGet: (id) => req(`/api/history/${id}`),
-  historyDownloadUrl: (id) => `${API}/api/history/${id}/download`,
-  historyDownloadPdfUrl: (id) => `${API}/api/history/${id}/download-pdf`,
+  // These endpoints require the Bearer token like any other API call, so a
+  // plain window.open() (no Authorization header) gets a 401 instead of the
+  // file -- fetch it ourselves and hand back a Blob the caller can download
+  // or feed into the Web Share API.
+  historyDownloadBlob: (id) => reqBlob(`/api/history/${id}/download`),
+  historyDownloadPdfBlob: (id) => reqBlob(`/api/history/${id}/download-pdf`),
 
   voiceIntent: (transcript, context, actions) =>
     req('/api/voice/intent', { method: 'POST', body: JSON.stringify({ transcript, context, actions }) }),
