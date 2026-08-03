@@ -20,6 +20,7 @@ import { analyses, messages } from '../db/schema.js';
 import { computeQuantumProbabilities, mergeQuantumResults } from '../services/quantum.js';
 import { computeFraudRiskScores, mergeFraudResults } from '../services/fraudDetection.js';
 import { computeOptimalAllocation, mergeOptimizerResults } from '../services/portfolioOptimizer.js';
+import { parseTransactionFile } from '../services/transactionSource.js';
 import { isWeatherQuery, getLiveWeatherReply } from '../services/weather.js';
 import { researchWeb, formatResearchContext } from '../services/webResearch.js';
 import { logger } from '../lib/logger.js';
@@ -49,6 +50,24 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
     }
 
     const name = (file.originalname || '').toLowerCase();
+
+    // BDDK/BTK real transaction data: a CSV/XLSX recognized as a genuine
+    // transaction table skips the AI's invented-sample-records path entirely
+    // -- see transactionSource.js and the realTransactions handling below.
+    if (/\.(csv|xlsx|xls)$/.test(name)) {
+      const parsed = parseTransactionFile(file.buffer, file.originalname);
+      if (parsed) {
+        return res.json({
+          type: 'transactions',
+          transactions: parsed.transactions,
+          warnings: parsed.warnings,
+          recordCount: parsed.transactions.length,
+          filename: file.originalname,
+        });
+      }
+      return res.status(400).json({ error: 'Dosya bir işlem tablosu olarak tanınamadı. En az "Tutar" ve "Saat"/"Tarih" sütunları gereklidir.' });
+    }
+
     let text = '';
 
     if (name.endsWith('.txt') || file.mimetype === 'text/plain') {
@@ -80,21 +99,32 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
   }
 });
 
+function isRealTransactionArray(v) {
+  return Array.isArray(v) && v.length >= 3 && v.every((t) => t && typeof t.amount !== 'undefined');
+}
+
 /**
  * Standard Analysis — quantum mode optional
- * Body: { category, title, prompt, quantumMode?, documentContext? }
+ * Body: { category, title, prompt, quantumMode?, documentContext?, realTransactions? }
+ * realTransactions: BDDK/BTK only — real records parsed from an uploaded
+ * CSV/XLSX (see transactionSource.js). When present, the AI is told NOT to
+ * invent sample records and the quantum kernel scores these real rows
+ * directly instead of AI-fabricated ones.
  */
 router.post('/generate', authMiddleware, async (req, res) => {
   try {
-    const { category, title, prompt, quantumMode = false, documentContext = null, imageData = null } = req.body;
+    const { category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null } = req.body;
     const userCode = req.user.userCode;
 
     if (!category || !prompt) {
       return res.status(400).json({ error: 'category ve prompt zorunlu' });
     }
 
+    const fraudCategory = isFraudCategory(category);
+    const hasRealTransactions = fraudCategory && isRealTransactionArray(realTransactions);
+
     const systemPrompt = quantumMode
-      ? getQuantumSystemPrompt(category)
+      ? getQuantumSystemPrompt(category, hasRealTransactions)
       : getSystemPromptForCategory(category);
 
     const basePrompt = `${prompt}
@@ -107,15 +137,20 @@ Raporun sonunda şu bilgileri mutlaka ekle:
 - Bu konudaki ulusal mevzuat referansı (kanun/yönetmelik numarası)
 ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık matrisi sun.' : ''}`;
 
-    const enrichedPrompt = documentContext
-      ? `[YÜKLENEN KAYNAK BELGE]\n${documentContext}\n\n[ANALİZ TALEBİ]\n${basePrompt}`
+    const realTransactionsNote = hasRealTransactions
+      ? `[YÜKLENEN GERÇEK İŞLEM VERİSİ -- ${realTransactions.length} kayıt, kullanıcı tarafından yüklenen dosyadan çıkarıldı. BUNLARI UYDURMA/YENİDEN ÜRETME, sadece aşağıdaki gerçek kayıtlara dayanarak yorum yap:]\n` +
+        realTransactions.slice(0, 20).map((t) => `${t.id}: ${t.amount} TL, saat ${t.hour}, sıklık ${t.frequency}, yeni taraf ${t.newCounterparty ? 'evet' : 'hayır'}, sınır ötesi ${t.crossBorder ? 'evet' : 'hayır'}`).join('\n') +
+        (realTransactions.length > 20 ? `\n... (+${realTransactions.length - 20} kayıt daha)` : '') + '\n\n'
+      : '';
+
+    const enrichedPrompt = documentContext || hasRealTransactions
+      ? `[YÜKLENEN KAYNAK BELGE]\n${documentContext || ''}\n\n${realTransactionsNote}[ANALİZ TALEBİ]\n${basePrompt}`
       : basePrompt;
 
     const result = imageData?.base64
       ? await generateAnalysisWithVision(systemPrompt, enrichedPrompt, imageData.base64, imageData.mimetype)
       : await generateAnalysis(systemPrompt, enrichedPrompt);
 
-    const fraudCategory = isFraudCategory(category);
     let scenarios = quantumMode && !fraudCategory ? parseScenarios(result.content) : null;
     let quantumComputation = null;
     let fraudComputation = null;
@@ -123,10 +158,11 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     let finalContent = result.content;
 
     if (quantumMode && fraudCategory) {
-      const transactions = parseTransactions(result.content);
+      const transactions = hasRealTransactions ? realTransactions : parseTransactions(result.content);
       if (transactions?.length) {
         fraudComputation = await computeFraudRiskScores(transactions);
         if (fraudComputation) {
+          fraudComputation.dataSource = hasRealTransactions ? 'uploaded' : 'ai-generated';
           const note = mergeFraudResults(fraudComputation);
           if (note) finalContent += note;
         } else {
@@ -210,6 +246,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             transactionCount: fraudComputation.transactionCount,
             flaggedCount: fraudComputation.flaggedCount,
             transactions: fraudComputation.transactions,
+            dataSource: fraudComputation.dataSource,
           }
         : null,
       optimizer: optimizerComputation

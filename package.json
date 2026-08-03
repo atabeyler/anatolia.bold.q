@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.36",
+  "version": "2.1.38",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "private": true,

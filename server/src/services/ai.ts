@@ -108,12 +108,20 @@ const STATE_KNOWLEDGE_BASE = `
 
 const FRAUD_CATEGORIES = new Set(['bddk', 'btk']);
 
-function buildMasterSystemPrompt(category: string, quantumMode = false): string {
+function buildMasterSystemPrompt(category: string, quantumMode = false, hasRealTransactions = false): string {
   const today = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
   const todayISO = new Date().toISOString().split('T')[0];
   const isFraudCategory = FRAUD_CATEGORIES.has(category);
 
-  const quantumInstructions = quantumMode && isFraudCategory ? `
+  const quantumInstructions = quantumMode && isFraudCategory && hasRealTransactions ? `
+
+## KUANTUM ANOMALI TESPIT MOTORU
+Sen ANATOLIA-Q'nun Kuantum Anomali Tespit Modulusun. Kullanici GERCEK islem kayitlarini bir belge olarak yukledi --
+bu kayitlar asagida "[YUKLENEN GERCEK ISLEM VERISI]" basligi altinda sana verilecek. BU KAYITLARI KESINLIKLE
+YENIDEN URETME, UYDURMA VEYA DEGISTIRME -- sadece verilen gercek kayitlara dayanarak bir uyum/denetim raporu yaz,
+hangi kayitlarin neden dikkat cektigini anlat. Rapor sonunda kuantum kernel motorunun bu gercek kayitlar uzerinde
+calisacagini belirt.
+` : quantumMode && isFraudCategory ? `
 
 ## KUANTUM ANOMALI TESPIT MOTORU
 Sen ANATOLIA-Q'nun Kuantum Anomali Tespit Modulusun. Kullanicinin actigi durumu veya yukledigi belgeyi temsil eden
@@ -459,8 +467,8 @@ export function getSystemPromptForCategory(category: string): string {
   return buildMasterSystemPrompt(category, false);
 }
 
-export function getQuantumSystemPrompt(category: string): string {
-  return buildMasterSystemPrompt(category, true);
+export function getQuantumSystemPrompt(category: string, hasRealTransactions = false): string {
+  return buildMasterSystemPrompt(category, true, hasRealTransactions);
 }
 
 export function getScenarioDeepDivePrompt(category: string, scenarioId: string, scenarioSummary: string): string {

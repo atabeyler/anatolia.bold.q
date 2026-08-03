@@ -21,6 +21,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const [prompt, setPrompt] = useState('');
   const [documentContexts, setDocumentContexts] = useState([]); // [{ filename, text }]
   const [imageFiles, setImageFiles] = useState([]);
+  const [realTransactions, setRealTransactions] = useState(null); // { filename, transactions, warnings }
   const [quantumMode, setQuantumMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingScenario, setLoadingScenario] = useState(null);
@@ -35,9 +36,16 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const titlePlaceholder = reportTitleExamples[lang]?.[category] || t('reportTitlePh');
 
   const handleAIFile = (file) => {
-    if (!file) return;
+    if (!file) {
+      setRealTransactions(null);
+      return;
+    }
     if (file.type === 'image') {
       setImageFiles((prev) => [...prev, file]);
+      return;
+    }
+    if (file.type === 'transactions') {
+      setRealTransactions({ filename: file.filename, transactions: file.transactions, warnings: file.warnings || [] });
       return;
     }
     if (file.type === 'text') {
@@ -60,7 +68,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
     try {
       const aiImageData = imageFiles[0] ? { base64: imageFiles[0].base64, mimetype: imageFiles[0].mimetype } : null;
       const mergedContext = documentContexts.length ? documentContexts.map((d) => d.text).join('\n\n') : null;
-      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData);
+      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null);
       setResult(r);
     } catch (e) {
       setError(e.message);
@@ -101,6 +109,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
     setError('');
     setDocumentContexts([]);
     setImageFiles([]);
+    setRealTransactions(null);
   };
 
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;
@@ -129,6 +138,25 @@ export default function AnalysisView({ category, onCategoryChange }) {
             <FileAttach onAIFile={handleAIFile} />
             {(documentContexts.length > 0 || imageFiles.length > 0) && <span className="text-[10px] text-emerald-400 font-mono">✓ {documentContexts.length + imageFiles.length} kaynak dosya eklendi</span>}
           </div>
+
+          {isFraudCategory && (
+            <p className="text-[10px] text-gold/40 leading-relaxed">
+              BDDK/BTK için gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz;
+              yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.
+            </p>
+          )}
+
+          {realTransactions && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
+                ✓ {realTransactions.transactions.length} gerçek işlem kaydı yüklendi ({realTransactions.filename})
+              </span>
+              <button type="button" onClick={() => setRealTransactions(null)} className="text-xs text-red-300">×</button>
+              {realTransactions.warnings.map((w, i) => (
+                <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
+              ))}
+            </div>
+          )}
 
           {imageFiles.length > 0 && (
             <div className="flex gap-2 flex-wrap">

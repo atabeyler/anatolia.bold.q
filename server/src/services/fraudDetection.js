@@ -100,10 +100,15 @@ export function mergeFraudResults(fraudResult) {
     .map((t) => `| ${t.id} | ${t.amount} | ${t.hour} | ${t.frequency} | ${t.newCounterparty ? 'Evet' : 'Hayır'} | ${t.crossBorder ? 'Evet' : 'Hayır'} | ${t.riskScore} | ${t.flagged ? '🚩 İŞARETLENDİ' : '—'} |`)
     .join('\n');
 
+  const sourceNote = fraudResult.dataSource === 'uploaded'
+    ? 'Bu kayıtlar kullanıcı tarafından yüklenen bir dosyadan (CSV/XLSX) çıkarılan GERÇEK işlem verileridir.'
+    : 'Gerçek veri sağlanmadığından bu kayıtlar senaryoyu temsil eden ÖRNEK/yapay veridir (bkz. yukarıdaki üretim notu).';
+
   const note = `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n` +
     `${fraudResult.transactionCount} işlem kaydı, ${fraudResult.qubits}-kübitlik bir öznitelik-haritalama (feature-map) devresine kodlanıp ` +
     `her işlem çifti arasındaki kuantum çakışma (fidelity) değeri hesaplanarak bir kuantum çekirdek (kernel) matrisi oluşturulmuştur. ` +
     `Bir işlemin risk skoru, bu kuantum uzayında diğer tüm işlemlere olan ortalama benzerliğinin tersidir — ortalamadan istatistiksel olarak sapan işlemler işaretlenmiştir. ` +
+    `${sourceNote}\n` +
     `Backend: ${fraudResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${fraudResult.circuitDepth} — gerçek banka/operatör sistemlerine canlı bağlantı yoktur, bu bölüm sadece sağlanan/üretilen kayıtları puanlar).\n\n` +
     `**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**\n\n` +
     `| İşlem ID | Tutar (TL) | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk Skoru | Durum |\n|---|---|---|---|---|---|---|---|\n${rows}\n\n` +

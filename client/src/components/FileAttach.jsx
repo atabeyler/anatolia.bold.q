@@ -3,7 +3,7 @@ import { Paperclip, X, Loader2 } from 'lucide-react';
 import { api } from '../services/api.js';
 
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i;
-const DOC_EXTS = /\.(pdf|docx|txt)$/i;
+const DOC_EXTS = /\.(pdf|docx|txt|csv|xlsx|xls)$/i;
 
 export function FileMessageContent({ text, className = '' }) {
   const idx = text ? text.indexOf('\n\n[📎 EKLİ DOSYA:') : -1;
