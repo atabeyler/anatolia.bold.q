@@ -25,9 +25,10 @@ function styledRun(text, opts = {}) {
   });
 }
 
-// Splits a line on **bold** spans and returns one TextRun per span, so
-// mid-line markdown bold (e.g. "**Etiket:** açıklama devamı") renders as
-// actual Word bold instead of the literal asterisks showing up in the text.
+// Splits a line on **bold** and *italic* spans and returns one TextRun per
+// span, so mid-line markdown emphasis (e.g. "**Etiket:** açıklama devamı",
+// or *"quoted aside"*) renders as actual Word formatting instead of the
+// literal asterisks showing up in the text.
 function inlineRuns(text, opts = {}) {
   // Odd split indices are the captured **bold** groups -- determine bold
   // status per part *before* dropping empty strings, otherwise filtering
@@ -36,7 +37,23 @@ function inlineRuns(text, opts = {}) {
     .split(/\*\*(.+?)\*\*/g)
     .map((part, i) => ({ part, bold: opts.bold || i % 2 === 1 }))
     .filter(({ part }) => part.length)
-    .map(({ part, bold }) => styledRun(part, { ...opts, bold }));
+    .flatMap(({ part, bold }) => {
+      if (bold) return [{ part, bold, italics: opts.italics }];
+      // Within a non-bold segment, further split single *italic* spans.
+      return part
+        .split(/\*(.+?)\*/g)
+        .map((sub, i) => ({ part: sub, bold, italics: opts.italics || i % 2 === 1 }))
+        .filter((seg) => seg.part.length);
+    })
+    .map(({ part, bold, italics }) => styledRun(part, { ...opts, bold, italics }));
+}
+
+// Splits table-cell text on <br> tags (how the AI represents line breaks
+// inside a markdown table cell, since literal newlines aren't possible
+// there) into one Paragraph per line, each run through inlineRuns.
+function cellParagraphs(text, opts = {}, alignment = AlignmentType.LEFT) {
+  const lines = String(text).split(/<br\s*\/?>/i);
+  return lines.map((line) => new Paragraph({ alignment, children: inlineRuns(line, opts) }));
 }
 
 function p(text, opts = {}) {
@@ -155,10 +172,7 @@ function buildTable(headers, rows, customWidthsPct = null) {
     width: { size: colWidths[i], type: WidthType.DXA },
     shading: { type: ShadingType.SOLID, color: COLORS.darkBlue, fill: COLORS.darkBlue },
     margins: cellMargins,
-    children: [new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: inlineRuns(h, { size: 20, bold: true, color: 'FFFFFF' })
-    })]
+    children: cellParagraphs(h, { size: 20, bold: true, color: 'FFFFFF' }, AlignmentType.CENTER)
   }));
 
   const headerRow = new TableRow({ children: headerCells, tableHeader: true, cantSplit: true });
@@ -171,10 +185,7 @@ function buildTable(headers, rows, customWidthsPct = null) {
       children: normalized.map((cell, i) => new TableCell({
         width: { size: colWidths[i], type: WidthType.DXA },
         margins: cellMargins,
-        children: [new Paragraph({
-          alignment: AlignmentType.LEFT,
-          children: inlineRuns(String(cell), { size: 20 })
-        })]
+        children: cellParagraphs(String(cell), { size: 20 })
       }))
     });
   });

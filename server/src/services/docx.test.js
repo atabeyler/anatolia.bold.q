@@ -124,4 +124,48 @@ Bu bir test raporudur.
     expect(allRuns.find((r) => r.text === 'Etiket:')?.bold).toBe(true);
     expect(allRuns.find((r) => r.text.includes('açıklama'))?.bold).toBe(false);
   });
+
+  it('turns <br> inside a table cell into a real paragraph break, not literal tag text', async () => {
+    // Regression test: the AI represents a line break inside a markdown
+    // table cell with <br> (there's no way to put a literal newline in a
+    // GFM table cell). It must become a second paragraph in that cell, not
+    // literal "<br>" text.
+    const content = `| Senaryo | Kaskat Etki |
+|---|---|
+| SENARYO-A | Enerji: yüksek bağımlılık.<br>Savunma: entegrasyon ihtiyacı. |
+`;
+    const buf = await generateReportDocx({
+      category: 'enerji', title: 'Test', content, userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const xml = await documentXml(buf);
+    expect(xml).not.toContain('<br>');
+    expect(xml).toContain('Enerji: yüksek bağımlılık.');
+    expect(xml).toContain('Savunma: entegrasyon ihtiyacı.');
+    // Two separate paragraphs, not one run with the tag stuck in the middle.
+    const cellParaCount = (xml.match(/<w:t[^>]*>(Enerji: yüksek bağımlılık\.|Savunma: entegrasyon ihtiyacı\.)<\/w:t>/g) || []).length;
+    expect(cellParaCount).toBe(2);
+  });
+
+  it('renders single *italic* markers inside a table cell as actual italics, not literal asterisks', async () => {
+    const content = `| Senaryo | Olasılık |
+|---|---|
+| SENARYO-A<br>*"Kontrollü Gerilim"* | %45 |
+`;
+    const buf = await generateReportDocx({
+      category: 'enerji', title: 'Test', content, userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const xml = await documentXml(buf);
+    expect(xml).not.toContain('*');
+    expect(xml).toContain('&quot;Kontrollü Gerilim&quot;');
+  });
+
+  it('renders single *italic* markers in prose as actual italics, not literal asterisks', async () => {
+    const buf = await generateReportDocx({
+      category: 'enerji', title: 'Test', content: 'Bu bir *vurgulu* ifadedir.',
+      userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const xml = await documentXml(buf);
+    expect(xml).not.toContain('*vurgulu*');
+    expect(xml).toMatch(/<w:i\/>[\s\S]{0,200}vurgulu/);
+  });
 });

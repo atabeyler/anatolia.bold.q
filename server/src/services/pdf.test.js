@@ -74,13 +74,13 @@ Bu bir test raporudur.
     // bold. This must assert on the *specific* segment, not just presence.
     expect(splitBoldSegments('**Etiket:** açıklama')).toEqual([
       { text: 'Etiket:', bold: true },
-      { text: ' açıklama', bold: false },
+      { text: ' açıklama', bold: false, italic: false },
     ]);
     expect(splitBoldSegments('**Tümü kalın**')).toEqual([
       { text: 'Tümü kalın', bold: true },
     ]);
     expect(splitBoldSegments('normal metin')).toEqual([
-      { text: 'normal metin', bold: false },
+      { text: 'normal metin', bold: false, italic: false },
     ]);
   });
 
@@ -117,5 +117,45 @@ Bu bir test raporudur.
     expect(text).not.toContain('**');
     expect(text).toContain('SENARYO-A');
     expect(text).toContain('Etiket:');
+  });
+
+  it('turns <br> inside a table cell into a real line break, not literal tag text', async () => {
+    // Regression test: the AI represents a line break inside a markdown
+    // table cell with <br> (there's no way to put a literal newline in a
+    // GFM table cell). It must not show up as literal "<br>" text.
+    const content = `| Senaryo | Kaskat Etki |
+|---|---|
+| SENARYO-A | Enerji: yüksek bağımlılık.<br>Savunma: entegrasyon ihtiyacı. |
+`;
+    const buf = await generateReportPdf({
+      category: 'enerji', title: 'Test', content, userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const text = await pdfText(buf);
+    expect(text).not.toContain('<br>');
+    expect(text).toContain('Enerji: yüksek bağımlılık.');
+    expect(text).toContain('Savunma: entegrasyon ihtiyacı.');
+  });
+
+  it('strips single *italic* markers inside a table cell instead of showing literal asterisks', async () => {
+    const content = `| Senaryo | Olasılık |
+|---|---|
+| SENARYO-A<br>*"Kontrollü Gerilim"* | %45 |
+`;
+    const buf = await generateReportPdf({
+      category: 'enerji', title: 'Test', content, userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const text = await pdfText(buf);
+    expect(text).not.toContain('*');
+    expect(text).toContain('Kontrollü Gerilim');
+  });
+
+  it('strips single *italic* markers in prose instead of showing literal asterisks', async () => {
+    const buf = await generateReportPdf({
+      category: 'enerji', title: 'Test', content: 'Bu bir *vurgulu* ifadedir.',
+      userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const text = await pdfText(buf);
+    expect(text).not.toContain('*');
+    expect(text).toContain('vurgulu');
   });
 });

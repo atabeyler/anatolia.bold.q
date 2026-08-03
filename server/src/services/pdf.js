@@ -73,31 +73,48 @@ function drawCoverPage(doc, { category, title, userCode, aiProvider }) {
   doc.addPage();
 }
 
-// Splits a line on **bold** spans into [{ text, bold }] parts. Odd split
-// indices are the captured **bold** groups -- bold status must be
-// determined per part *before* dropping empty strings, otherwise filtering
-// first re-indexes the array and scrambles which parts are bold.
+// Splits a line on **bold** and *italic* spans into [{ text, bold, italic }]
+// parts. Odd split indices are the captured **bold** groups -- bold status
+// must be determined per part *before* dropping empty strings, otherwise
+// filtering first re-indexes the array and scrambles which parts are bold.
 export function splitBoldSegments(text) {
   return String(text)
     .split(/\*\*(.+?)\*\*/g)
     .map((part, i) => ({ text: part, bold: i % 2 === 1 }))
-    .filter((seg) => seg.text.length);
+    .filter((seg) => seg.text.length)
+    .flatMap((seg) => {
+      if (seg.bold) return [seg];
+      // Within a non-bold segment, further split single *italic* spans.
+      return seg.text
+        .split(/\*(.+?)\*/g)
+        .map((sub, i) => ({ text: sub, bold: false, italic: i % 2 === 1 }))
+        .filter((sub) => sub.text.length);
+    });
 }
 
-// Writes a line with mid-line **bold** spans as alternating normal/bold
-// font runs (pdfkit continued-text chaining), instead of literal asterisks.
+// Writes a line with mid-line **bold**/*italic* spans as alternating font
+// runs (pdfkit continued-text chaining), instead of literal asterisks.
 function writeInline(doc, text, { size = 10.5, color = COLORS.black, align } = {}) {
   const parts = splitBoldSegments(text);
   if (!parts.length) { doc.text('', { align }); return; }
-  parts.forEach(({ text: part, bold }, i) => {
+  parts.forEach(({ text: part, bold, italic }, i) => {
     const isLast = i === parts.length - 1;
-    doc.font(bold ? FONT_BOLD : FONT).fontSize(size).fillColor(color)
+    const font = bold && italic ? FONT_BOLD_ITALIC : bold ? FONT_BOLD : italic ? FONT_ITALIC : FONT;
+    doc.font(font).fontSize(size).fillColor(color)
       .text(part, { continued: !isLast, align });
   });
 }
 
+// Table cells are drawn with plain doc.text() at a fixed x/y/width, so
+// unlike prose we don't attempt mixed bold/italic runs there -- just strip
+// the markdown emphasis markers, and turn <br> (how the AI represents a
+// line break inside a table cell, since literal newlines aren't possible
+// there) into a real newline that doc.text() already wraps on.
 function stripBoldMarkers(text) {
-  return String(text ?? '').replace(/\*\*(.+?)\*\*/g, '$1');
+  return String(text ?? '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1');
 }
 
 function drawTable(doc, headers, rows) {
