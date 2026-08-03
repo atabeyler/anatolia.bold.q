@@ -40,6 +40,8 @@ export default [
         __APP_VERSION__: 'readonly',
         URLSearchParams: 'readonly',
         sessionStorage: 'readonly',
+        Element: 'readonly',
+        File: 'readonly',
       },
     },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
