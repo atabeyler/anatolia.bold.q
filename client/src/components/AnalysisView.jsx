@@ -261,6 +261,11 @@ export default function AnalysisView({ category, onCategoryChange }) {
 
       {result && !scenarioResult && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          {result.quantumWarning && (
+            <div className="bg-amber-500/10 border border-amber-400/40 rounded-lg p-3 text-xs text-amber-300 flex items-start gap-2">
+              <span>⚠️</span><span>{result.quantumWarning}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between bg-navy-light/70 border border-gold/30 rounded-lg p-3 flex-wrap gap-2">
             <div className="text-xs text-gold/60 flex items-center gap-2">
               {result.quantumMode && <Atom className="w-3 h-3 text-gold" />}

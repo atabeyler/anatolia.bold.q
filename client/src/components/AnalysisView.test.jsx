@@ -167,4 +167,33 @@ describe('AnalysisView', () => {
     fireEvent.click(screen.getByRole('button', { name: /PAYLAŞ/i }));
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
   });
+
+  it('shows a visible warning when quantum mode was requested but the circuit computation failed', async () => {
+    api.generateAnalysis.mockResolvedValueOnce({
+      success: true, content: '# Rapor', docxBase64: btoa('x'), pdfBase64: btoa('x'),
+      quantumMode: true, quantumWarning: 'Kuantum devre hesaplaması başarısız oldu — gösterilen olasılıklar YZ tahminleridir.',
+    });
+    renderView({ category: 'ekonomi' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'brief' } });
+    fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
+
+    expect(await screen.findByText(/Kuantum devre hesaplaması başarısız oldu/)).toBeInTheDocument();
+  });
+
+  it('shows no warning when quantum mode succeeds', async () => {
+    api.generateAnalysis.mockResolvedValueOnce({
+      success: true, content: '# Rapor', docxBase64: btoa('x'), pdfBase64: btoa('x'),
+      quantumMode: true, quantumWarning: null,
+    });
+    renderView({ category: 'ekonomi' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'brief' } });
+    fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
+
+    await screen.findByText('Rapor');
+    expect(screen.queryByText(/başarısız/)).not.toBeInTheDocument();
+  });
 });

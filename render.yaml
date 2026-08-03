@@ -3,7 +3,13 @@ services:
     name: anatolia-q
     runtime: node
     plan: free
-    buildCommand: "rm -rf client/dist client/node_modules/.vite && npm install --prefix server && npm install --prefix client && npm run build --prefix client && pip3 install -r server/quantum/requirements.txt"
+    # --ignore-installed on the pip step: some base images ship a system
+    # PyJWT (via apt/dist-packages) that pip can't uninstall (no RECORD
+    # metadata, "installed by debian"), which aborts the whole install
+    # before qiskit gets to install -- silently leaving quantum mode
+    # broken (falls back to AI-only estimates with no visible error).
+    # --ignore-installed sidesteps the uninstall attempt entirely.
+    buildCommand: "rm -rf client/dist client/node_modules/.vite && npm install --prefix server && npm install --prefix client && npm run build --prefix client && pip3 install --ignore-installed -r server/quantum/requirements.txt"
     startCommand: "npm run start --prefix server"
     envVars:
       - key: NODE_ENV

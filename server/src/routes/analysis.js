@@ -217,6 +217,12 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     let fraudComputation = null;
     let optimizerComputation = null;
     let finalContent = result.content;
+    // Surfaced to the client (and appended to the report) whenever quantum
+    // mode was requested but the real circuit computation didn't happen --
+    // previously this failed completely silently (only a server log line),
+    // so a broken Python/Qiskit worker looked identical to a healthy one
+    // that just used the AI's own estimates.
+    let quantumWarning = null;
 
     if (quantumMode && fraudCategory) {
       const transactions = hasRealTransactions ? realTransactions : parseTransactions(result.content);
@@ -228,6 +234,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           if (note) finalContent += note;
         } else {
           logger.warn('[FraudDetection] Kernel result unavailable — proceeding with AI narrative only');
+          quantumWarning = 'Kuantum çekirdek (kernel) hesaplaması başarısız oldu — bu rapor yalnızca YZ anlatısına dayanmaktadır, gerçek kuantum doğrulaması içermemektedir.';
         }
       }
     } else if (quantumMode) {
@@ -240,6 +247,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           if (merged.note) finalContent += merged.note;
         } else {
           logger.warn('[Quantum] Circuit result unavailable — proceeding with AI estimates');
+          quantumWarning = 'Kuantum devre hesaplaması başarısız oldu — gösterilen olasılıklar YZ tahminleridir, gerçek kuantum ölçümüyle doğrulanmamıştır.';
         }
       }
 
@@ -258,6 +266,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
         }
       }
     }
+
+    if (quantumWarning) finalContent += `\n\n> ⚠️ ${quantumWarning}`;
 
     let analysisId = null;
     if (isDbConfigured()) {
@@ -300,6 +310,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       docxBase64: docxBuffer.toString('base64'),
       pdfBase64: pdfBuffer.toString('base64'),
       quantumMode,
+      quantumWarning,
       scenarios,
       quantum: quantumComputation
         ? {
