@@ -6,6 +6,7 @@ const sendVideoMeetingStartedToUsersMock = vi.fn(async () => {});
 const getUserEmailByNicknameMock = vi.fn(async () => null);
 const getUserEmailRecipientsMock = vi.fn(async () => []);
 const getOnlineSocketIdMock = vi.fn(async () => undefined);
+const isNewDirectMessageConversationMock = vi.fn(async () => true);
 
 vi.mock('./email.js', () => ({
   sendVideoMeetingStartedAlert: (...args) => sendVideoMeetingStartedAlertMock(...args),
@@ -22,6 +23,7 @@ vi.mock('../lib/onlineState.js', () => ({
   removeOnline: vi.fn(async () => {}),
   getOnlineNicknames: vi.fn(async () => []),
   getOnlineSocketId: (...args) => getOnlineSocketIdMock(...args),
+  isNewDirectMessageConversation: (...args) => isNewDirectMessageConversationMock(...args),
   setLocation: vi.fn(async () => {}),
   removeLocation: vi.fn(async () => {}),
   getAllLocations: vi.fn(async () => ({})),
@@ -66,9 +68,10 @@ beforeEach(() => {
   getOnlineSocketIdMock.mockResolvedValue(undefined);
   getUserEmailByNicknameMock.mockResolvedValue(null);
   getUserEmailRecipientsMock.mockResolvedValue([]);
+  isNewDirectMessageConversationMock.mockResolvedValue(true);
 });
 
-describe('chat:send (always emails the recipient, active or not)', () => {
+describe('chat:send (emails the recipient once per new conversation, active or not)', () => {
   it('emails the recipient when they are not currently connected', async () => {
     getOnlineSocketIdMock.mockResolvedValue(undefined);
     getUserEmailByNicknameMock.mockResolvedValue('offline@example.com');
@@ -115,6 +118,23 @@ describe('chat:send (always emails the recipient, active or not)', () => {
     await handlers['chat:send']({ to: 'BOLD-002', message: 'merhaba' });
     await flushMicrotasks();
 
+    expect(sendDirectMessageEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('does not email again for a later message in the same conversation', async () => {
+    getUserEmailByNicknameMock.mockResolvedValue('offline@example.com');
+    isNewDirectMessageConversationMock.mockResolvedValue(false);
+
+    const { io, connect } = createFakeIo();
+    initSocketHandlers(io);
+    const { socket, handlers } = createFakeSocket();
+    connect(socket);
+    socket.nickname = 'BOLD-001';
+
+    await handlers['chat:send']({ to: 'BOLD-002', message: 'ikinci mesaj' });
+    await flushMicrotasks();
+
+    expect(getUserEmailByNicknameMock).not.toHaveBeenCalled();
     expect(sendDirectMessageEmailMock).not.toHaveBeenCalled();
   });
 });

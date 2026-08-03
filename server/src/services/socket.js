@@ -70,10 +70,12 @@ export function initSocketHandlers(io) {
         if (targetSocket) {
           io.to(targetSocket).emit('chat:receive', payload);
         }
-        // Also email the recipient regardless of online status -- the app
-        // can sit backgrounded/neglected even while "active", so socket
-        // delivery alone isn't a reliable way to reach them.
-        getUserEmailByNickname(to)
+        // Also email the recipient, but only for the first message of a
+        // new conversation -- the app can sit backgrounded/neglected even
+        // while "active", so a one-time notice is warranted, but an
+        // active back-and-forth shouldn't send an email per line.
+        onlineState.isNewDirectMessageConversation(from, to)
+          .then((isNew) => isNew && getUserEmailByNickname(to))
           .then((email) => email && sendDirectMessageEmail(email, to, from, message))
           .catch((err) => logger.warn({ err }, '[Socket] DM email notify failed'));
       } else {

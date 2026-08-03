@@ -35,4 +35,14 @@ describe('onlineState (memory fallback, REDIS_URL unset)', () => {
     await onlineState.removeLocation('TEST-A');
     expect((await onlineState.getAllLocations())['TEST-A']).toBeUndefined();
   });
+
+  it('reports a new conversation on the first from->to message, then not again until idle', async () => {
+    expect(await onlineState.isNewDirectMessageConversation('TEST-A', 'TEST-B')).toBe(true);
+    expect(await onlineState.isNewDirectMessageConversation('TEST-A', 'TEST-B')).toBe(false);
+  });
+
+  it('tracks each direction of a conversation independently', async () => {
+    expect(await onlineState.isNewDirectMessageConversation('TEST-C', 'TEST-D')).toBe(true);
+    expect(await onlineState.isNewDirectMessageConversation('TEST-D', 'TEST-C')).toBe(true);
+  });
 });

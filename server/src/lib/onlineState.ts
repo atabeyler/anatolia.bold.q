@@ -14,6 +14,11 @@ import { logger } from './logger.js';
 
 const ONLINE_KEY = 'anatoliaq:online-users';
 const LOCATIONS_KEY = 'anatoliaq:user-locations';
+const DM_NOTIFY_PREFIX = 'anatoliaq:dm-notified:';
+// A new email notification is only sent for the first message of a
+// conversation; this is how long a sender/recipient pair must go idle
+// before their next message counts as starting a new one.
+const DM_NOTIFY_IDLE_SECONDS = 30 * 60;
 
 export interface UserLocation {
   lat: number;
@@ -24,6 +29,7 @@ export interface UserLocation {
 
 const memOnline = new Map<string, string>();
 const memLocations = new Map<string, UserLocation>();
+const memDmNotified = new Map<string, number>();
 
 export async function setOnline(nickname: string, socketId: string): Promise<void> {
   const r = getRedis();
@@ -98,6 +104,30 @@ export async function removeLocation(nickname: string): Promise<void> {
     }
   }
   memLocations.delete(nickname);
+}
+
+/**
+ * True only for the first message of a new from->to conversation (i.e. the
+ * pair has been idle for DM_NOTIFY_IDLE_SECONDS); false for every
+ * subsequent message until that idle window elapses again. Used to email
+ * a recipient once per conversation start rather than on every message.
+ */
+export async function isNewDirectMessageConversation(from: string, to: string): Promise<boolean> {
+  const key = `${DM_NOTIFY_PREFIX}${from}->${to}`;
+  const r = getRedis();
+  if (r) {
+    try {
+      const result = await r.set(key, '1', 'EX', DM_NOTIFY_IDLE_SECONDS, 'NX');
+      return result === 'OK';
+    } catch (e) {
+      logger.warn({ err: e }, '[OnlineState] Redis DM-notify check error, falling back to memory');
+    }
+  }
+  const now = Date.now();
+  const expiresAt = memDmNotified.get(key);
+  if (expiresAt && expiresAt > now) return false;
+  memDmNotified.set(key, now + DM_NOTIFY_IDLE_SECONDS * 1000);
+  return true;
 }
 
 export async function getAllLocations(): Promise<Record<string, UserLocation>> {
