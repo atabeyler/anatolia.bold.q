@@ -31,6 +31,7 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         atob: 'readonly',
+        btoa: 'readonly',
         import: 'readonly',
         Notification: 'readonly',
         FileReader: 'readonly',
