@@ -37,7 +37,9 @@ export default function DashboardPage({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [infoPanel, setInfoPanel] = useState(null); // 'about' | 'mission' | 'contact' | null
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768
+  );
   const [radarOpen, setRadarOpen] = useState(false);
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
