@@ -28,6 +28,12 @@ IBM_TOKEN = os.environ.get("IBM_QUANTUM_TOKEN")
 IBM_INSTANCE = os.environ.get("IBM_QUANTUM_INSTANCE")
 IBM_WAIT_SECONDS = int(os.environ.get("IBM_QUANTUM_WAIT_SECONDS", "60"))
 
+# Diagnostic-only: the reason the last run_on_ibm_hardware() call fell back
+# to the simulator, so the quantum-status health check can surface *why*
+# (instead of run_on_ibm_hardware()'s None being indistinguishable from
+# "not configured" once it crosses back into Node/the HTTP response).
+LAST_IBM_ERROR = {"message": None}
+
 
 def is_ibm_configured():
     return bool(IBM_TOKEN and IBM_INSTANCE)
@@ -58,6 +64,8 @@ def run_on_ibm_hardware(circuit, shots):
             status = job.status()
 
         if status != "DONE":
+            print(f"[quantum] IBM hardware job did not finish in time (status={status}), falling back to simulator", file=sys.stderr)
+            LAST_IBM_ERROR["message"] = f"job status was {status!r} after waiting {IBM_WAIT_SECONDS}s (queue too long, or the job errored/was cancelled)"
             return None
 
         result = job.result()
@@ -70,4 +78,5 @@ def run_on_ibm_hardware(circuit, shots):
         # log it so it's diagnosable, without treating it as the overall
         # request's failure (the caller falls back to the simulator either way).
         print(f"[quantum] IBM hardware run failed, falling back to simulator: {exc}", file=sys.stderr)
+        LAST_IBM_ERROR["message"] = f"{type(exc).__name__}: {exc}"
         return None

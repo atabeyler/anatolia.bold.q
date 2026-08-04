@@ -131,7 +131,7 @@ describe('GET /api/analysis/quantum-status -- unauthenticated Python/Qiskit work
     const res = await request(app).get('/api/analysis/quantum-status');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, backend: 'qiskit-aer-simulator', qubits: 2, hardwareVerification: null });
+    expect(res.body).toEqual({ ok: true, backend: 'qiskit-aer-simulator', qubits: 2, hardwareVerification: null, ibmDiagnostic: null });
   });
 
   it('reports ok:false when the Qiskit worker fails (deployment broken)', async () => {
@@ -140,7 +140,7 @@ describe('GET /api/analysis/quantum-status -- unauthenticated Python/Qiskit work
     const res = await request(app).get('/api/analysis/quantum-status');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: false, backend: null, qubits: null, hardwareVerification: null });
+    expect(res.body).toEqual({ ok: false, backend: null, qubits: null, hardwareVerification: null, ibmDiagnostic: null });
   });
 
   it('surfaces hardwareVerification when IBM_QUANTUM_TOKEN/INSTANCE are configured and a real hardware run succeeded', async () => {
@@ -157,6 +157,23 @@ describe('GET /api/analysis/quantum-status -- unauthenticated Python/Qiskit work
 
     expect(res.status).toBe(200);
     expect(res.body.hardwareVerification).toMatchObject({ backend: 'ibm_torino' });
+  });
+
+  it('surfaces ibmDiagnostic explaining why hardware was not used, when IBM is configured but the attempt failed', async () => {
+    // Without this, "hardwareVerification: null" is indistinguishable from
+    // "not configured" -- ibmDiagnostic carries the actual reason (bad
+    // token/CRN, queue timeout, no available backend, etc.) surfaced from
+    // _ibm_backend.py's LAST_IBM_ERROR.
+    computeQuantumProbabilitiesMock.mockResolvedValue({
+      backend: 'qiskit-aer-simulator', qubits: 2, shots: 4096, scenarios: [],
+      hardwareVerification: null,
+      ibmDiagnostic: "configured but failed: IBMApiError: Instance CRN not found or access denied",
+    });
+    const app = buildApp();
+    const res = await request(app).get('/api/analysis/quantum-status');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ibmDiagnostic).toMatch(/configured but failed/);
   });
 
   it('requires no authentication', async () => {

@@ -53,6 +53,7 @@ router.get('/quantum-status', async (req, res) => {
     backend: result?.backend || null,
     qubits: result?.qubits || null,
     hardwareVerification: result?.hardwareVerification || null,
+    ibmDiagnostic: result?.ibmDiagnostic || null,
   });
 });
 

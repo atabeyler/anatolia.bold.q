@@ -25,7 +25,7 @@ import statistics
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 from qiskit_aer import AerSimulator
 
-from _ibm_backend import run_on_ibm_hardware, is_ibm_configured
+from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
 
 # Multi-layer, all-pairs entangling mixer: each layer connects every qubit
 # to every other qubit (not just neighbors) via CRX, followed by a per-qubit
@@ -149,7 +149,12 @@ def build_distribution(scenarios, shots):
     # the same kind of noise as simulator shot statistics, so blending them
     # into one average would misrepresent both.
     hardware_verification = None
+    # Diagnostic-only: reported alongside hardwareVerification so the
+    # quantum-status health check can tell "not configured" apart from
+    # "configured but the hardware attempt failed" (and why).
+    ibm_diagnostic = "not configured (IBM_QUANTUM_TOKEN/IBM_QUANTUM_INSTANCE unset)"
     if is_ibm_configured():
+        ibm_diagnostic = "configured, attempting hardware run..."
         ibm_result = run_on_ibm_hardware(qc, batch_shots)
         if ibm_result:
             counts, backend_name = ibm_result
@@ -167,6 +172,9 @@ def build_distribution(scenarios, shots):
                     for i, s in enumerate(scenarios)
                 ],
             }
+            ibm_diagnostic = f"succeeded on {backend_name}"
+        else:
+            ibm_diagnostic = f"configured but failed: {LAST_IBM_ERROR['message'] or 'unknown error'}"
 
     return {
         "backend": "qiskit-aer-simulator",
@@ -178,6 +186,7 @@ def build_distribution(scenarios, shots):
         "circuitDiagram": diagram,
         "scenarios": out,
         "hardwareVerification": hardware_verification,
+        "ibmDiagnostic": ibm_diagnostic,
     }
 
 
