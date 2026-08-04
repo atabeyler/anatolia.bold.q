@@ -149,6 +149,12 @@ function drawTable(doc, headers, rows) {
 
   drawRow(headers, { header: true });
   for (const row of rows) drawRow(row);
+  // Each cell was drawn with an explicit x (positioned .text() calls), so
+  // doc.x is left wherever the last cell happened to be -- often far from
+  // the left margin. Any content drawn next without an explicit x (e.g. a
+  // following heading) would inherit that x and get squeezed into
+  // whatever sliver of page width remains, wrapping one word per line.
+  doc.x = startX;
   doc.moveDown(0.6);
 }
 

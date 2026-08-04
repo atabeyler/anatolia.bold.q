@@ -8,6 +8,31 @@ async function pdfText(buf) {
 }
 
 describe('generateReportPdf', () => {
+  it('resets the cursor x position after a table, instead of squeezing what follows into the last column width', async () => {
+    // Regression test: drawTable() draws each cell with doc.text(str, x, y,
+    // opts) -- an explicit-position call -- and never restores doc.x
+    // afterward. Content drawn right after the table with no explicit x
+    // (e.g. a section heading) then inherited the last cell's x, leaving
+    // only a sliver of page width and forcing one-word-per-line wrapping
+    // (even mid-word, e.g. "OPTİMİZASY" / "ON" / "PROBLEMİ").
+    // A wide table (5 columns, like the real "Kuantum Olasılık Matrisi"
+    // table) is needed to reproduce it -- with fewer columns the leftover
+    // x isn't far enough right to break a word, only to mis-space it.
+    const content = `| Senaryo | Olasılık | Zaman Ufku | Kritik Tetikleyici | Kaskat Etki Matrisi |
+|---|---|---|---|---|
+| A | %50 | 0-12 ay | tetikleyici metni | etki metni |
+| B | %50 | 12-24 ay | tetikleyici metni | etki metni |
+
+## OPTİMİZASYON PROBLEMİ
+Aşağıdaki tablo bütçe kısıtları altında ulusal dirençliliği en üst düzeye çıkaracak projelerin çıktısını göstermektedir.
+`;
+    const buf = await generateReportPdf({
+      category: 'savunma', title: 'Test', content, userCode: 'BOLD-001', aiProvider: 'Test',
+    });
+    const text = await pdfText(buf);
+    expect(text).toContain('OPTİMİZASYON PROBLEMİ');
+  });
+
   it('renders Turkish special characters correctly instead of garbling them', async () => {
     // Regression test: pdfkit's built-in standard fonts (Times-Roman etc.)
     // only support WinAnsiEncoding, which doesn't contain ğ/ş/ı/İ/ö/ü/ç --
