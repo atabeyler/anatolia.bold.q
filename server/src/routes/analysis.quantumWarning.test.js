@@ -131,7 +131,7 @@ describe('GET /api/analysis/quantum-status -- unauthenticated Python/Qiskit work
     const res = await request(app).get('/api/analysis/quantum-status');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, backend: 'qiskit-aer-simulator', qubits: 2 });
+    expect(res.body).toEqual({ ok: true, backend: 'qiskit-aer-simulator', qubits: 2, hardwareVerification: null });
   });
 
   it('reports ok:false when the Qiskit worker fails (deployment broken)', async () => {
@@ -140,7 +140,23 @@ describe('GET /api/analysis/quantum-status -- unauthenticated Python/Qiskit work
     const res = await request(app).get('/api/analysis/quantum-status');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: false, backend: null, qubits: null });
+    expect(res.body).toEqual({ ok: false, backend: null, qubits: null, hardwareVerification: null });
+  });
+
+  it('surfaces hardwareVerification when IBM_QUANTUM_TOKEN/INSTANCE are configured and a real hardware run succeeded', async () => {
+    // Regression guard: the simulator run's top-level "backend" is always
+    // "qiskit-aer-simulator" by design (see scenario_quantum.py), so it
+    // can never be used to tell whether real IBM hardware ran --
+    // hardwareVerification is the only field that reflects that.
+    computeQuantumProbabilitiesMock.mockResolvedValue({
+      backend: 'qiskit-aer-simulator', qubits: 2, shots: 4096, scenarios: [],
+      hardwareVerification: { backend: 'ibm_torino', shots: 4096, scenarios: [{ id: 'health-check', quantumProbability: 51.2 }] },
+    });
+    const app = buildApp();
+    const res = await request(app).get('/api/analysis/quantum-status');
+
+    expect(res.status).toBe(200);
+    expect(res.body.hardwareVerification).toMatchObject({ backend: 'ibm_torino' });
   });
 
   it('requires no authentication', async () => {

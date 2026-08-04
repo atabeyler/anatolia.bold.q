@@ -43,7 +43,17 @@ router.get('/status', (req, res) => {
 // missing quantum results.
 router.get('/quantum-status', async (req, res) => {
   const result = await computeQuantumProbabilities([{ id: 'health-check', probability: '%50' }]);
-  res.json({ ok: !!result, backend: result?.backend || null, qubits: result?.qubits || null });
+  // Note: `result.backend` is always "qiskit-aer-simulator" -- that's the
+  // simulator run that always happens. Whether IBM_QUANTUM_TOKEN/INSTANCE
+  // are configured AND a real hardware run actually succeeded is only
+  // reflected in hardwareVerification (null if unconfigured or the
+  // hardware attempt failed/fell back -- see quantum/_ibm_backend.py).
+  res.json({
+    ok: !!result,
+    backend: result?.backend || null,
+    qubits: result?.qubits || null,
+    hardwareVerification: result?.hardwareVerification || null,
+  });
 });
 
 // Document upload and text extraction
