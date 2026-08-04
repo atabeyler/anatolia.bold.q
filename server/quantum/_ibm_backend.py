@@ -52,7 +52,16 @@ def run_on_ibm_hardware(circuit, shots):
 
         service = QiskitRuntimeService(channel="ibm_quantum_platform", token=IBM_TOKEN, instance=IBM_INSTANCE)
         backend = service.least_busy(operational=True, simulator=False)
-        transpiled = transpile(circuit, backend=backend, optimization_level=1)
+        # translation_method="translator" sidesteps a known qiskit/
+        # qiskit-ibm-runtime plugin-resolution bug where transpile() picks
+        # the "ibm_dynamic_circuits" translation plugin for some IBM
+        # backends even though this circuit has no dynamic-circuit
+        # (mid-circuit measurement + classical feedforward) features that
+        # would need it, and that plugin then fails to resolve
+        # ("Invalid plugin name ibm_dynamic_circuits for stage translation").
+        # See https://github.com/Qiskit/qiskit-ibm-runtime/issues/738 and
+        # https://github.com/Qiskit/qiskit-ibm-runtime/issues/1253.
+        transpiled = transpile(circuit, backend=backend, optimization_level=1, translation_method="translator")
 
         sampler = SamplerV2(mode=backend)
         job = sampler.run([transpiled], shots=shots)
