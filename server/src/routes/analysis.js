@@ -590,9 +590,14 @@ function parseTransactions(content) {
 
 function parseOptimizationProblem(content) {
   try {
-    // "OPTIMIZASYON PROBLEM" (drops the trailing İ) sidesteps the diacritic
-    // mojibake risk, same reasoning as parseTransactions' "LEM KAYITLARI".
-    const headingIdx = content.search(/OPTIMIZASYON PROBLEM/i);
+    // "OPT.M.ZASYON PROBLEM" (wildcards for the İ/I in "OPTİMİZASYON", drops
+    // the trailing İ) sidesteps the diacritic mojibake risk -- same
+    // reasoning as parseScenarios' "MATR.S." and parseTransactions'
+    // "LEM KAYITLARI". This previously used a literal ASCII "OPTIMIZASYON",
+    // but the AI's actual uppercase Turkish text uses İ (U+0130), which is
+    // NOT case-fold-equivalent to ASCII I/i -- so the heading never
+    // matched and this parser always returned null in production.
+    const headingIdx = content.search(/OPT.M.ZASYON PROBLEM/i);
     if (headingIdx === -1) return null;
 
     // Bounded by the next section heading (like the other parsers), with a

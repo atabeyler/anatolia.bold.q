@@ -471,6 +471,16 @@ export async function streamConsultationText(
         full += chunk;
         res.write(chunk);
       }
+      if (!startedSending) {
+        // The stream completed with zero chunks and no thrown exception --
+        // some providers (e.g. Anthropic on a billing/credit failure)
+        // surface the error this way instead of rejecting the async
+        // iterator. Without this check that looks like a silent, empty
+        // "success" on the first attempt and never falls back to the next
+        // provider, leaving the client with a 200 response and no body.
+        logger.warn({ provider: attempt.name }, 'Stream produced no output, trying next provider');
+        continue;
+      }
       res.end();
       return { provider: attempt.name, content: full };
     } catch (err) {

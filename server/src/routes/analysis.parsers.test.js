@@ -101,8 +101,27 @@ describe('parseOptimizationProblem', () => {
     expect(parseOptimizationProblem('no problem section here')).toBeNull();
   });
 
+  it('finds the heading despite the Turkish dotted İ, not just ASCII I', () => {
+    // Regression test: this previously matched literal ASCII "OPTIMIZASYON",
+    // but the AI's actual uppercase Turkish text uses İ (U+0130) at both
+    // internal positions, and İ is not case-fold-equivalent to ASCII I/i in
+    // Unicode -- so the heading never matched and this parser always
+    // returned null in production, confirmed against a live report.
+    const content = `## OPTİMİZASYON PROBLEMİ
+Bütçe: %60
+| Kalem | Değer | Maliyet |
+|---|---|---|
+| A | 35 | 30 |
+| B | 28 | 25 |
+`;
+    const problem = parseOptimizationProblem(content);
+    expect(problem).not.toBeNull();
+    expect(problem.budgetPercent).toBe(60);
+    expect(problem.items).toHaveLength(2);
+  });
+
   it('picks the percentage next to "bütçe" rather than an unrelated one', () => {
-    const content = `## OPTIMIZASYON PROBLEMİ
+    const content = `## OPTİMİZASYON PROBLEMİ
 Hedef: %80 verimlilik ile %60 bütçe kısıtı altında en yüksek değeri seç.
 | Kalem | Değer | Maliyet |
 |---|---|---|
@@ -118,7 +137,7 @@ Hedef: %80 verimlilik ile %60 bütçe kısıtı altında en yüksek değeri seç
   });
 
   it('parses Turkish-formatted item values and costs', () => {
-    const content = `## OPTIMIZASYON PROBLEMİ
+    const content = `## OPTİMİZASYON PROBLEMİ
 Bütçe: %60
 | Kalem | Değer | Maliyet |
 |---|---|---|
@@ -130,7 +149,7 @@ Bütçe: %60
   });
 
   it('strips markdown bold from item ids instead of leaving literal asterisks', () => {
-    const content = `## OPTIMIZASYON PROBLEMİ
+    const content = `## OPTİMİZASYON PROBLEMİ
 Bütçe: %60
 | Kalem | Değer | Maliyet |
 |---|---|---|
