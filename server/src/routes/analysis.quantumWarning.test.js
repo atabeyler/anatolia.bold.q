@@ -79,6 +79,19 @@ describe('POST /api/analysis/generate -- quantum failure visibility', () => {
     expect(res.body.content).toContain(res.body.quantumWarning);
   });
 
+  it('surfaces a quantumWarning when the AI response has no parseable scenario matrix at all', async () => {
+    generateAnalysisMock.mockResolvedValue({ content: 'Bu rapor bir senaryo tablosu içermiyor.', provider: 'Test Provider' });
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/analysis/generate')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ category: 'enerji', title: 'Test', prompt: 'test prompt', quantumMode: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.quantumWarning).toMatch(/senaryo matrisi bulunamadığından/);
+    expect(computeQuantumProbabilitiesMock).not.toHaveBeenCalled();
+  });
+
   it('does not set quantumWarning when the circuit computation succeeds', async () => {
     computeQuantumProbabilitiesMock.mockResolvedValue({
       backend: 'qiskit-aer-simulator', qubits: 2, shots: 4096, batches: 1, circuitDepth: 8,
@@ -108,5 +121,32 @@ describe('POST /api/analysis/generate -- quantum failure visibility', () => {
     expect(res.status).toBe(200);
     expect(res.body.quantumWarning).toBeNull();
     expect(computeQuantumProbabilitiesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/analysis/quantum-status -- unauthenticated Python/Qiskit worker health check', () => {
+  it('reports ok:true with backend info when the Qiskit worker responds', async () => {
+    computeQuantumProbabilitiesMock.mockResolvedValue({ backend: 'qiskit-aer-simulator', qubits: 2, shots: 4096, scenarios: [] });
+    const app = buildApp();
+    const res = await request(app).get('/api/analysis/quantum-status');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, backend: 'qiskit-aer-simulator', qubits: 2 });
+  });
+
+  it('reports ok:false when the Qiskit worker fails (deployment broken)', async () => {
+    computeQuantumProbabilitiesMock.mockResolvedValue(null);
+    const app = buildApp();
+    const res = await request(app).get('/api/analysis/quantum-status');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: false, backend: null, qubits: null });
+  });
+
+  it('requires no authentication', async () => {
+    computeQuantumProbabilitiesMock.mockResolvedValue(null);
+    const app = buildApp();
+    const res = await request(app).get('/api/analysis/quantum-status');
+    expect(res.status).not.toBe(401);
   });
 });

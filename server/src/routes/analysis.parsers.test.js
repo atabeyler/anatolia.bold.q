@@ -45,6 +45,25 @@ describe('parseScenarios', () => {
     expect(scenarios[0]).toMatchObject({ title: 'SENARYO A (Birincil)', probability: '%42', timeframe: '6 ay' });
     expect(scenarios[1].title).toBe('SENARYO B');
   });
+
+  it('parses scenario rows even when the AI wraps the title cell in markdown bold', () => {
+    // Regression test: a real Gemini response wrapped the scenario cell as
+    // "| **SENARYO-A (Birincil):** ... |", which a plain
+    // startsWith('| SENARYO') check missed entirely -- silently dropping
+    // every scenario and disabling quantum computation for the whole
+    // report, with the client never told why.
+    const content = `## KUANTUM OLASILIK MATRİSİ
+| Senaryo | Olasılık | Zaman | Tetikleyici |
+|---|---|---|---|
+| **SENARYO-A (Birincil):** Kontrollü Dezenflasyon | %65 | 0-12 ay | Sıkı para politikası |
+| **SENARYO-B (Alternatif):** Jeopolitik Şok | %25 | 6-24 ay | Enerji kesintisi |
+`;
+    const scenarios = parseScenarios(content);
+    expect(scenarios).toHaveLength(2);
+    expect(scenarios[0].title).toBe('SENARYO-A (Birincil): Kontrollü Dezenflasyon');
+    expect(scenarios[0].title).not.toContain('*');
+    expect(scenarios[1].probability).toBe('%25');
+  });
 });
 
 describe('parseTransactions', () => {
@@ -63,6 +82,17 @@ describe('parseTransactions', () => {
     expect(transactions).toHaveLength(2);
     expect(transactions[0]).toMatchObject({ id: 'TXN-001', amount: 15000.5, hour: 3, frequency: 4, newCounterparty: 1, crossBorder: 0 });
     expect(transactions[1].amount).toBe(250);
+  });
+
+  it('parses transaction rows even when the AI wraps the id cell in markdown bold', () => {
+    const content = `## İŞLEM KAYITLARI
+| ID | Tutar | Saat | Sıklık | Yeni Taraf | Sınır Ötesi |
+|---|---|---|---|---|---|
+| **TXN-001** | 500 | 3 | 4 | 1 | 0 |
+`;
+    const transactions = parseTransactions(content);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0].id).toBe('TXN-001');
   });
 });
 
@@ -97,5 +127,17 @@ Bütçe: %60
 `;
     const problem = parseOptimizationProblem(content);
     expect(problem.items[0]).toEqual({ id: 'A', value: 1500, cost: 30 });
+  });
+
+  it('strips markdown bold from item ids instead of leaving literal asterisks', () => {
+    const content = `## OPTIMIZASYON PROBLEMİ
+Bütçe: %60
+| Kalem | Değer | Maliyet |
+|---|---|---|
+| **Proje-1: Siber Güvenlik** | 90 | 20 |
+| Proje-2 | 70 | 15 |
+`;
+    const problem = parseOptimizationProblem(content);
+    expect(problem.items[0].id).toBe('Proje-1: Siber Güvenlik');
   });
 });

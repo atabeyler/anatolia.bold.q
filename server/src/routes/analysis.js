@@ -36,6 +36,16 @@ router.get('/status', (req, res) => {
   res.json(getStatus());
 });
 
+// Public, boolean-only diagnostic (same exposure level as /status above) --
+// actually spawns the Python/Qiskit worker with a trivial payload so a
+// broken deployment (e.g. qiskit failed to install, python3 missing) can
+// be confirmed directly instead of only inferred from a report silently
+// missing quantum results.
+router.get('/quantum-status', async (req, res) => {
+  const result = await computeQuantumProbabilities([{ id: 'health-check', probability: '%50' }]);
+  res.json({ ok: !!result, backend: result?.backend || null, qubits: result?.qubits || null });
+});
+
 // Document upload and text extraction
 router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
   try {
@@ -249,6 +259,9 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           logger.warn('[Quantum] Circuit result unavailable — proceeding with AI estimates');
           quantumWarning = 'Kuantum devre hesaplaması başarısız oldu — gösterilen olasılıklar YZ tahminleridir, gerçek kuantum ölçümüyle doğrulanmamıştır.';
         }
+      } else {
+        logger.warn('[Quantum] No parseable scenario matrix in the AI response — quantum computation skipped');
+        quantumWarning = 'Kuantum modu seçildi ancak raporda ayrıştırılabilir bir senaryo matrisi bulunamadığından kuantum hesaplaması yapılamadı.';
       }
 
       // Independent of the scenario matrix: only present when the topic is
@@ -507,9 +520,16 @@ function parseScenarios(content) {
     const matrixMatch = content.match(/KUANTUM OLASILIK MATR.S.[\s\S]*?\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([\s\S]*?)(?=\n##|\n---|\n\n##|$)/i);
     if (!matrixMatch) return null;
 
-    const lines = content.split('\n').filter(l => l.startsWith('| SENARYO'));
+    // The AI sometimes wraps the scenario cell in markdown bold
+    // ("| **SENARYO-A...** | ..."), which a plain startsWith('| SENARYO')
+    // check misses entirely -- silently dropping every scenario row and
+    // disabling the quantum computation for the whole report. Tolerate
+    // leading emphasis markers, and strip them from every cell so ids/
+    // titles don't carry literal asterisks through to the UI or the
+    // Qiskit worker payload.
+    const lines = content.split('\n').filter(l => /^\|\s*\*{0,2}SENARYO/.test(l.trim()));
     for (const line of lines) {
-      const parts = line.split('|').map(s => s.trim()).filter(Boolean);
+      const parts = line.split('|').map(s => s.trim().replace(/\*+/g, '')).filter(Boolean);
       if (parts.length >= 3) {
         scenarios.push({
           id: parts[0].split(' ')[0] + ' ' + (parts[0].split(' ')[1] || ''),
@@ -535,9 +555,11 @@ function parseTransactions(content) {
     const tableMatch = content.match(/LEM KAYITLARI[\s\S]*?\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([\s\S]*?)(?=\n##|\n---|\n\n##|$)/i);
     if (!tableMatch) return null;
 
-    const lines = content.split('\n').filter(l => l.trim().startsWith('| TXN'));
+    // Same emphasis-marker tolerance as parseScenarios below -- the AI can
+    // wrap the row's leading cell in markdown bold.
+    const lines = content.split('\n').filter(l => /^\|\s*\*{0,2}TXN/.test(l.trim()));
     for (const line of lines) {
-      const parts = line.split('|').map(s => s.trim()).filter(Boolean);
+      const parts = line.split('|').map(s => s.trim().replace(/\*+/g, '')).filter(Boolean);
       if (parts.length >= 6) {
         transactions.push({
           id: parts[0],
@@ -578,7 +600,7 @@ function parseOptimizationProblem(content) {
     const lines = section.split('\n').filter(l => l.trim().startsWith('|'));
     const items = [];
     for (const line of lines) {
-      const parts = line.split('|').map(s => s.trim()).filter(Boolean);
+      const parts = line.split('|').map(s => s.trim().replace(/\*+/g, '')).filter(Boolean);
       if (parts.length < 3) continue;
       if (/^-+$/.test(parts[1])) continue; // separator row
       if (toNumber(parts[1]) === 0 && toNumber(parts[2]) === 0) continue; // header row
