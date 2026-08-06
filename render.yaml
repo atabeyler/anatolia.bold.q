@@ -39,8 +39,6 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: SESSION_SECRET
-        generateValue: true
       - key: CENTER_EMAIL
         value: info@boldkimya.com.tr
       - key: SHARED_PASSWORD
