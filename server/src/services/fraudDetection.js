@@ -9,11 +9,15 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from '../lib/logger.js';
+import { withIbmTimeout } from '../lib/quantumTimeout.js';
 import { resolveQuantumCommand } from './quantumProcess.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/fraud_detection.py');
-const TIMEOUT_MS = 20000;
+// When IBM credentials are configured, detect() also runs a swap-test
+// verification on real hardware (see fraud_detection.py) -- the subprocess
+// timeout has to cover that wait too, or it gets SIGKILLed mid-computation.
+const TIMEOUT_MS = withIbmTimeout(20000);
 // Mirrors MAX_TRANSACTIONS in fraud_detection.py — the exact pairwise
 // kernel is O(n^2), so an unbounded transaction table could run past
 // TIMEOUT_MS on every request.
@@ -114,6 +118,17 @@ export function mergeFraudResults(fraudResult) {
     ? ` **Not:** Yüklenen/üretilen ${fraudResult.originalCount} kayıttan yalnızca ilk ${fraudResult.transactionCount} tanesi (kernel'in O(n²) karmaşıklığı nedeniyle) taranmıştır.`
     : '';
 
+  const hw = fraudResult.hardwareVerification;
+  const hardwareSection = hw
+    ? `\n### Gerçek Donanım Doğrulaması\n` +
+      `En yüksek riskli kayıt (**${hw.pair.a}**) ile en tipik kayıt (**${hw.pair.b}**) arasındaki kuantum çakışma (fidelity) değeri, ` +
+      `bir swap-test devresiyle gerçek IBM Quantum donanımında (**${hw.backend}**, ${hw.shots} shot) bağımsız olarak ölçülmüştür ` +
+      `(bu ölçüm yukarıdaki risk skorlarını etkilemez — donanım gürültüsü nedeniyle, işaretleme kararı her zaman kesin/deterministik simülatör sonucuna dayanır):\n\n` +
+      `| Kaynak | Ölçülen Fidelity |\n|---|---|\n` +
+      `| Kesin (statevector simülatör) | ${hw.exactFidelity} |\n` +
+      `| Gerçek donanım ölçümü | ${hw.measuredFidelity} |\n`
+    : '';
+
   const note = `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n` +
     `${fraudResult.transactionCount} işlem kaydı, ${fraudResult.qubits}-kübitlik bir öznitelik-haritalama (feature-map) devresine kodlanıp ` +
     `her işlem çifti arasındaki kuantum çakışma (fidelity) değeri hesaplanarak bir kuantum çekirdek (kernel) matrisi oluşturulmuştur.${truncationNote} ` +
@@ -122,7 +137,7 @@ export function mergeFraudResults(fraudResult) {
     `Backend: ${fraudResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${fraudResult.circuitDepth} — gerçek banka/operatör sistemlerine canlı bağlantı yoktur, bu bölüm sadece sağlanan/üretilen kayıtları puanlar).\n\n` +
     `**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**\n\n` +
     `| İşlem ID | Tutar (TL) | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk Skoru | Durum |\n|---|---|---|---|---|---|---|---|\n${rows}\n\n` +
-    `### Öznitelik-Haritalama Devresi (en yüksek riskli kayıt)\n\`\`\`\n${fraudResult.circuitDiagram}\n\`\`\`\n`;
+    `### Öznitelik-Haritalama Devresi (en yüksek riskli kayıt)\n\`\`\`\n${fraudResult.circuitDiagram}\n\`\`\`\n${hardwareSection}`;
 
   return note;
 }
