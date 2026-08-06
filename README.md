@@ -1,5 +1,7 @@
 # ANATOLIA-Q
 
+![Version](https://img.shields.io/badge/version-2.1.88-blue)
+
 **Quantum-Based National Decision Support System**
 Bold Military Technology and Defense Industry Inc.
 
@@ -95,6 +97,8 @@ Tests: `npm test --prefix server` and `npm test --prefix client`
 **Login flow:** user code + password are validated against `auth_users` (bcrypt-hashed) → **admin accounts** get a JWT immediately, no approval step. **Non-admin accounts** go through mail approval: a 10-minute approval token is generated → an approve/reject email goes to the central mailbox → the client polls status every 2.5 seconds → once approved, a JWT is issued and login completes.
 
 **Analysis generation:** the user picks a category and writes a brief → system/user prompts are prepared → sent to Claude (falls back to Gemini, then GPT-4o, on quota/error — the same fallback chain also covers the streaming consultation chat) → a markdown report comes back → if quantum mode is on, the report's scenario/transaction/optimization tables are parsed out and recomputed on a real Qiskit circuit (see Features) → converted into the fixed DOCX/PDF templates → saved to the database → automatically emailed to the central mailbox as a .docx attachment.
+
+See **[API.md](./API.md)** for the full list of endpoints and what each one does.
 
 ---
 
