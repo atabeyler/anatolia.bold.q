@@ -138,6 +138,23 @@ describe('POST /api/analysis/generate -- quantum failure visibility', () => {
     expect(res.body.quantum.ibmDiagnostic).toBe('succeeded on ibm_marrakesh');
   });
 
+  it('forwards the ALL_AI_PROVIDERS_FAILED error code so the client can show a localized message', async () => {
+    // Regression test: this error's message is Turkish-only and isn't
+    // routed through the client's i18n system -- without forwarding `code`,
+    // the UI showed it raw regardless of the user's selected app language.
+    const err = new Error('Tüm AI sağlayıcılar başarısız: []');
+    err.code = 'ALL_AI_PROVIDERS_FAILED';
+    generateAnalysisMock.mockRejectedValue(err);
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/analysis/generate')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ category: 'enerji', title: 'Test', prompt: 'test prompt', quantumMode: false });
+
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe('ALL_AI_PROVIDERS_FAILED');
+  });
+
   it('does not set quantumWarning when quantum mode is off', async () => {
     const app = buildApp();
     const res = await request(app)

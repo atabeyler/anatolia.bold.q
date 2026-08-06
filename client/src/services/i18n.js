@@ -227,6 +227,7 @@ export const translations = {
     noHistory: 'Henüz analiz raporu üretilmemiş.',
     downloadDocxBtn: '.DOCX İNDİR',
     errorPrefix: 'Hata',
+    errAllProvidersFailed: 'Tüm YZ sağlayıcıları şu anda başarısız oluyor (kota/kredi/bağlantı sorunu olabilir). Lütfen daha sonra tekrar deneyin.',
 
     newAnalysisShort: 'ANALİZ',
     consultNav: 'SOHBET',
@@ -358,6 +359,7 @@ export const translations = {
     pastAnalyses: 'PAST ANALYSES', view: 'VIEW', download: 'DOWNLOAD', noHistory: 'No analysis reports have been generated yet.',
     downloadDocxBtn: 'DOWNLOAD .DOCX',
     errorPrefix: 'Error',
+    errAllProvidersFailed: 'All AI providers are currently failing (this may be a quota, billing, or connectivity issue). Please try again later.',
 
     newAnalysisShort: 'ANALYSIS',
     consultNav: 'CHAT',
@@ -446,6 +448,7 @@ export const translations = {
     pastAnalyses: 'FRÜHERE ANALYSEN', view: 'ANZEIGEN', download: 'HERUNTERLADEN', noHistory: 'Es wurden noch keine Analyseberichte erstellt.',
     downloadDocxBtn: '.DOCX HERUNTERLADEN',
     errorPrefix: 'Fehler',
+    errAllProvidersFailed: 'Alle KI-Anbieter schlagen derzeit fehl (möglicherweise ein Kontingent-, Abrechnungs- oder Verbindungsproblem). Bitte versuchen Sie es später erneut.',
 
     newAnalysisShort: 'ANALYSE',
     consultNav: 'CHAT',
@@ -534,6 +537,7 @@ export const translations = {
     pastAnalyses: 'ANALYSES PASSÉES', view: 'VOIR', download: 'TÉLÉCHARGER', noHistory: 'Aucun rapport d\'analyse n\'a encore été généré.',
     downloadDocxBtn: 'TÉLÉCHARGER .DOCX',
     errorPrefix: 'Erreur',
+    errAllProvidersFailed: 'Tous les fournisseurs d\'IA échouent actuellement (problème possible de quota, de facturation ou de connectivité). Veuillez réessayer plus tard.',
 
     newAnalysisShort: 'ANALYSE',
     consultNav: 'CHAT',
@@ -622,6 +626,7 @@ export const translations = {
     pastAnalyses: 'التحليلات السابقة', view: 'عرض', download: 'تنزيل', noHistory: 'لم يتم إنشاء أي تقارير تحليل بعد.',
     downloadDocxBtn: 'تنزيل .DOCX',
     errorPrefix: 'خطأ',
+    errAllProvidersFailed: 'تفشل جميع مزودي الذكاء الاصطناعي حالياً (قد تكون مشكلة حصة أو فوترة أو اتصال). يرجى المحاولة مرة أخرى لاحقاً.',
 
     newAnalysisShort: 'تحليل',
     consultNav: 'محادثة',

@@ -3,7 +3,7 @@
 ![Version](https://img.shields.io/badge/version-2.1.89-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**
-Bold Askeri Teknoloji ve Savunma Sanayi A.Ş. (Bold Military Technology and Defense Industry Inc.)
+Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
 
 ANATOLIA-Q generates structured, fixed-format decision-support reports across 10 domains (defense, energy, economy, health, financial crime, and more), optionally cross-checking the AI's scenario/risk estimates against real quantum circuits — including, when configured, real IBM Quantum hardware — instead of treating "quantum-powered" as a marketing label.
 
@@ -30,7 +30,7 @@ If you're referencing the quantum methodology specifically in academic or techni
 - **Triple AI Assurance** — Claude (Anthropic) → Gemini → GPT-4o automatic fallback, for both the one-shot report generator and the streaming consultation chat
 - **Fixed-Format Report** — auto-generated document number, Times New Roman 11pt, cover page + header/footer, produced as both DOCX and PDF, saved to history, and automatically emailed to the central mailbox as .docx
 - **Voice Assistant** — Whisper transcription, TTS playback, and a natural-language voice command intent parser (OpenAI-backed)
-- **Conversation Memory** — danışma (consultation) chats can be saved, AI-summarized, archived, and revisited later per user
+- **Conversation Memory** — Consultation chats can be saved, AI-summarized, archived, and revisited later per user
 - **Morning Brief** — a daily auto-generated intelligence digest aggregated from Turkish government/news RSS and HTML sources
 
 **Quantum Computing** (Qiskit, `server/quantum/`)
@@ -121,7 +121,7 @@ Tests: `npm test --prefix server` and `npm test --prefix client`
 
 | Variable | What actually happens if it's missing |
 |---|---|
-| `RESEND_API_KEY` | Approval and report emails are **silently skipped** (`sendApprovalEmail`/`sendAnalysisReport` return `{ skipped: true }`) — the login flow still shows "Merkez onayı bekleniyor" (approval pending) as if the email went out. If mail approval isn't working in production, check this first |
+| `RESEND_API_KEY` | Approval and report emails are **silently skipped** (`sendApprovalEmail`/`sendAnalysisReport` return `{ skipped: true }`) — the login-request API call still reports `success: true` as if the email went out (the client UI itself doesn't surface this raw message; it shows its own translated "awaiting approval" text regardless). If mail approval isn't working in production, check this first |
 | `CENTER_EMAIL` | Falls back to a hardcoded `info@boldkimya.com.tr` if unset — not a hard failure, but silent if you meant to redirect notifications elsewhere |
 
 **Everything else required for normal operation:**
@@ -289,4 +289,4 @@ See [CHANGELOG.md](./CHANGELOG.md) for the history of notable changes.
 
 Proprietary — see [LICENSE](./LICENSE). All rights reserved; this source is not licensed for copying, modification, or redistribution without the Company's prior written consent.
 
-**© Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.** (Bold Military Technology and Defense Industry Inc.) · Tüm Hakları Saklıdır
+**© Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.** · All Rights Reserved

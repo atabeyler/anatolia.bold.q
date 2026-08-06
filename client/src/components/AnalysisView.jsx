@@ -71,6 +71,12 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const removeImageAt = (idx) => setImageFiles((prev) => prev.filter((_, i) => i !== idx));
   const removeDocAt = (idx) => setDocumentContexts((prev) => prev.filter((_, i) => i !== idx));
 
+  // Server errors are plain Turkish text by default (not routed through
+  // i18n) except for a few with a machine-readable `code`, which map to a
+  // properly localized message here instead of leaking raw Turkish into a
+  // UI the user may have set to another language.
+  const localizedError = (e) => (e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message);
+
   const generate = async () => {
     if (!prompt.trim() || !category) return;
     setLoading(true);
@@ -85,7 +91,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
       const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload);
       setResult(r);
     } catch (e) {
-      setError(e.message);
+      setError(localizedError(e));
     } finally {
       setLoading(false);
     }
@@ -98,7 +104,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
       const r = await api.scenarioDeepDive(category, scenario.id, scenario.title);
       setScenarioResult({ ...r, scenarioLabel: scenario.title });
     } catch (e) {
-      setError('Senaryo analizi basarisiz: ' + e.message);
+      setError('Senaryo analizi basarisiz: ' + localizedError(e));
     } finally {
       setLoadingScenario(null);
     }

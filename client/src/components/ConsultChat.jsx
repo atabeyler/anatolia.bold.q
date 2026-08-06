@@ -99,7 +99,8 @@ export default function ConsultChat() {
         });
       }
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${e.message}`, error: true }]);
+      const msg = e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message;
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}`, error: true }]);
     } finally {
       setLoading(false);
     }

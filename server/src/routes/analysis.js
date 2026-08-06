@@ -377,7 +377,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     });
   } catch (err) {
     logger.error({ err }, 'Analysis error');
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -435,7 +435,7 @@ router.post('/scenario-deep-dive', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     logger.error({ err }, 'Scenario analysis error');
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -497,7 +497,7 @@ router.post('/chat', authMiddleware, async (req, res) => {
   } catch (err) {
     logger.error({ err }, 'Chat error');
     if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message, code: err.code });
     } else {
       res.end();
     }

@@ -10,6 +10,7 @@ All notable changes to ANATOLIA-Q are documented in this file, grouped by date. 
 
 ### Fixed
 - The `/generate` response's `quantum` and `fraud` fields were missing `hardwareVerification`/`ibmDiagnostic` even when a real IBM hardware run succeeded — an explicit field whitelist in the route handler hadn't been updated to include them
+- The "all AI providers failed" error was shown to users verbatim in Turkish regardless of their selected UI language, since it's a server-side error message that was never routed through the client's i18n system. The error now carries a machine-readable `code` (`ALL_AI_PROVIDERS_FAILED`) end-to-end so `AnalysisView.jsx`/`ConsultChat.jsx` can substitute a properly localized message in all 5 supported languages instead
 
 ## 2026-08-04
 

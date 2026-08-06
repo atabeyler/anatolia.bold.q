@@ -24,7 +24,12 @@ async function req(path, options = {}) {
   const res = await fetch(baseFor(path) + path, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'API hatası');
+    const e = new Error(err.error || 'API hatası');
+    // Some server errors carry a machine-readable code (e.g.
+    // ALL_AI_PROVIDERS_FAILED) so UI code can show a localized message
+    // instead of the raw server-side (Turkish-only) error text.
+    if (err.code) e.code = err.code;
+    throw e;
   }
   return res.json();
 }
@@ -67,7 +72,9 @@ export const api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || 'API hatası');
+      const e = new Error(err.error || 'API hatası');
+      if (err.code) e.code = err.code;
+      throw e;
     }
 
     const contentType = res.headers.get('content-type') || '';

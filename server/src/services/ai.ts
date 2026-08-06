@@ -387,6 +387,16 @@ export async function generateAnalysisWithVision(
   return generateAnalysis(systemPrompt, `[Görsel eklendi — görsel AI kullanılamıyor]\n\n${userPrompt}`);
 }
 
+// Thrown when every AI provider fails. The Turkish `message` is kept for
+// logs and direct API callers, but the client never shows it raw -- it's
+// not routed through the i18n system like the rest of the UI, so it would
+// display in Turkish regardless of the user's selected app language. The
+// `code` lets client code substitute a properly localized string instead
+// (see AnalysisView.jsx / ConsultChat.jsx).
+export class AllProvidersFailedError extends Error {
+  code = 'ALL_AI_PROVIDERS_FAILED';
+}
+
 export async function generateAnalysis(systemPrompt: string, userPrompt: string): Promise<GenerateResult> {
   const errors: Array<{ provider: string; error: string }> = [];
 
@@ -433,7 +443,7 @@ export async function generateAnalysis(systemPrompt: string, userPrompt: string)
     }
   }
 
-  throw new Error(`Tüm AI sağlayıcılar başarısız: ${JSON.stringify(errors)}`);
+  throw new AllProvidersFailedError(`Tüm AI sağlayıcılar başarısız: ${JSON.stringify(errors)}`);
 }
 
 /**
@@ -494,7 +504,7 @@ export async function streamConsultationText(
     }
   }
 
-  throw new Error('Tüm AI sağlayıcılar başarısız');
+  throw new AllProvidersFailedError('Tüm AI sağlayıcılar başarısız');
 }
 
 export function getSystemPromptForCategory(category: string): string {

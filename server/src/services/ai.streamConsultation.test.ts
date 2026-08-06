@@ -97,4 +97,16 @@ describe('streamConsultationText', () => {
     await expect(streamConsultationText('sys', 'user', res as never)).rejects.toThrow('Tüm AI sağlayıcılar başarısız');
     expect(res.writeHead).not.toHaveBeenCalled();
   });
+
+  it('tags the all-providers-failed error with a machine-readable code', async () => {
+    // The message is Turkish-only and not routed through the client's i18n
+    // system, so the route handler forwards this `code` in the JSON error
+    // response and the client substitutes a properly localized string
+    // instead of showing raw Turkish regardless of the user's UI language.
+    streamTextMock.mockReturnValue(emptyStream());
+    const res = fakeRes();
+    await expect(streamConsultationText('sys', 'user', res as never)).rejects.toMatchObject({
+      code: 'ALL_AI_PROVIDERS_FAILED',
+    });
+  });
 });
