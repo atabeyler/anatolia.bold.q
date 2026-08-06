@@ -111,6 +111,33 @@ describe('POST /api/analysis/generate -- quantum failure visibility', () => {
     expect(res.body.quantum).toMatchObject({ backend: 'qiskit-aer-simulator', qubits: 2 });
   });
 
+  it('surfaces hardwareVerification/ibmDiagnostic on the quantum field of the /generate response', async () => {
+    // Regression test: these were computed by scenario_quantum.py and
+    // present on computeQuantumProbabilities()'s resolved value, but the
+    // /generate route's response builds `quantum` from an explicit field
+    // whitelist that didn't include them -- so a real IBM hardware run
+    // never showed up in the API response here, only inside quantum-status
+    // (a separate endpoint) and buried in the report's markdown text.
+    computeQuantumProbabilitiesMock.mockResolvedValue({
+      backend: 'qiskit-aer-simulator', qubits: 2, shots: 4096, batches: 1, circuitDepth: 8,
+      scenarios: [
+        { id: 'SENARYO-A', llmEstimate: 60, quantumProbability: 58, quantumStdDev: 1, quantumRangeLow: 57, quantumRangeHigh: 59 },
+        { id: 'SENARYO-B', llmEstimate: 40, quantumProbability: 42, quantumStdDev: 1, quantumRangeLow: 41, quantumRangeHigh: 43 },
+      ],
+      hardwareVerification: { backend: 'ibm_marrakesh', shots: 4095, scenarios: [{ id: 'SENARYO-A', quantumProbability: 61.2 }] },
+      ibmDiagnostic: 'succeeded on ibm_marrakesh',
+    });
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/analysis/generate')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ category: 'enerji', title: 'Test', prompt: 'test prompt', quantumMode: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.quantum.hardwareVerification).toMatchObject({ backend: 'ibm_marrakesh' });
+    expect(res.body.quantum.ibmDiagnostic).toBe('succeeded on ibm_marrakesh');
+  });
+
   it('does not set quantumWarning when quantum mode is off', async () => {
     const app = buildApp();
     const res = await request(app)

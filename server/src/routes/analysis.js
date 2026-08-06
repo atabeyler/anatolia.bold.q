@@ -344,6 +344,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             batches: quantumComputation.batches,
             circuitDepth: quantumComputation.circuitDepth,
             dataSource: quantumComputation.dataSource,
+            hardwareVerification: quantumComputation.hardwareVerification || null,
+            ibmDiagnostic: quantumComputation.ibmDiagnostic || null,
           }
         : null,
       fraud: fraudComputation
@@ -355,6 +357,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             flaggedCount: fraudComputation.flaggedCount,
             transactions: fraudComputation.transactions,
             dataSource: fraudComputation.dataSource,
+            hardwareVerification: fraudComputation.hardwareVerification || null,
+            ibmDiagnostic: fraudComputation.ibmDiagnostic || null,
           }
         : null,
       optimizer: optimizerComputation
