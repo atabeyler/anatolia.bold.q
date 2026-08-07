@@ -114,7 +114,7 @@ def build_swap_test_circuit(circuit_a, circuit_b):
     return qc
 
 
-def detect(transactions):
+def detect(transactions, skip_hardware=False):
     n = len(transactions)
     if n < 3:
         return None  # too few points for a meaningful outlier comparison
@@ -167,7 +167,9 @@ def detect(transactions):
     # that decision must stay deterministic.
     hardware_verification = None
     ibm_diagnostic = "not configured (IBM_QUANTUM_TOKEN/IBM_QUANTUM_INSTANCE unset)"
-    if top_idx != typical_idx and is_ibm_configured():
+    if skip_hardware:
+        ibm_diagnostic = "skipped (fast simulator-only response; hardware verification runs separately)"
+    elif top_idx != typical_idx and is_ibm_configured():
         ibm_diagnostic = "configured, attempting hardware run..."
         swap_qc = build_swap_test_circuit(circuits[top_idx], circuits[typical_idx])
         ibm_result = run_on_ibm_hardware(swap_qc, 2048)
@@ -205,7 +207,8 @@ def main():
     raw = sys.stdin.read() or "{}"
     payload = json.loads(raw)
     transactions = payload.get("transactions", [])[:MAX_TRANSACTIONS]
-    result = detect(transactions)
+    skip_hardware = bool(payload.get("skipHardware"))
+    result = detect(transactions, skip_hardware)
     print(json.dumps(result if result is not None else {
         "backend": "qiskit-statevector-kernel", "qubits": len(FEATURES),
         "featureNames": FEATURES, "transactionCount": len(transactions),

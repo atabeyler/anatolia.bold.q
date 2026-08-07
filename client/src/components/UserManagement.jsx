@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Trash2, ShieldOff, ShieldCheck, UserPlus, Pencil, ScrollText } from 'lucide-react';
-import { adminApi } from '../services/api.js';
+import { X, Trash2, ShieldOff, ShieldCheck, UserPlus, Pencil, ScrollText, TrendingUp } from 'lucide-react';
+import { adminApi, api } from '../services/api.js';
 
 const AUDIT_ACTION_LABELS = {
   user_added: 'Kullanıcı eklendi',
@@ -10,6 +10,73 @@ const AUDIT_ACTION_LABELS = {
   user_unblocked: 'Engel kaldırıldı',
   user_deleted: 'Kullanıcı silindi',
 };
+
+// Trend view over historical BDDK/BTK fraud flags (see /api/analysis/fraud-trend)
+// -- previously each report stood alone with no way to see whether flagged
+// transactions were trending up or down across reports over time.
+function FraudTrendTab() {
+  const [points, setPoints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [category, setCategory] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    api.fraudTrend(category || null)
+      .then((data) => setPoints(data.points || []))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [category]);
+
+  if (loading) return <p className="text-sm text-cyan-100/50">Yükleniyor…</p>;
+  if (error) return <p className="text-xs text-red-300">{error}</p>;
+
+  const W = 640, H = 180, PAD = 28;
+  const maxRate = Math.max(10, ...points.map((p) => p.flagRate));
+  const xStep = points.length > 1 ? (W - 2 * PAD) / (points.length - 1) : 0;
+  const toXY = (p, i) => [PAD + i * xStep, H - PAD - (p.flagRate / maxRate) * (H - 2 * PAD)];
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${toXY(p, i).join(',')}`).join(' ');
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-cyan-300" />
+        <span className="text-xs text-cyan-100/70">İşaretlenme Oranı (%) — Gün Bazında</span>
+        <select value={category} onChange={(e) => setCategory(e.target.value)}
+          className="ml-auto bg-[#071225] border border-cyan-300/25 text-cyan-100 text-xs rounded px-2 py-1">
+          <option value="">Tümü (BDDK + BTK)</option>
+          <option value="bddk">BDDK</option>
+          <option value="btk">BTK</option>
+        </select>
+      </div>
+
+      {points.length === 0 ? (
+        <p className="text-sm text-cyan-100/50">Henüz kuantum modda üretilmiş fraud raporu yok.</p>
+      ) : (
+        <>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44 bg-[#071225]/50 border border-cyan-300/15 rounded">
+            <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="rgba(103,232,249,0.25)" />
+            <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="rgba(103,232,249,0.25)" />
+            <path d={linePath} fill="none" stroke="#67e8f9" strokeWidth="2" />
+            {points.map((p, i) => {
+              const [x, y] = toXY(p, i);
+              return <circle key={`${p.date}-${p.category}`} cx={x} cy={y} r="3" fill="#22d3ee" />;
+            })}
+          </svg>
+          <div className="max-h-40 overflow-y-auto pr-1 space-y-1">
+            {points.slice().reverse().map((p) => (
+              <div key={`${p.date}-${p.category}`} className="flex items-center justify-between text-xs border border-cyan-300/10 rounded px-3 py-1.5 bg-[#071225]/40">
+                <span className="text-cyan-100/70">{p.date} · {p.category.toUpperCase()}</span>
+                <span className="text-cyan-100/50">{p.reportCount} rapor · {p.flaggedCount}/{p.transactionCount} işaretlendi</span>
+                <span className="text-cyan-200 font-mono">%{p.flagRate}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function AuditLogTab() {
   const [logs, setLogs] = useState([]);
@@ -191,6 +258,10 @@ export default function UserManagementModal({ onClose }) {
             className={`px-3 py-1.5 text-xs tracking-widest uppercase transition flex items-center gap-1.5 ${tab === 'audit' ? 'text-cyan-200 border-b-2 border-cyan-400' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>
             <ScrollText className="w-3.5 h-3.5" /> İşlem Kaydı
           </button>
+          <button onClick={() => setTab('fraud-trend')}
+            className={`px-3 py-1.5 text-xs tracking-widest uppercase transition flex items-center gap-1.5 ${tab === 'fraud-trend' ? 'text-cyan-200 border-b-2 border-cyan-400' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>
+            <TrendingUp className="w-3.5 h-3.5" /> Fraud Trend
+          </button>
         </div>
 
         {error && (
@@ -198,6 +269,7 @@ export default function UserManagementModal({ onClose }) {
         )}
 
         {tab === 'audit' && <AuditLogTab />}
+        {tab === 'fraud-trend' && <FraudTrendTab />}
 
         {tab === 'users' && (
         <>

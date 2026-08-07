@@ -148,6 +148,8 @@ export const api = {
 
   getAIStatus: () => req('/api/analysis/status'),
 
+  fraudTrend: (category = null) => req(`/api/analysis/fraud-trend${category ? `?category=${category}` : ''}`),
+
   weatherCurrent: (lat, lng) => req(`/api/weather/current?lat=${lat}&lng=${lng}`),
 
   emergencyCenter: (message, region) =>
@@ -158,6 +160,10 @@ export const api = {
 
   emergencyRegion: (region, message) =>
     req('/api/emergency/region', { method: 'POST', body: JSON.stringify({ region, message }) }),
+
+  pushVapidPublicKey: () => req('/api/emergency/push/vapid-public-key'),
+  pushSubscribe: (subscription) => req('/api/emergency/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription }) }),
+  pushUnsubscribe: (endpoint) => req('/api/emergency/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
 
   historyList: () => req('/api/history/list'),
   activityFeed: () => req('/api/history/feed'),

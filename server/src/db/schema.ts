@@ -5,7 +5,7 @@
  * file generates no migrations, it only provides a typed query layer.
  * approval_tokens is NOT here — kept out of scope along with auth.js.
  */
-import { pgTable, serial, varchar, text, boolean, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, boolean, timestamp, jsonb, integer } from 'drizzle-orm/pg-core';
 
 export const analyses = pgTable('analyses', {
   id: serial('id').primaryKey(),
@@ -14,6 +14,12 @@ export const analyses = pgTable('analyses', {
   title: text('title').notNull(),
   content: text('content').notNull(),
   aiProvider: varchar('ai_provider', { length: 20 }),
+  // Populated only for BDDK/BTK reports that ran the quantum kernel fraud
+  // detector, so the fraud-trend view can aggregate without re-parsing
+  // markdown -- see routes/analysis.js and routes/analysis.js's
+  // /fraud-trend endpoint.
+  fraudTransactionCount: integer('fraud_transaction_count'),
+  fraudFlaggedCount: integer('fraud_flagged_count'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -56,6 +62,15 @@ export const userProfiles = pgTable('user_profiles', {
   preferredLang: varchar('preferred_lang', { length: 5 }).default('tr'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: serial('id').primaryKey(),
+  userCode: varchar('user_code', { length: 50 }).notNull(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 export const conversationMemory = pgTable('conversation_memory', {

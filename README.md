@@ -40,9 +40,10 @@ If you're referencing the quantum methodology specifically in academic or techni
 **Emergency & Situational Awareness**
 - **Emergency Center** — center notification, user notification, end-to-end encrypted chat, and video call panels
 - **3D Rotating Globe & Turkey Map** — real-texture Earth map with city pins and radar sweep, plus a dedicated Turkey-focused personnel radar view
+- **Web Push** — opt-in browser push notifications (Settings > Push) for emergency broadcasts and admin-started video meetings, so they still reach a closed/backgrounded tab — see `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` in Environment Variables
 
 **Administration**
-- **Admin Panel** — user management (create/update/block/delete), an audit log of admin actions, and a public `/api/analysis/quantum-status` health check that reports whether the Qiskit worker and IBM hardware link are actually working
+- **Admin Panel** — user management (create/update/block/delete), an audit log of admin actions, a BDDK/BTK fraud-flag trend view (`GET /api/analysis/fraud-trend`), and a public `/api/analysis/quantum-status` health check that reports whether the Qiskit worker and IBM hardware link are actually working
 - **History Archive** — all reports can be viewed, downloaded (DOCX/PDF), and appear in a live activity feed
 - **Two-Stage Login** — user code + password, followed by approval via the central mailbox (`info@boldkimya.com.tr`); admin accounts skip mail approval and get a JWT immediately (see [Security Notes](#security-notes))
 
@@ -149,9 +150,11 @@ Tests: `npm test --prefix server` and `npm test --prefix client`
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION` | File uploads are stored persistently in S3/Cloudflare R2 |
 | `SENTRY_DSN` | Server errors are reported to Sentry |
 | `VITE_ICE_SERVERS` | TURN server for the emergency video call feature |
-| `IBM_QUANTUM_TOKEN`, `IBM_QUANTUM_INSTANCE`, `IBM_QUANTUM_WAIT_SECONDS` | Run the scenario and fraud-detection quantum modules' verification lane on real IBM Quantum hardware (falls back to simulator-only otherwise); wait defaults to 60s |
+| `IBM_QUANTUM_TOKEN`, `IBM_QUANTUM_INSTANCE`, `IBM_QUANTUM_WAIT_SECONDS` | Run the scenario and fraud-detection quantum modules' verification lane on real IBM Quantum hardware (falls back to simulator-only otherwise); wait defaults to 60s. `/generate` never blocks on this wait — it responds on the local simulator result immediately, then runs the hardware lane in the background and appends it to the saved report + pushes an `analysis:hardwareVerified` socket event when it resolves |
 | `NEWS_RSS_SOURCES` | Overrides the default RSS/HTML source list the morning brief aggregates from |
 | `PYTHON_BIN` | Overrides the `python3` binary used to spawn the Qiskit subprocesses (for local dev setups with a non-default interpreter) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Enables Web Push for emergency broadcasts (`server/src/lib/webPush.js`) — without them, push is silently disabled and only the in-app socket toast/email notify. Generate a keypair with `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` defaults to `mailto:info@boldkimya.com.tr` |
+| `CONVERSATION_MEMORY_TTL_DAYS` | Retention window for saved consultation conversations (`conversation_memory` table), swept every 6 hours (`server/src/routes/memory.js`); defaults to 180 days |
 
 ---
 
@@ -190,7 +193,7 @@ Single live samples against the production deployment (Render free tier, Frankfu
 | `GET /api/weather/current` | ~1.1–1.6s | Proxies an external API (Open-Meteo) |
 | `GET /api/history/morning-brief/today` | ~0.5s | Pre-generated, served from DB |
 | `GET /api/analysis/quantum-status` | ~50s | Spawns a real Qiskit subprocess and attempts a real IBM hardware round-trip; dominated by the hardware queue wait, not local computation |
-| `POST /api/analysis/generate` (quantum mode) | tens of seconds to several minutes | Highly variable — depends on which AI provider succeeds, whether quantum mode triggers an IBM hardware verification, and IBM's queue depth (bounded by `IBM_QUANTUM_WAIT_SECONDS`) |
+| `POST /api/analysis/generate` (quantum mode) | a few seconds to tens of seconds | Depends on which AI provider succeeds; no longer waits on IBM's hardware queue — that verification runs in the background after the response (see the FAQ entry below) |
 
 ---
 
@@ -211,24 +214,22 @@ Single live samples against the production deployment (Render free tier, Frankfu
 **Shipped:**
 - ✅ Triple-AI fallback for report generation and consultation chat
 - ✅ Quantum scenario probability, QAOA portfolio optimization, and fraud/AML kernel detection
-- ✅ Real IBM Quantum hardware verification (scenario + fraud modules)
+- ✅ Real IBM Quantum hardware verification (scenario + fraud modules), run as a background job off the request/response cycle — `/generate` responds on the local simulator result immediately and appends the hardware verification (plus a socket push) once it resolves, instead of blocking on `IBM_QUANTUM_WAIT_SECONDS`
 - ✅ Voice assistant (transcription, TTS, intent parsing)
-- ✅ Conversation memory, morning brief, admin panel with audit log
+- ✅ Conversation memory (with a 180-day TTL retention sweep, `CONVERSATION_MEMORY_TTL_DAYS`), morning brief, admin panel with audit log
+- ✅ A trend view over historical BDDK/BTK fraud flags (`GET /api/analysis/fraud-trend`, admin-only), instead of each report standing alone
+- ✅ Web Push for emergency broadcasts and admin-started video meetings, so a closed/backgrounded browser tab doesn't mean a missed alert (opt-in, Settings > Push)
 
-**Under consideration** (not committed — flagged as real gaps found during testing, not a promised timeline):
-- ⬜ Admin login 2FA — currently the highest-privilege account has the *weakest* login flow (password only, no mail approval)
+**Under consideration** (not committed — flagged as a real gap, not a promised timeline):
+- ⬜ Admin login 2FA — currently the highest-privilege account has the *weakest* login flow (password only, no mail approval). Deliberately deferred during active development to avoid the extra approval friction; revisit before wider rollout
 - ⬜ An AI-provider quota/usage dashboard for admins, so provider exhaustion is visible before users start seeing failures
-- ⬜ Moving long-running quantum jobs (especially IBM hardware verification, which can take the full `IBM_QUANTUM_WAIT_SECONDS`) off the request/response cycle and into a background-job + poll/webhook pattern
-- ⬜ A trend view over historical BDDK/BTK fraud flags, rather than each report standing alone
-- ⬜ Web Push for emergency notifications, so a closed browser tab doesn't mean a missed alert
-- ⬜ A retention/TTL policy for `conversationMemory`, matching the one file uploads already have
 
 ---
 
 ## FAQ
 
-**Why did my quantum-mode report take minutes instead of seconds?**
-Quantum mode always runs a local simulator (fast), but if `IBM_QUANTUM_TOKEN`/`IBM_QUANTUM_INSTANCE` are configured, it *also* attempts a real hardware verification run, which waits on IBM's job queue for up to `IBM_QUANTUM_WAIT_SECONDS` (default 60s) before giving up and falling back. See [Performance](#performance).
+**Why did my quantum-mode report's hardware verification section show up after the report itself?**
+Quantum mode always runs a local simulator (fast) and `/generate` responds as soon as that's done. If `IBM_QUANTUM_TOKEN`/`IBM_QUANTUM_INSTANCE` are configured, the real hardware verification run — which waits on IBM's job queue for up to `IBM_QUANTUM_WAIT_SECONDS` (default 60s) — happens afterward as a background job, not before the response. Once it resolves, the result is appended to the saved report and pushed to your session over Socket.IO (`analysis:hardwareVerified`) so a still-open report updates live instead of you having to poll. See [Performance](#performance).
 
 **The report generator returned "Tüm AI sağlayıcılar başarısız" (all AI providers failed) — is the app broken?**
 Not necessarily the app itself — this means Claude, Gemini, and GPT-4o all failed for that request (commonly: exhausted API quota/credit on all three simultaneously). Check `GET /api/analysis/status` for which providers have keys configured, and each provider's own dashboard for quota/billing status.

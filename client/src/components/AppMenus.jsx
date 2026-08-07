@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check } from 'lucide-react';
 import QuantumLogo from './QuantumLogo.jsx';
+import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../services/push.js';
 
 function DropdownOverlay({ onClose, closeLabel }) {
   return (
@@ -71,9 +72,32 @@ const SETTINGS_LANGUAGES = [
 
 function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, sidebarCollapsed, setSidebarCollapsed, onOpenGuide, showAppearance = true }) {
   const [tab, setTab] = useState('language');
+  const [pushState, setPushState] = useState('checking');
+  const [pushError, setPushError] = useState('');
+  useEffect(() => {
+    if (!isPushSupported()) { setPushState('unsupported'); return; }
+    getPushSubscriptionState().then(setPushState).catch(() => setPushState('unsupported'));
+  }, []);
+  const togglePush = async () => {
+    setPushError('');
+    try {
+      if (pushState === 'subscribed') {
+        await unsubscribeFromPush();
+        setPushState('unsubscribed');
+      } else {
+        setPushState('checking');
+        await subscribeToPush();
+        setPushState('subscribed');
+      }
+    } catch (e) {
+      setPushError(e.message);
+      setPushState(await getPushSubscriptionState().catch(() => 'unsubscribed'));
+    }
+  };
   const tabs = [
     { key: 'language', label: t('settingsLanguage') },
     { key: 'sound', label: t('settingsSound') },
+    { key: 'push', label: t('settingsPush') },
     ...(showAppearance ? [{ key: 'appearance', label: t('settingsAppearance') }] : []),
     { key: 'about', label: t('settingsAbout') },
   ];
@@ -127,6 +151,20 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
                 <span className="text-[10px] text-gold/50 shrink-0">{t('settingsSoundVolume')}</span>
                 <input type="range" min="0.02" max="0.2" step="0.01" value={soundVolume} onChange={(e) => setSoundVolume(Number(e.target.value))} className="flex-1" />
               </div>
+            </div>
+          )}
+
+          {tab === 'push' && (
+            <div>
+              <button
+                onClick={togglePush}
+                disabled={pushState === 'unsupported' || pushState === 'checking'}
+                className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-2 disabled:opacity-40">
+                <span>{t('settingsPushEnable')}</span>
+                {pushState === 'subscribed' ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}
+              </button>
+              {pushState === 'unsupported' && <p className="text-[11px] text-gold/50">{t('settingsPushUnsupported')}</p>}
+              {pushError && <p className="text-[11px] text-red-300">{pushError}</p>}
             </div>
           )}
 

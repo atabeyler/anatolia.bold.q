@@ -7,8 +7,39 @@ import { authMiddleware } from '../middleware/auth.js';
 import { getOptionalUserCode } from '../lib/optionalAuth.js';
 import { publicActionLimiter } from '../middleware/rateLimit.js';
 import { logger } from '../lib/logger.js';
+import { getVapidPublicKey, saveSubscription, removeSubscription, sendPushToUsers } from '../lib/webPush.js';
 
 const router = express.Router();
+
+// Web Push subscription management -- lets a closed/backgrounded browser tab
+// still receive an emergency broadcast as an OS-level notification, not just
+// the in-app socket toast (see lib/webPush.js).
+router.get('/push/vapid-public-key', (req, res) => {
+  res.json({ publicKey: getVapidPublicKey() });
+});
+
+router.post('/push/subscribe', authMiddleware, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return res.status(400).json({ error: 'Geçersiz push aboneliği' });
+    }
+    await saveSubscription(req.user.userCode, subscription);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/push/unsubscribe', authMiddleware, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    await removeSubscription(endpoint);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_REGION_LENGTH = 100;
@@ -71,6 +102,11 @@ router.post('/users', authMiddleware, publicActionLimiter, async (req, res) => {
     getUserEmailRecipients()
       .then((recipients) => recipients.length && sendEmergencyBroadcastEmail(userCode, message, recipients))
       .catch((err) => logger.warn({ err }, '[Emergency] Broadcast email failed'));
+
+    // Web Push -- reaches subscribed users even with the app tab closed or
+    // backgrounded, unlike the socket broadcast above (only live sockets).
+    sendPushToUsers({ title: 'ANATOLIA-Q — Acil Yayın', body: `${userCode}: ${message}`, tag: 'emergency' })
+      .catch((err) => logger.warn({ err }, '[Emergency] Push broadcast failed'));
 
     res.json({ success: true, message: 'Tüm kullanıcılara iletildi.' });
   } catch (err) {

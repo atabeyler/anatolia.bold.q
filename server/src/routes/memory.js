@@ -1,11 +1,31 @@
 import express from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { userProfiles, conversationMemory } from '../db/schema.js';
 import { generateAnalysis } from '../services/ai.js';
+import { logger } from '../lib/logger.js';
 
 const router = express.Router();
+
+// Retention policy for conversationMemory, mirroring the disk-upload TTL
+// sweep in routes/files.js (DISK_FILE_TTL_MS) -- these are user-initiated
+// saved consultations rather than incidental uploads, so the default
+// window is much longer, and archiving (see PATCH /conversations/:id/archive)
+// does not exempt a conversation from it.
+const CONVERSATION_MEMORY_TTL_MS = (Number(process.env.CONVERSATION_MEMORY_TTL_DAYS) || 180) * 24 * 60 * 60 * 1000;
+
+async function cleanupOldConversations() {
+  if (!isDbConfigured()) return;
+  try {
+    const cutoff = new Date(Date.now() - CONVERSATION_MEMORY_TTL_MS);
+    await getDb().delete(conversationMemory).where(lt(conversationMemory.createdAt, cutoff));
+  } catch (err) {
+    logger.warn({ err }, '[Memory] Conversation TTL cleanup failed');
+  }
+}
+setInterval(cleanupOldConversations, 6 * 60 * 60 * 1000).unref();
+cleanupOldConversations();
 
 const toProfileJson = (row) => ({
   user_code: row.userCode,

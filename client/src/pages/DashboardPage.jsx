@@ -269,15 +269,28 @@ export default function DashboardPage({ user, onLogout }) {
       disconnectSocket();
       onLogout();
     };
+    const onHardwareVerified = (data) => {
+      if (!data) return;
+      const ok = !!data.hardwareVerification;
+      pushNotification({
+        type: 'system',
+        title: t('hardwareVerifiedTitle'),
+        body: ok ? t('hardwareVerifiedBody') : t('hardwareVerifiedFailedBody'),
+        action: 'history',
+      });
+      notifyDevice(t('hardwareVerifiedTitle'), ok ? t('hardwareVerifiedBody') : t('hardwareVerifiedFailedBody'));
+    };
     sock.on('emergency:broadcast', onBroadcast);
     sock.on('chat:receive', onChatReceive);
     sock.on('notification:new', onSystemNotification);
     sock.on('auth:blocked', onBlocked);
+    sock.on('analysis:hardwareVerified', onHardwareVerified);
     return () => {
       sock.off('emergency:broadcast', onBroadcast);
       sock.off('chat:receive', onChatReceive);
       sock.off('notification:new', onSystemNotification);
       sock.off('auth:blocked', onBlocked);
+      sock.off('analysis:hardwareVerified', onHardwareVerified);
     };
   }, [user.userCode, lang, soundEnabled, soundVolume]);
 
@@ -640,6 +653,7 @@ export default function DashboardPage({ user, onLogout }) {
                   key={n.id}
                   onClick={() => {
                     if (n.action === 'home') setView('home');
+                    if (n.action === 'history') setView('history');
                     if (n.action === 'open-emergency-chat') window.dispatchEvent(new CustomEvent('aq:emergency:open', { detail: { targetUser: n.targetUser, forceChat: true } }));
                     setNotifOpen(false);
                   }}

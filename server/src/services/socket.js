@@ -7,6 +7,7 @@ import { getUserEmailByNickname, getUserEmailRecipients } from './database.js';
 import * as onlineState from '../lib/onlineState.js';
 import { logger } from '../lib/logger.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
+import { sendPushToUsers } from '../lib/webPush.js';
 
 const adminSockets = new Set();
 const activeMeetingByRoom = new Map();
@@ -144,6 +145,8 @@ export function initSocketHandlers(io) {
       getUserEmailRecipients()
         .then((recipients) => recipients.length && sendVideoMeetingStartedToUsers(socket.nickname, recipients))
         .catch((err) => logger.warn({ err }, '[Socket] Meeting-start email failed'));
+      sendPushToUsers({ title: 'ANATOLIA-Q — Acil Toplantı', body: `${socket.nickname} görüntülü toplantı başlattı.`, tag: 'emergency' })
+        .catch((err) => logger.warn({ err }, '[Socket] Meeting-start push failed'));
       activeMeetingByRoom.set(roomId, {
         host: socket.nickname,
         startedAt,

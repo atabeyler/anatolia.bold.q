@@ -33,11 +33,16 @@ vi.mock('../services/pdf.js', () => ({ generateReportPdf: (...args) => generateR
 vi.mock('../services/email.js', () => ({ sendAnalysisReport: vi.fn(async () => {}) }));
 vi.mock('../db/client.js', () => ({ isDbConfigured: () => false, getDb: () => { throw new Error('not used when isDbConfigured() is false'); } }));
 vi.mock('../db/schema.js', () => ({ analyses: {}, messages: {} }));
-vi.mock('../services/quantum.js', () => ({ computeQuantumProbabilities: vi.fn(), mergeQuantumResults: vi.fn() }));
+vi.mock('../services/quantum.js', () => ({
+  computeQuantumProbabilities: vi.fn(), mergeQuantumResults: vi.fn(),
+  isIbmHardwareConfigured: () => false, verifyScenarioHardwareAsync: vi.fn(), buildScenarioHardwareSection: vi.fn(() => ''),
+}));
 vi.mock('../services/fraudDetection.js', () => ({
   computeFraudRiskScores: (...args) => computeFraudRiskScoresMock(...args),
   mergeFraudResults: (...args) => mergeFraudResultsMock(...args),
+  verifyFraudHardwareAsync: vi.fn(), buildFraudHardwareSection: vi.fn(() => ''),
 }));
+vi.mock('../services/socket.js', () => ({ broadcastToUser: vi.fn(async () => {}) }));
 vi.mock('../services/portfolioOptimizer.js', () => ({ computeOptimalAllocation: vi.fn(), mergeOptimizerResults: vi.fn() }));
 vi.mock('../services/transactionSource.js', () => ({ parseTransactionFile: vi.fn() }));
 vi.mock('../services/scenarioDataSource.js', () => ({ parseScenarioFile: vi.fn(), parseOptimizationFile: vi.fn() }));

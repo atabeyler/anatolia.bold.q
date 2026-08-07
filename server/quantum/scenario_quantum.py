@@ -71,7 +71,7 @@ def build_mixer(qc, num_qubits):
     return layers
 
 
-def build_distribution(scenarios, shots):
+def build_distribution(scenarios, shots, skip_hardware=False):
     n = len(scenarios)
     if n == 0:
         return None
@@ -153,7 +153,9 @@ def build_distribution(scenarios, shots):
     # quantum-status health check can tell "not configured" apart from
     # "configured but the hardware attempt failed" (and why).
     ibm_diagnostic = "not configured (IBM_QUANTUM_TOKEN/IBM_QUANTUM_INSTANCE unset)"
-    if is_ibm_configured():
+    if skip_hardware:
+        ibm_diagnostic = "skipped (fast simulator-only response; hardware verification runs separately)"
+    elif is_ibm_configured():
         ibm_diagnostic = "configured, attempting hardware run..."
         ibm_result = run_on_ibm_hardware(qc, batch_shots)
         if ibm_result:
@@ -195,8 +197,9 @@ def main():
     payload = json.loads(raw)
     scenarios = payload.get("scenarios", [])
     shots = min(MAX_SHOTS, max(MIN_SHOTS, int(payload.get("shots") or 4096)))
+    skip_hardware = bool(payload.get("skipHardware"))
 
-    result = build_distribution(scenarios, shots)
+    result = build_distribution(scenarios, shots, skip_hardware)
     print(json.dumps(result if result is not None else {
         "backend": "qiskit-aer-simulator", "qubits": 0, "shots": 0,
         "batches": 0, "circuitDepth": 0, "mixerLayers": [], "circuitDiagram": "",

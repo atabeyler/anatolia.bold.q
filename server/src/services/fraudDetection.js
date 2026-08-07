@@ -25,16 +25,19 @@ const MAX_TRANSACTIONS = 60;
 
 /**
  * @param {Array<{id:string, amount:number, hour:number, frequency:number, newCounterparty:number, crossBorder:number}>} transactions
+ * @param {{skipHardware?: boolean}} [opts] - skipHardware=true returns the fast
+ *        simulator-only result so the request/response path isn't blocked on
+ *        the IBM queue wait; see verifyFraudHardwareAsync for the deferred run.
  * @returns {Promise<{backend:string, qubits:number, circuitDepth:number, circuitDiagram:string, transactions:Array}|null>}
  *          Returns null if the Python process fails (no python/qiskit, timeout, too few records, etc.)
  *          — the caller should then proceed with the LLM's narrative report unscored.
  */
-export function computeFraudRiskScores(transactions) {
+export function computeFraudRiskScores(transactions, opts = {}) {
   if (!Array.isArray(transactions) || transactions.length < 3) return Promise.resolve(null);
 
   const originalCount = transactions.length;
   const truncated = originalCount > MAX_TRANSACTIONS;
-  const payload = JSON.stringify({ transactions: transactions.slice(0, MAX_TRANSACTIONS) });
+  const payload = JSON.stringify({ transactions: transactions.slice(0, MAX_TRANSACTIONS), skipHardware: !!opts.skipHardware });
 
   return new Promise((resolve) => {
     let settled = false;
@@ -98,6 +101,35 @@ export function computeFraudRiskScores(transactions) {
 }
 
 /**
+ * Builds the "real hardware" markdown table on its own, so a hardware
+ * verification result that arrives later (see verifyFraudHardwareAsync) can
+ * be appended to an already-saved report without recomputing the rest of
+ * mergeFraudResults' output.
+ */
+export function buildFraudHardwareSection(hw) {
+  if (!hw) return '';
+  return `\n### Gerçek Donanım Doğrulaması\n` +
+    `En yüksek riskli kayıt (**${hw.pair.a}**) ile en tipik kayıt (**${hw.pair.b}**) arasındaki kuantum çakışma (fidelity) değeri, ` +
+    `bir swap-test devresiyle gerçek IBM Quantum donanımında (**${hw.backend}**, ${hw.shots} shot) bağımsız olarak ölçülmüştür ` +
+    `(bu ölçüm yukarıdaki risk skorlarını etkilemez — donanım gürültüsü nedeniyle, işaretleme kararı her zaman kesin/deterministik simülatör sonucuna dayanır):\n\n` +
+    `| Kaynak | Ölçülen Fidelity |\n|---|---|\n` +
+    `| Kesin (statevector simülatör) | ${hw.exactFidelity} |\n` +
+    `| Gerçek donanım ölçümü | ${hw.measuredFidelity} |\n`;
+}
+
+/**
+ * Re-runs the fraud kernel in the background to get the real-hardware
+ * verification lane, without making the original request wait on the IBM
+ * queue (see computeFraudRiskScores' skipHardware option). The risk-score
+ * portion of this second run is discarded — only hardwareVerification/
+ * ibmDiagnostic are used.
+ */
+export async function verifyFraudHardwareAsync(transactions) {
+  const result = await computeFraudRiskScores(transactions, { skipHardware: false });
+  return result ? { hardwareVerification: result.hardwareVerification || null, ibmDiagnostic: result.ibmDiagnostic || null } : null;
+}
+
+/**
  * Produces the markdown verification section (flagged-transaction table +
  * the real feature-map circuit diagram) to append to the report.
  */
@@ -118,16 +150,7 @@ export function mergeFraudResults(fraudResult) {
     ? ` **Not:** Yüklenen/üretilen ${fraudResult.originalCount} kayıttan yalnızca ilk ${fraudResult.transactionCount} tanesi (kernel'in O(n²) karmaşıklığı nedeniyle) taranmıştır.`
     : '';
 
-  const hw = fraudResult.hardwareVerification;
-  const hardwareSection = hw
-    ? `\n### Gerçek Donanım Doğrulaması\n` +
-      `En yüksek riskli kayıt (**${hw.pair.a}**) ile en tipik kayıt (**${hw.pair.b}**) arasındaki kuantum çakışma (fidelity) değeri, ` +
-      `bir swap-test devresiyle gerçek IBM Quantum donanımında (**${hw.backend}**, ${hw.shots} shot) bağımsız olarak ölçülmüştür ` +
-      `(bu ölçüm yukarıdaki risk skorlarını etkilemez — donanım gürültüsü nedeniyle, işaretleme kararı her zaman kesin/deterministik simülatör sonucuna dayanır):\n\n` +
-      `| Kaynak | Ölçülen Fidelity |\n|---|---|\n` +
-      `| Kesin (statevector simülatör) | ${hw.exactFidelity} |\n` +
-      `| Gerçek donanım ölçümü | ${hw.measuredFidelity} |\n`
-    : '';
+  const hardwareSection = buildFraudHardwareSection(fraudResult.hardwareVerification);
 
   const note = `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n` +
     `${fraudResult.transactionCount} işlem kaydı, ${fraudResult.qubits}-kübitlik bir öznitelik-haritalama (feature-map) devresine kodlanıp ` +

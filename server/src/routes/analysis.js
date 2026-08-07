@@ -16,10 +16,18 @@ import {
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
 import { sendAnalysisReport } from '../services/email.js';
+import { eq, and, inArray, isNotNull, asc } from 'drizzle-orm';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { analyses, messages } from '../db/schema.js';
-import { computeQuantumProbabilities, mergeQuantumResults } from '../services/quantum.js';
-import { computeFraudRiskScores, mergeFraudResults } from '../services/fraudDetection.js';
+import {
+  computeQuantumProbabilities, mergeQuantumResults,
+  isIbmHardwareConfigured, verifyScenarioHardwareAsync, buildScenarioHardwareSection,
+} from '../services/quantum.js';
+import {
+  computeFraudRiskScores, mergeFraudResults,
+  verifyFraudHardwareAsync, buildFraudHardwareSection,
+} from '../services/fraudDetection.js';
+import { broadcastToUser } from '../services/socket.js';
 import { computeOptimalAllocation, mergeOptimizerResults } from '../services/portfolioOptimizer.js';
 import { parseTransactionFile } from '../services/transactionSource.js';
 import { parseScenarioFile, parseOptimizationFile } from '../services/scenarioDataSource.js';
@@ -55,6 +63,57 @@ router.get('/quantum-status', async (req, res) => {
     hardwareVerification: result?.hardwareVerification || null,
     ibmDiagnostic: result?.ibmDiagnostic || null,
   });
+});
+
+// BDDK/BTK fraud-flag trend over time -- each report previously stood alone,
+// with no way to see whether flagged transactions are trending up or down
+// across reports. Admin-only: this aggregates flag counts across every
+// user's fraud-category reports, not just the caller's own.
+router.get('/fraud-trend', authMiddleware, async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Yetkisiz' });
+  if (!isDbConfigured()) return res.json({ points: [] });
+
+  try {
+    const category = ['bddk', 'btk'].includes(req.query.category) ? req.query.category : null;
+    const rows = await getDb()
+      .select({
+        category: analyses.category,
+        transactionCount: analyses.fraudTransactionCount,
+        flaggedCount: analyses.fraudFlaggedCount,
+        createdAt: analyses.createdAt,
+      })
+      .from(analyses)
+      .where(
+        and(
+          category ? eq(analyses.category, category) : inArray(analyses.category, ['bddk', 'btk']),
+          isNotNull(analyses.fraudTransactionCount)
+        )
+      )
+      .orderBy(asc(analyses.createdAt))
+      .limit(1000);
+
+    // Bucketed by day (UTC) x category so multiple reports on the same day
+    // still show as one trend point instead of a noisy per-report series.
+    const buckets = new Map();
+    for (const r of rows) {
+      const day = new Date(r.createdAt).toISOString().slice(0, 10);
+      const key = `${day}|${r.category}`;
+      const bucket = buckets.get(key) || { date: day, category: r.category, reportCount: 0, transactionCount: 0, flaggedCount: 0 };
+      bucket.reportCount += 1;
+      bucket.transactionCount += r.transactionCount || 0;
+      bucket.flaggedCount += r.flaggedCount || 0;
+      buckets.set(key, bucket);
+    }
+
+    const points = Array.from(buckets.values())
+      .map((b) => ({ ...b, flagRate: b.transactionCount ? Math.round((b.flaggedCount / b.transactionCount) * 1000) / 10 : 0 }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    res.json({ points });
+  } catch (err) {
+    logger.error({ err }, '[Analysis] Fraud trend query error');
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Document upload and text extraction
@@ -245,11 +304,20 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     // that just used the AI's own estimates.
     let quantumWarning = null;
 
+    // Hardware verification (when IBM_QUANTUM_TOKEN/INSTANCE are configured)
+    // waits on IBM's job queue for up to IBM_QUANTUM_WAIT_SECONDS -- always
+    // fetched with skipHardware so /generate responds on the fast local
+    // simulator alone; the hardware lane (if any) runs after the response
+    // is sent, see the background verification block below.
+    let hardwareTransactions = null;
+    let hardwareScenarios = null;
+
     if (quantumMode && fraudCategory) {
       const transactions = hasRealTransactions ? realTransactions : parseTransactions(result.content);
       if (transactions?.length) {
-        fraudComputation = await computeFraudRiskScores(transactions);
+        fraudComputation = await computeFraudRiskScores(transactions, { skipHardware: true });
         if (fraudComputation) {
+          hardwareTransactions = transactions;
           fraudComputation.dataSource = hasRealTransactions ? 'uploaded' : 'ai-generated';
           const note = mergeFraudResults(fraudComputation);
           if (note) finalContent += note;
@@ -260,11 +328,12 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       }
     } else if (quantumMode) {
       if (scenarios?.length) {
-        quantumComputation = await computeQuantumProbabilities(scenarios);
+        quantumComputation = await computeQuantumProbabilities(scenarios, 4096, { skipHardware: true });
         if (quantumComputation) {
           quantumComputation.dataSource = hasRealScenarios ? 'uploaded' : 'ai-generated';
           const merged = mergeQuantumResults(scenarios, quantumComputation);
           scenarios = merged.scenarios;
+          hardwareScenarios = merged.scenarios;
           if (merged.note) finalContent += merged.note;
         } else {
           logger.warn('[Quantum] Circuit result unavailable — proceeding with AI estimates');
@@ -303,6 +372,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           title: title || prompt.slice(0, 80),
           content: finalContent,
           aiProvider: result.provider,
+          fraudTransactionCount: fraudComputation ? fraudComputation.transactionCount : null,
+          fraudFlaggedCount: fraudComputation ? fraudComputation.flaggedCount : null,
         })
         .returning({ id: analyses.id });
       analysisId = row.id;
@@ -326,6 +397,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     sendAnalysisReport(userCode, category, title || prompt.slice(0, 80), docxBuffer)
       .catch(e => logger.error({ err: e }, 'Mail error'));
 
+    const hardwarePending = isIbmHardwareConfigured() && !!(hardwareScenarios || hardwareTransactions);
+
     res.json({
       success: true,
       analysisId,
@@ -346,6 +419,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             dataSource: quantumComputation.dataSource,
             hardwareVerification: quantumComputation.hardwareVerification || null,
             ibmDiagnostic: quantumComputation.ibmDiagnostic || null,
+            hardwarePending: hardwarePending && !!hardwareScenarios,
           }
         : null,
       fraud: fraudComputation
@@ -359,6 +433,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             dataSource: fraudComputation.dataSource,
             hardwareVerification: fraudComputation.hardwareVerification || null,
             ibmDiagnostic: fraudComputation.ibmDiagnostic || null,
+            hardwarePending: hardwarePending && !!hardwareTransactions,
           }
         : null,
       optimizer: optimizerComputation
@@ -375,6 +450,49 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           }
         : null
     });
+
+    // Deferred, non-blocking: the response above already went out on the
+    // fast local-simulator result. If IBM hardware verification is
+    // configured, run it now in the background (this is what can take up
+    // to IBM_QUANTUM_WAIT_SECONDS) and, once it resolves, append the result
+    // to the saved report and push it to the user's socket if still online
+    // — see the "background quantum jobs" roadmap item this replaces.
+    if (hardwarePending) {
+      const io = req.app.get('io');
+      (async () => {
+        try {
+          if (hardwareScenarios) {
+            const hw = await verifyScenarioHardwareAsync(hardwareScenarios);
+            if (hw?.hardwareVerification) {
+              const section = buildScenarioHardwareSection(hardwareScenarios, hw.hardwareVerification);
+              if (analysisId && isDbConfigured() && section) {
+                await getDb().update(analyses)
+                  .set({ content: finalContent + section })
+                  .where(eq(analyses.id, analysisId));
+              }
+              broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
+                analysisId, kind: 'quantum', hardwareVerification: hw.hardwareVerification, ibmDiagnostic: hw.ibmDiagnostic,
+              }).catch(() => {});
+            }
+          } else if (hardwareTransactions) {
+            const hw = await verifyFraudHardwareAsync(hardwareTransactions);
+            if (hw?.hardwareVerification) {
+              const section = buildFraudHardwareSection(hw.hardwareVerification);
+              if (analysisId && isDbConfigured() && section) {
+                await getDb().update(analyses)
+                  .set({ content: finalContent + section })
+                  .where(eq(analyses.id, analysisId));
+              }
+              broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
+                analysisId, kind: 'fraud', hardwareVerification: hw.hardwareVerification, ibmDiagnostic: hw.ibmDiagnostic,
+              }).catch(() => {});
+            }
+          }
+        } catch (err) {
+          logger.warn({ err }, '[Analysis] Background hardware verification failed');
+        }
+      })();
+    }
   } catch (err) {
     logger.error({ err }, 'Analysis error');
     res.status(500).json({ error: err.message, code: err.code });

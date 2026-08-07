@@ -31,7 +31,11 @@ vi.mock('../services/quantum.js', async (importOriginal) => {
     computeQuantumProbabilities: (...args) => computeQuantumProbabilitiesMock(...args),
   };
 });
-vi.mock('../services/fraudDetection.js', () => ({ computeFraudRiskScores: vi.fn(), mergeFraudResults: vi.fn() }));
+vi.mock('../services/fraudDetection.js', () => ({
+  computeFraudRiskScores: vi.fn(), mergeFraudResults: vi.fn(),
+  verifyFraudHardwareAsync: vi.fn(), buildFraudHardwareSection: vi.fn(() => ''),
+}));
+vi.mock('../services/socket.js', () => ({ broadcastToUser: vi.fn(async () => {}) }));
 vi.mock('../services/portfolioOptimizer.js', () => ({ computeOptimalAllocation: vi.fn(), mergeOptimizerResults: vi.fn() }));
 vi.mock('../services/transactionSource.js', () => ({ parseTransactionFile: vi.fn() }));
 vi.mock('../services/scenarioDataSource.js', () => ({ parseScenarioFile: vi.fn(), parseOptimizationFile: vi.fn() }));

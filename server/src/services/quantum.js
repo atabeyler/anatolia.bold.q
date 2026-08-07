@@ -24,15 +24,21 @@ function parsePercentToWeight(raw) {
 
 /**
  * @param {Array<{id:string, probability?:string}>} scenarios - output of parseScenarios()
+ * @param {number} shots
+ * @param {{skipHardware?: boolean}} [opts] - skipHardware=true returns the fast
+ *        simulator-only result (hardwareVerification always null) so callers
+ *        on the request/response path aren't blocked on the IBM queue wait;
+ *        see verifyScenarioHardwareAsync for the deferred hardware run.
  * @returns {Promise<{backend:string, qubits:number, shots:number, scenarios:Array}|null>}
  *          Returns null if the Qiskit process fails (no python/qiskit, timeout, etc.)
  *          — the caller should then proceed with the LLM's original estimates.
  */
-export function computeQuantumProbabilities(scenarios, shots = 4096) {
+export function computeQuantumProbabilities(scenarios, shots = 4096, opts = {}) {
   if (!Array.isArray(scenarios) || scenarios.length === 0) return Promise.resolve(null);
 
   const payload = JSON.stringify({
     shots,
+    skipHardware: !!opts.skipHardware,
     scenarios: scenarios.map((s) => ({ id: s.id, weight: parsePercentToWeight(s.probability) })),
   });
 
@@ -94,6 +100,46 @@ export function computeQuantumProbabilities(scenarios, shots = 4096) {
 }
 
 /**
+ * Builds the "real hardware" markdown table on its own, so a hardware
+ * verification result that arrives later (see verifyScenarioHardwareAsync)
+ * can be appended to an already-saved report without recomputing the rest
+ * of mergeQuantumResults' output.
+ */
+export function buildScenarioHardwareSection(scenarios, hardwareVerification) {
+  if (!hardwareVerification?.scenarios?.length) return '';
+  return `\n### Gerçek Donanım Doğrulaması\n` +
+    `Aynı devre ayrıca gerçek IBM Quantum donanımında (**${hardwareVerification.backend}**, ${hardwareVerification.shots} shot) bir kez daha çalıştırılmıştır ` +
+    `(bu değer, yukarıdaki güven aralığına dahil edilmemiştir — donanım gürültüsü örnekleme gürültüsüyle aynı değildir):\n\n` +
+    `| Senaryo | Gerçek Donanım Sonucu |\n|---|---|\n` +
+    hardwareVerification.scenarios.map((s) => {
+      const label = scenarios.find((m) => m.id === s.id)?.title || s.id;
+      return `| ${label} | %${s.quantumProbability} |`;
+    }).join('\n') + '\n';
+}
+
+/**
+ * True when IBM_QUANTUM_TOKEN/IBM_QUANTUM_INSTANCE are both set, i.e. a
+ * background hardware-verification run (see verifyScenarioHardwareAsync /
+ * verifyFraudHardwareAsync) has a chance of producing a real result instead
+ * of immediately reporting "not configured".
+ */
+export function isIbmHardwareConfigured() {
+  return !!(process.env.IBM_QUANTUM_TOKEN && process.env.IBM_QUANTUM_INSTANCE);
+}
+
+/**
+ * Re-runs the scenario circuit in the background to get the real-hardware
+ * verification lane, without making the original request wait on the IBM
+ * queue (see computeQuantumProbabilities' skipHardware option). The
+ * simulator portion of this second run is discarded — only
+ * hardwareVerification/ibmDiagnostic are used.
+ */
+export async function verifyScenarioHardwareAsync(scenarios, shots = 4096) {
+  const result = await computeQuantumProbabilities(scenarios, shots, { skipHardware: false });
+  return result ? { hardwareVerification: result.hardwareVerification || null, ibmDiagnostic: result.ibmDiagnostic || null } : null;
+}
+
+/**
  * Merges quantum results into the scenarios list and produces the
  * markdown verification section (table + confidence interval + the real
  * circuit diagram) to append to the report.
@@ -127,17 +173,7 @@ export function mergeQuantumResults(scenarios, quantumResult) {
     ? 'Bu senaryolar kullanıcı tarafından yüklenen bir dosyadan (CSV/XLSX) çıkarılan GERÇEK senaryo verileridir.'
     : 'Gerçek veri sağlanmadığından bu senaryolar YZ tarafından üretilen tahminlerdir.';
 
-  const hw = quantumResult.hardwareVerification;
-  const hardwareSection = hw?.scenarios?.length
-    ? `\n### Gerçek Donanım Doğrulaması\n` +
-      `Aynı devre ayrıca gerçek IBM Quantum donanımında (**${hw.backend}**, ${hw.shots} shot) bir kez daha çalıştırılmıştır ` +
-      `(bu değer, yukarıdaki güven aralığına dahil edilmemiştir — donanım gürültüsü örnekleme gürültüsüyle aynı değildir):\n\n` +
-      `| Senaryo | Gerçek Donanım Sonucu |\n|---|---|\n` +
-      hw.scenarios.map((s) => {
-        const label = merged.find((m) => m.id === s.id)?.title || s.id;
-        return `| ${label} | %${s.quantumProbability} |`;
-      }).join('\n') + '\n'
-    : '';
+  const hardwareSection = buildScenarioHardwareSection(merged, quantumResult.hardwareVerification);
 
   const note = `\n## KUANTUM DEVRE DOĞRULAMASI\n` +
     `Aşağıdaki olasılıklar, YZ'nin ilk tahminleri kuantum genliği olarak ${quantumResult.qubits}-kübitlik bir devreye yüklenip, ` +

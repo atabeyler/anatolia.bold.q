@@ -62,6 +62,11 @@ export async function initDatabase() {
     );
   `);
 
+  // analyses may already exist from before the fraud-trend columns were
+  // added -- populated only for BDDK/BTK reports that ran the quantum
+  // kernel fraud detector (see routes/analysis.js), NULL otherwise.
+  await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS fraud_transaction_count INTEGER;`);
+  await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS fraud_flagged_count INTEGER;`);
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -100,6 +105,17 @@ export async function initDatabase() {
   // auth_users may already exist from before the "blocked"/"email" columns were added.
   await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE;`);
   await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email VARCHAR(255);`);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      user_code VARCHAR(50) NOT NULL,
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS admin_audit_log (
