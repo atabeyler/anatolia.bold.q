@@ -618,5 +618,9 @@ export async function parseVoiceIntent(systemPrompt: string, userMessage: string
     }
   }
 
-  throw new Error('Tüm AI sağlayıcılar başarısız');
+  // AllProvidersFailedError (not a plain Error) so callers that switch on
+  // err.code === 'ALL_AI_PROVIDERS_FAILED' (client/src/services/api.js,
+  // ConsultChat.jsx) also catch a total voice-intent failure consistently
+  // with generateAnalysis/streamConsultationText above.
+  throw new AllProvidersFailedError('Tüm AI sağlayıcılar başarısız');
 }

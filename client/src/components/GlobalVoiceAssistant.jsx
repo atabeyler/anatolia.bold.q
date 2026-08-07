@@ -26,6 +26,10 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
   const [page, setPage] = useState('unknown');
   const [pos, setPos] = useState({ x: 24, y: 24 });
   const dragRef = useRef({ dragging: false, moved: false, sx: 0, sy: 0, px: 24, py: 24 });
+  // Tracks the exact listener functions currently attached to window so an
+  // unmount mid-drag (route change, logout) can remove them even though
+  // onDragMove/onDragEnd are recreated on every render.
+  const dragListenersRef = useRef(null);
   const suppressClickRef = useRef(false);
 
   const onRef      = useRef(false);
@@ -209,6 +213,19 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
     return () => { stopMic(); clearTimeout(restartRef.current); };
   }, [on, lang, stopMic, scheduleRestart]);
 
+  useEffect(() => {
+    return () => {
+      if (dragListenersRef.current) {
+        const { onDragMove, onDragEnd } = dragListenersRef.current;
+        window.removeEventListener('mousemove', onDragMove);
+        window.removeEventListener('mouseup', onDragEnd);
+        window.removeEventListener('touchmove', onDragMove);
+        window.removeEventListener('touchend', onDragEnd);
+        dragListenersRef.current = null;
+      }
+    };
+  }, []);
+
   if (!SR) return null;
 
   const onDragStart = (e) => {
@@ -218,6 +235,7 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
     window.addEventListener('mouseup', onDragEnd);
     window.addEventListener('touchmove', onDragMove, { passive: false });
     window.addEventListener('touchend', onDragEnd);
+    dragListenersRef.current = { onDragMove, onDragEnd };
   };
   const onDragMove = (e) => {
     if (!dragRef.current.dragging) return;
@@ -240,6 +258,7 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
     window.removeEventListener('mouseup', onDragEnd);
     window.removeEventListener('touchmove', onDragMove);
     window.removeEventListener('touchend', onDragEnd);
+    dragListenersRef.current = null;
   };
 
   const dot = {

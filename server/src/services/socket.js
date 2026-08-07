@@ -12,6 +12,30 @@ import { sendPushToUsers } from '../lib/webPush.js';
 const adminSockets = new Set();
 const activeMeetingByRoom = new Map();
 
+// Mirrors MAX_MESSAGE_LENGTH/validMessage in routes/emergency.js -- the
+// socket chat path had no equivalent, so a message of unbounded size/type
+// could reach the DB insert and every connected client's UI.
+const MAX_MESSAGE_LENGTH = 2000;
+function validMessage(message) {
+  return typeof message === 'string' && message.trim().length > 0 && message.length <= MAX_MESSAGE_LENGTH;
+}
+
+// Simple per-socket flood guard: chat:send had no event-level rate limit,
+// unlike the REST endpoints behind publicActionLimiter/uploadLimiter.
+const CHAT_RATE_WINDOW_MS = 10 * 1000;
+const CHAT_RATE_MAX = 20;
+const chatRateState = new Map();
+function isChatRateLimited(socketId) {
+  const now = Date.now();
+  const entry = chatRateState.get(socketId);
+  if (!entry || now - entry.windowStart > CHAT_RATE_WINDOW_MS) {
+    chatRateState.set(socketId, { windowStart: now, count: 1 });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > CHAT_RATE_MAX;
+}
+
 // Both nickname and isAdmin must never be taken from client-supplied data
 // (register payload) -- they are only ever derived here from a server-signed
 // JWT (which already carries the correct nickname for the logged-in user,
@@ -53,9 +77,11 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('chat:send', async (data) => {
-      const { to, message } = data;
+      const { to, message } = data || {};
       const from = socket.nickname;
       if (!from) return;
+      if (!validMessage(message)) return;
+      if (isChatRateLimited(socket.id)) return;
 
       try {
         if (isDbConfigured()) {
@@ -301,6 +327,7 @@ export function initSocketHandlers(io) {
         await onlineState.removeLocation(socket.nickname);
       }
       adminSockets.delete(socket.id);
+      chatRateState.delete(socket.id);
       io.emit('users:online', await onlineState.getOnlineNicknames());
       logger.info({ nickname: socket.nickname || socket.id }, 'Connection disconnected');
     });

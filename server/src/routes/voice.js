@@ -32,7 +32,7 @@ function openaiRequest(path, body, headers) {
   });
 }
 
-router.post('/transcribe', authMiddleware, async (req, res) => {
+router.post('/transcribe', authMiddleware, publicActionLimiter, async (req, res) => {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'OpenAI API key tanimli degil' });
@@ -56,7 +56,7 @@ router.post('/transcribe', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/speak', authMiddleware, express.json({ limit: '1mb' }), async (req, res) => {
+router.post('/speak', authMiddleware, publicActionLimiter, express.json({ limit: '1mb' }), async (req, res) => {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {

@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import GlobalVoiceAssistant from './components/GlobalVoiceAssistant.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
-import { getCurrentUser } from './services/api.js';
+import { getCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
 import { useLang } from './services/langContext.jsx';
 
 // The dashboard (and everything it pulls in -- analysis views, chat, voice,
@@ -24,12 +24,32 @@ export default function App() {
   const [showSplash] = useState(isStandalonePwa);
   const { lang } = useLang();
 
+  // Event-driven instead of polling: setJWT() fires AUTH_CHANGED_EVENT on
+  // login/logout in this tab, the browser fires 'storage' for other tabs,
+  // and a one-shot timeout re-checks exactly at token expiry -- no need to
+  // re-parse/base64-decode the JWT every second just to detect a change.
   useEffect(() => {
-    const interval = setInterval(() => {
-      const u = getCurrentUser();
-      if (JSON.stringify(u) !== JSON.stringify(user)) setUser(u);
-    }, 1000);
-    return () => clearInterval(interval);
+    const sync = () => setUser(getCurrentUser());
+    const onStorage = (e) => { if (!e.key || e.key === 'anatolia_jwt') sync(); };
+
+    window.addEventListener(AUTH_CHANGED_EVENT, sync);
+    window.addEventListener('storage', onStorage);
+
+    let expiryTimer;
+    if (user?.exp) {
+      const msUntilExpiry = user.exp * 1000 - Date.now();
+      // setTimeout delays beyond ~24.8 days overflow to fire immediately in
+      // some engines; JWTs here expire in hours, but clamp defensively.
+      if (msUntilExpiry > 0 && msUntilExpiry < 2 ** 31) {
+        expiryTimer = setTimeout(sync, msUntilExpiry);
+      }
+    }
+
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, sync);
+      window.removeEventListener('storage', onStorage);
+      if (expiryTimer) clearTimeout(expiryTimer);
+    };
   }, [user]);
 
   return (

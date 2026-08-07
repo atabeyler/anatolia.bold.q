@@ -15,6 +15,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/scenario_quantum.py');
 const TIMEOUT_MS = withIbmTimeout(20000);
 
+// Mirrors MAX_TRANSACTIONS in fraudDetection.js and MAX_SCENARIOS in
+// scenario_quantum.py -- caps the payload before it reaches the Python
+// worker, not just inside it, so an oversized LLM-produced scenario table
+// doesn't even spend the subprocess spawn on a payload that will be truncated.
+const MAX_SCENARIOS = 32;
+
 function parsePercentToWeight(raw) {
   if (!raw) return null;
   // Turkish decimals use "," (e.g. "%42,5") — accept either separator.
@@ -39,7 +45,7 @@ export function computeQuantumProbabilities(scenarios, shots = 4096, opts = {}) 
   const payload = JSON.stringify({
     shots,
     skipHardware: !!opts.skipHardware,
-    scenarios: scenarios.map((s) => ({ id: s.id, weight: parsePercentToWeight(s.probability) })),
+    scenarios: scenarios.slice(0, MAX_SCENARIOS).map((s) => ({ id: s.id, weight: parsePercentToWeight(s.probability) })),
   });
 
   return new Promise((resolve) => {

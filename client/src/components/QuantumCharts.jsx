@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { useLang } from '../services/langContext.jsx';
 
 // Fixed categorical/status colors, validated against the app's dark navy
 // panel surface (#11172a) with scripts/validate_palette.js from the dataviz
@@ -156,10 +157,11 @@ export function ScenarioComparisonChart({ scenarios }) {
 }
 
 function ScenarioTable({ data }) {
+  const { t } = useLang();
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[11px] font-mono text-gold/70">
-        <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">Senaryo</th><th className="py-1 pr-3">YZ Tahmini</th><th className="py-1 pr-3">Kuantum Sonucu</th><th className="py-1">Guven Araligi</th></tr></thead>
+        <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">{t('tableScenario')}</th><th className="py-1 pr-3">{t('tableAiEstimate')}</th><th className="py-1 pr-3">{t('tableQuantumResult')}</th><th className="py-1">{t('tableConfidenceInterval')}</th></tr></thead>
         <tbody>
           {data.map((s) => (
             <tr key={s.id} className="border-t border-gold/10">
@@ -240,17 +242,18 @@ export function FraudRiskChart({ transactions }) {
 }
 
 function FraudTable({ data }) {
+  const { t: translate } = useLang();
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[11px] font-mono text-gold/70">
-        <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">Islem ID</th><th className="py-1 pr-3">Tutar</th><th className="py-1 pr-3">Risk Skoru</th><th className="py-1">Durum</th></tr></thead>
+        <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">{translate('tableTxnId')}</th><th className="py-1 pr-3">{translate('tableAmount')}</th><th className="py-1 pr-3">{translate('tableRiskScore')}</th><th className="py-1">{translate('tableStatus')}</th></tr></thead>
         <tbody>
-          {data.map((t) => (
-            <tr key={t.id} className="border-t border-gold/10">
-              <td className="py-1 pr-3">{t.id}</td>
-              <td className="py-1 pr-3">{t.amount} TL</td>
-              <td className="py-1 pr-3">{t.riskScore}</td>
-              <td className="py-1">{t.flagged ? '⚠ Isaretlendi' : '-'}</td>
+          {data.map((row) => (
+            <tr key={row.id} className="border-t border-gold/10">
+              <td className="py-1 pr-3">{row.id}</td>
+              <td className="py-1 pr-3">{row.amount} TL</td>
+              <td className="py-1 pr-3">{row.riskScore}</td>
+              <td className="py-1">{row.flagged ? '⚠ Isaretlendi' : '-'}</td>
             </tr>
           ))}
         </tbody>
@@ -322,10 +325,11 @@ export function OptimizerChart({ items }) {
 }
 
 function OptimizerTable({ data }) {
+  const { t } = useLang();
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[11px] font-mono text-gold/70">
-        <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">Kalem</th><th className="py-1 pr-3">Deger</th><th className="py-1 pr-3">Maliyet</th><th className="py-1">Durum</th></tr></thead>
+        <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">{t('tableItem')}</th><th className="py-1 pr-3">{t('tableValue')}</th><th className="py-1 pr-3">{t('tableCost')}</th><th className="py-1">{t('tableStatus')}</th></tr></thead>
         <tbody>
           {data.map((it) => (
             <tr key={it.id} className="border-t border-gold/10">

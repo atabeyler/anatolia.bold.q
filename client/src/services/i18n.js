@@ -293,7 +293,12 @@ export const translations = {
     voiceNote: 'ANATOLIA-Q sizi Türkçe anlayacak ve yanıtlayacak.',
     micDenied: 'Mikrofon erişimi reddedildi',
     noSpeech: 'Ses algılanamadı',
-    ttsError: 'Ses üretme hatası'
+    ttsError: 'Ses üretme hatası',
+
+    tableScenario: 'Senaryo', tableAiEstimate: 'YZ Tahmini', tableQuantumResult: 'Kuantum Sonucu', tableConfidenceInterval: 'Güven Aralığı',
+    tableTxnId: 'İşlem ID', tableAmount: 'Tutar', tableRiskScore: 'Risk Skoru', tableStatus: 'Durum',
+    tableItem: 'Kalem', tableValue: 'Değer', tableCost: 'Maliyet',
+    sendBtn: 'Gönder'
   },
 
   en: {
@@ -382,7 +387,11 @@ export const translations = {
 
     emergencyCenter: 'EMERGENCY CENTER', reportToCenter: 'Report to Center', reportToUsers: 'Notify Users', messaging: 'Messaging', centerNote: 'Will be sent as emergency notification.', sendToCenter: 'SEND TO CENTER', sendToUsers: 'SEND TO ALL USERS', sending: 'SENDING...', sent: 'SENT TO CENTER', sentAll: 'SENT', lockedPanel: 'AUTHORIZED ACCESS ONLY', lockedNote: 'The messaging panel is only available after authenticated login.', selectUser: 'Select a user first', messagePh: 'message to user...', emergencyMsg: 'Describe the emergency situation in detail...', usersMsg: 'Emergency message to be sent to other users...', centerUser: 'CENTER', centerUserOption: 'CENTER', centerForwarded: 'Message forwarded to center.', noMessages: 'No messages yet.',
     liveMonitor: 'LIVE', monitorPoints: 'MONITORING POINTS · RADAR ACTIVE', loadingGlobe: 'LOADING GLOBE...', mapGrid: 'ANATOLIA-Q TERRITORIAL MONITORING GRID', regionalAlert: 'REGIONAL ALERT', regionNote: 'Emergency notification for this region will be sent to the center.', regionPh: 'Threat/situation observed in this region...', sendAlert: 'SEND TO CENTER', alertSent: 'notification sent to center for region',
-    voiceModeTitle: 'CONSULTATION MODE', autoListen: 'AUTO-LISTEN ON', autoListenOff: 'AUTO-LISTEN OFF', voiceIdle: 'Click the microphone to start', voiceListening: 'LISTENING', voiceProcessing: 'Converting speech to text...', voiceThinking: 'ANATOLIA-Q is analyzing...', voiceSpeaking: 'ANATOLIA-Q is speaking...', voicePaused: 'Click the microphone to continue', voiceReset: 'Reset Conversation', voiceStart: 'Click the microphone button below and start speaking.', voiceNote: 'ANATOLIA-Q will understand you.', micDenied: 'Microphone access denied', noSpeech: 'No speech detected', ttsError: 'Audio generation error'
+    voiceModeTitle: 'CONSULTATION MODE', autoListen: 'AUTO-LISTEN ON', autoListenOff: 'AUTO-LISTEN OFF', voiceIdle: 'Click the microphone to start', voiceListening: 'LISTENING', voiceProcessing: 'Converting speech to text...', voiceThinking: 'ANATOLIA-Q is analyzing...', voiceSpeaking: 'ANATOLIA-Q is speaking...', voicePaused: 'Click the microphone to continue', voiceReset: 'Reset Conversation', voiceStart: 'Click the microphone button below and start speaking.', voiceNote: 'ANATOLIA-Q will understand you.', micDenied: 'Microphone access denied', noSpeech: 'No speech detected', ttsError: 'Audio generation error',
+    tableScenario: 'Scenario', tableAiEstimate: 'AI Estimate', tableQuantumResult: 'Quantum Result', tableConfidenceInterval: 'Confidence Interval',
+    tableTxnId: 'Transaction ID', tableAmount: 'Amount', tableRiskScore: 'Risk Score', tableStatus: 'Status',
+    tableItem: 'Item', tableValue: 'Value', tableCost: 'Cost',
+    sendBtn: 'Send'
   },
 
   de: {
@@ -471,7 +480,11 @@ export const translations = {
 
     emergencyCenter: 'NOTFALLZENTRUM', reportToCenter: 'An Zentrum melden', reportToUsers: 'Benutzer benachrichtigen', messaging: 'Nachrichten', centerNote: 'wird als Notfallbenachrichtigung gesendet.', sendToCenter: 'AN ZENTRUM SENDEN', sendToUsers: 'AN ALLE BENUTZER SENDEN', sending: 'WIRD GESENDET...', sent: '✓ AN ZENTRUM GESENDET', sentAll: '✓ GESENDET', lockedPanel: 'AUTORISIERTER ZUGRIFF', lockedNote: 'Das Nachrichtenfeld ist nur nach genehmigter Benutzeranmeldung verfügbar.', selectUser: 'Zuerst Benutzer auswählen', messagePh: 'Nachricht an Benutzer...', emergencyMsg: 'Beschreiben Sie die Notfallsituation ausführlich...', usersMsg: 'Notfallnachricht an andere Benutzer...', centerUser: 'ZENTRUM', centerUserOption: 'ZENTRUM', centerForwarded: 'Nachricht an das Zentrum weitergeleitet.', noMessages: 'Noch keine Nachrichten.',
     liveMonitor: 'LIVE', monitorPoints: 'ÜBERWACHUNGSPUNKTE · RADAR AKTIV', loadingGlobe: 'GLOBUS WIRD GELADEN...', mapGrid: 'ANATOLIA-Q TERRITORIAL MONITORING GRID', regionalAlert: 'REGIONALE BENACHRICHTIGUNG', regionNote: 'Notfallbenachrichtigung bezüglich der Region wird an das Zentrum übermittelt.', regionPh: 'in der Region beobachtete Bedrohung/Situation...', sendAlert: 'AN ZENTRUM SENDEN', alertSent: 'Benachrichtigung für die Region an das Zentrum gesendet',
-    voiceModeTitle: 'BERATUNGSMODUS', autoListen: 'AUTO-ZUHÖREN AKTIV', autoListenOff: 'AUTO-ZUHÖREN AUS', voiceIdle: 'Klicken Sie auf das Mikrofon, um zu beginnen', voiceListening: 'HÖRT ZU', voiceProcessing: 'Sprache wird in Text umgewandelt...', voiceThinking: 'ANATOLIA-Q analysiert...', voiceSpeaking: 'ANATOLIA-Q spricht...', voicePaused: 'Klicken Sie auf das Mikrofon, um fortzufahren', voiceReset: 'Gespräch zurücksetzen', voiceStart: 'Klicken Sie auf die Mikrofon-Schaltfläche unten und beginnen Sie zu sprechen.', voiceNote: 'ANATOLIA-Q wird Sie verstehen.', micDenied: 'Mikrofonzugriff verweigert', noSpeech: 'Keine Sprache erkannt', ttsError: 'Fehler bei der Audiogenerierung'
+    voiceModeTitle: 'BERATUNGSMODUS', autoListen: 'AUTO-ZUHÖREN AKTIV', autoListenOff: 'AUTO-ZUHÖREN AUS', voiceIdle: 'Klicken Sie auf das Mikrofon, um zu beginnen', voiceListening: 'HÖRT ZU', voiceProcessing: 'Sprache wird in Text umgewandelt...', voiceThinking: 'ANATOLIA-Q analysiert...', voiceSpeaking: 'ANATOLIA-Q spricht...', voicePaused: 'Klicken Sie auf das Mikrofon, um fortzufahren', voiceReset: 'Gespräch zurücksetzen', voiceStart: 'Klicken Sie auf die Mikrofon-Schaltfläche unten und beginnen Sie zu sprechen.', voiceNote: 'ANATOLIA-Q wird Sie verstehen.', micDenied: 'Mikrofonzugriff verweigert', noSpeech: 'Keine Sprache erkannt', ttsError: 'Fehler bei der Audiogenerierung',
+    tableScenario: 'Szenario', tableAiEstimate: 'KI-Schätzung', tableQuantumResult: 'Quantenergebnis', tableConfidenceInterval: 'Konfidenzintervall',
+    tableTxnId: 'Transaktions-ID', tableAmount: 'Betrag', tableRiskScore: 'Risikoscore', tableStatus: 'Status',
+    tableItem: 'Position', tableValue: 'Wert', tableCost: 'Kosten',
+    sendBtn: 'Senden'
   },
 
   fr: {
@@ -560,7 +573,11 @@ export const translations = {
 
     emergencyCenter: 'CENTRE D\'URGENCE', reportToCenter: 'Signaler au Centre', reportToUsers: 'Notifier les Utilisateurs', messaging: 'Messagerie', centerNote: 'sera envoyé comme notification d\'urgence.', sendToCenter: 'ENVOYER AU CENTRE', sendToUsers: 'ENVOYER À TOUS LES UTILISATEURS', sending: 'ENVOI EN COURS...', sent: '✓ ENVOYÉ AU CENTRE', sentAll: '✓ ENVOYÉ', lockedPanel: 'ACCÈS AUTORISÉ UNIQUEMENT', lockedNote: 'Le panneau de messagerie n\'est disponible qu\'après une connexion utilisateur approuvée.', selectUser: 'Sélectionnez d\'abord un utilisateur', messagePh: 'message à l\'utilisateur...', emergencyMsg: 'Décrivez la situation d\'urgence en détail...', usersMsg: 'Message d\'urgence à envoyer aux autres utilisateurs...', centerUser: 'CENTRE', centerUserOption: 'CENTRE', centerForwarded: 'Message transmis au centre.', noMessages: 'Aucun message pour l\'instant.',
     liveMonitor: 'DIRECT', monitorPoints: 'POINTS DE SURVEILLANCE · RADAR ACTIF', loadingGlobe: 'CHARGEMENT DU GLOBE...', mapGrid: 'ANATOLIA-Q TERRITORIAL MONITORING GRID', regionalAlert: 'ALERTE RÉGIONALE', regionNote: 'Une notification d\'urgence concernant cette région sera envoyée au centre.', regionPh: 'menace/situation observée dans la région...', sendAlert: 'ENVOYER AU CENTRE', alertSent: 'notification envoyée au centre pour la région',
-    voiceModeTitle: 'MODE CONSULTATION', autoListen: 'ÉCOUTE AUTO ACTIVÉE', autoListenOff: 'ÉCOUTE AUTO DÉSACTIVÉE', voiceIdle: 'Cliquez sur le microphone pour commencer', voiceListening: 'À L\'ÉCOUTE', voiceProcessing: 'Conversion de la parole en texte...', voiceThinking: 'ANATOLIA-Q analyse...', voiceSpeaking: 'ANATOLIA-Q parle...', voicePaused: 'Cliquez sur le microphone pour continuer', voiceReset: 'Réinitialiser la Conversation', voiceStart: 'Cliquez sur le bouton du microphone ci-dessous et commencez à parler.', voiceNote: 'ANATOLIA-Q vous comprendra.', micDenied: 'Accès au microphone refusé', noSpeech: 'Aucune parole détectée', ttsError: 'Erreur de génération audio'
+    voiceModeTitle: 'MODE CONSULTATION', autoListen: 'ÉCOUTE AUTO ACTIVÉE', autoListenOff: 'ÉCOUTE AUTO DÉSACTIVÉE', voiceIdle: 'Cliquez sur le microphone pour commencer', voiceListening: 'À L\'ÉCOUTE', voiceProcessing: 'Conversion de la parole en texte...', voiceThinking: 'ANATOLIA-Q analyse...', voiceSpeaking: 'ANATOLIA-Q parle...', voicePaused: 'Cliquez sur le microphone pour continuer', voiceReset: 'Réinitialiser la Conversation', voiceStart: 'Cliquez sur le bouton du microphone ci-dessous et commencez à parler.', voiceNote: 'ANATOLIA-Q vous comprendra.', micDenied: 'Accès au microphone refusé', noSpeech: 'Aucune parole détectée', ttsError: 'Erreur de génération audio',
+    tableScenario: 'Scénario', tableAiEstimate: 'Estimation IA', tableQuantumResult: 'Résultat quantique', tableConfidenceInterval: 'Intervalle de confiance',
+    tableTxnId: 'ID de transaction', tableAmount: 'Montant', tableRiskScore: 'Score de risque', tableStatus: 'Statut',
+    tableItem: 'Élément', tableValue: 'Valeur', tableCost: 'Coût',
+    sendBtn: 'Envoyer'
   },
 
   ar: {
@@ -649,7 +666,11 @@ export const translations = {
 
     emergencyCenter: 'مركز الطوارئ', reportToCenter: 'إبلاغ المركز', reportToUsers: 'إخطار المستخدمين', messaging: 'المراسلة', centerNote: 'سيتم إرساله كإشعار طوارئ.', sendToCenter: 'إرسال إلى المركز', sendToUsers: 'إرسال إلى جميع المستخدمين', sending: 'جارٍ الإرسال...', sent: '✓ تم الإرسال إلى المركز', sentAll: '✓ تم الإرسال', lockedPanel: 'وصول مصرح به فقط', lockedNote: 'لوحة المراسلة متاحة فقط بعد تسجيل دخول مستخدم معتمد.', selectUser: 'اختر مستخدماً أولاً', messagePh: 'رسالة إلى المستخدم...', emergencyMsg: 'صف حالة الطوارئ بالتفصيل...', usersMsg: 'رسالة طوارئ لإرسالها إلى المستخدمين الآخرين...', centerUser: 'المركز', centerUserOption: 'المركز', centerForwarded: 'تم إرسال الرسالة إلى المركز.', noMessages: 'لا توجد رسائل بعد.',
     liveMonitor: 'مباشر', monitorPoints: 'نقاط المراقبة · الرادار نشط', loadingGlobe: 'جارٍ تحميل الكرة الأرضية...', mapGrid: 'ANATOLIA-Q TERRITORIAL MONITORING GRID', regionalAlert: 'تنبيه إقليمي', regionNote: 'سيتم إرسال إشعار طوارئ بخصوص هذه المنطقة إلى المركز.', regionPh: 'التهديد/الوضع الملاحظ في المنطقة...', sendAlert: 'إرسال إلى المركز', alertSent: 'تم إرسال الإشعار إلى المركز بخصوص المنطقة',
-    voiceModeTitle: 'وضع الاستشارة', autoListen: 'الاستماع التلقائي مفعّل', autoListenOff: 'الاستماع التلقائي متوقف', voiceIdle: 'انقر على الميكروفون للبدء', voiceListening: 'يستمع', voiceProcessing: 'جارٍ تحويل الصوت إلى نص...', voiceThinking: 'ANATOLIA-Q يقوم بالتحليل...', voiceSpeaking: 'ANATOLIA-Q يتحدث...', voicePaused: 'انقر على الميكروفون للمتابعة', voiceReset: 'إعادة تعيين المحادثة', voiceStart: 'انقر على زر الميكروفون أدناه وابدأ التحدث.', voiceNote: 'سيفهمك ANATOLIA-Q.', micDenied: 'تم رفض الوصول إلى الميكروفون', noSpeech: 'لم يتم اكتشاف أي كلام', ttsError: 'خطأ في إنشاء الصوت'
+    voiceModeTitle: 'وضع الاستشارة', autoListen: 'الاستماع التلقائي مفعّل', autoListenOff: 'الاستماع التلقائي متوقف', voiceIdle: 'انقر على الميكروفون للبدء', voiceListening: 'يستمع', voiceProcessing: 'جارٍ تحويل الصوت إلى نص...', voiceThinking: 'ANATOLIA-Q يقوم بالتحليل...', voiceSpeaking: 'ANATOLIA-Q يتحدث...', voicePaused: 'انقر على الميكروفون للمتابعة', voiceReset: 'إعادة تعيين المحادثة', voiceStart: 'انقر على زر الميكروفون أدناه وابدأ التحدث.', voiceNote: 'سيفهمك ANATOLIA-Q.', micDenied: 'تم رفض الوصول إلى الميكروفون', noSpeech: 'لم يتم اكتشاف أي كلام', ttsError: 'خطأ في إنشاء الصوت',
+    tableScenario: 'السيناريو', tableAiEstimate: 'تقدير الذكاء الاصطناعي', tableQuantumResult: 'نتيجة الحوسبة الكمية', tableConfidenceInterval: 'فاصل الثقة',
+    tableTxnId: 'رقم المعاملة', tableAmount: 'المبلغ', tableRiskScore: 'درجة الخطر', tableStatus: 'الحالة',
+    tableItem: 'البند', tableValue: 'القيمة', tableCost: 'التكلفة',
+    sendBtn: 'إرسال'
   }
 };
 

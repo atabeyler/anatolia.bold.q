@@ -93,6 +93,14 @@ export const api = {
       full += chunk;
       onChunk?.(chunk, full);
     }
+    // Flush any pending partial multi-byte UTF-8 sequence left in the
+    // decoder (e.g. a Turkish character split across a stream boundary) --
+    // without this, a trailing byte can be silently dropped.
+    const tail = decoder.decode();
+    if (tail) {
+      full += tail;
+      onChunk?.(tail, full);
+    }
     return { provider, content: full };
   },
 
@@ -196,9 +204,15 @@ export const adminApi = {
   auditLog: () => req('/api/auth/admin/audit-log'),
 };
 
+// Dispatched whenever the JWT is written/cleared in this tab, so App.jsx can
+// react to login/logout without polling getCurrentUser() on an interval
+// (the 'storage' event alone only fires for *other* tabs, not this one).
+export const AUTH_CHANGED_EVENT = 'anatoliaq:auth-changed';
+
 export function setJWT(jwt) {
   if (jwt) localStorage.setItem('anatolia_jwt', jwt);
   else localStorage.removeItem('anatolia_jwt');
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
 }
 
 export function getCurrentUser() {

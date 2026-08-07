@@ -9,6 +9,7 @@ import { publicActionLimiter } from '../middleware/rateLimit.js';
 import * as onlineState from '../lib/onlineState.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
 import { escapeHtml } from '../lib/escapeHtml.js';
+import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '../lib/loginThrottle.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ const APP_URL = process.env.APP_URL || 'http://localhost:10000';
 // existing users keep working after the move to DB-backed accounts. After
 // the seed, this list is never read again — all account management goes
 // through the /admin/users endpoints below.
-const LEGACY_SEED_PASSWORD = process.env.SHARED_PASSWORD || 'AnatoliaQ2026!';
+const LEGACY_SEED_PASSWORD = process.env.SHARED_PASSWORD;
 const LEGACY_SEED_USERS = [
   { userCode: '120184', nickname: 'BOLD', isAdmin: true },
   { userCode: '847293', nickname: 'BOLD-001', isAdmin: false },
@@ -41,6 +42,11 @@ async function seedLegacyUsersIfEmpty() {
   try {
     const { rows } = await query('SELECT COUNT(*)::int AS count FROM auth_users');
     if (rows[0].count > 0) return;
+
+    if (!LEGACY_SEED_PASSWORD) {
+      console.error('auth_users seed skipped: SHARED_PASSWORD env var is not set');
+      return;
+    }
 
     const passwordHash = await bcrypt.hash(LEGACY_SEED_PASSWORD, 10);
     for (const u of LEGACY_SEED_USERS) {
@@ -73,15 +79,23 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Kullanıcı kodu ve şifre zorunlu' });
     }
 
+    if (await isLoginLocked(userCode)) {
+      return res.status(429).json({ error: 'Çok fazla hatalı deneme. Lütfen birkaç dakika sonra tekrar deneyin.' });
+    }
+
     const user = await findUser(userCode);
     if (!user) {
+      await recordLoginFailure(userCode);
       return res.status(401).json({ error: 'Geçersiz kullanıcı kodu' });
     }
 
     const passwordOk = await bcrypt.compare(password, user.password_hash);
     if (!passwordOk) {
+      await recordLoginFailure(userCode);
       return res.status(401).json({ error: 'Şifre hatalı' });
     }
+
+    await clearLoginFailures(userCode);
 
     if (user.blocked) {
       return res.status(403).json({ error: 'Hesabınız engellenmiş. Merkez ile iletişime geçin.' });

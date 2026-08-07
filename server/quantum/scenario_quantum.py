@@ -51,6 +51,12 @@ MIN_BATCH_SHOTS = 256
 MIN_SHOTS = 256
 MAX_SHOTS = 20000
 
+# Mirrors MAX_TRANSACTIONS in fraud_detection.py and MAX_ITEMS in
+# portfolio_optimizer.py -- without a cap, an unusually large LLM-produced
+# scenario table would reach this script with no upper bound on qubit count
+# or crx-pair mixer work.
+MAX_SCENARIOS = 32
+
 
 def build_mixer(qc, num_qubits):
     """Applies the multi-layer entangling mixer in place; returns a
@@ -195,7 +201,7 @@ def build_distribution(scenarios, shots, skip_hardware=False):
 def main():
     raw = sys.stdin.read() or "{}"
     payload = json.loads(raw)
-    scenarios = payload.get("scenarios", [])
+    scenarios = payload.get("scenarios", [])[:MAX_SCENARIOS]
     shots = min(MAX_SHOTS, max(MIN_SHOTS, int(payload.get("shots") or 4096)))
     skip_hardware = bool(payload.get("skipHardware"))
 

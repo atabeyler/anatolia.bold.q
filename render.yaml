@@ -69,3 +69,20 @@ services:
         sync: false
       - key: IBM_QUANTUM_WAIT_SECONDS
         value: "60"
+      # Web push notifications -- optional, generate with
+      # `npx web-push generate-vapid-keys`. Undefined means push stays
+      # disabled (isPushConfigured() returns false), no error is raised.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # How long conversation memory entries are retained before pruning;
+      # optional, defaults applied in code if unset.
+      - key: CONVERSATION_MEMORY_TTL_DAYS
+        sync: false
+      # Comma-separated RSS feed URLs for the morning brief news section;
+      # optional, defaults applied in code if unset.
+      - key: NEWS_RSS_SOURCES
+        sync: false

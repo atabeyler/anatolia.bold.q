@@ -2,6 +2,7 @@
 import multer from 'multer';
 import { createRequire } from 'module';
 import { authMiddleware } from '../middleware/auth.js';
+import { publicActionLimiter, analysisLimiter } from '../middleware/rateLimit.js';
 import {
   generateAnalysis,
   generateAnalysisWithVision,
@@ -49,7 +50,7 @@ router.get('/status', (req, res) => {
 // broken deployment (e.g. qiskit failed to install, python3 missing) can
 // be confirmed directly instead of only inferred from a report silently
 // missing quantum results.
-router.get('/quantum-status', async (req, res) => {
+router.get('/quantum-status', publicActionLimiter, async (req, res) => {
   const result = await computeQuantumProbabilities([{ id: 'health-check', probability: '%50' }]);
   // Note: `result.backend` is always "qiskit-aer-simulator" -- that's the
   // simulator run that always happens. Whether IBM_QUANTUM_TOKEN/INSTANCE
@@ -117,7 +118,7 @@ router.get('/fraud-trend', authMiddleware, async (req, res) => {
 });
 
 // Document upload and text extraction
-router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
+router.post('/upload', authMiddleware, analysisLimiter, upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'Dosya bulunamadı' });
@@ -234,7 +235,7 @@ function isRealOptimizationProblem(v) {
  * quantum engine computes on these real rows directly instead of ones the
  * AI fabricated.
  */
-router.post('/generate', authMiddleware, async (req, res) => {
+router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
   try {
     const {
       category, title, prompt, quantumMode = false, documentContext = null, imageData = null,
@@ -502,7 +503,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
 /**
  * Alternative scenario deep-dive analysis
  */
-router.post('/scenario-deep-dive', authMiddleware, async (req, res) => {
+router.post('/scenario-deep-dive', authMiddleware, analysisLimiter, async (req, res) => {
   try {
     const { category, scenarioId, scenarioSummary } = req.body;
     const userCode = req.user.userCode;
@@ -560,7 +561,7 @@ router.post('/scenario-deep-dive', authMiddleware, async (req, res) => {
 /**
  * Consultation chat — documentContext optional
  */
-router.post('/chat', authMiddleware, async (req, res) => {
+router.post('/chat', authMiddleware, analysisLimiter, async (req, res) => {
   try {
     const { message, history = [], documentContext = null, imageData = null } = req.body;
     const userCode = req.user.userCode;
