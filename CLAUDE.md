@@ -22,11 +22,6 @@ Working rules for this repo.
 - This happens automatically: `.husky/pre-commit` runs `scripts/bump-version.js` before every commit and stages the updated files into it. Do not disable, bypass (`--no-verify`), or remove this hook.
 - The login page displays the current version (`__APP_VERSION__`, read from `client/package.json` at build time) — it must always reflect the latest committed change.
 
-## Test/admin credentials (production)
-
-- Admin login for `https://anatolia-q.onrender.com` (for live diagnostics only — e.g. `POST /api/auth/login-request`): user code `120184`, password `Bold..`.
-- The user has explicitly acknowledged that committing this to the repo means it's in git history. Use only to test/debug the live deployment when asked; never print it back in chat beyond what's needed.
-
 ## Project
 
 - Backend: `server/` (Node.js + Express, ESM, run via `tsx`)
