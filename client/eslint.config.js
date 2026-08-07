@@ -61,5 +61,15 @@ export default [
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
+  {
+    // Runs in the Service Worker global scope (no window/document), not the
+    // page scope the block above is configured for.
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { self: 'readonly' },
+    },
+  },
   { ignores: ['dist/**', 'node_modules/**'] },
 ];

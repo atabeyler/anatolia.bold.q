@@ -220,10 +220,6 @@ Single live samples against the production deployment (Render free tier, Frankfu
 - ✅ A trend view over historical BDDK/BTK fraud flags (`GET /api/analysis/fraud-trend`, admin-only), instead of each report standing alone
 - ✅ Web Push for emergency broadcasts and admin-started video meetings, so a closed/backgrounded browser tab doesn't mean a missed alert (opt-in, Settings > Push)
 
-**Under consideration** (not committed — flagged as a real gap, not a promised timeline):
-- ⬜ Admin login 2FA — currently the highest-privilege account has the *weakest* login flow (password only, no mail approval). Deliberately deferred during active development to avoid the extra approval friction; revisit before wider rollout
-- ⬜ An AI-provider quota/usage dashboard for admins, so provider exhaustion is visible before users start seeing failures
-
 ---
 
 ## FAQ

@@ -2,7 +2,7 @@
 // notifications -- it does not cache/serve app assets, so it can't go stale
 // and break the app the way an offline-caching SW would.
 self.addEventListener('push', (event) => {
-  let data = {};
+  let data;
   try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
 
   const title = data.title || 'ANATOLIA-Q';
