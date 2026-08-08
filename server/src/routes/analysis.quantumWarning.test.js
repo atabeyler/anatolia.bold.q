@@ -18,6 +18,8 @@ vi.mock('../services/ai.js', () => ({
   getConsultationPrompt: () => 'sys-consult',
   getStatus: () => ({ claude: false, gemini: false, openai: false }),
   isFraudCategory: () => false,
+  getCategoryGroup: () => 'defense',
+  CATEGORY_GROUP_SOURCES: { defense: { local: [], international: [] } },
 }));
 vi.mock('../services/docx.js', () => ({ generateReportDocx: (...args) => generateReportDocxMock(...args) }));
 vi.mock('../services/pdf.js', () => ({ generateReportPdf: (...args) => generateReportPdfMock(...args) }));

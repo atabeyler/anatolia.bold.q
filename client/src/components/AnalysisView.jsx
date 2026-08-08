@@ -88,7 +88,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
       const aiImageData = imageFiles[0] ? { base64: imageFiles[0].base64, mimetype: imageFiles[0].mimetype } : null;
       const mergedContext = documentContexts.length ? documentContexts.map((d) => d.text).join('\n\n') : null;
       const realOptimizationPayload = realOptimization ? { items: realOptimization.items, budgetPercent: realOptimization.budgetPercent } : null;
-      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload);
+      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang);
       setResult(r);
     } catch (e) {
       setError(localizedError(e));
@@ -101,7 +101,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
     setLoadingScenario(scenario.id);
     setScenarioResult(null);
     try {
-      const r = await api.scenarioDeepDive(category, scenario.id, scenario.title);
+      const r = await api.scenarioDeepDive(category, scenario.id, scenario.title, lang);
       setScenarioResult({ ...r, scenarioLabel: scenario.title });
     } catch (e) {
       setError('Senaryo analizi basarisiz: ' + localizedError(e));

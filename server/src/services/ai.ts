@@ -108,14 +108,175 @@ const STATE_KNOWLEDGE_BASE = `
 
 const FRAUD_CATEGORIES = new Set(['bddk', 'btk']);
 
+// Every category previously shared one fixed 10-section military-report
+// skeleton (GPS coordinates, NATO/STANAG, defense-industry references) even
+// for e.g. saglik/ekonomi reports. Categories are now grouped so each group
+// gets its own section skeleton, mandatory elements, and live-source domains
+// -- content still varies further via getCategoryExpertise() below.
+export type CategoryGroup = 'defense' | 'economic' | 'compliance' | 'health' | 'advisory';
+
+const CATEGORY_GROUPS: Record<string, CategoryGroup> = {
+  savunma: 'defense',
+  saldiri: 'defense',
+  enerji: 'defense',
+  toplumsal: 'defense',
+  'cok-alanli': 'defense',
+  ekonomi: 'economic',
+  bddk: 'compliance',
+  btk: 'compliance',
+  saglik: 'health',
+  danisma: 'advisory',
+};
+
+export function getCategoryGroup(category: string): CategoryGroup {
+  return CATEGORY_GROUPS[category] || 'defense';
+}
+
+// Official domains researchWeb() (server/src/services/webResearch.js) is
+// steered toward for each group via `site:` filters -- not a real API
+// integration with these institutions, just biasing the general web search
+// toward their published content instead of the open web at large.
+export const CATEGORY_GROUP_SOURCES: Record<CategoryGroup, { local: string[]; international: string[] }> = {
+  defense: {
+    local: ['mevzuat.gov.tr', 'resmigazete.gov.tr', 'msb.gov.tr', 'ssb.gov.tr'],
+    international: ['nato.int', 'sipri.org', 'un.org'],
+  },
+  economic: {
+    local: ['tcmb.gov.tr', 'hmb.gov.tr', 'tuik.gov.tr', 'mevzuat.gov.tr', 'resmigazete.gov.tr'],
+    international: ['imf.org', 'worldbank.org', 'oecd.org', 'bis.org'],
+  },
+  compliance: {
+    local: ['bddk.org.tr', 'btk.gov.tr', 'masak.hmb.gov.tr', 'kvkk.gov.tr', 'mevzuat.gov.tr', 'resmigazete.gov.tr'],
+    international: ['fatf-gafi.org', 'bis.org', 'itu.int'],
+  },
+  health: {
+    local: ['saglik.gov.tr', 'titck.gov.tr', 'mevzuat.gov.tr', 'resmigazete.gov.tr'],
+    international: ['who.int', 'ecdc.europa.eu', 'cdc.gov'],
+  },
+  advisory: {
+    local: ['mevzuat.gov.tr', 'resmigazete.gov.tr'],
+    international: [],
+  },
+};
+
+// Section skeleton per group, authored once in Turkish as the canonical
+// structural/semantic reference -- buildMasterSystemPrompt() below instructs
+// the model to render these (headings included) in the target report
+// language rather than maintaining hand-translated heading lists per
+// language x group.
+const GROUP_SECTIONS: Record<CategoryGroup, string[]> = {
+  defense: [
+    'YONETICI OZETI -- 1 sayfada ust duzey karar verici icin ozet',
+    'TEHDIT ANALIZI -- Actorler, kapasiteler, niyetler, zaman cizelgesi',
+    'MEVCUT KAPASITE DEGERLENDIRMESI -- Turkiye\'nin mevcut konumu',
+    'ONERILEN MIMARI / STRATEJI -- Somut, olculebilir oneriler',
+    'BOLGE BAZLI ANALIZ -- GPS koordinatlariyla ilgili bolgeler',
+    'UYGULAMA PLANI -- Faz 1 (0-6 ay), Faz 2 (6-18 ay), Faz 3 (18-36 ay)',
+    'KURUMSAL SORUMLULUK MATRISI -- Hangi kurum ne yapacak (tablo)',
+    'RISKLER VE AZALTMA TEDBIRLERI -- Risk matrisi',
+    'MALI BOYUT -- Maliyet tahmini ve finansman kaynaklari',
+    'SONUC VE EYLEM CAGRISI -- Acil adimlar ve karar onerisi',
+  ],
+  economic: [
+    'YONETICI OZETI -- 1 sayfada ust duzey karar verici icin ozet',
+    'MAKROEKONOMIK / PIYASA DURUMU ANALIZI -- Guncel gostergeler, trendler',
+    'RISK VE FIRSAT ANALIZI -- Olasi senaryolar ve etkileri',
+    'ONERILEN EKONOMIK STRATEJI -- Somut, olculebilir oneriler',
+    'SEKTOREL / BOLGESEL ETKI ANALIZI',
+    'UYGULAMA PLANI -- Faz 1 (0-6 ay), Faz 2 (6-18 ay), Faz 3 (18-36 ay)',
+    'ILGILI KURUMLAR VE SORUMLULUK MATRISI -- TCMB, Hazine, ilgili bakanliklar (tablo)',
+    'RISKLER VE AZALTMA TEDBIRLERI -- Risk matrisi',
+    'MALI BOYUT VE BUTCE ETKISI',
+    'SONUC VE EYLEM CAGRISI -- Acil adimlar ve karar onerisi',
+  ],
+  compliance: [
+    'YONETICI OZETI -- 1 sayfada ust duzey karar verici icin ozet',
+    'UYUM DURUMU DEGERLENDIRMESI -- Mevcut mevzuata gore durum',
+    'TESPIT EDILEN RISK / IHLAL ALANLARI',
+    'ONERILEN UYUM / DENETIM STRATEJISI -- Somut, olculebilir oneriler',
+    'ILGILI MEVZUAT VE DUZENLEYICI CERCEVE -- Kanun/yonetmelik numaralariyla',
+    'UYGULAMA PLANI -- Faz 1 (0-6 ay), Faz 2 (6-18 ay), Faz 3 (18-36 ay)',
+    'ILGILI KURUMLAR VE SORUMLULUK MATRISI -- BDDK/BTK, MASAK, KVKK Kurumu (tablo)',
+    'RISKLER VE YAPTIRIM IHTIMALI -- Risk matrisi',
+    'MALI BOYUT -- Ceza/uyum maliyeti tahmini',
+    'SONUC VE EYLEM CAGRISI -- Acil adimlar ve karar onerisi',
+  ],
+  health: [
+    'YONETICI OZETI -- 1 sayfada ust duzey karar verici icin ozet',
+    'SAGLIK TEHDIDI / DURUM ANALIZI',
+    'MEVCUT KAPASITE VE HAZIRLIK DEGERLENDIRMESI',
+    'ONERILEN SAGLIK STRATEJISI -- Somut, olculebilir oneriler',
+    'BOLGE BAZLI ANALIZ',
+    'UYGULAMA PLANI -- Faz 1 (0-6 ay), Faz 2 (6-18 ay), Faz 3 (18-36 ay)',
+    'ILGILI KURUMLAR VE SORUMLULUK MATRISI -- Saglik Bakanligi, TITCK, WHO (tablo)',
+    'RISKLER VE AZALTMA TEDBIRLERI -- Risk matrisi',
+    'MALI BOYUT -- Maliyet tahmini ve finansman kaynaklari',
+    'SONUC VE EYLEM CAGRISI -- Acil adimlar ve karar onerisi',
+  ],
+  // advisory (danisma) never reaches this skeleton -- getCategoryExpertise('danisma')
+  // supplies its own short format instead (see buildMasterSystemPrompt below).
+  advisory: [],
+};
+
+const GROUP_MANDATORY_ELEMENTS: Record<CategoryGroup, string[]> = {
+  defense: [
+    'GPS KOORDINATLARI: Ilgili her lokasyon icin',
+    'SAYISAL VERI: Tum iddialari rakamlarla destekle',
+    'YERLI TEKNOLOJI ONCELIGI: ASELSAN, STM, HAVELSAN, ROKETSAN, BAYKAR, TUSAS, TUBITAK, MKE',
+    'KURUMSAL REFERANSLAR: MSB, SSB, MGK, MIT, ilgili komutanliklar',
+    'NATO / STANAG UYUMU: Ittifak yukumluluklleriyle uyum analizi',
+    'BUTCE KATEGORISI: TL olarak maliyet tahmini + Savunma Sanayi Fonu (SSF) uygunlugu',
+    "KPI'LAR: Her onerinin olculebilir basari kriterleri",
+  ],
+  economic: [
+    'SAYISAL VERI: Guncel ekonomik gostergelerle destekle',
+    'KURUMSAL REFERANSLAR: TCMB, Hazine ve Maliye Bakanligi, TUIK',
+    'ILGILI MEVZUAT: Kanun/yonetmelik numarasi (varsa)',
+    'ULUSLARARASI REFERANS: IMF / Dunya Bankasi / OECD verileriyle karsilastirma (varsa)',
+    'BUTCE / MALIYET ETKISI: TL cinsinden',
+    "KPI'LAR: Her onerinin olculebilir basari kriterleri",
+  ],
+  compliance: [
+    'ILGILI MEVZUAT: Kanun/yonetmelik numarasi (5411, 5549, 5809 sayili kanunlar vb. ilgili olani)',
+    'KURUMSAL REFERANSLAR: BDDK/BTK, MASAK, KVKK Kurumu',
+    'ULUSLARARASI STANDART REFERANSI: FATF, Basel III, ITU (ilgili olani)',
+    'SAYISAL VERI: Tum iddialari rakamlarla destekle',
+    'YAPTIRIM / CEZA RISKI DEGERLENDIRMESI',
+    "KPI'LAR: Her onerinin olculebilir basari kriterleri",
+  ],
+  health: [
+    'KURUMSAL REFERANSLAR: Saglik Bakanligi, TITCK',
+    'ILGILI MEVZUAT: Kanun/yonetmelik numarasi (varsa)',
+    'ULUSLARARASI REFERANS: WHO IHR, ECDC/CDC (ilgili olani)',
+    'SAYISAL VERI: Tum iddialari rakamlarla destekle',
+    'BUTCE / KAYNAK ETKISI',
+    "KPI'LAR: Her onerinin olculebilir basari kriterleri",
+  ],
+  advisory: [],
+};
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  tr: 'Turkce',
+  en: 'Ingilizce (English)',
+  de: 'Almanca (Deutsch)',
+  fr: 'Fransizca (Francais)',
+  ar: 'Arapca (Al-Arabiyyah)',
+};
+
+function resolveLangName(lang: string): string {
+  return LANGUAGE_NAMES[lang] || LANGUAGE_NAMES.tr;
+}
+
 interface RealDataFlags {
   hasRealTransactions?: boolean;
   hasRealScenarios?: boolean;
   hasRealOptimization?: boolean;
 }
 
-function buildMasterSystemPrompt(category: string, quantumMode = false, realData: RealDataFlags = {}): string {
+function buildMasterSystemPrompt(category: string, quantumMode = false, realData: RealDataFlags = {}, lang = 'tr'): string {
   const { hasRealTransactions = false, hasRealScenarios = false, hasRealOptimization = false } = realData;
+  const group = getCategoryGroup(category);
+  const langName = resolveLangName(lang);
   const today = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
   const todayISO = new Date().toISOString().split('T')[0];
   const isFraudCategory = FRAUD_CATEGORIES.has(category);
@@ -202,45 +363,50 @@ Sen ANATOLIA-Q'nun Kuantum Olasilik Modulusun. Her analiz icin:
 ${scenarioSection}
 ${optimizationSection}` : '';
 
+  const sections = GROUP_SECTIONS[group];
+  const reportStandardsBlock = sections.length ? `
+## RAPOR STANDARTLARI
+
+Rapor su bolumlerden olusmali (sirasiyla, hepsi zorunlu):
+${sections.map((s, i) => `${i + 1}. **${s}**`).join('\n')}
+` : '';
+
+  const mandatory = GROUP_MANDATORY_ELEMENTS[group];
+  const mandatoryBlock = mandatory.length ? `
+## ZORUNLU UNSURLAR
+
+${mandatory.map((m) => `- **${m}**`).join('\n')}
+` : '';
+
+  // Only the defense group's report content actually references TSK/base
+  // locations and defense-industry structure -- injecting this into e.g. an
+  // ekonomi or saglik report added irrelevant military content to every
+  // report regardless of topic.
+  const knowledgeBaseBlock = group === 'defense' ? `
+## MEVCUT TURK DEVLET/ASKERI BILGI TABANI:
+${STATE_KNOWLEDGE_BASE}
+` : '';
+
+  const languageBlock = `
+## DIL
+
+Raporun TAMAMINI (basliklar dahil) ${langName} dilinde yaz -- yukaridaki bolum basliklari anlamlarini koruyarak
+${langName} diline, o dilin resmi rapor/devlet dokumani stiline uygun sekilde cevrilmeli (birebir kelime kelime
+ceviri sart degil). ${quantumMode ? `ISTISNA: "## KUANTUM OLASILIK MATRISI", "## ISLEM KAYITLARI",
+"## OPTIMIZASYON PROBLEMI" tablo basliklarini ve bu tablolarin sutun basliklarini AYNEN Turkce birak, dil
+secimi ne olursa olsun degistirme -- bu basliklar sistem tarafindan otomatik olarak ayristiriliyor.` : ''}
+- Profesyonel, resmi rapor tonu
+- Markdown formati: ## basliklar, tablolar, maddeler`;
+
   return `Sen ANATOLIA-Q sistemisin -- Turkiye Cumhuriyeti'nin Kuantum Tabanli Ulusal Karar Destek Sistemi.
 BOLD Askeri Teknoloji ve Savunma Sanayi A.S. tarafindan gelistirilmistir.
 
-GUNEL TARIH: ${today} (${todayISO}) -- Tum analizleri bu tarih itibariyla guncel bilgilerle hazirla. Gecmise ait gelismeleri gecmis, guncel durumu bugunun kosullarina gore degerlendir.
+GUNEL TARIH: ${today} (${todayISO}) -- Tum analizleri bu tarih itibariyla guncel bilgilerle hazirla. Gecmise ait gelismeleri gecmis, guncel durumu bugunun kosullarina gore degerlendir. Sana ayrica saglanmis olabilecek [CANLI WEB ARASTIRMASI] sonuclarini -- varsa -- guncel mevzuat/kurum durumu icin birincil kaynak olarak kullan.
 
 GIZLILIK: GIZLI -- Tum ciktilar ust gizlilik kurallarina tabidir.
 ${quantumInstructions}
-
-## RAPOR STANDARTLARI (QTR-200120401018 formati)
-
-Rapor su bolumlerden olusmal:
-1. **YONETICI OZETI** -- 1 sayfada ust duzey karar verici icin ozet
-2. **TEHDIT ANALIZI** -- Actorler, kapasiteler, niyetler, zaman cizelgesi
-3. **MEVCUT KAPASITE DEGERLENDIRMESI** -- Turkiye'nin mevcut konumu
-4. **ONERILEN MIMARI / STRATEJI** -- Somut, olculebilir oneriler
-5. **BOLGE BAZLI ANALIZ** -- GPS koordinatlariyla ilgili bolgeler
-6. **UYGULAMA PLANI** -- Faz 1 (0-6 ay), Faz 2 (6-18 ay), Faz 3 (18-36 ay)
-7. **KURUMSAL SORUMLULUK MATRISI** -- Hangi kurum ne yapacak (tablo)
-8. **RISKLER VE AZALTMA TEDBIRLERI** -- Risk matrisi
-9. **MALI BOYUT** -- Maliyet tahmini ve finansman kaynaklari
-10. **SONUC VE EYLEM CAGRISI** -- Acil adimlar ve karar onerisi
-
-## ZORUNLU UNSURLAR
-
-- **GPS KOORDINATLARI**: Ilgili her lokasyon icin
-- **SAYISAL VERI**: Tum iddialari rakamlarla destekle
-- **YERLI TEKNOLOJI ONCELIGI**: ASELSAN, STM, HAVELSAN, ROKETSAN, BAYKAR, TUSAS, TUBITAK, MKE
-- **KURUMSAL REFERANSLAR**: MSB, SSB, MGK, MIT, ilgili komutanliklar
-- **NATO / STANAG UYUMU**: Ittifak yukumluluklleriyle uyum analizi
-- **BUTCE KATEGORISI**: TL olarak maliyet tahmini + Savunma Sanayi Fonu (SSF) uygunlugu
-- **KPI'LAR**: Her onerinin olculebilir basari kriterleri
-
-## DIL VE TON
-- Turkce, profesyonel, resmi devlet raporu standarti
-- Markdown formati: ## basliklar, tablolar, maddeler
-
-## MEVCUT TURK DEVLET/ASKERI BILGI TABANI:
-${STATE_KNOWLEDGE_BASE}
-
+${reportStandardsBlock}${mandatoryBlock}${languageBlock}
+${knowledgeBaseBlock}
 ## KATEGORI BAZLI UZMANLIK: ${getCategoryExpertise(category)}`;
 }
 
@@ -507,16 +673,16 @@ export async function streamConsultationText(
   throw new AllProvidersFailedError('Tüm AI sağlayıcılar başarısız');
 }
 
-export function getSystemPromptForCategory(category: string): string {
-  return buildMasterSystemPrompt(category, false);
+export function getSystemPromptForCategory(category: string, lang = 'tr'): string {
+  return buildMasterSystemPrompt(category, false, {}, lang);
 }
 
-export function getQuantumSystemPrompt(category: string, realData: RealDataFlags = {}): string {
-  return buildMasterSystemPrompt(category, true, realData);
+export function getQuantumSystemPrompt(category: string, realData: RealDataFlags = {}, lang = 'tr'): string {
+  return buildMasterSystemPrompt(category, true, realData, lang);
 }
 
-export function getScenarioDeepDivePrompt(category: string, scenarioId: string, scenarioSummary: string): string {
-  return `${buildMasterSystemPrompt(category, false)}
+export function getScenarioDeepDivePrompt(category: string, scenarioId: string, scenarioSummary: string, lang = 'tr'): string {
+  return `${buildMasterSystemPrompt(category, false, {}, lang)}
 
 ## GOREV: ALTERNATIF SENARYO DERIN ANALIZI
 Kullanici daha once KUANTUM OLASILIK MATRISI'nde belirlenen "${scenarioId}" numarali senaryonun

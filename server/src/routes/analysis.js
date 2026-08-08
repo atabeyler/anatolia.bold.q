@@ -12,7 +12,9 @@ import {
   getScenarioDeepDivePrompt,
   getConsultationPrompt,
   getStatus,
-  isFraudCategory
+  isFraudCategory,
+  getCategoryGroup,
+  CATEGORY_GROUP_SOURCES
 } from '../services/ai.js';
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
@@ -38,6 +40,30 @@ import { researchWeb, formatResearchContext } from '../services/webResearch.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
+
+// Runs two searches in parallel: a general topic search (same pattern as
+// /chat below), and one steered toward the category group's official local
+// + international sources (mevzuat.gov.tr/resmigazete.gov.tr always
+// included, plus e.g. tcmb.gov.tr/imf.org for economic reports) via `site:`
+// filters. Grounds report content (mevzuat/kurum references) in real search
+// results instead of the model's training-data recall, which for
+// law/regulation numbers is a real hallucination risk.
+async function gatherResearchContext(category, topic) {
+  const group = getCategoryGroup(category);
+  const sources = CATEGORY_GROUP_SOURCES[group];
+  const siteFilter = [...sources.local, ...sources.international].map((d) => `site:${d}`).join(' OR ');
+  const topicQuery = (topic || '').slice(0, 150);
+
+  const queries = [topicQuery, siteFilter ? `${topicQuery} mevzuat kanun yönetmelik ${siteFilter}` : null].filter(Boolean);
+
+  try {
+    const results = (await Promise.all(queries.map((q) => researchWeb(q).catch(() => [])))).flat();
+    return formatResearchContext(results);
+  } catch (e) {
+    logger.warn({ err: e }, '[WebResearch] generate search error');
+    return '';
+  }
+}
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const require = createRequire(import.meta.url);
 
@@ -239,7 +265,7 @@ router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
   try {
     const {
       category, title, prompt, quantumMode = false, documentContext = null, imageData = null,
-      realTransactions = null, realScenarios = null, realOptimization = null,
+      realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr',
     } = req.body;
     const userCode = req.user.userCode;
 
@@ -253,8 +279,10 @@ router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
     const hasRealOptimization = !fraudCategory && isRealOptimizationProblem(realOptimization);
 
     const systemPrompt = quantumMode
-      ? getQuantumSystemPrompt(category, { hasRealTransactions, hasRealScenarios, hasRealOptimization })
-      : getSystemPromptForCategory(category);
+      ? getQuantumSystemPrompt(category, { hasRealTransactions, hasRealScenarios, hasRealOptimization }, lang)
+      : getSystemPromptForCategory(category, lang);
+
+    const webContext = await gatherResearchContext(category, prompt);
 
     const basePrompt = `${prompt}
 
@@ -283,9 +311,10 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       : '';
 
     const hasRealData = hasRealTransactions || hasRealScenarios || hasRealOptimization;
+    const webContextPrefix = webContext ? `${webContext}\n` : '';
     const enrichedPrompt = documentContext || hasRealData
-      ? `[YÜKLENEN KAYNAK BELGE]\n${documentContext || ''}\n\n${realTransactionsNote}${realScenariosNote}${realOptimizationNote}[ANALİZ TALEBİ]\n${basePrompt}`
-      : basePrompt;
+      ? `${webContextPrefix}[YÜKLENEN KAYNAK BELGE]\n${documentContext || ''}\n\n${realTransactionsNote}${realScenariosNote}${realOptimizationNote}[ANALİZ TALEBİ]\n${basePrompt}`
+      : `${webContextPrefix}${basePrompt}`;
 
     const result = imageData?.base64
       ? await generateAnalysisWithVision(systemPrompt, enrichedPrompt, imageData.base64, imageData.mimetype)
@@ -505,10 +534,10 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
  */
 router.post('/scenario-deep-dive', authMiddleware, analysisLimiter, async (req, res) => {
   try {
-    const { category, scenarioId, scenarioSummary } = req.body;
+    const { category, scenarioId, scenarioSummary, lang = 'tr' } = req.body;
     const userCode = req.user.userCode;
 
-    const systemPrompt = getScenarioDeepDivePrompt(category, scenarioId, scenarioSummary);
+    const systemPrompt = getScenarioDeepDivePrompt(category, scenarioId, scenarioSummary, lang);
     const userPrompt = `"${scenarioId}" senaryosunun tam derinlemesine analizini hazırla.\nSenaryo özeti: ${scenarioSummary}\nSanki bu birincil senaryoymuş gibi eksiksiz bir BOLD raporu yaz.`;
 
     const result = await generateAnalysis(systemPrompt, userPrompt);

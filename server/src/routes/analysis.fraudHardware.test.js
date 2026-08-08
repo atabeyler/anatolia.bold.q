@@ -27,6 +27,8 @@ vi.mock('../services/ai.js', () => ({
   getConsultationPrompt: () => 'sys-consult',
   getStatus: () => ({ claude: false, gemini: false, openai: false }),
   isFraudCategory: (category) => category === 'bddk' || category === 'btk',
+  getCategoryGroup: () => 'compliance',
+  CATEGORY_GROUP_SOURCES: { compliance: { local: [], international: [] } },
 }));
 vi.mock('../services/docx.js', () => ({ generateReportDocx: (...args) => generateReportDocxMock(...args) }));
 vi.mock('../services/pdf.js', () => ({ generateReportPdf: (...args) => generateReportPdfMock(...args) }));

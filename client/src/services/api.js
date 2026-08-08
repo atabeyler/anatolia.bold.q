@@ -52,11 +52,11 @@ export const api = {
 
   checkApproval: (token) => req(`/api/auth/check/${token}`),
 
-  generateAnalysis: (category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null, realScenarios = null, realOptimization = null) =>
-    req('/api/analysis/generate', { method: 'POST', body: JSON.stringify({ category, title, prompt, quantumMode, documentContext, imageData, realTransactions, realScenarios, realOptimization }) }),
+  generateAnalysis: (category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr') =>
+    req('/api/analysis/generate', { method: 'POST', body: JSON.stringify({ category, title, prompt, quantumMode, documentContext, imageData, realTransactions, realScenarios, realOptimization, lang }) }),
 
-  scenarioDeepDive: (category, scenarioId, scenarioSummary) =>
-    req('/api/analysis/scenario-deep-dive', { method: 'POST', body: JSON.stringify({ category, scenarioId, scenarioSummary }) }),
+  scenarioDeepDive: (category, scenarioId, scenarioSummary, lang = 'tr') =>
+    req('/api/analysis/scenario-deep-dive', { method: 'POST', body: JSON.stringify({ category, scenarioId, scenarioSummary, lang }) }),
 
   // Without an image the reply arrives as a stream — onChunk is called for each piece.
   // With an image, or when the server returns JSON (e.g. the weather shortcut), it returns all at once.

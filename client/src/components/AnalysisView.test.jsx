@@ -125,7 +125,7 @@ describe('AnalysisView', () => {
     await waitFor(() => expect(screen.getAllByText('Senaryo B').length).toBeGreaterThan(0));
 
     fireEvent.click(screen.getByRole('button', { name: 'ANALİZ ET' }));
-    await waitFor(() => expect(api.scenarioDeepDive).toHaveBeenCalledWith('ekonomi', 'B', 'Senaryo B'));
+    await waitFor(() => expect(api.scenarioDeepDive).toHaveBeenCalledWith('ekonomi', 'B', 'Senaryo B', 'tr'));
     expect(await screen.findByText('Alt senaryo')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Ana Rapora Dön'));
