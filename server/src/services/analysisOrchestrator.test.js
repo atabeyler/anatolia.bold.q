@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import {
+  DATA_SOURCE_TYPES,
+  resolveDataProvenance,
+  assessDataQuality,
+  createDecisionTrace,
+  markDecisionStage,
+  buildEvidenceSummary,
+  runAnalysisStages,
+} from './analysisOrchestrator.js';
+
+describe('analysisOrchestrator', () => {
+  it('marks structured uploads as verified uploaded provenance', () => {
+    const provenance = resolveDataProvenance({ hasRealTransactions: true });
+    expect(provenance).toEqual({ type: DATA_SOURCE_TYPES.UPLOADED, source: 'user-upload', verifiedInput: true });
+  });
+
+  it('prioritizes an institutional source over uploaded input', () => {
+    const provenance = resolveDataProvenance({ hasRealScenarios: true, institutionalSource: 'authorized-feed' });
+    expect(provenance.type).toBe(DATA_SOURCE_TYPES.INSTITUTIONAL_API);
+    expect(provenance.source).toBe('authorized-feed');
+    expect(provenance.verifiedInput).toBe(true);
+  });
+
+  it('keeps model-generated input explicitly unverified', () => {
+    expect(resolveDataProvenance()).toEqual({
+      type: DATA_SOURCE_TYPES.AI_GENERATED,
+      source: 'model-generated',
+      verifiedInput: false,
+    });
+  });
+
+  it('scores institutional data higher while applying warning penalties', () => {
+    const provenance = resolveDataProvenance({ institutionalSource: 'institution-x' });
+    const clean = assessDataQuality({ provenance, recordCount: 100 });
+    const warned = assessDataQuality({ provenance, recordCount: 100, warnings: ['a', 'b'] });
+    expect(clean.score).toBe(100);
+    expect(clean.level).toBe('high');
+    expect(warned.score).toBe(90);
+  });
+
+  it('builds an internal decision trace without requiring user engine choices', () => {
+    const provenance = resolveDataProvenance({ hasRealScenarios: true });
+    const quality = assessDataQuality({ provenance, recordCount: 3 });
+    const trace = createDecisionTrace({ category: 'economy', quantumMode: true, provenance, dataQuality: quality });
+    markDecisionStage(trace, 'ai-analysis', 'completed', { provider: 'test' });
+    expect(trace.quantumRequested).toBe(true);
+    expect(trace.stages.map((s) => s.stage)).toEqual(['ingest', 'validate', 'normalize', 'ai-analysis']);
+  });
+
+  it('creates a compact evidence summary', () => {
+    const evidence = buildEvidenceSummary({
+      provenance: { type: DATA_SOURCE_TYPES.UPLOADED, source: 'user-upload' },
+      dataQuality: { score: 85, level: 'high' },
+      provider: 'provider-x',
+      quantum: { backend: 'qiskit-aer-simulator', shots: 4096, dataSource: 'uploaded' },
+    });
+    expect(evidence.aiProvider).toBe('provider-x');
+    expect(evidence.quantum.shots).toBe(4096);
+    expect(evidence.source).toBe(DATA_SOURCE_TYPES.UPLOADED);
+  });
+
+  it('runs orchestration stages sequentially and records them', async () => {
+    const trace = createDecisionTrace({ category: 'test' });
+    const result = await runAnalysisStages(trace, [
+      { name: 'first', run: async () => 2 },
+      { name: 'second', run: async (results) => results.first * 3 },
+    ]);
+    expect(result.second).toBe(6);
+    expect(trace.stages.at(-1).stage).toBe('second');
+    expect(trace.stages.at(-1).status).toBe('completed');
+  });
+});
