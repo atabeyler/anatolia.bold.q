@@ -15,10 +15,13 @@ a Qiskit Runtime service instance provisioned in that IBM Cloud account,
 passed as `instance`. See README.md's Optional Infrastructure table for how
 to obtain both.
 
-NOTE: this path could not be exercised against a real IBM Cloud account
-during development (no credentials were available in the build/test
-environment). The local-simulator fallback path is what has actually been
-verified.
+LIVE VALIDATION: this integration has been exercised against a real IBM
+Quantum Platform account. Authentication, Qiskit Runtime service connection,
+least-busy real-backend selection, transpilation, hardware job submission,
+and hardware-result retrieval have been validated through the production
+integration path. The local deterministic simulator remains the authoritative
+decision path; IBM hardware is intentionally used as an independent
+verification lane so NISQ hardware noise cannot alter a reported decision.
 """
 import os
 import sys
