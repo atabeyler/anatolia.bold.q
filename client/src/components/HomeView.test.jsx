@@ -4,8 +4,6 @@ import HomeView from './HomeView.jsx';
 import { LangProvider } from '../services/langContext.jsx';
 import { api, getCurrentUser } from '../services/api.js';
 
-// TurkeyMap pulls in the WorldGlobe (three.js) stack via a lazy import --
-// stub it so HomeView tests don't need a WebGL-capable jsdom environment.
 vi.mock('./TurkeyMap.jsx', () => ({ default: () => <div>TurkeyMap stub</div> }));
 
 vi.mock('../services/api.js', () => ({
@@ -28,13 +26,25 @@ beforeEach(() => {
   api.activityFeed.mockResolvedValue([]);
   api.morningBriefToday.mockResolvedValue({ exists: false });
   getCurrentUser.mockReturnValue({ userCode: 'BOLD-001', isAdmin: false });
+  vi.stubGlobal('fetch', vi.fn(async () => ({
+    json: async () => ({
+      ready: true,
+      database: { configured: true, ok: true },
+      ai: { configured: true },
+      quantum: { ibmConfigured: true },
+      storage: { persistentObjectStorageConfigured: true },
+      redis: { configured: true },
+    }),
+  })));
 });
 
 describe('HomeView', () => {
-  it('renders the live map area and system metrics panel', async () => {
+  it('renders the live map area and real platform status panel', async () => {
     renderHome();
     expect(await screen.findByText('TurkeyMap stub')).toBeInTheDocument();
-    expect(screen.getAllByText('CPU').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('PLATFORM')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('AI')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('CPU')).not.toBeInTheDocument();
   });
 
   it('shows the personnel radar button only when isAdmin is true', () => {
