@@ -27,7 +27,7 @@ describe('MenuPanel', () => {
   it('closes via the close button and the background overlay', () => {
     const onClose = vi.fn();
     render(<MenuPanel t={t} onClose={onClose} onOpenGuide={vi.fn()} onOpenInfo={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText('Kapat'));
+    fireEvent.click(screen.getByLabelText('Close'));
     expect(onClose).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByLabelText('menuTooltip'));
     expect(onClose).toHaveBeenCalledTimes(2);
@@ -119,7 +119,7 @@ describe('InfoModal', () => {
   it('closes via the close button', () => {
     const onClose = vi.fn();
     render(<InfoModal panel="about" t={t} onClose={onClose} />);
-    fireEvent.click(screen.getByLabelText('Kapat'));
+    fireEvent.click(screen.getByLabelText('Close'));
     expect(onClose).toHaveBeenCalled();
   });
 });
@@ -143,7 +143,7 @@ describe('GuideModal', () => {
   it('closes via the close button', () => {
     const onClose = vi.fn();
     render(<GuideModal onClose={onClose} t={t} lang="tr" />);
-    fireEvent.click(screen.getByLabelText('Kapat'));
+    fireEvent.click(screen.getByLabelText('Close'));
     expect(onClose).toHaveBeenCalled();
   });
 });
