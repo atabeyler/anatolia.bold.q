@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Bumps the patch version in root/client/server package.json files together,
-// so they never drift apart. Run automatically by .husky/pre-commit before
-// every commit; the updated files are then staged into that same commit.
-import { readFileSync, writeFileSync } from 'fs';
+// Bumps the patch version in root/client/server package.json files together
+// and keeps the README version badge aligned with the same release.
+// Run automatically by .husky/pre-commit before every commit; the updated
+// files are then staged into that same commit.
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -23,6 +24,16 @@ for (const file of jsonTargets) {
   const pkg = JSON.parse(readFileSync(file, 'utf-8'));
   pkg.version = nextVersion;
   writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+}
+
+const readmePath = path.join(root, 'README.md');
+if (existsSync(readmePath)) {
+  const readme = readFileSync(readmePath, 'utf-8');
+  const updated = readme.replace(
+    /version-\d+\.\d+\.\d+-blue/,
+    `version-${nextVersion}-blue`
+  );
+  writeFileSync(readmePath, updated);
 }
 
 console.log(`Version bumped: ${rootPkg.version} -> ${nextVersion}`);

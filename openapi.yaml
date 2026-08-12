@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: ANATOLIA-Q API
+  version: 2.1.102
+  description: Versioned institutional/platform API surface for ANATOLIA-Q.
+servers:
+  - url: /api/v1
+paths:
+  /platform/health/live:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Process is alive
+  /platform/health/ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Core services are ready
+        '503':
+          description: A required core service is unavailable
+  /platform/overview:
+    get:
+      summary: Administrative operational overview
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Health, connector, decision and risk overview
+  /platform/connectors:
+    get:
+      summary: Registered institutional connector status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Connector registry and health state
+  /platform/decisions/{analysisId}:
+    get:
+      summary: Read the decision trace for an analysis
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: analysisId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Decision provenance, evidence and trace
+        '404':
+          description: Decision trace not found or not accessible
+  /platform/decisions/{analysisId}/outcome:
+    post:
+      summary: Record the observed outcome of a prior decision-support analysis
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: analysisId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Outcome recorded
+  /platform/decisions/{analysisId}/replay:
+    post:
+      summary: Re-run a stored analysis request through the current analysis pipeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: analysisId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Replay result
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

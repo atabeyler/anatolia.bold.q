@@ -28,10 +28,29 @@ All endpoints marked **auth** require `Authorization: Bearer <jwt>`. Admin-only 
 |---|---|---|
 | `GET /status` | — | Whether each AI provider key is configured |
 | `GET /quantum-status` | — | Spawns the Qiskit worker with a trivial payload; reports simulator + IBM hardware health |
+| `GET /fraud-trend` | auth, admin | Historical BDDK/BTK fraud-flag trend aggregated by date and category |
 | `POST /upload` | auth | Extracts text from an uploaded document, or returns an image as base64 for vision analysis |
-| `POST /generate` | auth | Main report generator — category + prompt in, DOCX/PDF report out. `quantumMode: true` additionally recomputes scenario/transaction/optimization tables on Qiskit (see README's Quantum Computing feature) |
+| `POST /generate` | auth | Main report generator — category + prompt in, DOCX/PDF report out. `quantumMode: true` additionally recomputes scenario/transaction/optimization tables on Qiskit. Successful generations are also recorded in the decision-intelligence trace store |
 | `POST /scenario-deep-dive` | auth | Expands a single scenario from a prior report into a focused sub-analysis |
 | `POST /chat` | auth | Streaming danışma (consultation) chat, same triple-AI fallback as `/generate` |
+
+## Platform & Decision Intelligence (`/api/platform`, versioned alias `/api/v1/platform`)
+
+| Method & Path | Auth | Description |
+|---|---|---|
+| `GET /health/live` | — | Lightweight process liveness probe |
+| `GET /health/ready` | — | Readiness summary for database, AI, quantum configuration, storage and Redis |
+| `GET /models` | auth | Model registry and analysis prompt version |
+| `GET /connectors` | auth, admin | Registered institutional connector definitions and health state |
+| `GET /metrics` | auth, admin | In-process request latency/error metrics (p50/p95/max) |
+| `GET /retention` | auth, admin | Current decision-record retention policy |
+| `GET /overview` | auth, admin | Operational overview: service health, connectors, decision counts, pending approvals, recent risks and metrics |
+| `GET /risk` | auth, admin | Recent risk-oriented analyses and BDDK/BTK flag rates |
+| `GET /decisions/:analysisId` | auth | Provenance, evidence, data-quality and decision trace for an accessible analysis |
+| `POST /decisions/:analysisId/outcome` | auth | Record the observed real-world outcome/assessment of a prior analysis |
+| `POST /decisions/:analysisId/replay` | auth | Re-run the stored original request through the current analysis pipeline |
+
+The machine-readable API definition for the new versioned platform surface is in [`openapi.yaml`](./openapi.yaml).
 
 ## History (`/api/history`)
 

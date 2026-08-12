@@ -10,7 +10,10 @@ import { fileURLToPath } from 'url';
 import { logger } from './lib/logger.js';
 import { attachSentryErrorHandler } from './lib/sentry.js';
 import { initDatabase, initMemoryTables } from './services/database.js';
+import { ensureDecisionTables, purgeExpiredDecisionRecords } from './services/decisionIntelligence.js';
 import { initSocketHandlers } from './services/socket.js';
+import { requestMetricsMiddleware } from './lib/requestMetrics.js';
+import { analysisTraceMiddleware } from './middleware/analysisTrace.js';
 import authRoutes from './routes/auth.js';
 import analysisRoutes from './routes/analysis.js';
 import emergencyRoutes from './routes/emergency.js';
@@ -19,6 +22,7 @@ import voiceRoutes from './routes/voice.js';
 import memoryRoutes from './routes/memory.js';
 import filesRoutes from './routes/files.js';
 import weatherRoutes from './routes/weather.js';
+import platformRoutes from './routes/platform.js';
 import { startMorningBriefScheduler } from './services/morningBrief.js';
 import { startSelfPing } from './services/selfPing.js';
 
@@ -54,15 +58,18 @@ app.use(pinoHttp({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(requestMetricsMiddleware);
 
-// Health check (for UptimeRobot)
+// Lightweight liveness endpoint kept for external uptime monitors.
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', uptime: process.uptime(), timestamp: Date.now() });
 });
 
 // API routes
 app.use('/api/auth', authRoutes);
-app.use('/api/analysis', analysisRoutes);
+// Observe generation responses and persist provenance/evidence/decision trace
+// without changing the established analysis route implementation or UX.
+app.use('/api/analysis', analysisTraceMiddleware, analysisRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/voice',
@@ -72,6 +79,10 @@ app.use('/api/voice',
 app.use('/api/memory', memoryRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/platform', platformRoutes);
+// Versioned alias for new institutional/platform integrations. Existing API
+// paths remain stable for current clients while new consumers can target v1.
+app.use('/api/v1/platform', platformRoutes);
 
 // Socket.IO handlers
 initSocketHandlers(io);
@@ -104,11 +115,16 @@ server.listen(PORT, () => {
 
 initDatabase()
   .then(() => initMemoryTables())
+  .then(() => ensureDecisionTables())
   .then(() => {
     startMorningBriefScheduler();
+    purgeExpiredDecisionRecords().catch((err) => logger.warn({ err }, 'Decision retention sweep failed'));
+    const retentionTimer = setInterval(() => {
+      purgeExpiredDecisionRecords().catch((err) => logger.warn({ err }, 'Decision retention sweep failed'));
+    }, 6 * 60 * 60 * 1000);
+    retentionTimer.unref();
     logger.info('Database ready');
   })
   .catch(err => {
     logger.error({ err }, 'Database initialization failed — continuing without DB');
   });
-
