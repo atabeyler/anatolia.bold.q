@@ -1,52 +1,82 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.92-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.104-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
-**Quantum-Based National Decision Support System**
+**Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
 
-ANATOLIA-Q generates structured, fixed-format decision-support reports across 10 domains (defense, energy, economy, health, financial crime, and more), optionally cross-checking the AI's scenario/risk estimates against real quantum circuits — including, when configured, real IBM Quantum hardware — instead of treating "quantum-powered" as a marketing label.
+ANATOLIA-Q generates structured decision-support reports across 10 domains, combining a multi-provider AI layer with deterministic quantum analysis and optional real IBM Quantum hardware verification. The platform is designed so users receive one clear decision-support result while provenance, auditability, verification, and institutional integration remain managed by the system.
 
 ---
 
 ## Research Context
 
-This project sits at the intersection of applied AI (LLM-based report generation with a triple-provider fallback chain) and near-term quantum computing (NISQ-era circuits run on both simulators and real superconducting hardware).
+This project sits at the intersection of applied AI and near-term quantum computing.
 
-- **Motivation:** LLM-generated risk/scenario narratives are fluent but not verifiable — there's no independent check on whether a stated "42% probability" or "flagged as anomalous" means anything beyond the model's confident phrasing. ANATOLIA-Q's quantum modules re-derive those numbers from an explicit, inspectable circuit instead of asking the LLM to also grade its own homework.
-- **Approach:** three independent quantum techniques, each matched to what it's actually verifying — amplitude-encoded interference for scenario probability distributions (`scenario_quantum.py`), a QAOA-style combinatorial solver for budget-constrained resource allocation (`portfolio_optimizer.py`), and an exact quantum-kernel fidelity measure for anomaly detection in transaction data (`fraud_detection.py`).
-- **Hardware verification, deliberately scoped:** every module's *decision* (the reported probability, the selected allocation, the fraud flag) always comes from a deterministic local simulation. Real IBM Quantum hardware, when configured, is used only as a second, separate measurement — real NISQ hardware noise is not an acceptable source of variance for a number that gets reported as fact or used to flag a financial transaction. See `server/quantum/_ibm_backend.py` and each module's docstring for the reasoning.
-- **Use cases:** the four "hard" domains (BDDK/BTK financial-crime detection, defense/energy scenario planning, resource-allocation optimization) are where the quantum layer adds falsifiable structure on top of the LLM narrative. The remaining categories (social, health, multi-domain synthesis, consultation) are LLM-only by design — there's no quantum formulation that adds value there yet.
-- **Institutional integration:** the current deployment is not connected to any live bank, telecom, or government system. However, the data-source layer is intentionally pluggable and prepared for authorized institutional integration: institutional APIs, core-banking feeds, BDDK/BTK exports, or other structured data sources can be mapped into the existing normalized input models and passed through the same downstream AI and quantum-analysis pipeline without redesigning the core system. See `server/src/services/transactionSource.js` and `server/src/services/scenarioDataSource.js`.
-- **Limitations:** the quantum circuits currently operate on data the LLM extracts from its generated report or on real data supplied through the implemented upload sources. A "verified on real IBM hardware" badge means the *circuit* ran on real hardware; it does not by itself establish that the underlying financial/scenario data came from an authoritative institutional source. NISQ hardware queue times (up to `IBM_QUANTUM_WAIT_SECONDS`, default 60s) make the hardware-verification lane unsuitable for latency-sensitive use.
-
-If you're referencing the quantum methodology specifically in academic or technical writing, see [Citation](#citation) below.
+- **AI layer:** Claude (Anthropic) → Gemini → GPT-4o automatic fallback for report generation and consultation workflows.
+- **Quantum layer:** scenario probability analysis, QAOA-style resource allocation, and quantum-kernel fraud/AML anomaly detection.
+- **Deterministic decision path:** reported decisions come from the deterministic local computation path. Real IBM Quantum hardware, when configured, is used as an independent verification lane so NISQ hardware noise cannot alter the authoritative result.
+- **Live IBM Quantum validation:** authentication, Qiskit Runtime service connection, real-backend selection, transpilation, hardware job submission, and result retrieval have been exercised against a real IBM Quantum Platform account through the production integration path.
+- **Institutional integration:** the current deployment is not connected to any live bank, telecom, or government system. The data-source layer is intentionally pluggable: authorized institutional APIs, core-banking feeds, BDDK/BTK exports, or other structured sources can be normalized into the existing analysis pipeline without redesigning the core system.
+- **Limitations:** successful IBM hardware verification proves that the circuit ran on real hardware; it does not by itself establish that the underlying input data came from an authoritative institutional source.
 
 ---
 
 ## Features
 
-**AI & Reporting**
+### AI & Reporting
+
 - **10 Analysis Categories** — Defense, Energy, Offensive, Economy, Social, Consultation, Health, Multi-Domain Synthesis, BDDK, BTK
-- **Triple AI Assurance** — Claude (Anthropic) → Gemini → GPT-4o automatic fallback, for both the one-shot report generator and the streaming consultation chat
-- **Fixed-Format Report** — auto-generated document number, Times New Roman 11pt, cover page + header/footer, produced as both DOCX and PDF, saved to history, and automatically emailed to the central mailbox as .docx
-- **Voice Assistant** — Whisper transcription, TTS playback, and a natural-language voice command intent parser (OpenAI-backed)
-- **Conversation Memory** — Consultation chats can be saved, AI-summarized, archived, and revisited later per user
-- **Morning Brief** — a daily auto-generated intelligence digest aggregated from Turkish government/news RSS and HTML sources
+- **Triple AI Assurance** — Claude → Gemini → GPT-4o fallback
+- **Fixed-Format Reports** — DOCX/PDF generation, report history, and central-mail delivery
+- **Voice Assistant** — transcription, TTS, and natural-language command handling
+- **Conversation Memory** — per-user consultation memory and archive
+- **Morning Brief** — automated intelligence digest from configured public sources
 
-**Quantum Computing** (Qiskit, `server/quantum/`)
-- Scenario probability engine, QAOA portfolio optimization, and a quantum-kernel fraud/AML anomaly detector for BDDK/BTK
-- Every module always runs on a local, deterministic simulator first; when `IBM_QUANTUM_TOKEN`/`IBM_QUANTUM_INSTANCE` are configured, the scenario and fraud modules *additionally* verify one result on real IBM Quantum hardware (a repeat circuit run for scenarios, a swap-test fidelity check for fraud) as a separate, clearly-labeled data point — see [Research Context](#research-context)
+### Decision Intelligence & Auditability
 
-**Emergency & Situational Awareness**
-- **Emergency Center** — center notification, user notification, end-to-end encrypted chat, and video call panels
-- **3D Rotating Globe & Turkey Map** — real-texture Earth map with city pins and radar sweep, plus a dedicated Turkey-focused personnel radar view
-- **Web Push** — opt-in browser push notifications (Settings > Push) for emergency broadcasts and admin-started video meetings, so they still reach a closed/backgrounded tab — see `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` in Environment Variables
+- **Analysis Orchestrator** — central execution primitives for ingest, validation, normalization, AI/quantum stages, and future institutional connector flows
+- **Data Provenance** — records whether analysis input originated from model-generated data, user uploads, manual input, or an authorized institutional source
+- **Data Quality Assessment** — assigns an internal quality level and score from available source/record/warning evidence
+- **Evidence Chain** — preserves the principal AI, quantum, fraud, optimizer, and source metadata supporting an analysis
+- **Decision Trace** — records the analysis execution path and stage timing without requiring the end user to manage internal engines
+- **Model Registry** — records the AI provider/model and prompt version associated with analysis execution
+- **Scenario Replay & Outcome Tracking** — platform APIs support replaying a recorded decision context and recording subsequent real-world outcomes
+- **Analysis Audit View** — archived reports expose a concise audit panel showing provider/model, prompt version, source provenance, data quality, classification, duration, quantum backend metadata, and creation time when those fields are available
 
-**Administration**
-- **Admin Panel** — user management (create/update/block/delete), an audit log of admin actions, a BDDK/BTK fraud-flag trend view (`GET /api/analysis/fraud-trend`), and a public `/api/analysis/quantum-status` health check that reports whether the Qiskit worker and IBM hardware link are actually working
-- **History Archive** — all reports can be viewed, downloaded (DOCX/PDF), and appear in a live activity feed
-- **Two-Stage Login** — user code + password, followed by approval via the central mailbox (`info@boldkimya.com.tr`); admin accounts skip mail approval and get a JWT immediately (see [Security Notes](#security-notes))
+These controls are system-level traceability features. Users are not expected to compare classical and quantum engines manually; ANATOLIA-Q presents one decision-support result while retaining the technical audit trail behind it.
+
+### Quantum Computing
+
+- Scenario probability engine
+- QAOA-style portfolio/resource optimization
+- Quantum-kernel fraud/AML anomaly detector for BDDK/BTK workflows
+- Deterministic simulator-first execution
+- Optional real IBM Quantum hardware verification for supported modules
+- Hardware verification metadata retained through the decision-intelligence layer when available
+
+### Institutional Integration Foundation
+
+- **Pluggable Connector Framework** — common contract for authorized institutional data adapters
+- **REST Connector Base** — reusable authenticated REST connector with normalized output contract
+- **Connector Health/Status** — registered integrations can expose configuration and health state without changing the downstream analysis pipeline
+- No live BDDK, BTK, banking, telecom, or government endpoint is claimed until an authorized institution-specific API specification and credentials are actually configured
+
+### Emergency & Situational Awareness
+
+- Emergency center and user notifications
+- Encrypted chat and video-call workflows
+- 3D globe/Turkey personnel visualization
+- Browser Web Push for supported emergency events
+
+### Administration & Operations
+
+- User management and admin audit log
+- History archive with DOCX/PDF access and Analysis Audit metadata
+- BDDK/BTK fraud trend endpoint
+- Quantum worker/IBM status endpoint
+- Platform live/readiness health endpoints
+- Operational overview, request metrics, risk overview, connector status, and decision-intelligence endpoints under the versioned platform API
 
 ---
 
@@ -56,214 +86,132 @@ If you're referencing the quantum methodology specifically in academic or techni
 flowchart LR
     User[Client — React/Vite] -->|REST + Socket.IO| API[Express API]
     API --> Auth[Auth / JWT / Admin]
-    API --> AI[AI Service<br/>Claude → Gemini → GPT-4o]
-    API --> Quantum[Quantum Subprocess<br/>Python + Qiskit]
-    Quantum -->|always| Sim[Local Simulator<br/>deterministic]
-    Quantum -.->|if configured, verification only| IBM[Real IBM Quantum Hardware]
+    API --> Orchestrator[Analysis / Decision Intelligence]
+    Orchestrator --> AI[AI Service<br/>Claude → Gemini → GPT-4o]
+    Orchestrator --> Quantum[Quantum Subprocess<br/>Python + Qiskit]
+    Orchestrator --> Connectors[Authorized Data Connectors]
+    Quantum -->|authoritative computation| Sim[Local Simulator<br/>deterministic]
+    Quantum -.->|optional verification| IBM[Real IBM Quantum Hardware]
     API --> DB[(PostgreSQL)]
     API --> Storage[(S3 / R2 or local disk)]
-    API --> Mail[Resend — approval & report emails]
+    API --> Mail[Resend]
 ```
 
-The request path for a quantum-mode report: **User → API → AI (report text) → parse scenario/transaction/optimization tables out of that text → Quantum subprocess (simulator, +optional hardware verification) → merged result appended to the report → DOCX/PDF → DB + email.**
+The user-facing analysis path remains simple: **input → analysis → decision-support report**. Internally, ANATOLIA-Q can retain provenance, quality, model, quantum, evidence, and execution-trace metadata so a later audit can establish how the result was produced.
 
-```
-anatolia-q/
-├── server/                       # Node.js + Express backend (ESM, run via tsx)
-│   ├── src/
-│   │   ├── index.js              # Main server
-│   │   ├── routes/                # API routes — see API.md for the full endpoint list
-│   │   ├── services/              # AI (ai.ts), DB, mail, socket, DOCX/PDF, quantum (quantum.js, fraudDetection.js, portfolioOptimizer.js), morningBrief, webResearch, scenarioDataSource, transactionSource
-│   │   ├── db/                     # Drizzle schema and client
-│   │   ├── lib/                    # Redis/S3 fallbacks, JWT secret, quantum subprocess timeout budgeting, logger
-│   │   └── middleware/            # JWT authentication, rate limiting
-│   └── quantum/                   # Python/Qiskit scripts (scenario_quantum.py, portfolio_optimizer.py, fraud_detection.py, _ibm_backend.py)
-├── client/                        # React + Vite + Tailwind frontend
-│   └── src/
-│       ├── pages/                 # LoginPage, DashboardPage
-│       ├── components/            # Sidebar, 3D globe/Turkey map, analysis, history, memory panel, admin user management, emergency, voice assistant
-│       └── services/               # API and socket clients, i18n (Turkish UI strings)
-├── render.yaml                    # Render deploy configuration (web service + Postgres)
-└── package.json                   # Root scripts
-```
+---
 
-This tree covers the directories that matter for understanding the system, not every file — see `API.md` for the exhaustive endpoint list and the source itself for full detail.
+## Platform API
+
+The existing application APIs remain available under `/api/*`. Platform-level decision-intelligence and operational capabilities are also exposed through the versioned `/api/v1/platform/*` surface.
+
+These include platform live/readiness checks, connector status, operational/risk overview, request metrics, decision trace lookup, model registry, scenario replay, outcome recording, and retention/classification information.
+
+See **[API.md](./API.md)** for the endpoint inventory and **[openapi.yaml](./openapi.yaml)** for the machine-readable platform API specification.
 
 ---
 
 ## Local Development
 
 ```bash
-# Install dependencies
 npm install --prefix server
 npm install --prefix client
 
-# Create and fill in server/.env (see Environment Variables)
-
-# Two separate terminals:
-npm run dev:server   # backend — http://localhost:10000
-npm run dev:client   # frontend — http://localhost:5173
+# Configure server/.env, then run in separate terminals:
+npm run dev:server
+npm run dev:client
 ```
 
-Tests: `npm test --prefix server` and `npm test --prefix client`
+Tests: `npm test --prefix server` and `npm test --prefix client`.
 
 ---
 
 ## Environment Variables
 
-**Critical** — the app will not start or will be non-functional without these:
+### Critical
 
 | Variable | Description |
 |---|---|
-| `JWT_SECRET` | JWT signing secret. Server refuses to start without it (`server/src/lib/jwtSecret.js`) |
-| `DATABASE_URL` | PostgreSQL connection string — without it, most features degrade to `isDbConfigured() === false` fallbacks (empty lists, no persistence) |
-| At least one of `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` | Without any AI provider key, `/generate` and `/chat` fail outright |
+| `JWT_SECRET` | JWT signing secret; production startup requires a valid configured secret |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` | At least one AI provider must be configured for AI analysis; multiple keys enable fallback |
 
-**Configured, but fails silently if wrong or missing** — the app keeps running and looks like it succeeded, so these deserve extra care:
-
-| Variable | What actually happens if it's missing |
-|---|---|
-| `RESEND_API_KEY` | Approval and report emails are **silently skipped** (`sendApprovalEmail`/`sendAnalysisReport` return `{ skipped: true }`) — the login-request API call still reports `success: true` as if the email went out (the client UI itself doesn't surface this raw message; it shows its own translated "awaiting approval" text regardless). If mail approval isn't working in production, check this first |
-| `CENTER_EMAIL` | Falls back to a hardcoded `info@boldkimya.com.tr` if unset — not a hard failure, but silent if you meant to redirect notifications elsewhere |
-
-**Everything else required for normal operation:**
+### Application / Infrastructure
 
 | Variable | Description |
 |---|---|
-| `APP_URL` | The app's live URL (for CORS and approval links) |
-| `LOG_LEVEL` | pino log level (`debug`/`info`/`warn`/`error`) |
-| `SHARED_PASSWORD` | One-time seed password for the original hardcoded user list, used only to populate `auth_users` on first boot if the table is empty — not read again afterward |
+| `APP_URL` | Live application URL used by CORS/approval flows |
+| `LOG_LEVEL` | pino log level |
+| `RESEND_API_KEY` | Enables approval/report email delivery |
+| `CENTER_EMAIL` | Central notification/report mailbox |
+| `SHARED_PASSWORD` | One-time seed password for initial legacy user seeding when applicable |
+| `REDIS_URL` | Optional Redis-backed active-user/location state |
+| `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION` | Optional persistent object storage |
+| `SENTRY_DSN` | Optional server error reporting |
+| `VITE_ICE_SERVERS` | Optional TURN/ICE configuration for emergency video |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional Web Push configuration |
+| `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |
+| `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
 
-**Platform-provided** (set by Render itself, or safe to leave at their defaults locally):
+### Quantum
 
 | Variable | Description |
 |---|---|
-| `NODE_ENV` | `production` on Render (`render.yaml`); affects logging and error verbosity |
-| `PORT` | The port the server listens on; Render injects this automatically |
-| `RENDER_EXTERNAL_URL` | Render's own externally-reachable URL for this service, used by `selfPing.js`'s keep-alive ping |
-| `PYTHON_VERSION` | Pinned to `3.11.9` in `render.yaml` — Render's newer default Python has no prebuilt wheel for Qiskit's `symengine` dependency, so pip falls back to compiling it from source, which then fails because the SymEngine C++ library itself isn't installed. Don't bump this without confirming symengine wheels exist for the target version |
+| `IBM_QUANTUM_TOKEN` | IBM Cloud API key used by Qiskit Runtime |
+| `IBM_QUANTUM_INSTANCE` | IBM Quantum Platform/Qiskit Runtime service-instance CRN |
+| `IBM_QUANTUM_WAIT_SECONDS` | Maximum wait for the optional hardware-verification lane; defaults to 60 seconds |
+| `PYTHON_BIN` | Optional Python executable override for Qiskit subprocesses |
+| `PYTHON_VERSION` | Deployment Python version; `render.yaml` pins the supported release |
 
-**Optional** (if unset, the app keeps working on memory/local-disk fallbacks):
-
-| Variable | What it does |
-|---|---|
-| `REDIS_URL` | Active user/location state is kept in Redis |
-| `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION` | File uploads are stored persistently in S3/Cloudflare R2 |
-| `SENTRY_DSN` | Server errors are reported to Sentry |
-| `VITE_ICE_SERVERS` | TURN server for the emergency video call feature |
-| `IBM_QUANTUM_TOKEN`, `IBM_QUANTUM_INSTANCE`, `IBM_QUANTUM_WAIT_SECONDS` | Run the scenario and fraud-detection quantum modules' verification lane on real IBM Quantum hardware (falls back to simulator-only otherwise); wait defaults to 60s. `/generate` never blocks on this wait — it responds on the local simulator result immediately, then runs the hardware lane in the background and appends it to the saved report + pushes an `analysis:hardwareVerified` socket event when it resolves |
-| `NEWS_RSS_SOURCES` | Overrides the default RSS/HTML source list the morning brief aggregates from |
-| `PYTHON_BIN` | Overrides the `python3` binary used to spawn the Qiskit subprocesses (for local dev setups with a non-default interpreter) |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Enables Web Push for emergency broadcasts (`server/src/lib/webPush.js`) — without them, push is silently disabled and only the in-app socket toast/email notify. Generate a keypair with `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` defaults to `mailto:info@boldkimya.com.tr` |
-| `CONVERSATION_MEMORY_TTL_DAYS` | Retention window for saved consultation conversations (`conversation_memory` table), swept every 6 hours (`server/src/routes/memory.js`); defaults to 180 days |
+Platform-provided variables such as `NODE_ENV`, `PORT`, and `RENDER_EXTERNAL_URL` are supplied by the deployment environment where applicable.
 
 ---
 
 ## How It Works
 
-**Login flow:** user code + password are validated against `auth_users` (bcrypt-hashed) → **admin accounts** get a JWT immediately, no approval step. **Non-admin accounts** go through mail approval: a 10-minute approval token is generated → an approve/reject email goes to the central mailbox → the client polls status every 2.5 seconds → once approved, a JWT is issued and login completes.
+**Login:** credentials are checked against `auth_users`. Admin accounts receive a JWT after successful credential validation. Non-admin accounts use the central-mail approval flow before the JWT is issued.
 
-**Analysis generation:** the user picks a category and writes a brief → system/user prompts are prepared → sent to Claude (falls back to Gemini, then GPT-4o, on quota/error — the same fallback chain also covers the streaming consultation chat) → a markdown report comes back → if quantum mode is on, the report's scenario/transaction/optimization tables are parsed out and recomputed on a real Qiskit circuit (see [Research Context](#research-context)) → converted into the fixed DOCX/PDF templates → saved to the database → automatically emailed to the central mailbox as a .docx attachment.
+**Analysis:** the user selects a category and supplies the brief/data → the AI provider chain generates the structured report → supported quantum modules independently recompute relevant scenario, optimization, or anomaly structures → the authoritative local result is merged into the report → optional IBM hardware verification can run as a separate verification lane → the report is persisted and exported.
 
-See **[API.md](./API.md)** for the full list of endpoints and what each one does.
+**Audit:** analysis execution metadata can be recorded by the decision-intelligence layer. When an archived analysis has a matching trace, the History view displays an Analysis Audit panel containing the relevant model, prompt, provenance, quality, classification, duration, and quantum metadata without exposing unnecessary engine-selection controls to the user.
 
 ---
 
 ## Deployment
 
-The app is deployed on Render via the `render.yaml` blueprint in this repo.
+The application is deployed through the repository workflows and `render.yaml` configuration.
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `.github/workflows/ci.yml` | Every push, every PR | Typecheck, lint, test (server + client), plus a Python syntax check on all four quantum scripts |
-| `.github/workflows/deploy.yml` | `workflow_run`, only after `CI` completes successfully on `main` | Deploys to Render — **not** a direct push trigger, so a push that fails lint/tests never reaches Render |
-| `.github/workflows/keep-alive.yml` | Cron, every 10 minutes | Pings `/api/health` so the free-tier instance doesn't spin down from inactivity |
+| `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
+| `.github/workflows/deploy.yml` | Successful CI on `main` | Deploy to Render |
+| `.github/workflows/keep-alive.yml` | Scheduled | Keeps the configured deployment warm where applicable |
 
-Deploy typically lands a few minutes after the push; check both `CI` and `Deploy to Render` workflow runs on GitHub Actions before assuming a push is live — a low `/api/health` uptime alone isn't proof (a free-tier restart can happen for unrelated reasons). `server/src/services/selfPing.js` runs the same keep-alive idea from inside the app itself, as a second line of defense alongside the GitHub Actions cron.
-
----
-
-## Performance
-
-Single live samples against the production deployment (Render free tier, Frankfurt region), taken 2026-08-06 — not averages, and free-tier cold-start/neighbor-noise variance is real. Treat as a rough order of magnitude, not an SLA.
-
-| Endpoint | Observed | Notes |
-|---|---|---|
-| `GET /api/health` | ~0.4s | No DB/auth involved |
-| `GET /api/history/list` (auth) | ~0.9–1.5s | DB query, up to 100 rows |
-| `GET /api/weather/current` | ~1.1–1.6s | Proxies an external API (Open-Meteo) |
-| `GET /api/history/morning-brief/today` | ~0.5s | Pre-generated, served from DB |
-| `GET /api/analysis/quantum-status` | ~50s | Spawns a real Qiskit subprocess and attempts a real IBM hardware round-trip; dominated by the hardware queue wait, not local computation |
-| `POST /api/analysis/generate` (quantum mode) | a few seconds to tens of seconds | Depends on which AI provider succeeds; no longer waits on IBM's hardware queue — that verification runs in the background after the response (see the FAQ entry below) |
+A deployment should be treated as live only after the corresponding CI and deploy workflows complete successfully.
 
 ---
 
 ## Security Notes
 
-- Passwords are bcrypt-hashed in the `auth_users` table, not stored in plain text. `SHARED_PASSWORD` is only used once, to seed the original hardcoded user list into the database on first boot (if `auth_users` is empty) — it is never read again afterward
-- JWTs are short-lived: 4 hours for admin logins, 2 hours for mail-approved user logins
-- **Admin logins bypass mail approval entirely** — a correct user code + password for an admin account returns a JWT directly, with no human-in-the-loop step. Treat admin credentials accordingly
-- The approval token (non-admin login) is valid for 10 minutes and becomes invalid once used
-- Blocking a user (`/api/auth/admin/users/:userCode` with `blocked: true`) force-disconnects their active socket session immediately, rather than waiting for their JWT to expire
-- All notifications go to the `CENTER_EMAIL` address — see the Environment Variables table above for what happens if `RESEND_API_KEY` isn't configured
-- Found a vulnerability? See [SECURITY.md](./SECURITY.md) — please don't open a public issue for it
+- Passwords are bcrypt-hashed in `auth_users`
+- JWTs are time-limited
+- Non-admin approval tokens are short-lived and one-time use
+- Blocking a user disconnects the active socket session
+- Sensitive credentials belong in environment configuration, never connector source code
+- Institutional connectors must not be described as live until authorized endpoint specifications and credentials are configured
+- Security issues should be reported according to **[SECURITY.md](./SECURITY.md)**
 
 ---
 
-## Roadmap
+## Current Capability Summary
 
-**Shipped:**
-- ✅ Triple-AI fallback for report generation and consultation chat
-- ✅ Quantum scenario probability, QAOA portfolio optimization, and fraud/AML kernel detection
-- ✅ Real IBM Quantum hardware verification (scenario + fraud modules), run as a background job off the request/response cycle — `/generate` responds on the local simulator result immediately and appends the hardware verification (plus a socket push) once it resolves, instead of blocking on `IBM_QUANTUM_WAIT_SECONDS`
-- ✅ Voice assistant (transcription, TTS, intent parsing)
-- ✅ Conversation memory (with a 180-day TTL retention sweep, `CONVERSATION_MEMORY_TTL_DAYS`), morning brief, admin panel with audit log
-- ✅ A trend view over historical BDDK/BTK fraud flags (`GET /api/analysis/fraud-trend`, admin-only), instead of each report standing alone
-- ✅ Web Push for emergency broadcasts and admin-started video meetings, so a closed/backgrounded browser tab doesn't mean a missed alert (opt-in, Settings > Push)
+ANATOLIA-Q currently combines multi-provider AI decision-support reporting, deterministic quantum analysis with optional real IBM hardware verification, decision provenance/quality/evidence/trace foundations, model and prompt audit metadata, an archived-report Analysis Audit UI, scenario replay/outcome APIs, an institutional connector framework, operational/readiness/connector/risk platform APIs, a versioned `/api/v1/platform` interface with OpenAPI specification, and emergency communication/situational-awareness features.
 
----
-
-## FAQ
-
-**Why did my quantum-mode report's hardware verification section show up after the report itself?**
-Quantum mode always runs a local simulator (fast) and `/generate` responds as soon as that's done. If `IBM_QUANTUM_TOKEN`/`IBM_QUANTUM_INSTANCE` are configured, the real hardware verification run — which waits on IBM's job queue for up to `IBM_QUANTUM_WAIT_SECONDS` (default 60s) — happens afterward as a background job, not before the response. Once it resolves, the result is appended to the saved report and pushed to your session over Socket.IO (`analysis:hardwareVerified`) so a still-open report updates live instead of you having to poll. See [Performance](#performance).
-
-**The report generator returned "Tüm AI sağlayıcılar başarısız" (all AI providers failed) — is the app broken?**
-Not necessarily the app itself — this means Claude, Gemini, and GPT-4o all failed for that request (commonly: exhausted API quota/credit on all three simultaneously). Check `GET /api/analysis/status` for which providers have keys configured, and each provider's own dashboard for quota/billing status.
-
-**A user says they never got the login approval email — what do I check?**
-First: is `RESEND_API_KEY` actually set? If it's missing, the server silently reports success without sending anything (see [Environment Variables](#environment-variables)). If it is set, check `CENTER_EMAIL` and the Resend dashboard for delivery failures.
-
-**Why does `/api/analysis/quantum-status` say `ok: true` but `hardwareVerification: null`?**
-`ok: true` only means the local simulator worked — that's always attempted and is the deterministic source of truth. `hardwareVerification: null` with a populated `ibmDiagnostic` string tells you *why* the hardware attempt didn't produce a result (not configured, bad credentials, queue timeout, etc.).
-
-**Can I trust the BDDK/BTK "flagged" decision if IBM hardware verification failed?**
-Yes — the flagged/riskScore decision never depends on the hardware verification lane succeeding. It's computed from an exact, deterministic local simulation every time; hardware verification (when it runs) is an independent secondary check, not an input to the decision. See [Research Context](#research-context).
-
----
-
-## Troubleshooting
-
-| Symptom | Likely cause | Check |
-|---|---|---|
-| Deploy doesn't seem to reflect a recent push | CI hasn't finished, or failed | GitHub Actions → `CI` workflow run for that commit must be green before `Deploy to Render` even starts |
-| Quantum mode always falls back to AI-only estimates | Qiskit/Python worker broken, or the AI's report didn't include a parseable scenario/transaction table | `GET /api/analysis/quantum-status` for worker health; check `quantumWarning` in the `/generate` response for the specific reason |
-| `pip install` fails during Render build with a symengine/wheel error | `PYTHON_VERSION` env var got removed or changed | Must stay pinned to a version with prebuilt Qiskit symengine wheels (currently `3.11.9`) — see the Environment Variables table |
-| Login approval email never arrives, but the API reports success | `RESEND_API_KEY` not configured | See the FAQ entry above |
-| A file upload works locally but 404s on the deployed app | S3/R2 env vars set locally but not on Render (or vice versa) — disk-mode uploads aren't portable across restarts | Confirm `S3_BUCKET` etc. are consistently configured for the target environment |
-| IBM hardware verification always reports `configured but failed` | Bad token/CRN, or no available (non-simulator) backend | The `ibmDiagnostic` field carries the actual exception message from `qiskit-ibm-runtime` — check it directly rather than guessing |
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, testing expectations, and code style. Security issues should go to [SECURITY.md](./SECURITY.md)'s reporting process instead of a public issue.
+The next institution-specific connector should be implemented only when a real authorized API/data specification is available; the platform does not fabricate institution endpoints or claim integrations that have not been configured and tested.
 
 ---
 
 ## Citation
-
-If you use or reference ANATOLIA-Q's quantum verification methodology (the scenario-probability circuit, the QAOA portfolio optimizer, or the quantum-kernel fraud detector), please cite:
 
 ```bibtex
 @software{anatoliaq2026,
@@ -271,15 +219,9 @@ If you use or reference ANATOLIA-Q's quantum verification methodology (the scena
   author       = {{Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.}},
   year         = {2026},
   url          = {https://github.com/atabeyler/anatolia.bold.q},
-  note         = {LLM-generated scenario, resource-allocation, and financial-anomaly analysis, cross-checked against deterministic quantum-circuit simulation with optional real IBM Quantum hardware verification}
+  note         = {LLM-generated decision support cross-checked by deterministic quantum-circuit computation with optional real IBM Quantum hardware verification}
 }
 ```
-
----
-
-## Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md) for the history of notable changes.
 
 ---
 
