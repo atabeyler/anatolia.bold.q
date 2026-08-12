@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.105",
+  "version": "2.1.106",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "private": true,
@@ -11,10 +11,6 @@
     "dev:client": "npm run dev --prefix client",
     "prepare": "husky"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "devDependencies": {
-    "husky": "^9.1.7"
-  }
+  "engines": { "node": ">=18.0.0" },
+  "devDependencies": { "husky": "^9.1.7" }
 }
