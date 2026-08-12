@@ -39,12 +39,20 @@ html[data-theme='light'] .theme-overlay {
   background: rgba(31, 47, 58, 0.32) !important;
 }
 
+/* Convert legacy fixed dark surfaces to readable light surfaces. */
 html[data-theme='light'] [class*='bg-[#061326]'],
 html[data-theme='light'] [class*='bg-[#071225]'],
 html[data-theme='light'] [class*='bg-[#0b1d34]'],
 html[data-theme='light'] [class*='bg-[#08182d]'],
-html[data-theme='light'] [class*='bg-[#0a1a32]'] {
-  background-color: rgba(249, 252, 253, 0.97) !important;
+html[data-theme='light'] [class*='bg-[#0a1a32]'],
+html[data-theme='light'] [class*='bg-[#010e1e]'],
+html[data-theme='light'] [class*='bg-[#021728]'] {
+  background: linear-gradient(150deg, rgba(255,255,255,0.97), rgba(236,246,250,0.97)) !important;
+  background-color: rgba(249, 252, 253, 0.98) !important;
+}
+
+html[data-theme='light'] [class*='bg-black/30'] {
+  background-color: rgba(25, 80, 105, 0.06) !important;
 }
 
 html[data-theme='light'] [class*='bg-navy'],
@@ -58,8 +66,33 @@ html[data-theme='light'] [class*='text-cyan-200'] { color: #15566f !important; }
 html[data-theme='light'] [class*='text-cyan-300'],
 html[data-theme='light'] [class*='text-cyan-400'] { color: #096783 !important; }
 html[data-theme='light'] [class*='text-gold'] { color: #7b5719 !important; }
-html[data-theme='light'] [class*='text-white/'] { color: rgba(25, 47, 63, 0.80) !important; }
+html[data-theme='light'] [class*='text-white/'] { color: rgba(25, 47, 63, 0.86) !important; }
 html[data-theme='light'] .text-white { color: #173044 !important; }
+
+/* Dashboard labels need stronger contrast than their dark-theme opacity values. */
+html[data-theme='light'] [class*='text-white/25'],
+html[data-theme='light'] [class*='text-white/30'],
+html[data-theme='light'] [class*='text-white/40'],
+html[data-theme='light'] [class*='text-white/50'],
+html[data-theme='light'] [class*='text-white/60'],
+html[data-theme='light'] [class*='text-white/70'],
+html[data-theme='light'] [class*='text-white/75'],
+html[data-theme='light'] [class*='text-white/80'],
+html[data-theme='light'] [class*='text-white/90'] {
+  color: #29485b !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='light'] [class*='text-cyan-300/'],
+html[data-theme='light'] [class*='text-cyan-400/'] {
+  color: #0c6480 !important;
+  opacity: 1 !important;
+}
+
+html[data-theme='light'] [class*='text-gold/'] {
+  color: #765116 !important;
+  opacity: 1 !important;
+}
 
 /* Dark-theme semantic colors need stronger equivalents on white surfaces. */
 html[data-theme='light'] [class*='text-blue-200'],
@@ -105,6 +138,18 @@ html[data-theme='light'] [class*='border-white/'] { border-color: rgba(32, 67, 8
 html[data-theme='light'] [class*='bg-white/5'],
 html[data-theme='light'] [class*='bg-white/10'] { background-color: rgba(30, 104, 135, 0.07) !important; }
 
+/* Category/activity chips should stay tinted but no longer use very dark fills. */
+html[data-theme='light'] [class*='bg-cyan-900/'],
+html[data-theme='light'] [class*='bg-yellow-900/'],
+html[data-theme='light'] [class*='bg-red-900/'],
+html[data-theme='light'] [class*='bg-green-900/'],
+html[data-theme='light'] [class*='bg-violet-900/'],
+html[data-theme='light'] [class*='bg-blue-900/'],
+html[data-theme='light'] [class*='bg-emerald-900/'],
+html[data-theme='light'] [class*='bg-orange-900/'] {
+  background-color: rgba(43, 126, 156, 0.08) !important;
+}
+
 html[data-theme='light'] input,
 html[data-theme='light'] textarea,
 html[data-theme='light'] select {
@@ -114,7 +159,7 @@ html[data-theme='light'] select {
 }
 html[data-theme='light'] input::placeholder,
 html[data-theme='light'] textarea::placeholder {
-  color: rgba(39, 73, 94, 0.62) !important;
+  color: rgba(39, 73, 94, 0.68) !important;
   opacity: 1 !important;
 }
 html[data-theme='light'] option { background: #ffffff; color: #17364b; }
