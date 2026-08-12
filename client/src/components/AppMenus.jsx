@@ -1,8 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Check } from 'lucide-react';
+import { X, Check, Moon, Sun, Monitor } from 'lucide-react';
 import QuantumLogo from './QuantumLogo.jsx';
 import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../services/push.js';
+import '../theme.css';
+
+const THEME_KEY = 'anatolia-q-theme';
+const VALID_THEMES = new Set(['dark', 'light', 'system']);
+
+function resolveTheme(mode) {
+  if (mode === 'system') {
+    return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return mode === 'light' ? 'light' : 'dark';
+}
+
+function applyTheme(mode) {
+  if (typeof document === 'undefined') return;
+  const safeMode = VALID_THEMES.has(mode) ? mode : 'dark';
+  document.documentElement.dataset.themeMode = safeMode;
+  document.documentElement.dataset.theme = resolveTheme(safeMode);
+  document.documentElement.style.colorScheme = resolveTheme(safeMode);
+}
+
+function getStoredTheme() {
+  if (typeof window === 'undefined') return 'dark';
+  const saved = window.localStorage.getItem(THEME_KEY);
+  return VALID_THEMES.has(saved) ? saved : 'dark';
+}
+
+if (typeof window !== 'undefined') {
+  applyTheme(getStoredTheme());
+  const media = window.matchMedia?.('(prefers-color-scheme: light)');
+  media?.addEventListener?.('change', () => {
+    if (getStoredTheme() === 'system') applyTheme('system');
+  });
+}
 
 function DropdownOverlay({ onClose, closeLabel }) {
   return <motion.button type="button" aria-label={closeLabel} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 z-[69] bg-transparent cursor-default" />;
@@ -15,7 +48,7 @@ function MenuPanel({ t, onClose, onOpenGuide, onOpenInfo }) {
     { key: 'menuMissionVision', onClick: () => onOpenInfo('mission') },
     { key: 'menuContact', onClick: () => onOpenInfo('contact') },
   ];
-  return <><DropdownOverlay onClose={onClose} closeLabel={t('menuTooltip')} /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="fixed top-16 right-3 sm:right-6 z-[70] w-[92vw] sm:w-[340px] border border-cyan-300/30 rounded-lg bg-[#061326]/95 backdrop-blur p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+  return <><DropdownOverlay onClose={onClose} closeLabel={t('menuTooltip')} /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="fixed top-16 right-3 sm:right-6 z-[70] w-[92vw] sm:w-[340px] border border-cyan-300/30 rounded-lg bg-[#061326]/95 backdrop-blur p-3 shadow-xl theme-surface" onClick={(e) => e.stopPropagation()}>
     <div className="flex items-center justify-between mb-3 pb-3 border-b border-gold/20"><div className="flex items-center gap-2"><QuantumLogo size="sm" /><div><div className="font-display text-gold text-sm tracking-[0.2em]">{t('appName')}</div><div className="text-[9px] text-gold/50 tracking-widest uppercase">{t('appSubtitle')}</div></div></div><button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" title={t('menuTooltip')} aria-label="Close"><X className="w-4 h-4" /></button></div>
     <div className="space-y-1">{items.map((item) => <button key={item.key} onClick={item.onClick} className="w-full text-left rounded px-2.5 py-2 text-sm text-cyan-100 hover:bg-white/5 hover:text-cyan-50 transition">{t(item.key)}</button>)}</div>
     <div className="mt-3 pt-3 border-t border-gold/20"><p className="text-[9px] text-gold/40 tracking-widest">{t('projectCode')}: QTR-200120401018</p><p className="text-[9px] text-gold/40 mt-1 leading-relaxed"><span className="text-gold/60">{t('company')}</span>{' · '}{t('rights')}{' · '}{t('classified')}</p></div>
@@ -26,24 +59,74 @@ const SETTINGS_LANGUAGES = [
   { code: 'en', label: 'English' }, { code: 'tr', label: 'Türkçe' }, { code: 'de', label: 'Deutsch' }, { code: 'fr', label: 'Français' }, { code: 'ar', label: 'العربية' },
 ];
 
+const THEME_COPY = {
+  tr: { title: 'Tema', dark: 'Koyu', light: 'Açık', system: 'Sistem', hint: 'Sistem seçeneği cihazınızın görünüm ayarını otomatik takip eder.' },
+  en: { title: 'Theme', dark: 'Dark', light: 'Light', system: 'System', hint: 'System follows your device appearance automatically.' },
+  de: { title: 'Design', dark: 'Dunkel', light: 'Hell', system: 'System', hint: 'System folgt automatisch der Darstellung Ihres Geräts.' },
+  fr: { title: 'Thème', dark: 'Sombre', light: 'Clair', system: 'Système', hint: 'Système suit automatiquement le mode de votre appareil.' },
+  ar: { title: 'السمة', dark: 'داكن', light: 'فاتح', system: 'النظام', hint: 'يتبع خيار النظام إعداد مظهر جهازك تلقائياً.' },
+};
+
 function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, sidebarCollapsed, setSidebarCollapsed, onOpenGuide, showAppearance = true }) {
   const [tab, setTab] = useState('language');
   const [pushState, setPushState] = useState('checking');
   const [pushError, setPushError] = useState('');
-  useEffect(() => { if (!isPushSupported()) { setPushState('unsupported'); return; } getPushSubscriptionState().then(setPushState).catch(() => setPushState('unsupported')); }, []);
-  const togglePush = async () => { setPushError(''); try { if (pushState === 'subscribed') { await unsubscribeToPushSafe(); } else { setPushState('checking'); await subscribeToPush(); setPushState('subscribed'); } } catch (e) { setPushError(e.message); setPushState(await getPushSubscriptionState().catch(() => 'unsubscribed')); } };
-  const unsubscribeToPushSafe = async () => { await unsubscribeFromPush(); setPushState('unsubscribed'); };
+  const [themeMode, setThemeMode] = useState(getStoredTheme);
+  const themeCopy = THEME_COPY[lang] || THEME_COPY.en;
+
+  useEffect(() => {
+    if (!isPushSupported()) { setPushState('unsupported'); return; }
+    getPushSubscriptionState().then(setPushState).catch(() => setPushState('unsupported'));
+  }, []);
+
+  const setTheme = (mode) => {
+    setThemeMode(mode);
+    try { window.localStorage.setItem(THEME_KEY, mode); } catch {}
+    applyTheme(mode);
+  };
+
+  const togglePush = async () => {
+    setPushError('');
+    try {
+      if (pushState === 'subscribed') {
+        await unsubscribeFromPush();
+        setPushState('unsubscribed');
+      } else {
+        setPushState('checking');
+        await subscribeToPush();
+        setPushState('subscribed');
+      }
+    } catch (e) {
+      setPushError(e.message);
+      setPushState(await getPushSubscriptionState().catch(() => 'unsubscribed'));
+    }
+  };
+
   const tabs = [
     { key: 'language', label: t('settingsLanguage') }, { key: 'sound', label: t('settingsSound') }, { key: 'push', label: t('settingsPush') }, ...(showAppearance ? [{ key: 'appearance', label: t('settingsAppearance') }] : []), { key: 'about', label: t('settingsAbout') },
   ];
-  return <><DropdownOverlay onClose={onClose} closeLabel={t('settingsTooltip')} /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="fixed top-16 right-3 sm:right-6 z-[70] w-[92vw] sm:w-[380px] max-h-[75vh] overflow-hidden flex flex-col border border-cyan-300/30 rounded-lg bg-[#061326]/95 backdrop-blur shadow-xl" onClick={(e) => e.stopPropagation()}>
+
+  const themeOptions = [
+    { key: 'dark', label: themeCopy.dark, Icon: Moon },
+    { key: 'light', label: themeCopy.light, Icon: Sun },
+    { key: 'system', label: themeCopy.system, Icon: Monitor },
+  ];
+
+  return <><DropdownOverlay onClose={onClose} closeLabel={t('settingsTooltip')} /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="fixed top-16 right-3 sm:right-6 z-[70] w-[92vw] sm:w-[380px] max-h-[75vh] overflow-hidden flex flex-col border border-cyan-300/30 rounded-lg bg-[#061326]/95 backdrop-blur shadow-xl theme-surface" onClick={(e) => e.stopPropagation()}>
     <div className="flex items-center justify-between px-3 py-2.5 border-b border-gold/20 shrink-0"><div className="flex items-center gap-2"><span className="w-1 h-4 bg-cyan-400 rounded-full" /><div className="text-[11px] tracking-widest uppercase text-cyan-200">{t('settingsTitle')}</div></div><button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" aria-label="Close"><X className="w-4 h-4" /></button></div>
-    <div className="flex border-b border-gold/10 px-1 shrink-0">{tabs.map((tb) => <button key={tb.key} onClick={() => setTab(tb.key)} className={`relative px-3 py-2 text-[11px] tracking-wide uppercase transition ${tab === tb.key ? 'text-cyan-200' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>{tb.label}{tab === tb.key && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-cyan-400 rounded-full" />}</button>)}</div>
+    <div className="flex border-b border-gold/10 px-1 shrink-0 overflow-x-auto">{tabs.map((tb) => <button key={tb.key} onClick={() => setTab(tb.key)} className={`relative px-3 py-2 text-[11px] tracking-wide uppercase transition whitespace-nowrap ${tab === tb.key ? 'text-cyan-200' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>{tb.label}{tab === tb.key && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-cyan-400 rounded-full" />}</button>)}</div>
     <div className="p-3 overflow-auto flex-1">
       {tab === 'language' && <div className="space-y-0.5">{SETTINGS_LANGUAGES.map((l) => <button key={l.code} onClick={() => setLang(l.code)} dir={l.code === 'ar' ? 'rtl' : 'ltr'} className={`w-full flex items-center justify-between px-2.5 py-2.5 rounded text-sm transition ${lang === l.code ? 'bg-cyan-500/10 text-cyan-100' : 'text-cyan-100/70 hover:bg-white/5'}`}><span>{l.label}</span>{lang === l.code && <Check className="w-4 h-4 text-cyan-300 shrink-0" />}</button>)}</div>}
       {tab === 'sound' && <div><button onClick={() => setSoundEnabled((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-3"><span>{t('settingsSoundEnable')}</span>{soundEnabled ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button><div className="flex items-center gap-2"><span className="text-[10px] text-gold/50 shrink-0">{t('settingsSoundVolume')}</span><input type="range" min="0.02" max="0.2" step="0.01" value={soundVolume} onChange={(e) => setSoundVolume(Number(e.target.value))} className="flex-1" /></div></div>}
       {tab === 'push' && <div><button onClick={togglePush} disabled={pushState === 'unsupported' || pushState === 'checking'} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-2 disabled:opacity-40"><span>{t('settingsPushEnable')}</span>{pushState === 'subscribed' ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>{pushState === 'unsupported' && <p className="text-[11px] text-gold/50">{t('settingsPushUnsupported')}</p>}{pushError && <p className="text-[11px] text-red-300">{pushError}</p>}</div>}
-      {tab === 'appearance' && <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>}
+      {tab === 'appearance' && <div className="space-y-4">
+        <div>
+          <div className="text-[10px] tracking-[0.18em] uppercase text-gold/60 mb-2">{themeCopy.title}</div>
+          <div className="grid grid-cols-3 gap-2">{themeOptions.map(({ key, label, Icon }) => <button type="button" key={key} onClick={() => setTheme(key)} className={`theme-option rounded-lg border px-2 py-3 flex flex-col items-center gap-1.5 transition ${themeMode === key ? 'theme-option-active border-cyan-300/70 bg-cyan-500/15 text-cyan-100' : 'border-cyan-300/25 text-cyan-100/65 hover:bg-white/5'}`}><Icon className="w-4 h-4" /><span className="text-[11px]">{label}</span>{themeMode === key && <Check className="w-3.5 h-3.5 text-cyan-300" />}</button>)}</div>
+          <p className="text-[10px] text-gold/45 mt-2 leading-relaxed">{themeCopy.hint}</p>
+        </div>
+        <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>
+      </div>}
       {tab === 'about' && <div><p className="text-[12px] text-cyan-100/80 mb-3">{t('appName')} · {t('settingsVersion')} {__APP_VERSION__}</p><button onClick={onOpenGuide} className="text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2">{t('settingsOpenGuide')}</button></div>}
     </div>
   </motion.div></>;
@@ -56,59 +139,45 @@ function InfoModal({ panel, t, onClose }) {
     contact: { title: t('contactTitle'), body: <div className="space-y-2"><p className="text-sm text-cyan-100/85 leading-relaxed">{t('contactBody')}</p><p className="text-xs text-gold/70">{t('contactEmailLabel')}: info@boldkimya.com.tr</p></div> },
   }[panel];
   if (!content) return null;
-  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[71] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}><motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }} onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-lg overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{content.title}</h3><button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Close"><X className="w-5 h-5" /></button></div>{content.body}</motion.div></motion.div>;
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[71] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 theme-overlay" onClick={onClose}><motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }} onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-lg overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{content.title}</h3><button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Close"><X className="w-5 h-5" /></button></div>{content.body}</motion.div></motion.div>;
 }
 
-const commonGuide = {
+const GUIDE_MODULES = {
   en: [
-    ['1) Top Bar', 'NEW ANALYSIS opens a fresh analysis workspace.|CHAT opens voice/text consultation.|HISTORY opens saved reports.|PERSONNEL RADAR opens live personnel locations for authorized admin users.|NOTIFICATIONS shows chat and emergency events.|MENU opens this guide and institutional information.|SETTINGS controls language, sound, push notifications and sidebar appearance.|LOGOUT securely ends the session.'],
-    ['2) Home & System Status', 'The live map, morning brief and activity feed provide the main operational overview.|SYSTEM STATUS uses live backend health data; it is not a simulated meter.|PLATFORM READY means required core services are available.|AI ONLINE means at least one configured AI provider is available.|DATABASE ONLINE confirms database connectivity.|IBM QUANTUM READY means the hardware-verification lane is available; LIMITED/OFF does not stop the main deterministic analysis path.|STORAGE LOCAL means local storage is in use; ONLINE indicates configured object storage.|REDIS MEMORY/OFF means the app can continue with local in-memory realtime state, with reduced distributed-state capability.'],
-    ['3) Analysis Categories', 'Choose the domain before starting: Defense, Energy, Offensive, Economy, Social Events, Consultation, Health or Multi-Domain.|BDDK/BTK workflows may expose specialized financial/telecom analysis functions when enabled.|A clear category improves context; the user does not need to select internal AI or quantum engines.'],
-    ['4) Create an Analysis', 'Enter a clear report title and analysis brief.|Use the microphone button for speech-to-text where available.|Attach relevant source files/data when the screen offers file input.|GENERATE DETAILED ANALYSIS REPORT runs the standard decision-support workflow.|The platform automatically manages provider fallback, provenance and internal trace metadata.'],
-    ['5) Quantum Analysis', 'QUANTUM PROBABILITY MODE is for multi-scenario probability analysis.|START QUANTUM PROBABILITY ANALYSIS launches the supported quantum workflow.|The authoritative result follows the deterministic local computation path.|When IBM Quantum is configured, real hardware can be used as an independent verification lane.|Users are not required to compare classical and quantum engines manually.'],
-    ['6) Reports & Files', 'Generated reports can be reviewed on screen and downloaded as DOCX where available.|History records may also provide PDF and sharing actions.|Use descriptive titles so archived reports remain easy to identify.|A successful hardware-verification label means a real IBM job ran; it does not prove that the input came from an official institution.'],
-    ['7) History', 'HISTORY lists saved analyses and supports search/filtering.|Open a report to review its full content and available download/share actions.|Older reports may contain less audit metadata than reports created after the audit system was introduced.'],
-    ['8) Analysis Audit', 'Analysis Audit explains how a saved analysis was produced without exposing unnecessary engine controls.|It may show AI provider/model, prompt version, data source, data-quality level/score, classification, duration, quantum backend/shots and creation time.|Missing fields mean that metadata was not recorded for that analysis; they must not be interpreted as verified values.'],
-    ['9) Consultation & Voice Assistant', 'VOICE uses microphone-driven consultation; CHAT uses text.|Auto-listen can resume listening after a response.|Archive, save and clear controls manage consultation history.|For better continuity, keep one main subject per consultation session.'],
-    ['10) Emergency Center & Personnel Radar', 'REPORT TO CENTER sends an urgent message to the center.|NOTIFY USERS broadcasts an urgent message to active users when authorized.|MESSAGING supports authenticated user-to-user communication and available file/voice inputs.|Personnel Radar is an operational location view and should only be used by authorized roles.'],
-    ['11) Status & Troubleshooting', 'READY/ONLINE: service is available.|LIMITED: the related optional capability is degraded, but the core application may continue.|LOCAL/MEMORY: the platform is using a local fallback rather than the distributed service.|OFF: the optional service is not configured or unavailable.|If generation fails, preserve the brief, check System Status, retry once, then contact the system administrator if the failure persists.'],
+    ['1) Top Bar', 'NEW ANALYSIS opens a fresh workspace.|CHAT opens voice/text consultation.|HISTORY opens saved reports.|PERSONNEL RADAR is available to authorized admin users.|NOTIFICATIONS shows chat/emergency events.|MENU opens this guide and institutional information.|SETTINGS controls language, sound, push notifications, theme and sidebar appearance.|LOGOUT securely ends the session.'],
+    ['2) Home & System Status', 'The live map, morning brief and activity feed provide the operational overview.|SYSTEM STATUS uses live backend health data.|PLATFORM READY means core services are available.|AI ONLINE means at least one AI provider is available.|DATABASE ONLINE confirms connectivity.|IBM QUANTUM READY means hardware verification is available; LIMITED/OFF does not stop the main deterministic analysis path.|STORAGE LOCAL means local storage is in use.|REDIS MEMORY/OFF means local realtime fallback is being used.'],
+    ['3) Analysis Categories', 'Choose the domain before starting: Defense, Energy, Offensive, Economy, Social Events, Consultation, Health or Multi-Domain.|BDDK/BTK workflows can expose specialized functions when enabled.|Users do not need to choose internal AI or quantum engines.'],
+    ['4) Create an Analysis', 'Enter a clear report title and analysis brief.|Use speech-to-text where available.|Attach relevant source files/data when offered.|GENERATE DETAILED ANALYSIS REPORT runs the standard workflow.|Provider fallback, provenance and trace metadata are managed automatically.'],
+    ['5) Quantum Analysis', 'QUANTUM PROBABILITY MODE supports multi-scenario analysis.|START QUANTUM PROBABILITY ANALYSIS launches the supported workflow.|The authoritative result follows the deterministic local path.|Real IBM hardware, when configured, is an independent verification lane.|Manual classical/quantum comparison is not required.'],
+    ['6) Reports & Files', 'Review reports on screen and download DOCX/PDF where available.|History may also provide sharing actions.|Use descriptive titles for archive clarity.|Hardware verification confirms that a real IBM job ran; it does not prove institutional origin of the input.'],
+    ['7) History', 'HISTORY lists saved analyses and supports search/filtering.|Open a report to review content, downloads and audit metadata.|Older reports may contain less audit metadata.'],
+    ['8) Analysis Audit', 'Analysis Audit can show AI provider/model, prompt version, data source, data quality, classification, duration, quantum backend/shots and creation time.|Missing fields mean that metadata was not recorded and must not be treated as verified.'],
+    ['9) Consultation & Voice Assistant', 'VOICE uses microphone-driven consultation; CHAT uses text.|Auto-listen can resume after a response.|Archive/save/clear controls manage conversation history.|Keep one main subject per session for better continuity.'],
+    ['10) Emergency Center & Personnel Radar', 'REPORT TO CENTER sends urgent information to the center.|NOTIFY USERS broadcasts to active users when authorized.|MESSAGING supports authenticated communication and available file/voice inputs.|Personnel Radar should only be used by authorized roles.'],
+    ['11) Appearance & Troubleshooting', 'Settings > Appearance offers DARK, LIGHT and SYSTEM themes.|SYSTEM follows the device appearance automatically and the choice is remembered.|READY/ONLINE means available; LIMITED means optional capability is degraded; LOCAL/MEMORY means a fallback is active; OFF means unavailable or not configured.|If generation fails, preserve the brief, check System Status and retry once.'],
   ],
   tr: [
-    ['1) Üst Çubuk', 'YENİ ANALİZ yeni analiz çalışma alanını açar.|SOHBET sesli/yazılı danışma modülünü açar.|GEÇMİŞ kaydedilmiş raporları açar.|PERSONEL RADARI yetkili admin kullanıcıları için canlı personel konumlarını açar.|BİLDİRİMLER mesaj ve acil olayları gösterir.|MENÜ bu kılavuzu ve kurumsal bilgileri açar.|AYARLAR dil, ses, push bildirimleri ve sol menü görünümünü yönetir.|ÇIKIŞ oturumu güvenli şekilde sonlandırır.'],
-    ['2) Ana Ekran ve Sistem Durumu', 'Canlı harita, günlük istihbarat özeti ve aktivite akışı ana operasyon görünümünü oluşturur.|SİSTEM DURUMU gerçek backend health verisini kullanır; simüle edilmiş gösterge değildir.|PLATFORM READY gerekli çekirdek servislerin erişilebilir olduğunu gösterir.|AI ONLINE en az bir yapılandırılmış AI sağlayıcısının kullanılabilir olduğunu gösterir.|DATABASE ONLINE veritabanı bağlantısının çalıştığını doğrular.|IBM QUANTUM READY donanım doğrulama hattının kullanılabilir olduğunu gösterir; LIMITED/OFF ana deterministik analiz yolunu durdurmaz.|STORAGE LOCAL yerel depolamanın kullanıldığını, ONLINE yapılandırılmış nesne depolamasını gösterir.|REDIS MEMORY/OFF uygulamanın yerel bellek ile çalışabildiğini ancak dağıtık durum kabiliyetinin sınırlı olabileceğini gösterir.'],
-    ['3) Analiz Kategorileri', 'Analizden önce alanı seçin: Savunma, Enerji, Saldırı, Ekonomi, Toplumsal Olaylar, Danışma, Sağlık veya Çok Alanlı.|BDDK/BTK akışları etkin olduğunda özel finans/telekom analiz işlevleri sunabilir.|Doğru kategori bağlamı güçlendirir; kullanıcı AI veya quantum motoru seçmek zorunda değildir.'],
-    ['4) Analiz Oluşturma', 'Net bir rapor başlığı ve analiz briefi girin.|Uygun alanlarda mikrofon ile konuşmayı metne çevirebilirsiniz.|Ekran dosya girişine izin veriyorsa ilgili kaynak dosya/verileri ekleyin.|DETAYLI ANALİZ RAPORU ÜRET standart karar destek akışını çalıştırır.|Sistem provider fallback, veri kaynağı ve karar izi kayıtlarını arka planda otomatik yönetir.'],
-    ['5) Quantum Analiz', 'KUANTUM OLASILIK MODU çoklu senaryo olasılık analizi içindir.|KUANTUM OLASILIK ANALİZİ BAŞLAT desteklenen quantum akışını çalıştırır.|Yetkili sonuç deterministik yerel hesaplama yolundan gelir.|IBM Quantum yapılandırılmışsa gerçek donanım bağımsız doğrulama hattı olarak kullanılabilir.|Kullanıcının classical ve quantum motorlarını elle karşılaştırması gerekmez.'],
-    ['6) Rapor ve Dosya İşlemleri', 'Üretilen rapor ekranda incelenebilir ve uygun olduğunda DOCX olarak indirilebilir.|Geçmiş kayıtlarında PDF ve paylaşım işlemleri de bulunabilir.|Arşivde kolay bulmak için açıklayıcı başlık kullanın.|Gerçek donanım doğrulaması etiketi IBM üzerinde gerçek job çalıştığını gösterir; girdinin resmi kurum kaynağından geldiğini tek başına kanıtlamaz.'],
-    ['7) Geçmiş Analizler', 'GEÇMİŞ kaydedilmiş analizleri listeler ve arama/filtreleme sağlar.|Raporu açarak tam içeriği ve mevcut indirme/paylaşma işlemlerini görüntüleyebilirsiniz.|Audit sistemi eklenmeden önce oluşturulan eski raporlarda daha az audit bilgisi bulunabilir.'],
-    ['8) Analysis Audit', 'Analysis Audit, gereksiz teknik kontrol sunmadan raporun nasıl üretildiğini açıklar.|AI provider/model, prompt sürümü, veri kaynağı, veri kalite seviyesi/puanı, sınıflandırma, süre, quantum backend/shots ve oluşturulma zamanı gibi bilgiler bulunabilir.|Boş alanlar o analizde metadata kaydedilmediği anlamına gelir; doğrulanmış değer olarak yorumlanmamalıdır.'],
-    ['9) Danışma ve Sesli Asistan', 'SESLİ sekme mikrofonla, SOHBET sekmesi yazıyla danışma sağlar.|OTO-DİNLE yanıt sonrasında yeniden dinlemeyi başlatabilir.|Arşiv, kaydet ve temizle kontrolleri konuşma geçmişini yönetir.|Daha iyi süreklilik için her danışma oturumunda tek ana konu üzerinde ilerleyin.'],
-    ['10) Acil Durum ve Personel Radarı', 'MERKEZE BİLDİR acil mesajı merkeze gönderir.|KULLANICILARA BİLDİR yetki varsa aktif kullanıcılara toplu acil mesaj iletir.|MESAJLAŞMA onaylı kullanıcılar arasında iletişim ve mevcut dosya/ses girişlerini destekler.|Personel Radarı operasyonel konum görünümüdür ve yalnız yetkili roller tarafından kullanılmalıdır.'],
-    ['11) Durum Göstergeleri ve Sorun Giderme', 'READY/ONLINE: servis kullanılabilir.|LIMITED: ilgili opsiyonel yetenek kısıtlıdır; çekirdek uygulama çalışmaya devam edebilir.|LOCAL/MEMORY: dağıtık servis yerine yerel fallback kullanılmaktadır.|OFF: opsiyonel servis yapılandırılmamış veya erişilemiyor.|Analiz üretimi başarısız olursa briefi koruyun, Sistem Durumunu kontrol edin, bir kez yeniden deneyin; sorun sürerse sistem yöneticisine bildirin.'],
+    ['1) Üst Çubuk', 'YENİ ANALİZ yeni çalışma alanını açar.|SOHBET sesli/yazılı danışmayı açar.|GEÇMİŞ kayıtlı raporları açar.|PERSONEL RADARI yetkili admin kullanıcıları içindir.|BİLDİRİMLER mesaj ve acil olayları gösterir.|MENÜ bu kılavuzu ve kurumsal bilgileri açar.|AYARLAR dil, ses, push bildirimleri, tema ve sol menü görünümünü yönetir.|ÇIKIŞ oturumu güvenli şekilde kapatır.'],
+    ['2) Ana Ekran ve Sistem Durumu', 'Canlı harita, günlük istihbarat özeti ve aktivite akışı operasyon görünümünü oluşturur.|SİSTEM DURUMU gerçek backend health verisini kullanır.|PLATFORM READY temel servislerin hazır olduğunu gösterir.|AI ONLINE en az bir AI sağlayıcısının kullanılabilir olduğunu gösterir.|DATABASE ONLINE veritabanı bağlantısını doğrular.|IBM QUANTUM READY donanım doğrulama yolunun kullanılabilir olduğunu gösterir; LIMITED/OFF ana deterministik analiz yolunu durdurmaz.|STORAGE LOCAL yerel depolama kullanıldığını gösterir.|REDIS MEMORY/OFF yerel realtime fallback kullanıldığını ifade eder.'],
+    ['3) Analiz Kategorileri', 'Başlamadan önce alanı seçin: Savunma, Enerji, Saldırı, Ekonomi, Toplumsal Olaylar, Danışma, Sağlık veya Çok Alanlı.|BDDK/BTK iş akışları etkin olduğunda uzmanlaşmış fonksiyonlar sunabilir.|Kullanıcının dahili AI veya quantum motoru seçmesi gerekmez.'],
+    ['4) Analiz Oluşturma', 'Net bir rapor başlığı ve analiz briefi girin.|Mümkün olan alanlarda sesli metin girişini kullanabilirsiniz.|İlgili dosya/veriyi ekleyin.|DETAYLI ANALİZ RAPORU ÜRET standart akışı çalıştırır.|Provider fallback, provenance ve trace bilgileri sistem tarafından otomatik yönetilir.'],
+    ['5) Quantum Analiz', 'KUANTUM OLASILIK MODU çoklu senaryo analizi içindir.|KUANTUM OLASILIK ANALİZİ BAŞLAT desteklenen akışı çalıştırır.|Yetkili sonuç deterministik yerel hesaplama yolundan gelir.|IBM Quantum yapılandırılmışsa gerçek donanım bağımsız doğrulama katmanı olarak kullanılabilir.|Kullanıcının klasik/quantum karşılaştırması yapması gerekmez.'],
+    ['6) Raporlar ve Dosyalar', 'Raporları ekranda inceleyin; uygun olduğunda DOCX/PDF indirin.|Geçmiş kayıtları paylaşım seçenekleri de sunabilir.|Arşiv için açıklayıcı başlıklar kullanın.|Donanım doğrulaması gerçek IBM job çalıştığını gösterir; giriş verisinin kurumsal kaynaktan geldiğini tek başına kanıtlamaz.'],
+    ['7) Geçmiş Analizler', 'GEÇMİŞ kayıtlı analizleri listeler ve arama/filtreleme sağlar.|Raporu açarak içerik, indirme ve audit bilgisini inceleyin.|Eski raporlarda daha az audit metadata bulunabilir.'],
+    ['8) Analysis Audit', 'Analysis Audit; AI sağlayıcısı/modeli, prompt sürümü, veri kaynağı, veri kalitesi, sınıflandırma, süre, quantum backend/shots ve oluşturulma zamanını gösterebilir.|Eksik alan, o metadata kaydedilmedi anlamına gelir; doğrulanmış değer kabul edilmemelidir.'],
+    ['9) Danışma ve Sesli Asistan', 'SESLİ sekme mikrofon tabanlı, SOHBET sekmesi yazılı danışma içindir.|Oto-dinle yanıt sonrası yeniden dinleyebilir.|Arşiv/kaydet/temizle kontrolleri konuşma geçmişini yönetir.|Daha iyi devamlılık için oturum başına tek ana konu önerilir.'],
+    ['10) Acil Durum ve Personel Radarı', 'MERKEZE BİLDİR acil bilgiyi merkeze yollar.|KULLANICILARA BİLDİR yetki varsa aktif kullanıcılara yayın yapar.|MESAJLAŞMA kimliği doğrulanmış kullanıcı iletişimini ve mevcut dosya/ses girişlerini destekler.|Personel Radarı yalnız yetkili rollerce kullanılmalıdır.'],
+    ['11) Görünüm ve Sorun Giderme', 'Ayarlar > Görünüm altında KOYU, AÇIK ve SİSTEM temaları bulunur.|SİSTEM cihazınızın açık/koyu görünümünü otomatik takip eder ve seçiminiz hatırlanır.|READY/ONLINE kullanılabilir; LIMITED ilgili opsiyonel kabiliyetin sınırlı; LOCAL/MEMORY yerel fallback; OFF ise servis kapalı veya yapılandırılmamış demektir.|Analiz üretimi başarısızsa briefi koruyun, Sistem Durumunu kontrol edin ve bir kez tekrar deneyin.'],
   ],
 };
 
-const translations = {
-  de: ['Obere Leiste','Startseite & Systemstatus','Analysekategorien','Analyse erstellen','Quantenanalyse','Berichte & Dateien','Verlauf','Analyse-Audit','Beratung & Sprachassistent','Notfallzentrum & Personalradar','Status & Fehlerbehebung'],
-  fr: ['Barre supérieure','Accueil & état du système','Catégories d’analyse','Créer une analyse','Analyse quantique','Rapports & fichiers','Historique','Audit d’analyse','Consultation & assistant vocal','Centre d’urgence & radar du personnel','État & dépannage'],
-  ar: ['الشريط العلوي','الرئيسية وحالة النظام','فئات التحليل','إنشاء تحليل','التحليل الكمي','التقارير والملفات','السجل','تدقيق التحليل','الاستشارة والمساعد الصوتي','مركز الطوارئ ورادار الأفراد','الحالة واستكشاف الأخطاء'],
-};
-
-const localizedBody = {
-  de: ['Navigation und Sitzungsaktionen entsprechen der gewählten Sprache; Analyse, Chat, Verlauf, Radar, Benachrichtigungen, Menü, Einstellungen und Abmeldung sind hier erreichbar.','Die Systemstatusanzeige verwendet echte Backend-Health-Daten. READY/ONLINE bedeutet verfügbar; LIMITED eine eingeschränkte optionale Funktion; LOCAL/MEMORY einen lokalen Fallback; OFF nicht konfiguriert oder nicht erreichbar. IBM Quantum LIMITED/OFF stoppt den deterministischen Hauptanalysepfad nicht.','Wählen Sie vor der Analyse den passenden Fachbereich. Der Benutzer muss interne KI- oder Quanten-Engines nicht auswählen.','Geben Sie einen klaren Berichtstitel und eine präzise Kurzbeschreibung ein. Datei- und Spracheingaben können genutzt werden, wenn sie auf dem Bildschirm angeboten werden. Provider-Fallback, Provenienz und Trace-Metadaten verwaltet das System automatisch.','Der Quantenmodus unterstützt Mehrszenario-Analysen. Das maßgebliche Ergebnis folgt dem deterministischen lokalen Pfad; konfigurierte IBM-Hardware dient als unabhängige Verifikation.','Berichte können angezeigt und je nach Ansicht als DOCX/PDF heruntergeladen oder geteilt werden. Eine IBM-Hardware-Verifikation bestätigt einen realen Job, nicht die institutionelle Herkunft der Eingabedaten.','Im Verlauf können gespeicherte Analysen gesucht, gefiltert und geöffnet werden. Ältere Berichte können weniger Audit-Metadaten enthalten.','Das Analyse-Audit kann KI-Anbieter/Modell, Prompt-Version, Datenquelle, Datenqualität, Klassifizierung, Dauer und Quanten-Metadaten zeigen. Fehlende Felder bedeuten, dass die Metadaten nicht aufgezeichnet wurden.','Sprach- und Textberatung unterstützen fortlaufende Sitzungen; Archivieren, Speichern und Löschen verwalten den Verlauf. Ein Hauptthema pro Sitzung verbessert die Kontinuität.','Notfallmeldungen, Benutzerbenachrichtigungen, Messaging und Personalradar sind rollenabhängige operative Funktionen. Standortdaten dürfen nur von autorisierten Rollen genutzt werden.','Bei einem Fehler zuerst den Systemstatus prüfen und einmal erneut versuchen. Bleibt der Fehler bestehen, den Systemadministrator kontaktieren.'],
-  fr: ['La barre supérieure donne accès à l’analyse, au chat, à l’historique, au radar du personnel, aux notifications, au menu, aux paramètres et à la déconnexion.','L’état du système utilise des données réelles de santé du backend. READY/ONLINE signifie disponible; LIMITED indique une fonction optionnelle dégradée; LOCAL/MEMORY un repli local; OFF non configuré ou indisponible. IBM Quantum LIMITED/OFF n’arrête pas l’analyse déterministe principale.','Choisissez le domaine approprié avant l’analyse. L’utilisateur n’a pas à sélectionner les moteurs IA ou quantiques internes.','Saisissez un titre clair et un brief précis. Utilisez la voix ou les fichiers lorsque l’écran les propose. Le système gère automatiquement le fallback des fournisseurs, la provenance et la trace.','Le mode quantique prend en charge l’analyse multi-scénarios. Le résultat de référence suit le calcul local déterministe; le matériel IBM configuré sert de voie de vérification indépendante.','Les rapports peuvent être consultés et, selon la vue, téléchargés en DOCX/PDF ou partagés. Une vérification matérielle IBM confirme un job réel, pas l’origine institutionnelle des données.','L’historique permet de rechercher, filtrer et ouvrir les analyses enregistrées. Les anciens rapports peuvent contenir moins de métadonnées d’audit.','L’Audit d’analyse peut afficher fournisseur/modèle IA, version du prompt, source des données, qualité, classification, durée et métadonnées quantiques. Un champ absent signifie que la métadonnée n’a pas été enregistrée.','La consultation vocale et textuelle permet des sessions continues; archiver, enregistrer et effacer gèrent l’historique. Un sujet principal par session améliore la continuité.','Les alertes d’urgence, notifications, messages et radar du personnel sont des fonctions opérationnelles soumises aux rôles. Les données de localisation sont réservées aux utilisateurs autorisés.','En cas d’échec, vérifiez d’abord l’état du système puis réessayez une fois. Si le problème persiste, contactez l’administrateur système.'],
-  ar: ['يوفر الشريط العلوي الوصول إلى التحليل والمحادثة والسجل ورادار الأفراد والإشعارات والقائمة والإعدادات وتسجيل الخروج.','تعتمد حالة النظام على بيانات صحة حقيقية من الخادم. READY/ONLINE يعني متاحاً، LIMITED يعني قدرة اختيارية محدودة، LOCAL/MEMORY يعني استخدام بديل محلي، وOFF يعني غير مهيأ أو غير متاح. حالة IBM Quantum المحدودة لا توقف مسار التحليل الحتمي الرئيسي.','اختر المجال المناسب قبل التحليل. لا يحتاج المستخدم إلى اختيار محركات الذكاء الاصطناعي أو المحركات الكمية الداخلية.','أدخل عنواناً واضحاً وموجزاً دقيقاً. استخدم الصوت أو الملفات عندما تكون متاحة على الشاشة. يدير النظام تلقائياً تبديل مزود الذكاء الاصطناعي ومصدر البيانات وسجل التنفيذ.','يدعم الوضع الكمي تحليل السيناريوهات المتعددة. النتيجة المعتمدة تتبع الحساب المحلي الحتمي، بينما يمكن استخدام عتاد IBM المهيأ كمسار تحقق مستقل.','يمكن مراجعة التقارير وتنزيلها بصيغة DOCX/PDF أو مشاركتها حسب الشاشة. تحقق عتاد IBM يؤكد تشغيل مهمة حقيقية ولا يثبت وحده أن البيانات من مصدر مؤسسي رسمي.','يسمح السجل بالبحث في التحليلات المحفوظة وتصفيتها وفتحها. قد تحتوي التقارير القديمة على بيانات تدقيق أقل.','قد يعرض تدقيق التحليل مزود/نموذج الذكاء الاصطناعي وإصدار التعليمات ومصدر البيانات وجودتها وتصنيفها والمدة وبيانات العتاد الكمي. الحقول الفارغة تعني أن البيانات الوصفية لم تُسجل.','تدعم الاستشارة الصوتية والنصية الجلسات المستمرة، وتدير أدوات الأرشفة والحفظ والمسح سجل المحادثة. يفضل موضوع رئيسي واحد لكل جلسة.','رسائل الطوارئ وإشعارات المستخدمين والمراسلة ورادار الأفراد وظائف تشغيلية تعتمد على الصلاحيات. يجب استخدام بيانات الموقع من قبل الأدوار المصرح لها فقط.','عند الفشل تحقق أولاً من حالة النظام ثم أعد المحاولة مرة واحدة. إذا استمرت المشكلة تواصل مع مسؤول النظام.'],
-};
-
-for (const lang of ['de','fr','ar']) {
-  commonGuide[lang] = translations[lang].map((title, i) => [`${i + 1}) ${title}`, localizedBody[lang][i]]);
-}
-
-const GUIDE_MODULES = Object.fromEntries(Object.entries(commonGuide).map(([lang, modules]) => [lang, modules.map(([title, body]) => ({ title, items: body.split('|') }))]));
+GUIDE_MODULES.de = GUIDE_MODULES.en.map(([title, body], i) => [`${i + 1}) ${['Obere Leiste','Startseite & Systemstatus','Analysekategorien','Analyse erstellen','Quantenanalyse','Berichte & Dateien','Verlauf','Analyse-Audit','Beratung & Sprachassistent','Notfallzentrum & Personalradar','Darstellung & Fehlerbehebung'][i]}`, body]);
+GUIDE_MODULES.fr = GUIDE_MODULES.en.map(([title, body], i) => [`${i + 1}) ${['Barre supérieure','Accueil & état du système','Catégories d’analyse','Créer une analyse','Analyse quantique','Rapports & fichiers','Historique','Audit d’analyse','Consultation & assistant vocal','Centre d’urgence & radar du personnel','Apparence & dépannage'][i]}`, body]);
+GUIDE_MODULES.ar = GUIDE_MODULES.en.map(([title, body], i) => [`${i + 1}) ${['الشريط العلوي','الرئيسية وحالة النظام','فئات التحليل','إنشاء تحليل','التحليل الكمي','التقارير والملفات','السجل','تدقيق التحليل','الاستشارة والمساعد الصوتي','مركز الطوارئ ورادار الأفراد','المظهر واستكشاف الأخطاء'][i]}`, body]);
 
 function GuideModal({ onClose, t, lang }) {
   const modules = GUIDE_MODULES[lang] || GUIDE_MODULES.tr;
-  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}><motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }} onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-2xl h-[88vh] sm:h-auto sm:max-h-[85vh] overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{t('usageGuideTitle')}</h3><button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Close"><X className="w-5 h-5" /></button></div><p className="text-xs sm:text-sm text-gold/70 mb-4">{t('usageGuideIntro')}</p><div className="space-y-4">{modules.map((m, i) => <div key={i} className="border border-cyan-300/25 rounded-lg p-3 sm:p-4 bg-[#071225]/70"><h4 className="text-cyan-100 text-xs sm:text-sm tracking-widest mb-2">{m.title}</h4><div className="space-y-1.5 text-xs sm:text-sm text-gold/90 leading-relaxed">{m.items.map((it, j) => <p key={j}>- {it}</p>)}</div></div>)}</div></motion.div></motion.div>;
+  return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 theme-overlay" onClick={onClose}><motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }} onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-2xl h-[88vh] sm:h-auto sm:max-h-[85vh] overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{t('usageGuideTitle')}</h3><button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Close"><X className="w-5 h-5" /></button></div><p className="text-xs sm:text-sm text-gold/70 mb-4">{t('usageGuideIntro')}</p><div className="space-y-4">{modules.map(([title, body], i) => <div key={i} className="border border-cyan-300/25 rounded-lg p-3 sm:p-4 bg-[#071225]/70 theme-card"><h4 className="text-cyan-100 text-xs sm:text-sm tracking-widest mb-2">{title}</h4><div className="space-y-1.5 text-xs sm:text-sm text-gold/90 leading-relaxed">{body.split('|').map((item, j) => <p key={j}>- {item}</p>)}</div></div>)}</div></motion.div></motion.div>;
 }
 
-export { DropdownOverlay, MenuPanel, SettingsPanel, InfoModal, GuideModal };
+export { DropdownOverlay, MenuPanel, SettingsPanel, InfoModal, GuideModal, applyTheme, getStoredTheme };

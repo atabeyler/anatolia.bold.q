@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.107-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.108-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -77,6 +77,13 @@ These controls are system-level traceability features. Users are not expected to
 - Quantum worker/IBM status endpoint
 - Platform live/readiness health endpoints
 - Operational overview, request metrics, risk overview, connector status, and decision-intelligence endpoints under the versioned platform API
+
+### Appearance
+
+- **Dark Theme** — preserves the original ANATOLIA-Q operational-center appearance
+- **Light Theme** — high-contrast light surfaces while retaining cyan/gold identity and HUD structure
+- **System Theme** — automatically follows the device light/dark preference
+- Theme selection is stored locally and restored on the next session
 
 ---
 
@@ -175,6 +182,8 @@ Platform-provided variables such as `NODE_ENV`, `PORT`, and `RENDER_EXTERNAL_URL
 
 **Audit:** analysis execution metadata can be recorded by the decision-intelligence layer. When an archived analysis has a matching trace, the History view displays an Analysis Audit panel containing the relevant model, prompt, provenance, quality, classification, duration, and quantum metadata without exposing unnecessary engine-selection controls to the user.
 
+**Appearance:** Settings → Appearance provides Dark, Light and System modes. The selected mode is retained in local storage; System mode follows the operating system/browser preference and reacts to preference changes while the app is open.
+
 ---
 
 ## Deployment
@@ -205,7 +214,7 @@ A deployment should be treated as live only after the corresponding CI and deplo
 
 ## Current Capability Summary
 
-ANATOLIA-Q currently combines multi-provider AI decision-support reporting, deterministic quantum analysis with optional real IBM hardware verification, decision provenance/quality/evidence/trace foundations, model and prompt audit metadata, an archived-report Analysis Audit UI, scenario replay/outcome APIs, an institutional connector framework, operational/readiness/connector/risk platform APIs, a versioned `/api/v1/platform` interface with OpenAPI specification, and emergency communication/situational-awareness features.
+ANATOLIA-Q currently combines multi-provider AI decision-support reporting, deterministic quantum analysis with optional real IBM hardware verification, decision provenance/quality/evidence/trace foundations, model and prompt audit metadata, an archived-report Analysis Audit UI, scenario replay/outcome APIs, an institutional connector framework, operational/readiness/connector/risk platform APIs, a versioned `/api/v1/platform` interface with OpenAPI specification, emergency communication/situational-awareness features, and persistent Dark/Light/System appearance modes.
 
 The next institution-specific connector should be implemented only when a real authorized API/data specification is available; the platform does not fabricate institution endpoints or claim integrations that have not been configured and tested.
 
