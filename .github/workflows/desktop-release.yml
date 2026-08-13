@@ -37,3 +37,11 @@ jobs:
         run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing is opt-in: electron-builder signs automatically once
+          # CSC_LINK/CSC_KEY_PASSWORD are set as repo secrets (Settings ->
+          # Secrets and variables -> Actions), and silently builds unsigned
+          # when they're unset, exactly as it does with no secrets configured
+          # at all -- see desktop/README.md's "Code signing" section for how
+          # to generate and register a certificate.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}

@@ -100,8 +100,18 @@ desktop build as production-ready.
 
 ## 10. Code signing (separate from all of the above)
 
-- [ ] Once a real Authenticode certificate is available, set
-      `CSC_LINK`/`CSC_KEY_PASSWORD` (or `CSC_LINK`+`CSC_KEY_PASSWORD` via
-      electron-builder's standard env vars) and re-run `npm run dist:win`;
-      confirm Windows SmartScreen no longer shows "Unknown Publisher" for
-      the installer.
+- [ ] With `CSC_LINK`/`CSC_KEY_PASSWORD` set (the self-signed cert — see
+      desktop/README.md's "Code signing" section), confirm `npm run
+      dist:win` actually signs the `.exe` (Windows: right-click →
+      Properties → Digital Signatures tab should show the "Bold Askeri
+      Teknoloji ve Savunma Sanayi A.Ş." certificate).
+- [ ] On a machine where the public `.cer` has **not** been imported: confirm
+      SmartScreen still shows "Unknown Publisher" (expected — a self-signed
+      cert doesn't grant public trust).
+- [ ] On a machine where an admin imported `anatolia-q-codesign-public.cer`
+      into both Trusted Root Certification Authorities and Trusted
+      Publishers (per desktop/README.md): confirm SmartScreen no longer
+      warns and the installer runs cleanly.
+- [ ] If/when a CA-trusted certificate (or Microsoft Trusted Signing)
+      replaces the self-signed one, re-run this whole section and confirm
+      no GPO step is needed anymore.
