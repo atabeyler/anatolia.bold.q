@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import http from 'node:http';
 import jwt from 'jsonwebtoken';
+import Database from 'better-sqlite3';
 import { createFakePool } from './syncTestHelpers.js';
 
 // True multi-device end-to-end coverage: the REAL desktop sync engine
@@ -16,17 +17,26 @@ import { createFakePool } from './syncTestHelpers.js';
 //
 // Desktop's sync/queue/conflict/entityHandlers modules have zero external
 // npm dependencies of their own (only node:fs/path/crypto plus sibling
-// imports), so importing them here by relative path works without adding
-// any new dependency to either package.json: better-sqlite3 already exists
-// as a root dependency (desktop/testHelpers.js resolves it from there),
-// and jsonwebtoken/express already exist as server dependencies.
+// imports), so importing them here by relative path works fine. The local
+// SQLite db itself is built inline (mirroring desktop/testHelpers.js)
+// rather than importing that file directly, so better-sqlite3 resolves
+// from THIS package's own node_modules (added as a server devDependency)
+// instead of requiring the server CI job to also install the root
+// package's dependencies (which would pull in Electron just for this).
+const { runMigrations } = await import('../../../desktop/db/migrate.js');
+function createTestDb() {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  runMigrations(db);
+  return db;
+}
+
 let fakePool;
 vi.mock('../services/database.js', () => ({ getPool: () => fakePool }));
 
 const { default: syncRouter } = await import('./sync.js');
 const { JWT_SECRET } = await import('../lib/jwtSecret.js');
 
-const { createTestDb } = await import('../../../desktop/testHelpers.js');
 const { runSync } = await import('../../../desktop/sync/engine.js');
 const { getDueOperations, hasPendingOrInFlight } = await import('../../../desktop/sync/queue.js');
 const { listUnresolvedConflicts, resolveConflict } = await import('../../../desktop/sync/conflict.js');
