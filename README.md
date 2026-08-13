@@ -114,7 +114,7 @@ The existing application APIs remain available under `/api/*`. Platform-level de
 
 These include platform live/readiness checks, connector status, operational/risk overview, request metrics, decision trace lookup, model registry, scenario replay, outcome recording, and retention/classification information.
 
-See **[API.md](./API.md)** for the endpoint inventory and **[openapi.yaml](./openapi.yaml)** for the machine-readable platform API specification.
+See **[API.md](./API.md)** for the complete application endpoint inventory and **[openapi.yaml](./openapi.yaml)** for the machine-readable specification of the versioned `/api/v1/platform/*` surface.
 
 ---
 
@@ -155,7 +155,7 @@ Tests: `npm test --prefix server` and `npm test --prefix client`.
 | `REDIS_URL` | Optional Redis-backed active-user/location state |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION` | Optional persistent object storage |
 | `SENTRY_DSN` | Optional server error reporting |
-| `VITE_ICE_SERVERS` | Optional TURN/ICE configuration for emergency video |
+| `VITE_ICE_SERVERS` | Optional client-side TURN/ICE configuration for emergency video |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional Web Push configuration |
 | `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |
 | `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
@@ -176,7 +176,7 @@ Platform-provided variables such as `NODE_ENV`, `PORT`, and `RENDER_EXTERNAL_URL
 
 ## How It Works
 
-**Login:** credentials are checked against `auth_users`. Admin accounts receive a JWT after successful credential validation. Non-admin accounts use the central-mail approval flow before the JWT is issued.
+**Login:** credentials are checked against `auth_users`. After successful password validation, admin accounts receive a JWT immediately with a 4-hour lifetime. Non-admin accounts enter the central-mail approval flow: the approval token expires after 10 minutes and, after approval, the client receives a 2-hour JWT. Approval links use a confirmation GET followed by a state-changing POST so automated mail-link scanners cannot approve a login merely by opening the link.
 
 **Analysis:** the user selects a category and supplies the brief/data → the AI provider chain generates the structured report → supported quantum modules independently recompute relevant scenario, optimization, or anomaly structures → the authoritative local result is merged into the report → optional IBM hardware verification can run as a separate verification lane → the report is persisted and exported.
 
@@ -194,7 +194,7 @@ The application is deployed through the repository workflows and `render.yaml` c
 |---|---|---|
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
 | `.github/workflows/deploy.yml` | Successful CI on `main` | Deploy to Render |
-| `.github/workflows/keep-alive.yml` | Scheduled | Keeps the configured deployment warm where applicable |
+| `.github/workflows/keep-alive.yml` | Scheduled (every 10 minutes, offset from the top of the hour) / manual dispatch | Keeps the configured deployment warm by calling `/api/health` |
 
 A deployment should be treated as live only after the corresponding CI and deploy workflows complete successfully.
 
@@ -202,9 +202,9 @@ A deployment should be treated as live only after the corresponding CI and deplo
 
 ## Security Notes
 
-- Passwords are bcrypt-hashed in `auth_users`
-- JWTs are time-limited
-- Non-admin approval tokens are short-lived and one-time use
+- Passwords are bcrypt-hashed in `auth_users` (bcrypt cost factor 10)
+- Admin JWTs expire after 4 hours; non-admin JWTs issued after central approval expire after 2 hours
+- Non-admin approval tokens expire after 10 minutes; approval is performed by POST after an explicit confirmation page
 - Blocking a user disconnects the active socket session
 - Sensitive credentials belong in environment configuration, never connector source code
 - Institutional connectors must not be described as live until authorized endpoint specifications and credentials are configured
