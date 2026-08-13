@@ -14,7 +14,7 @@ ANATOLIA-Q generates structured decision-support reports across 10 domains, comb
 This project sits at the intersection of applied AI and near-term quantum computing.
 
 - **AI layer:** Claude (Anthropic) → Gemini → GPT-4o automatic fallback for report generation and consultation workflows.
-- **Quantum layer:** scenario probability analysis, QAOA-style resource allocation, and quantum-kernel fraud/AML anomaly detection.
+- **Quantum layer:** scenario probability analysis, QAOA-based resource allocation, and quantum-kernel fraud/AML anomaly detection.
 - **Deterministic decision path:** reported decisions come from the deterministic local computation path. Real IBM Quantum hardware, when configured, is used as an independent verification lane so NISQ hardware noise cannot alter the authoritative result.
 - **Live IBM Quantum validation:** authentication, Qiskit Runtime service connection, real-backend selection, transpilation, hardware job submission, and result retrieval have been exercised against a real IBM Quantum Platform account through the production integration path.
 - **Institutional integration:** the current deployment is not connected to any live bank, telecom, or government system. The data-source layer is intentionally pluggable: authorized institutional APIs, core-banking feeds, BDDK/BTK exports, or other structured sources can be normalized into the existing analysis pipeline without redesigning the core system.
@@ -49,7 +49,7 @@ These controls are system-level traceability features. Users are not expected to
 ### Quantum Computing
 
 - Scenario probability engine
-- QAOA-style portfolio/resource optimization
+- QAOA-based portfolio/resource optimization
 - Quantum-kernel fraud/AML anomaly detector for BDDK/BTK workflows
 - Deterministic simulator-first execution
 - Optional real IBM Quantum hardware verification for supported modules
