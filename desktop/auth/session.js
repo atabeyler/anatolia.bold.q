@@ -92,8 +92,16 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // authMiddleware normally and is rejected/refreshed like any expired
   // token once connectivity returns (handled as an ordinary sync failure,
   // not a fatal desktop error).
+  //
+  // The bcrypt hash is stripped before returning -- the renderer (main.js's
+  // IPC handlers are its only path to this function) has no legitimate use
+  // for it, so there's no reason to hand it across the process boundary at
+  // all, defense-in-depth on top of contextIsolation.
   function getSession() {
-    return secureStore.load();
+    const stored = secureStore.load();
+    if (!stored) return null;
+    const { offlinePasswordHash: _offlinePasswordHash, ...session } = stored;
+    return session;
   }
 
   function isOfflineLoginAllowed(userCode) {

@@ -107,6 +107,14 @@ describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
     expect(secureStore.load().offlinePasswordHash).toMatch(/^\$2[aby]\$/); // a real bcrypt hash, not plaintext
   });
 
+  it('getSession() never exposes the password hash to the caller (the renderer, via IPC)', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+
+    expect(manager.getSession().offlinePasswordHash).toBeUndefined();
+  });
+
   it('rejects offline login after logout, even with the correct password', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
     const { manager } = buildManager({ fetchImpl });
