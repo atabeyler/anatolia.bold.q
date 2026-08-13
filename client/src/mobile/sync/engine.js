@@ -1,12 +1,12 @@
 import { dbGet, dbRun, dbTransaction } from '../db/index.js';
 import { getDueOperations, markInFlight, markDone, markFailed, hasPendingOrInFlight } from './queue.js';
 import { recordConflict } from './conflict.js';
+import { getEntityHandler } from './entityHandlers.js';
 
-const now = () => new Date().toISOString();
 const MAX_PUSH_PASSES = 20; // guards against an unexpected infinite loop, not a normal ceiling
 
 async function applyAppliedResult(db, op, result) {
-  await dbRun(db, `UPDATE analyses SET version = ?, sync_status = 'synced', updated_at = ? WHERE id = ?`, [result.serverVersion, now(), op.entity_id]);
+  await getEntityHandler(op.entity_type).applyApplied(db, op, result);
 }
 
 // Pushes every due queued operation to the server, resuming exactly where a
@@ -89,45 +89,7 @@ async function buildPulledRecordStatement(db, userId, record) {
   // the next push for it will either succeed (and this record shows up
   // again on a later pull, now safe to apply) or surface as a conflict.
   if (await hasPendingOrInFlight(db, record.entityType, record.entityId)) return null;
-
-  const ts = now();
-  const existing = await dbGet(db, `SELECT id FROM analyses WHERE id = ?`, [record.entityId]);
-
-  if (record.deleted) {
-    if (!existing) return null;
-    return {
-      statement: `UPDATE analyses SET deleted_at = ?, version = ?, updated_at = ?, sync_status = 'synced' WHERE id = ?`,
-      values: [ts, record.version, ts, record.entityId],
-    };
-  }
-
-  if (existing) {
-    return {
-      statement: `
-        UPDATE analyses SET title = ?, content = ?, category = ?, ai_provider = ?,
-          fraud_transaction_count = ?, fraud_flagged_count = ?,
-          version = ?, updated_at = ?, deleted_at = NULL, sync_status = 'synced', device_id = ?
-        WHERE id = ?
-      `,
-      values: [
-        record.payload.title, record.payload.content, record.payload.category, record.payload.aiProvider ?? null,
-        record.payload.fraudTransactionCount ?? null, record.payload.fraudFlaggedCount ?? null,
-        record.version, ts, record.deviceId, record.entityId,
-      ],
-    };
-  }
-
-  return {
-    statement: `
-      INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider, fraud_transaction_count, fraud_flagged_count)
-      VALUES (?, ?, NULL, ?, 'analysis', ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?)
-    `,
-    values: [
-      record.entityId, userId, record.deviceId, record.version, record.createdAt, record.updatedAt,
-      record.payload.category, record.payload.title, record.payload.content, record.payload.aiProvider ?? null,
-      record.payload.fraudTransactionCount ?? null, record.payload.fraudFlaggedCount ?? null,
-    ],
-  };
+  return getEntityHandler(record.entityType).buildPulledStatement(db, userId, record);
 }
 
 // Pulls everything new since the locally stored cursor, in cursor order,

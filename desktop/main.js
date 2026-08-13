@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 
+import { createDiagnostics } from './diagnostics.js';
 import { openDatabase } from './db/index.js';
 import { listAnalyses, getAnalysis, createAnalysis, updateAnalysis, deleteAnalysis } from './db/analysesRepo.js';
 import { getOrCreateDeviceId } from './auth/deviceId.js';
@@ -41,6 +42,12 @@ let deviceId = null;
 let sessionManager = null;
 let connectivity = null;
 let syncTimer = null;
+// Created before anything else in app.whenReady() so every subsequent
+// step (db open, sync, IPC handlers) can log through it; diagnostics.js
+// itself never throws, so this is safe to call unconditionally everywhere
+// below even before that assignment runs (only during the brief window
+// before whenReady resolves, which none of this code executes in).
+let diagnostics = null;
 
 function currentUserCode() {
   return sessionManager?.getSession()?.userCode || null;
@@ -49,13 +56,45 @@ function currentUserCode() {
 async function performSync() {
   const session_ = sessionManager?.getSession();
   if (!session_ || !db) return;
+
+  // A cached JWT past its own exp claim is a guaranteed 401 on every call
+  // -- there's no server-side refresh-token endpoint to silently renew it
+  // with, so skip the doomed network round-trip and tell the renderer to
+  // prompt for a fresh online login instead (see session.js's needsReauth
+  // doc comment). The sync queue and local data are untouched either way;
+  // whatever is queued gets pushed automatically the moment
+  // establishOnlineSession succeeds again (its IPC handler already
+  // triggers a sync right after).
+  if (sessionManager.needsReauth()) {
+    diagnostics?.warn('reauth_required', {});
+    mainWindow?.webContents.send('auth:reauthRequired');
+    return { ok: false, error: 'reauth_required', reauthRequired: true };
+  }
+
   connectivity.markSyncing();
-  const result = await runSync(db, {
-    apiBaseUrl: CLOUD_URL,
-    getToken: () => session_.jwt,
-    deviceId,
-    userId: session_.userCode,
-  });
+  diagnostics?.info('sync_start', {});
+  let result;
+  try {
+    result = await runSync(db, {
+      apiBaseUrl: CLOUD_URL,
+      getToken: () => session_.jwt,
+      deviceId,
+      userId: session_.userCode,
+    });
+  } catch (err) {
+    diagnostics?.error('sync_failed', { message: err.message });
+    throw err;
+  }
+  if (result?.ok === false) {
+    diagnostics?.warn('sync_failed', { message: result.error });
+  } else {
+    diagnostics?.info('sync_success', {
+      pushed: result?.push?.pushed ?? 0,
+      pulled: result?.pull?.pulled ?? 0,
+    });
+    const conflicts = result?.push?.conflicts ?? 0;
+    if (conflicts > 0) diagnostics?.warn('sync_conflict', { count: conflicts });
+  }
   await connectivity.checkOnce();
   mainWindow?.webContents.send('connectivity:change', connectivity.getState());
   return result;
@@ -70,6 +109,7 @@ function registerIpcHandlers() {
   ipcMain.handle('auth:verifyOfflineLogin', (_e, userCode, password) => sessionManager.verifyOfflineLogin(userCode, password));
   ipcMain.handle('auth:getSession', () => sessionManager.getSession());
   ipcMain.handle('auth:isOfflineLoginAllowed', (_e, userCode) => sessionManager.isOfflineLoginAllowed(userCode));
+  ipcMain.handle('auth:needsReauth', () => sessionManager.needsReauth());
   ipcMain.handle('auth:logout', () => sessionManager.logout());
 
   ipcMain.handle('analyses:list', () => {
@@ -84,14 +124,17 @@ function registerIpcHandlers() {
   ipcMain.handle('analyses:create', (_e, data) => {
     const userId = currentUserCode();
     if (!userId) throw new Error('Oturum açılmamış');
-    const row = createAnalysis(db, { userId, deviceId, ...data });
+    // userId/deviceId are session-derived and must win over any same-named
+    // key the renderer's data object happens to carry -- spreading data
+    // first (not last) is what makes that override impossible.
+    const row = createAnalysis(db, { ...data, userId, deviceId });
     performSync().catch(() => {});
     return row;
   });
   ipcMain.handle('analyses:update', (_e, id, data) => {
     const userId = currentUserCode();
     if (!userId) throw new Error('Oturum açılmamış');
-    const row = updateAnalysis(db, { userId, deviceId, id, ...data });
+    const row = updateAnalysis(db, { ...data, userId, deviceId, id });
     performSync().catch(() => {});
     return row;
   });
@@ -115,7 +158,7 @@ function registerIpcHandlers() {
   ipcMain.handle('ai:query', (_e, request) => {
     const userId = currentUserCode();
     if (!userId) return { ok: false, error: 'Oturum açılmamış' };
-    return createLocalAIProvider({ db, userId }).query(request);
+    return createLocalAIProvider({ db, userId, diagnostics }).query(request);
   });
 
   ipcMain.handle('connectivity:getState', () => connectivity.getState());
@@ -173,9 +216,18 @@ async function createWindow() {
   });
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error(`[renderer] failed to load: ${errorDescription} (${errorCode})`);
+    diagnostics?.error('renderer_load_failed', { errorCode, errorDescription });
   });
   mainWindow.webContents.on('preload-error', (event, preloadPath, error) => {
     console.error(`[preload] error in ${preloadPath}:`, error);
+    diagnostics?.error('preload_error', { message: error?.message });
+  });
+  // The renderer process crashing/being killed (OOM, GPU crash, ...) --
+  // distinct from did-fail-load (a navigation failure). Logged so a crash
+  // report from a user can be correlated with what the app was doing.
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('[renderer] process gone:', details?.reason);
+    diagnostics?.error('renderer_crash', { reason: details?.reason, exitCode: details?.exitCode });
   });
 }
 
@@ -205,6 +257,9 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  diagnostics = createDiagnostics(app.getPath('userData'));
+  diagnostics.info('app_start', { version: app.getVersion(), platform: process.platform, isDev });
+
   // Baseline CSP for the desktop shell (the web deploy leaves this off
   // pending a dedicated audit -- see server/src/index.js's comment; this is
   // scoped to only the Electron BrowserWindow's own session, so it can't
@@ -220,7 +275,9 @@ app.whenReady().then(async () => {
     });
   });
 
-  db = openDatabase(path.join(app.getPath('userData'), 'anatolia-q.db'));
+  db = openDatabase(path.join(app.getPath('userData'), 'anatolia-q.db'), {
+    onMigrations: (applied) => diagnostics.info('db_migrated', { applied: applied.length, files: applied }),
+  });
   deviceId = getOrCreateDeviceId(app.getPath('userData'));
   const secureStore = createSecureStore(app.getPath('userData'), safeStorage);
   sessionManager = createSessionManager({
@@ -229,7 +286,10 @@ app.whenReady().then(async () => {
   });
 
   connectivity = createConnectivityMonitor({ apiBaseUrl: CLOUD_URL });
-  connectivity.onChange((state) => mainWindow?.webContents.send('connectivity:change', state));
+  connectivity.onChange((state) => {
+    diagnostics.info('connectivity_change', { state });
+    mainWindow?.webContents.send('connectivity:change', state);
+  });
   connectivity.start();
   // A reconnect (local -> cloud) triggers an immediate sync instead of
   // waiting for the next timer tick -- spec point 3: sync starts
@@ -255,6 +315,7 @@ app.whenReady().then(async () => {
     // version it already has.
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       console.warn('[AutoUpdate] check failed:', err?.message || err);
+      diagnostics.error('auto_update_failed', { message: err?.message });
     });
   }
 

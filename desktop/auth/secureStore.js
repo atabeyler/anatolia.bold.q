@@ -8,37 +8,47 @@ import path from 'node:path';
 // Electron process.
 export function createSecureStore(userDataDir, safeStorage) {
   const file = path.join(userDataDir, 'session.enc');
+  // Used only when the OS keychain/secret-service is unavailable (rare off
+  // the Windows target, e.g. some headless Linux setups) -- the session
+  // lives for this process only and is never written to disk. A fresh
+  // process (the next app launch) always starts with this empty, so it
+  // naturally forces online login again rather than silently persisting
+  // a plaintext JWT/password hash at rest.
+  let memoryOnlySession = null;
+
+  function encryptionAvailable() {
+    return !!safeStorage?.isEncryptionAvailable?.();
+  }
 
   function save(value) {
-    fs.mkdirSync(userDataDir, { recursive: true });
-    if (safeStorage?.isEncryptionAvailable?.()) {
-      fs.writeFileSync(file, safeStorage.encryptString(JSON.stringify(value)));
-    } else {
-      // No OS keychain/secret-service available (rare off the Windows
-      // target, e.g. some headless Linux setups) -- degrade to plaintext
-      // rather than crash or silently refuse to persist the session. The
-      // flag lets callers warn the user their session isn't encrypted at
-      // rest instead of claiming a security property that isn't there.
-      fs.writeFileSync(file, JSON.stringify({ ...value, __unencrypted: true }));
+    if (!encryptionAvailable()) {
+      memoryOnlySession = value;
+      return { persisted: false };
     }
+    fs.mkdirSync(userDataDir, { recursive: true });
+    fs.writeFileSync(file, safeStorage.encryptString(JSON.stringify(value)));
+    memoryOnlySession = null;
+    return { persisted: true };
   }
 
   function load() {
+    if (!encryptionAvailable()) return memoryOnlySession;
     if (!fs.existsSync(file)) return null;
     const raw = fs.readFileSync(file);
     try {
-      if (safeStorage?.isEncryptionAvailable?.()) {
-        return JSON.parse(safeStorage.decryptString(raw));
-      }
-      return JSON.parse(raw.toString('utf8'));
+      return JSON.parse(safeStorage.decryptString(raw));
     } catch {
+      // Also covers a pre-upgrade plaintext session.enc left over from
+      // before this fix -- it won't decrypt as ciphertext, so it's
+      // discarded rather than read back as plaintext.
       return null;
     }
   }
 
   function clear() {
+    memoryOnlySession = null;
     if (fs.existsSync(file)) fs.unlinkSync(file);
   }
 
-  return { save, load, clear };
+  return { save, load, clear, encryptionAvailable };
 }

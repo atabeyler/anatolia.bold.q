@@ -1,20 +1,21 @@
-import { queryOffline } from './offlineExtractive.js';
+import { selectProvider } from './registry.js';
 
-// The local AI "provider" is intentionally just this one built-in offline
-// engine today — swapping in a real local model later only means
-// implementing the same query(db, userId, request) shape and wiring it in
-// here; nothing above this module needs to change. Mirrors
-// desktop/localAI/provider.js.
+// The local AI "provider" is intentionally just the one built-in offline
+// engine today (see registry.js's PROVIDERS list) — swapping in or adding
+// a real local model later only means registering it there; nothing above
+// this module needs to change. Mirrors desktop/localAI/provider.js.
 //
 // Report *generation* stays cloud-only via the existing /api/analysis
 // endpoints; this module only ever answers read-only questions about
 // reports already sitting in the local database.
 export function createLocalAIProvider({ db, userId }) {
+  const provider = selectProvider();
+  const runQuery = provider.createQuery({ db, userId });
   return {
-    capability: 'offline-extractive',
+    capability: provider.capability,
     async query(request) {
       try {
-        return { ok: true, ...(await queryOffline(db, userId, request)) };
+        return { ok: true, ...(await runQuery(request)) };
       } catch (err) {
         // Never throws past this boundary (spec: a missing/broken local AI
         // backend must not crash the app) — reported as a capability flag

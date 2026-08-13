@@ -25,6 +25,11 @@ on:
       - 'package-lock.json'
       - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
+    inputs:
+      allow_unsigned:
+        description: 'Publish an unsigned installer anyway (only for a deliberate test build -- never for an official version)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -47,15 +52,33 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify version consistency across package.json files
+        run: node scripts/check-version-consistency.js
+
+      # electron-builder signs automatically once CSC_LINK/CSC_KEY_PASSWORD
+      # are set as repo secrets and silently builds unsigned when they're
+      # not -- fine for a local `npm run dist:win` dev build, but this is
+      # the path that publishes an "official" GitHub Release, so an
+      # accidental unsigned publish here is exactly what installs
+      # SmartScreen-flagged onto every user's machine. Every automatic
+      # trigger (push) requires signing; only a deliberate manual
+      # workflow_dispatch with allow_unsigned=true can skip it.
+      - name: Require code signing for automatic/official releases
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.allow_unsigned != 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ]; then
+            echo "::error::CSC_LINK/CSC_KEY_PASSWORD are not set -- refusing to publish an unsigned Windows installer as an official release."
+            echo "See desktop/README.md's 'Code signing' section to generate and register a certificate,"
+            echo "or re-run this workflow manually via workflow_dispatch with allow_unsigned=true for a deliberate unsigned test build."
+            exit 1
+          fi
+
       - name: Build and publish the Windows installer
         run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing is opt-in: electron-builder signs automatically once
-          # CSC_LINK/CSC_KEY_PASSWORD are set as repo secrets (Settings ->
-          # Secrets and variables -> Actions), and silently builds unsigned
-          # when they're unset, exactly as it does with no secrets configured
-          # at all -- see desktop/README.md's "Code signing" section for how
-          # to generate and register a certificate.
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}

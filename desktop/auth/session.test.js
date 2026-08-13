@@ -9,7 +9,12 @@ function fakeJwt(payload) {
 
 function memoryStore() {
   let value = null;
-  return { save: (v) => { value = v; }, load: () => value, clear: () => { value = null; } };
+  return {
+    save: (v) => { value = v; return { persisted: true }; },
+    load: () => value,
+    clear: () => { value = null; },
+    encryptionAvailable: () => true,
+  };
 }
 
 const DEVICE = 'AQ-WIN-AAAAAAAA';
@@ -52,6 +57,23 @@ describe('establishOnlineSession', () => {
 
     await expect(manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }))).rejects.toThrow('Cihaz limiti aşıldı');
     expect(secureStore.load()).toBeNull();
+  });
+});
+
+describe('establishOnlineSession when no OS keychain is available', () => {
+  it('surfaces sessionPersisted:false instead of silently persisting an unencrypted session', async () => {
+    const db = createTestDb();
+    const secureStore = {
+      save: () => ({ persisted: false }),
+      load: () => null,
+      clear: () => {},
+      encryptionAvailable: () => false,
+    };
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const manager = createSessionManager({ db, secureStore, deviceId: DEVICE, apiBaseUrl: 'https://api.test', fetchImpl, appVersion: '1.0.0' });
+
+    const result = await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }));
+    expect(result.sessionPersisted).toBe(false);
   });
 });
 
@@ -122,6 +144,43 @@ describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
     manager.logout();
 
     expect(manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123').ok).toBe(false);
+  });
+});
+
+describe('needsReauth', () => {
+  it('is false with no cached session at all', () => {
+    const { manager } = buildManager({ fetchImpl: vi.fn() });
+    expect(manager.needsReauth()).toBe(false);
+  });
+
+  it('is false right after a normal online login (fresh, non-expired JWT)', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    const freshJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) + 3600 });
+
+    await manager.establishOnlineSession(freshJwt);
+    expect(manager.needsReauth()).toBe(false);
+  });
+
+  it('is true once the cached JWT\'s exp claim has passed (e.g. after a long offline stretch)', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    const expiredJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) - 3600 });
+
+    await manager.establishOnlineSession(expiredJwt);
+    expect(manager.needsReauth()).toBe(true);
+  });
+
+  it('goes back to false once a fresh online login replaces the expired cached session', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    const expiredJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) - 3600 });
+    await manager.establishOnlineSession(expiredJwt);
+    expect(manager.needsReauth()).toBe(true);
+
+    const freshJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) + 3600 });
+    await manager.establishOnlineSession(freshJwt);
+    expect(manager.needsReauth()).toBe(false);
   });
 });
 

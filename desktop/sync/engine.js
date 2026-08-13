@@ -1,18 +1,11 @@
 import { getDueOperations, markInFlight, markDone, markFailed, hasPendingOrInFlight } from './queue.js';
 import { recordConflict } from './conflict.js';
+import { getEntityHandler } from './entityHandlers.js';
 
-const now = () => new Date().toISOString();
 const MAX_PUSH_PASSES = 20; // guards against an unexpected infinite loop, not a normal ceiling
 
 function applyAppliedResult(db, op, result) {
-  const ts = now();
-  if (op.op === 'delete') {
-    db.prepare(`UPDATE analyses SET version = @version, sync_status = 'synced', updated_at = @ts WHERE id = @id`)
-      .run({ id: op.entity_id, version: result.serverVersion, ts });
-    return;
-  }
-  db.prepare(`UPDATE analyses SET version = @version, sync_status = 'synced', updated_at = @ts WHERE id = @id`)
-    .run({ id: op.entity_id, version: result.serverVersion, ts });
+  getEntityHandler(op.entity_type).applyApplied(db, op, result);
 }
 
 // Pushes every due queued operation to the server, resuming exactly where a
@@ -92,42 +85,7 @@ function applyPulledRecord(db, userId, record) {
   // the next push for it will either succeed (and this record shows up
   // again on a later pull, now safe to apply) or surface as a conflict.
   if (hasPendingOrInFlight(db, record.entityType, record.entityId)) return;
-
-  const ts = now();
-  const existing = db.prepare(`SELECT id FROM analyses WHERE id = ?`).get(record.entityId);
-
-  if (record.deleted) {
-    if (existing) {
-      db.prepare(`UPDATE analyses SET deleted_at = @ts, version = @version, updated_at = @ts, sync_status = 'synced' WHERE id = @id`)
-        .run({ id: record.entityId, ts, version: record.version });
-    }
-    return;
-  }
-
-  if (existing) {
-    db.prepare(`
-      UPDATE analyses SET title = @title, content = @content, category = @category, ai_provider = @aiProvider,
-        fraud_transaction_count = @fraudTx, fraud_flagged_count = @fraudFlag,
-        version = @version, updated_at = @ts, deleted_at = NULL, sync_status = 'synced', device_id = @deviceId
-      WHERE id = @id
-    `).run({
-      id: record.entityId, ts, version: record.version, deviceId: record.deviceId,
-      title: record.payload.title, content: record.payload.content, category: record.payload.category,
-      aiProvider: record.payload.aiProvider ?? null,
-      fraudTx: record.payload.fraudTransactionCount ?? null, fraudFlag: record.payload.fraudFlaggedCount ?? null,
-    });
-  } else {
-    db.prepare(`
-      INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider, fraud_transaction_count, fraud_flagged_count)
-      VALUES (@id, @userId, NULL, @deviceId, 'analysis', @version, @createdAt, @updatedAt, 'synced', @category, @title, @content, @aiProvider, @fraudTx, @fraudFlag)
-    `).run({
-      id: record.entityId, userId, deviceId: record.deviceId, version: record.version,
-      createdAt: record.createdAt, updatedAt: record.updatedAt,
-      category: record.payload.category, title: record.payload.title, content: record.payload.content,
-      aiProvider: record.payload.aiProvider ?? null,
-      fraudTx: record.payload.fraudTransactionCount ?? null, fraudFlag: record.payload.fraudFlaggedCount ?? null,
-    });
-  }
+  getEntityHandler(record.entityType).applyPulled(db, userId, record);
 }
 
 // Pulls everything new since the locally stored cursor, in cursor order,

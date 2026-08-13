@@ -32,7 +32,7 @@ All endpoints marked **auth** require `Authorization: Bearer <jwt>`. Admin-only 
 | `POST /upload` | auth | Extracts text from an uploaded document, or returns an image as base64 for vision analysis |
 | `POST /generate` | auth | Main report generator — category + prompt in, DOCX/PDF report out. `quantumMode: true` additionally recomputes scenario/transaction/optimization tables on Qiskit. Successful generations are also recorded in the decision-intelligence trace store |
 | `POST /scenario-deep-dive` | auth | Expands a single scenario from a prior report into a focused sub-analysis |
-| `POST /chat` | auth | Streaming danışma (consultation) chat, same triple-AI fallback as `/generate` |
+| `POST /chat` | auth | Streaming consultation chat, same triple-AI fallback as `/generate` |
 
 ## Platform & Decision Intelligence (`/api/platform`, versioned alias `/api/v1/platform`)
 
@@ -88,7 +88,7 @@ The machine-readable API definition for the new versioned platform surface is in
 |---|---|---|
 | `GET /profile` | auth | The user's display profile (name, rank, unit, persona, language) |
 | `PUT /profile` | auth | Update the profile |
-| `POST /save-conversation` | auth | Save + AI-summarize a danışma chat transcript |
+| `POST /save-conversation` | auth | Save + AI-summarize a consultation chat transcript |
 | `GET /conversations` | auth | List saved conversations |
 | `GET /conversations/:id` | auth | A single saved conversation with full history |
 | `PATCH /conversations/:id/archive` | auth | Archive/unarchive a conversation |

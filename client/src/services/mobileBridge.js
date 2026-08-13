@@ -111,6 +111,12 @@ export const mobileAuth = {
   verifyOfflineLogin: guard(async (userCode, password) => (await getSessionManager()).verifyOfflineLogin(userCode, password)),
   getSession: guard(async () => (await getSessionManager()).getSession()),
   isOfflineLoginAllowed: guard(async (userCode) => (await getSessionManager()).isOfflineLoginAllowed(userCode)),
+  // Desktop-only for now (see desktop/auth/session.js's needsReauth) --
+  // stubbed here so callers (e.g. a future shared reauth-prompt component)
+  // can call nativeAuth.needsReauth()/onReauthRequired() unconditionally
+  // without branching on platform, matching desktopBridge.js's shape.
+  needsReauth: guard(async () => false),
+  onReauthRequired: () => () => {},
   logout: guard(async () => (await getSessionManager()).logout()),
 };
 
@@ -126,14 +132,19 @@ export const mobileAnalyses = {
   create: guard(async (data) => {
     const userId = await currentUserId();
     if (!userId) throw new Error('Oturum açılmamış');
-    const row = await createAnalysis(await getDb(), { userId, deviceId, ...data });
+    // userId/deviceId are session-derived and must win over any same-named
+    // key in the caller's data object -- spreading data first (not last)
+    // is what makes that override impossible. Matches desktop/main.js's
+    // analyses:create IPC handler, which has the same fix for the same
+    // reason (there, across an actual Electron IPC trust boundary).
+    const row = await createAnalysis(await getDb(), { ...data, userId, deviceId });
     performSync().catch(() => {});
     return row;
   }),
   update: guard(async (id, data) => {
     const userId = await currentUserId();
     if (!userId) throw new Error('Oturum açılmamış');
-    const row = await updateAnalysis(await getDb(), { userId, deviceId, id, ...data });
+    const row = await updateAnalysis(await getDb(), { ...data, userId, deviceId, id });
     performSync().catch(() => {});
     return row;
   }),

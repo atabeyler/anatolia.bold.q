@@ -15,6 +15,7 @@ import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from '../components/A
 import AppFooter from '../components/AppFooter.jsx';
 import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
 import DesktopConflictModal from '../components/DesktopConflictModal.jsx';
+import ReauthBanner from '../components/ReauthBanner.jsx';
 import { api, setJWT, getToken } from '../services/api.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -550,6 +551,7 @@ export default function DashboardPage({ user, onLogout }) {
       <EmergencyButton authenticated={true} />
 
       <DesktopConflictModal />
+      <ReauthBanner onLogout={logout} />
 
       <AnimatePresence>
         {voiceChatOpen && <VoiceChatModal onClose={() => setVoiceChatOpen(false)} />}

@@ -9,7 +9,7 @@ let db = null;
 // any pending migrations, and configures it for a desktop app that may be
 // killed mid-write at any time (WAL journaling + a busy timeout instead of
 // immediate "database is locked" failures).
-export function openDatabase(dbPath) {
+export function openDatabase(dbPath, { onMigrations } = {}) {
   if (db) return db;
 
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -18,7 +18,8 @@ export function openDatabase(dbPath) {
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
 
-  runMigrations(db);
+  const applied = runMigrations(db);
+  onMigrations?.(applied);
   return db;
 }
 

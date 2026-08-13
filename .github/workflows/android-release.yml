@@ -31,6 +31,11 @@ on:
       - 'client/src/services/nativeBridge.js'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:
+    inputs:
+      allow_unsigned:
+        description: 'Publish an unsigned APK anyway (only for a deliberate test build -- never for an official version)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -51,6 +56,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      - name: Verify version consistency across package.json files
+        run: node scripts/check-version-consistency.js
 
       - name: Install client dependencies
         working-directory: client
@@ -82,6 +90,7 @@ jobs:
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "No ANDROID_KEYSTORE_BASE64 secret set -- building an unsigned APK."
+            echo "SIGNED=false" >> "$GITHUB_ENV"
             exit 0
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > anatolia-q-release.jks
@@ -91,6 +100,23 @@ jobs:
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
+          echo "SIGNED=true" >> "$GITHUB_ENV"
+
+      # Android requires every release of an app to be signed with the same
+      # key to be installable as an update -- an unsigned APK published as
+      # an "official" release here would be a dead end the moment signing
+      # is later configured. Every automatic trigger (push) requires
+      # signing; only a deliberate manual workflow_dispatch with
+      # allow_unsigned=true can skip it. Local `assembleDebug`/`assembleRelease`
+      # runs (outside this workflow) are never affected by this check.
+      - name: Require code signing for automatic/official releases
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.allow_unsigned != 'true'
+        run: |
+          if [ "$SIGNED" != "true" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 (and friends) are not set -- refusing to publish an unsigned APK as an official release."
+            echo "See mobile/README.md's 'Signing' section, or re-run this workflow manually via workflow_dispatch with allow_unsigned=true for a deliberate unsigned test build."
+            exit 1
+          fi
 
       - name: Build release APK
         working-directory: mobile/android

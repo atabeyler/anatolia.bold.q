@@ -59,12 +59,17 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     }
 
     const offlinePasswordHash = password ? bcrypt.hashSync(password, 10) : undefined;
-    secureStore.save({
+    const { persisted } = secureStore.save({
       jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin,
       offlinePasswordHash,
     });
     upsertDeviceMeta({ platform, userId: payload.userCode, ts: new Date().toISOString() });
-    return { userCode: payload.userCode };
+    // persisted:false means no OS keychain was available to encrypt the
+    // session at rest -- secureStore already refused to write it as
+    // plaintext, so the caller (main.js/LoginPage) knows this session
+    // (and offline login) will not survive an app restart, and can tell
+    // the user rather than have it silently fail on next launch.
+    return { userCode: payload.userCode, sessionPersisted: persisted };
   }
 
   // The actual offline login check: requires both (a) this device having
@@ -109,6 +114,28 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     return !!row && row.last_authorized_user_id === userCode;
   }
 
+  // True once the cached JWT's own `exp` claim has passed. There is no
+  // server-side refresh-token endpoint (JWTs here are short-lived bearer
+  // tokens, not paired with a long-lived refresh token) -- reconnecting
+  // after a long offline stretch with an expired cached token would
+  // otherwise mean every sync call silently fails with 401 forever,
+  // retried on a loop, until the user happens to log out and back in. This
+  // lets performSync() (main.js) detect that proactively -- skip the
+  // doomed network round-trip, and tell the renderer to prompt for a
+  // fresh online login instead -- rather than discovering it only after
+  // repeated failures. Re-authenticating reuses the existing online-login
+  // flow as-is (establishOnlineSession below) and never touches the local
+  // SQLite data or the sync queue -- whatever was queued while offline
+  // stays queued and is picked up by the very next sync once the session
+  // is valid again.
+  function needsReauth() {
+    const cached = secureStore.load();
+    if (!cached?.jwt) return false;
+    const payload = decodeJwtPayload(cached.jwt);
+    if (!payload?.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  }
+
   // Explicit logout revokes this device's offline capability too -- the
   // next login on this machine must be online again.
   function logout() {
@@ -116,7 +143,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     db.prepare('UPDATE device_meta SET last_authorized_user_id = NULL WHERE device_id = ?').run(deviceId);
   }
 
-  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logout };
+  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logout, needsReauth };
 }
 
 export const _internal = { decodeJwtPayload };

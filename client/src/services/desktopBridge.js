@@ -12,6 +12,8 @@ export const desktopAuth = {
   verifyOfflineLogin: (userCode, password) => bridge?.auth.verifyOfflineLogin(userCode, password),
   getSession: () => bridge?.auth.getSession(),
   isOfflineLoginAllowed: (userCode) => bridge?.auth.isOfflineLoginAllowed(userCode),
+  needsReauth: () => bridge?.auth.needsReauth(),
+  onReauthRequired: (callback) => bridge?.auth.onReauthRequired(callback) || (() => {}),
   logout: () => bridge?.auth.logout(),
 };
 

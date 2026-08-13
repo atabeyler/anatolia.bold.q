@@ -20,6 +20,7 @@ export function runMigrations(db) {
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
+  const newlyApplied = [];
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
@@ -28,5 +29,7 @@ export function runMigrations(db) {
       db.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(file, new Date().toISOString());
     });
     runMigration();
+    newlyApplied.push(file);
   }
+  return newlyApplied;
 }

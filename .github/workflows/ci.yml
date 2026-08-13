@@ -6,6 +6,21 @@ on:
   pull_request:
 
 jobs:
+  # Cheap, fast fail-fast check: package.json/client/package.json/
+  # server/package.json must always agree on version (scripts/bump-version.js
+  # keeps them in sync on every commit -- this is the guard against a
+  # hand-edit or merge conflict silently breaking that). desktop-release.yml
+  # and android-release.yml both run the same check again right before
+  # building, since a release can be triggered by a tag push that skips CI.
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-version-consistency.js
+
   server:
     runs-on: ubuntu-latest
     defaults:
@@ -22,7 +37,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - name: Kuantum betiklerinin sözdizimini doğrula
+      - name: Validate quantum script syntax
         run: python3 -m py_compile quantum/scenario_quantum.py quantum/fraud_detection.py quantum/portfolio_optimizer.py quantum/_ibm_backend.py
 
   client:

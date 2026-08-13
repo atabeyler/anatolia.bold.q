@@ -6,7 +6,7 @@ const now = () => new Date().toISOString();
 // Records both sides of a conflict and stops the local record from being
 // pushed again until the user (or an automated policy) resolves it — the
 // server's copy is never silently overwritten, and neither is the user's
-// local edit (spec: "iki sürümü koru ve kullanıcıya çözme imkânı sağla").
+// local edit (spec: keep both versions and give the user a way to resolve).
 export async function recordConflict(db, { entityType, entityId, localPayload, localBaseVersion, serverPayload, serverVersion, serverDeleted }) {
   await dbTransaction(db, [
     {

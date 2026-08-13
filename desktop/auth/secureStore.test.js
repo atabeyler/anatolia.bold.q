@@ -34,12 +34,33 @@ describe('createSecureStore', () => {
     expect(onDisk).not.toContain('super-secret-token');
   });
 
-  it('degrades to a flagged plaintext fallback instead of crashing when encryption is unavailable', () => {
-    const store = createSecureStore(tmpDir(), fakeSafeStorage(false));
-    store.save({ jwt: 'token' });
-    const loaded = store.load();
-    expect(loaded.jwt).toBe('token');
-    expect(loaded.__unencrypted).toBe(true);
+  it('never writes to disk when encryption is unavailable -- keeps the session in memory for this process only', () => {
+    const dir = tmpDir();
+    const store = createSecureStore(dir, fakeSafeStorage(false));
+    const result = store.save({ jwt: 'token' });
+    expect(result.persisted).toBe(false);
+    expect(store.load()).toEqual({ jwt: 'token' });
+    expect(fs.existsSync(path.join(dir, 'session.enc'))).toBe(false);
+  });
+
+  it('a fresh store instance (simulating app restart) has no session when encryption was unavailable', () => {
+    const dir = tmpDir();
+    createSecureStore(dir, fakeSafeStorage(false)).save({ jwt: 'token' });
+    const restarted = createSecureStore(dir, fakeSafeStorage(false));
+    expect(restarted.load()).toBeNull();
+  });
+
+  it('discards a pre-upgrade plaintext session.enc instead of reading it back as valid', () => {
+    const dir = tmpDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'session.enc'), JSON.stringify({ jwt: 'leaked-plaintext-token' }));
+    const store = createSecureStore(dir, fakeSafeStorage(true));
+    expect(store.load()).toBeNull();
+  });
+
+  it('encryptionAvailable() reflects the underlying safeStorage state', () => {
+    expect(createSecureStore(tmpDir(), fakeSafeStorage(true)).encryptionAvailable()).toBe(true);
+    expect(createSecureStore(tmpDir(), fakeSafeStorage(false)).encryptionAvailable()).toBe(false);
   });
 
   it('returns null when nothing has been saved yet', () => {

@@ -46,8 +46,9 @@ function parseDateRange(text, now = new Date()) {
   const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const today = startOfDay(now);
 
-  // \w* after the stem so inflected forms (aynı sözcük ekli haliyle: "ayki",
-  // "haftaki", "haftada", ...) still match, not just the bare word.
+  // \w* after the stem so inflected forms (the same word with a suffix
+  // attached: "ayki", "haftaki", "haftada", ...) still match, not just
+  // the bare word.
   if (/\bbugun\w*\b/.test(t)) {
     return { since: today, until: new Date(today.getTime() + 86400000) };
   }

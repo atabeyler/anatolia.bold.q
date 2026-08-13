@@ -24,7 +24,18 @@ const STAGES = { IDLE: 'idle', AWAITING_APPROVAL: 'awaiting', APPROVED: 'approve
 // until it succeeds once.
 function registerNativeSession(jwt, password) {
   if (!isNativeApp || !jwt) return;
-  nativeAuth.establishOnlineSession(jwt, password).catch((err) => {
+  nativeAuth.establishOnlineSession(jwt, password).then((result) => {
+    // sessionPersisted:false means the OS-level secure storage (Electron
+    // safeStorage / Capacitor secure storage) wasn't available on this
+    // device, so the session was deliberately kept in memory only rather
+    // than ever written to disk unencrypted (see desktop/auth/secureStore.js).
+    // Offline login on this device won't work until the app is relaunched
+    // with secure storage available again -- surfaced here (not silently)
+    // since the login screen itself is about to unmount.
+    if (result && result.sessionPersisted === false) {
+      console.warn('[ANATOLIA-Q] Secure session storage unavailable on this device -- offline login will not be available until the next successful online login.');
+    }
+  }).catch((err) => {
     console.warn('[ANATOLIA-Q] Device authorization failed:', err?.message || err);
   });
 }
