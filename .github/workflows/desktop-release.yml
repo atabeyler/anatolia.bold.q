@@ -1,0 +1,39 @@
+name: Desktop Release
+
+# Builds the Windows installer on an actual Windows runner (electron-builder's
+# NSIS target needs wine on Linux even for an unsigned build -- see
+# desktop/README.md) and publishes it to GitHub Releases via electron-updater's
+# configured publish target (package.json's build.publish). No custom secret
+# is needed: GITHUB_TOKEN is provided automatically by Actions and is scoped
+# to this repository, which is all the GitHub-provider publisher needs.
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Build and publish the Windows installer
+        run: npm run release:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

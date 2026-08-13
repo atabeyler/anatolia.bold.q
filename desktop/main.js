@@ -242,9 +242,13 @@ app.whenReady().then(async () => {
   syncTimer.unref?.();
 
   if (!isDev && app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {
-      // No publish feed configured yet (see package.json's build.publish) --
-      // this is expected until a release channel exists, never fatal.
+    // Publish target is GitHub Releases (package.json's build.publish),
+    // populated by .github/workflows/desktop-release.yml on a
+    // `desktop-v*` tag push. Failure here (no releases published yet,
+    // machine offline, ...) is never fatal -- the app just runs the
+    // version it already has.
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.warn('[AutoUpdate] check failed:', err?.message || err);
     });
   }
 

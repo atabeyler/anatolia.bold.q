@@ -41,3 +41,19 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # Desktop's own tests don't need a display or Electron itself -- they're
+  # pure Node/vitest against better-sqlite3 built for the runner's own Node
+  # ABI (never electron-rebuild'd here, so no ABI mismatch), unlike an
+  # actual Electron launch which desktop-release.yml covers on Windows.
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx vitest run desktop

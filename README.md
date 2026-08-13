@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.118-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.119-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -214,6 +214,7 @@ The application is deployed through the repository workflows and `render.yaml` c
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
 | `.github/workflows/deploy.yml` | Successful CI on `main` | Deploy to Render |
 | `.github/workflows/keep-alive.yml` | Scheduled (every 10 minutes, offset from the top of the hour) / manual dispatch | Keeps the configured deployment warm by calling `/api/health` |
+| `.github/workflows/desktop-release.yml` | Push of a `desktop-v*` tag / manual dispatch | Builds the Windows installer on a `windows-latest` runner and publishes it to GitHub Releases (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
 
 A deployment should be treated as live only after the corresponding CI and deploy workflows complete successfully.
 

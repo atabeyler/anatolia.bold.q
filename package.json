@@ -1,10 +1,15 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.118",
+  "version": "2.1.119",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
+  "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
   "private": true,
   "main": "desktop/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/atabeyler/anatolia.bold.q.git"
+  },
   "scripts": {
     "build": "cd client && npm install && npm run build && cd ..",
     "start": "node server/src/index.js",
@@ -14,6 +19,7 @@
     "desktop:dev": "concurrently -k \"npm run dev:client\" \"wait-on http://localhost:5173 && cross-env ANATOLIA_DESKTOP_DEV=1 electron .\"",
     "test:desktop": "vitest run desktop",
     "dist:win": "npm run build && electron-builder --win",
+    "release:win": "npm run build && electron-builder --win --publish always",
     "prepare": "husky"
   },
   "engines": {
@@ -56,7 +62,11 @@
       "createStartMenuShortcut": true,
       "shortcutName": "ANATOLIA-Q"
     },
-    "publish": null
+    "publish": {
+      "provider": "github",
+      "owner": "atabeyler",
+      "repo": "anatolia.bold.q"
+    }
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
