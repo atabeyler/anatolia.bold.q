@@ -29,9 +29,6 @@ on:
 permissions:
   contents: write
 
-# Retriggered once via a trivial push after the initial run failed to
-# register on GitHub's side before any job was scheduled (a known one-off
-# delay for a workflow file added in the same push that also triggers it).
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -65,26 +62,61 @@ jobs:
         working-directory: mobile
         run: npx cap sync android
 
+      # Runs unconditionally -- the secrets context isn't available in a
+      # step-level `if:` (GitHub rejects the whole workflow file at parse
+      # time if it is: "Unrecognized named-value: 'secrets'"), so the
+      # opt-in behavior is implemented in the shell script itself instead.
       - name: Restore signing keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         working-directory: mobile/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > anatolia-q-release.jks
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret set -- building an unsigned APK."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > anatolia-q-release.jks
           cat > keystore.properties <<EOF
           storeFile=anatolia-q-release.jks
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
           EOF
 
       - name: Build release APK
         working-directory: mobile/android
         run: ./gradlew assembleRelease
 
+      # Uses raw REST calls against the GitHub API (curl + the auto-provided
+      # GITHUB_TOKEN) instead of a third-party marketplace action, so this
+      # step works regardless of the repository's "Allow select actions"
+      # policy for non-GitHub actions.
       - name: Publish to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          files: mobile/android/app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+        working-directory: mobile/android/app/build/outputs/apk/release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          APK=$(ls *.apk | head -1)
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="android-build-${{ github.run_number }}"
+          fi
+
+          RELEASE_ID=$(curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases" \
+            -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")" \
+            | jq -r .id)
+
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$APK" \
+            --data-binary "@$APK"
