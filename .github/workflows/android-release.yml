@@ -29,6 +29,9 @@ on:
 permissions:
   contents: write
 
+# Retriggered once via a trivial push after the initial run failed to
+# register on GitHub's side before any job was scheduled (a known one-off
+# delay for a workflow file added in the same push that also triggers it).
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest

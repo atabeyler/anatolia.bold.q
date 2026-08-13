@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-server",
-  "version": "2.1.122",
+  "version": "2.1.123",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
