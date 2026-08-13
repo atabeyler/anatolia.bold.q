@@ -10,12 +10,18 @@ name: Android Release
 # self-signed keystore; unset, the build still runs and produces an
 # unsigned APK for manual signing later.
 #
-# Fires on a push to main that touches mobile/client code, on an
-# `android-v*` tag, or on a manual "Run workflow" click.
+# The APK is attached to the SAME versioned GitHub Release as the Windows
+# installer (tag v<version>, read from the root package.json -- kept in
+# sync across package.json/client/server by scripts/bump-version.js on
+# every commit, see CLAUDE.md) rather than a separate tag, so both
+# installers for a given app version live in one place. Whichever workflow
+# (this one or desktop-release.yml) runs first for a given version creates
+# that draft release; the other one finds it by tag and adds its asset.
+#
+# Fires on a push to main that touches mobile/client code, or on a manual
+# "Run workflow" click.
 on:
   push:
-    tags:
-      - 'android-v*'
     branches:
       - main
     paths:
@@ -90,10 +96,21 @@ jobs:
         working-directory: mobile/android
         run: ./gradlew assembleRelease
 
+      - name: Rename APK to match the app version
+        working-directory: mobile/android/app/build/outputs/apk/release
+        run: |
+          VERSION=$(node -p "require('${{ github.workspace }}/package.json').version")
+          mv app-release.apk "ANATOLIA-Q-$VERSION.apk"
+          echo "APK_NAME=ANATOLIA-Q-$VERSION.apk" >> "$GITHUB_ENV"
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+
       # Uses raw REST calls against the GitHub API (curl + the auto-provided
       # GITHUB_TOKEN) instead of a third-party marketplace action, so this
       # step works regardless of the repository's "Allow select actions"
-      # policy for non-GitHub actions.
+      # policy for non-GitHub actions. Finds-or-creates the release for
+      # tag v<version> -- the same tag electron-builder's GitHub publisher
+      # uses for the Windows installer -- so both artifacts end up as
+      # assets on one release instead of two separate ones.
       - name: Publish to GitHub Releases
         working-directory: mobile/android/app/build/outputs/apk/release
         env:
@@ -101,22 +118,25 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          APK=$(ls *.apk | head -1)
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="android-build-${{ github.run_number }}"
-          fi
 
-          RELEASE_ID=$(curl -sf -X POST \
+          HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/releases" \
-            -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")" \
-            | jq -r .id)
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG")
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            RELEASE_ID=$(jq -r .id release.json)
+          else
+            RELEASE_ID=$(curl -sf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/releases" \
+              -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":true,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")" \
+              | jq -r .id)
+          fi
 
           curl -sf -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Content-Type: application/vnd.android.package-archive" \
-            "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$APK" \
-            --data-binary "@$APK"
+            "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$APK_NAME" \
+            --data-binary "@$APK_NAME"

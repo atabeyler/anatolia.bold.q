@@ -113,20 +113,26 @@ against.
 
 ## Releases
 
-```bash
-git tag android-v1.0.0
-git push origin android-v1.0.0
-```
+`.github/workflows/android-release.yml` fires automatically on a push to
+`main` that touches `mobile/**` or the mobile-specific client code (or via
+a manual `workflow_dispatch`): it builds `client/dist`, syncs it into the
+Android project, builds and signs the release APK, and uploads it to a
+GitHub Release.
 
-Triggers `.github/workflows/android-release.yml`: builds `client/dist`,
-syncs it into the Android project, builds and signs the release APK, and
-uploads it as a GitHub Release asset. Also fires automatically on a push to
-`main` that touches `mobile/**` or the mobile-specific client code, or via a
-manual `workflow_dispatch`. Distribution from there is direct download +
-manual "Install from unknown sources" on each device (or an MDM push) —
-there is no store listing and no auto-update channel yet (unlike the desktop
-app's `electron-updater` integration); the app does not currently check for
-or prompt about newer APK releases.
+The APK is attached to the **same versioned release as the Windows
+installer** — tag `v<version>`, read from the root `package.json` (kept in
+sync across `package.json`/`client`/`server` by `scripts/bump-version.js`
+on every commit, see `CLAUDE.md`) — rather than a separate tag, so both
+installers for a given app version live in one place. Whichever release
+workflow (this one, or `desktop-release.yml`) runs first for a given
+version creates that draft release; the other finds it by tag and adds its
+asset alongside. The uploaded file is named `ANATOLIA-Q-<version>.apk`.
+
+Distribution from there is direct download + manual "Install from unknown
+sources" on each device (or an MDM push) — there is no store listing and
+no auto-update channel yet (unlike the desktop app's `electron-updater`
+integration); the app does not currently check for or prompt about newer
+APK releases.
 
 ## Testing
 
