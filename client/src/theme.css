@@ -163,24 +163,42 @@ html[data-theme='light'] .btn-gold {
   color: #173245 !important;
 }
 
-/* Keep the dark operational sidebar in light mode and force all category copy to white. */
+/* Light mode uses a coherent light sidebar with blue typography. */
 html[data-theme='light'] .aq-category-sidebar {
-  background: rgba(0,8,22,0.94) !important;
-  border-color: rgba(0,200,255,0.18) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(238,246,251,0.98)) !important;
+  border-color: rgba(30, 102, 145, 0.20) !important;
+  box-shadow: 8px 0 24px rgba(50, 83, 103, 0.08) !important;
 }
 html[data-theme='light'] .aq-category-sidebar .aq-category-title,
-html[data-theme='light'] .aq-category-sidebar .aq-category-status,
-html[data-theme='light'] .aq-category-sidebar .aq-category-desc,
 html[data-theme='light'] .aq-category-sidebar .aq-sidebar-heading {
-  color: #ffffff !important;
+  color: #123f6a !important;
+  opacity: 1 !important;
+}
+html[data-theme='light'] .aq-category-sidebar .aq-category-desc {
+  color: #426887 !important;
   opacity: 1 !important;
 }
 html[data-theme='light'] .aq-category-sidebar .aq-category-status {
-  border-color: rgba(255,255,255,0.42) !important;
-  background-color: rgba(255,255,255,0.06) !important;
+  color: #24577e !important;
+  opacity: 1 !important;
+  border-color: rgba(42, 101, 145, 0.30) !important;
+  background-color: rgba(40, 112, 158, 0.07) !important;
+}
+html[data-theme='light'] .aq-category-sidebar button:not(.btn-depth):hover {
+  background-color: rgba(45, 132, 177, 0.08) !important;
+  border-color: rgba(38, 120, 166, 0.22) !important;
+}
+html[data-theme='light'] .aq-category-sidebar .btn-depth {
+  background: linear-gradient(180deg, #eef8fc 0%, #d9edf5 100%) !important;
+  color: #164f78 !important;
+  border-color: rgba(45, 126, 168, 0.32) !important;
+  box-shadow: 0 2px 0 rgba(51, 120, 155, 0.32), 0 6px 14px rgba(50, 92, 114, 0.10) !important;
+}
+html[data-theme='light'] .aq-category-sidebar .btn-depth svg {
+  color: #b1842d !important;
 }
 
-/* Floating operational buttons must retain white labels/icons in light mode. */
+/* Floating operational buttons retain white labels/icons in light mode. */
 html[data-theme='light'] .aq-emergency-label,
 html[data-theme='light'] .aq-assistant-label,
 html[data-theme='light'] .btn-emergency,
