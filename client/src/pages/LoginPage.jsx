@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Shield, CheckCircle, XCircle, Wifi, Cpu, Activity, Menu as MenuIcon, Settings as SettingsIcon } from 'lucide-react';
 import { api, setJWT } from '../services/api.js';
+import { isDesktop, desktopAuth } from '../services/desktopBridge.js';
 import EmergencyButton from '../components/EmergencyButton.jsx';
 import { useLang } from '../services/langContext.jsx';
 import { localeFor } from '../services/i18n.js';
@@ -10,6 +11,20 @@ import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from '../components/A
 import AppFooter from '../components/AppFooter.jsx';
 
 const STAGES = { IDLE: 'idle', AWAITING_APPROVAL: 'awaiting', APPROVED: 'approved', EXPIRED: 'expired' };
+
+// Authorizes this desktop install's device_id against the account (see
+// desktop/auth/session.js) right after an ordinary online login succeeds --
+// this is the "online authorization" step spec point 5 requires before
+// offline login is allowed on this machine. A no-op on the web build
+// (isDesktop is false there) and never blocks the login flow if it fails --
+// the user is still online and logged in either way, they just won't be
+// able to log in offline on this device until it succeeds once.
+function registerDesktopSession(jwt) {
+  if (!isDesktop || !jwt) return;
+  desktopAuth.establishOnlineSession(jwt).catch((err) => {
+    console.warn('[ANATOLIA-Q Desktop] Device authorization failed:', err?.message || err);
+  });
+}
 
 // ─── Boot sequence lines ─────────────────────────────────────────────────
 const BOOT_LINES_BY_LANG = {
@@ -298,6 +313,7 @@ export default function LoginPage({ onLogin }) {
         if (r.status === 'approved') {
           clearInterval(pollRef.current);
           setJWT(r.jwt);
+          registerDesktopSession(r.jwt);
           setStage(STAGES.APPROVED);
           setTimeout(() => onLogin({ userCode: r.userCode }), 1500);
         } else if (r.status === 'expired' || r.status === 'not_found') {
@@ -321,6 +337,7 @@ export default function LoginPage({ onLogin }) {
       // Admin: gets JWT directly, no approval wait
       if (r.status === 'approved' && r.jwt) {
         setJWT(r.jwt);
+        registerDesktopSession(r.jwt);
         onLogin({ userCode: r.userCode, isAdmin: r.isAdmin });
         return;
       }

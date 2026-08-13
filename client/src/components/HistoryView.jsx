@@ -6,6 +6,22 @@ import { Download, FileText, Eye, Loader2, Search, FileDown, Share2, ShieldCheck
 import { api, getToken } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 import { shareOrDownloadBlob } from '../services/shareFile.js';
+import { isDesktop, desktopAnalyses } from '../services/desktopBridge.js';
+
+// The desktop app's local SQLite copy uses camelCase fields (see
+// desktop/db/analysesRepo.js); HistoryView (and the rest of the app) expect
+// the same snake_case shape the server's /api/history returns.
+function localRecordToHistoryJson(row) {
+  return {
+    id: row.id,
+    category: row.category,
+    title: row.title,
+    content: row.content,
+    ai_provider: row.aiProvider,
+    created_at: row.createdAt,
+    preview: (row.content || '').slice(0, 200),
+  };
+}
 
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -70,7 +86,13 @@ export default function HistoryView({ showTitle = true }) {
   const [category, setCategory] = useState('all');
 
   useEffect(() => {
-    api.historyList()
+    // Desktop reads its own local SQLite copy first (kept current by the
+    // sync engine's push/pull) so the report list is available with no
+    // network at all — see desktop/sync/engine.js.
+    const listing = isDesktop
+      ? desktopAnalyses.list().then((rows) => (rows || []).map(localRecordToHistoryJson))
+      : api.historyList();
+    listing
       .then(setItems)
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
@@ -114,9 +136,11 @@ export default function HistoryView({ showTitle = true }) {
 
   const view = async (id) => {
     try {
-      const a = await api.historyGet(id);
+      const a = isDesktop
+        ? localRecordToHistoryJson(await desktopAnalyses.get(id))
+        : await api.historyGet(id);
       setSelected(a);
-      loadAudit(id);
+      if (!isDesktop) loadAudit(id); // audit trail is a cloud-only decision-intelligence feature
     } catch (e) {
       alert(`${t('errorPrefix')}: ${e.message}`);
     }

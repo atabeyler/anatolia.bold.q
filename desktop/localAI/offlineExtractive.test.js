@@ -1,0 +1,92 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createTestDb } from '../testHelpers.js';
+import { findReports, summarizeReport, compareReports, queryOffline } from './offlineExtractive.js';
+
+let db;
+const USER = 'BOLD-001';
+
+function insertAnalysis(id, { title, content, category = 'bddk', createdAt }) {
+  const ts = createdAt || new Date().toISOString();
+  db.prepare(`
+    INSERT INTO analyses (id, user_id, device_id, version, created_at, updated_at, sync_status, category, title, content)
+    VALUES (?, ?, 'AQ-WIN-TEST', 1, ?, ?, 'synced', ?, ?, ?)
+  `).run(id, USER, ts, ts, category, title, content);
+}
+
+beforeEach(() => { db = createTestDb(); });
+
+describe('findReports', () => {
+  it('ranks by keyword relevance in title and content', () => {
+    insertAnalysis('r1', { title: 'Dolandırıcılık analizi', content: 'kredi kartı sahtekarlığı tespit edildi' });
+    insertAnalysis('r2', { title: 'Portföy raporu', content: 'yatırım dağılımı incelendi' });
+
+    const results = findReports(db, USER, 'dolandırıcılık sahtekarlık');
+    expect(results[0].id).toBe('r1');
+  });
+
+  it('filters by a Turkish relative date phrase ("geçen ay")', () => {
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString();
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 5).toISOString();
+    insertAnalysis('old', { title: 'Eski rapor', content: 'içerik', createdAt: lastMonth });
+    insertAnalysis('new', { title: 'Yeni rapor', content: 'içerik', createdAt: thisMonth });
+
+    const results = findReports(db, USER, 'geçen ayki raporlarımı bul');
+    expect(results.map((r) => r.id)).toEqual(['old']);
+  });
+
+  it('never returns another user\'s reports', () => {
+    insertAnalysis('mine', { title: 'Benim raporum', content: 'x' });
+    db.prepare(`UPDATE analyses SET user_id = 'BOLD-999' WHERE id = 'mine'`).run();
+    expect(findReports(db, USER, 'rapor')).toHaveLength(0);
+  });
+});
+
+describe('summarizeReport', () => {
+  it('extracts the most relevant sentences, in original order', () => {
+    insertAnalysis('r1', {
+      title: 'Rapor',
+      content: 'Hava bugün güzel. Dolandırıcılık işlemleri tespit edildi ve dolandırıcılık riski yüksek. Kedi uyuyor. Dolandırıcılık önlemleri artırıldı.',
+    });
+    const summary = summarizeReport(db, USER, 'r1', { maxSentences: 2 });
+    expect(summary.summary).toContain('Dolandırıcılık işlemleri tespit edildi');
+    expect(summary.summary).not.toContain('Kedi uyuyor');
+  });
+
+  it('returns null for a report that does not exist / is not the caller\'s', () => {
+    expect(summarizeReport(db, USER, 'missing')).toBeNull();
+  });
+});
+
+describe('compareReports', () => {
+  it('reports shared vs. unique terms between two reports', () => {
+    insertAnalysis('a', { title: 'A', content: 'dolandırıcılık kredi kartı işlem' });
+    insertAnalysis('b', { title: 'B', content: 'dolandırıcılık sigorta işlem' });
+
+    const result = compareReports(db, USER, 'a', 'b');
+    expect(result.commonTermCount).toBeGreaterThan(0);
+    expect(result.onlyInA).toContain('kredi');
+    expect(result.onlyInB).toContain('sigorta');
+  });
+});
+
+describe('queryOffline dispatch', () => {
+  it('dispatches to compare when two entityIds are given ("bu iki raporu karşılaştır")', () => {
+    insertAnalysis('a', { title: 'A', content: 'x' });
+    insertAnalysis('b', { title: 'B', content: 'y' });
+    const res = queryOffline(db, USER, { entityIds: ['a', 'b'] });
+    expect(res.type).toBe('compare');
+  });
+
+  it('dispatches to summary when one entityId is given ("özetle")', () => {
+    insertAnalysis('a', { title: 'A', content: 'x. y. z.' });
+    const res = queryOffline(db, USER, { entityIds: ['a'] });
+    expect(res.type).toBe('summary');
+  });
+
+  it('dispatches to find for free-text search', () => {
+    insertAnalysis('a', { title: 'Rapor', content: 'x' });
+    const res = queryOffline(db, USER, { text: 'raporlarımı bul' });
+    expect(res.type).toBe('find');
+  });
+});

@@ -13,6 +13,7 @@ import { RadarModal } from '../components/PersonnelRadar.jsx';
 import UserManagementModal from '../components/UserManagement.jsx';
 import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from '../components/AppMenus.jsx';
 import AppFooter from '../components/AppFooter.jsx';
+import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
 import { api, setJWT, getToken } from '../services/api.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -442,6 +443,7 @@ export default function DashboardPage({ user, onLogout }) {
         </div>
 
         <div className="flex items-center justify-end gap-1 flex-nowrap min-w-0 overflow-visible md:justify-self-end md:ml-auto">
+          <DesktopSyncBadge />
           <div className="relative" ref={calendarRef}>
             <button
               onClick={() => setCalendarOpen((v) => !v)}
