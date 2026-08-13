@@ -37,9 +37,6 @@ export const CATEGORIES = [
 
 export default function CategorySidebar({ activeCategory, onSelect, onHome, collapsed = false, onToggleCollapse = null }) {
   const { t, lang } = useLang();
-  // Layout now follows the collapsed flag directly (not a screen-width
-  // breakpoint), so the toggle has a visible effect on every screen size,
-  // including mobile.
   const labelClass = collapsed ? 'hidden' : 'inline';
   const blockLabelClass = collapsed ? 'hidden' : 'block';
   const justify = collapsed ? 'justify-center' : 'justify-start';
@@ -48,7 +45,7 @@ export default function CategorySidebar({ activeCategory, onSelect, onHome, coll
   const rowPad = collapsed ? 'py-2' : 'px-3 py-2';
 
   return (
-    <aside className={`relative z-10 ${collapsed ? 'w-14' : 'w-64 sm:w-72 md:w-80'} backdrop-blur border-r overflow-y-auto flex-shrink-0 transition-all`} style={{ background: "rgba(0,8,22,0.92)", borderColor: "rgba(0,200,255,0.15)" }}>
+    <aside className={`aq-category-sidebar relative z-10 ${collapsed ? 'w-14' : 'w-64 sm:w-72 md:w-80'} backdrop-blur border-r overflow-y-auto flex-shrink-0 transition-all`} style={{ background: "rgba(0,8,22,0.92)", borderColor: "rgba(0,200,255,0.15)" }}>
       <div className="p-1 sm:p-4">
         {onToggleCollapse && (
           <button onClick={onToggleCollapse}
@@ -70,7 +67,7 @@ export default function CategorySidebar({ activeCategory, onSelect, onHome, coll
           <span className={`${labelClass} tracking-widest text-xs uppercase`}>{t('newAnalysis')}</span>
         </button>
 
-        <div className={`${blockLabelClass} text-[10px] text-cyan-200/80 tracking-[0.3em] uppercase mb-3 px-3`}>
+        <div className={`${blockLabelClass} aq-sidebar-heading text-[10px] text-cyan-200/80 tracking-[0.3em] uppercase mb-3 px-3`}>
           {t('analysisCategories')}
         </div>
 
@@ -92,10 +89,10 @@ export default function CategorySidebar({ activeCategory, onSelect, onHome, coll
                 <Icon className={`${iconSize} flex-shrink-0`} style={{ color: isActive ? cat.color : '#d4af37' }} />
                 <div className={`${blockLabelClass} min-w-0 flex-1`}>
                   <div className="flex items-center gap-2">
-                    <span className="font-display tracking-wider text-xs uppercase">{t(cat.nameKey)}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-cyan-300/35 text-cyan-100/85">{status}</span>
+                    <span className="aq-category-title font-display tracking-wider text-xs uppercase">{t(cat.nameKey)}</span>
+                    <span className="aq-category-status text-[9px] px-1.5 py-0.5 rounded-full border border-cyan-300/35 text-cyan-100/85">{status}</span>
                   </div>
-                  <div className="text-[10px] text-cyan-200/65 mt-0.5 truncate">{desc}</div>
+                  <div className="aq-category-desc text-[10px] text-cyan-200/65 mt-0.5 truncate">{desc}</div>
                 </div>
                 {isActive && <div className={`ml-auto w-1.5 h-1.5 rounded-full bg-gold animate-pulse ${collapsed ? 'hidden' : 'block'}`} />}
               </button>

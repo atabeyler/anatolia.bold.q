@@ -35,11 +35,8 @@ html[data-theme='light'] .hud-panel::after {
   background: linear-gradient(120deg, transparent 10%, rgba(48, 174, 205, 0.06) 47%, transparent 58%) !important;
 }
 
-html[data-theme='light'] .theme-overlay {
-  background: rgba(31, 47, 58, 0.32) !important;
-}
+html[data-theme='light'] .theme-overlay { background: rgba(31, 47, 58, 0.32) !important; }
 
-/* Convert legacy fixed dark surfaces to readable light surfaces. */
 html[data-theme='light'] [class*='bg-[#061326]'],
 html[data-theme='light'] [class*='bg-[#071225]'],
 html[data-theme='light'] [class*='bg-[#0b1d34]'],
@@ -50,15 +47,9 @@ html[data-theme='light'] [class*='bg-[#021728]'] {
   background: linear-gradient(150deg, rgba(255,255,255,0.97), rgba(236,246,250,0.97)) !important;
   background-color: rgba(249, 252, 253, 0.98) !important;
 }
-
-html[data-theme='light'] [class*='bg-black/30'] {
-  background-color: rgba(25, 80, 105, 0.06) !important;
-}
-
+html[data-theme='light'] [class*='bg-black/30'] { background-color: rgba(25, 80, 105, 0.06) !important; }
 html[data-theme='light'] [class*='bg-navy'],
-html[data-theme='light'] [class*='bg-navy-light'] {
-  background-color: rgba(242, 248, 251, 0.96) !important;
-}
+html[data-theme='light'] [class*='bg-navy-light'] { background-color: rgba(242, 248, 251, 0.96) !important; }
 
 html[data-theme='light'] [class*='text-cyan-50'],
 html[data-theme='light'] [class*='text-cyan-100'] { color: #14384d !important; }
@@ -69,7 +60,6 @@ html[data-theme='light'] [class*='text-gold'] { color: #7b5719 !important; }
 html[data-theme='light'] [class*='text-white/'] { color: rgba(25, 47, 63, 0.86) !important; }
 html[data-theme='light'] .text-white { color: #173044 !important; }
 
-/* Dashboard labels need stronger contrast than their dark-theme opacity values. */
 html[data-theme='light'] [class*='text-white/25'],
 html[data-theme='light'] [class*='text-white/30'],
 html[data-theme='light'] [class*='text-white/40'],
@@ -82,19 +72,10 @@ html[data-theme='light'] [class*='text-white/90'] {
   color: #29485b !important;
   opacity: 1 !important;
 }
-
 html[data-theme='light'] [class*='text-cyan-300/'],
-html[data-theme='light'] [class*='text-cyan-400/'] {
-  color: #0c6480 !important;
-  opacity: 1 !important;
-}
+html[data-theme='light'] [class*='text-cyan-400/'] { color: #0c6480 !important; opacity: 1 !important; }
+html[data-theme='light'] [class*='text-gold/'] { color: #765116 !important; opacity: 1 !important; }
 
-html[data-theme='light'] [class*='text-gold/'] {
-  color: #765116 !important;
-  opacity: 1 !important;
-}
-
-/* Dark-theme semantic colors need stronger equivalents on white surfaces. */
 html[data-theme='light'] [class*='text-blue-200'],
 html[data-theme='light'] [class*='text-blue-300'],
 html[data-theme='light'] [class*='text-blue-400'] { color: #1d4f91 !important; }
@@ -134,11 +115,9 @@ html[data-theme='light'] [class*='border-cyan-400'],
 html[data-theme='light'] [class*='border-cyan-500'] { border-color: rgba(21, 130, 163, 0.30) !important; }
 html[data-theme='light'] [class*='border-gold'] { border-color: rgba(160, 117, 35, 0.26) !important; }
 html[data-theme='light'] [class*='border-white/'] { border-color: rgba(32, 67, 88, 0.16) !important; }
-
 html[data-theme='light'] [class*='bg-white/5'],
 html[data-theme='light'] [class*='bg-white/10'] { background-color: rgba(30, 104, 135, 0.07) !important; }
 
-/* Category/activity chips should stay tinted but no longer use very dark fills. */
 html[data-theme='light'] [class*='bg-cyan-900/'],
 html[data-theme='light'] [class*='bg-yellow-900/'],
 html[data-theme='light'] [class*='bg-red-900/'],
@@ -146,9 +125,7 @@ html[data-theme='light'] [class*='bg-green-900/'],
 html[data-theme='light'] [class*='bg-violet-900/'],
 html[data-theme='light'] [class*='bg-blue-900/'],
 html[data-theme='light'] [class*='bg-emerald-900/'],
-html[data-theme='light'] [class*='bg-orange-900/'] {
-  background-color: rgba(43, 126, 156, 0.08) !important;
-}
+html[data-theme='light'] [class*='bg-orange-900/'] { background-color: rgba(43, 126, 156, 0.08) !important; }
 
 html[data-theme='light'] input,
 html[data-theme='light'] textarea,
@@ -158,10 +135,7 @@ html[data-theme='light'] select {
   border-color: rgba(26, 126, 157, 0.30) !important;
 }
 html[data-theme='light'] input::placeholder,
-html[data-theme='light'] textarea::placeholder {
-  color: rgba(39, 73, 94, 0.68) !important;
-  opacity: 1 !important;
-}
+html[data-theme='light'] textarea::placeholder { color: rgba(39, 73, 94, 0.68) !important; opacity: 1 !important; }
 html[data-theme='light'] option { background: #ffffff; color: #17364b; }
 
 html[data-theme='light'] .btn-shine,
@@ -177,20 +151,42 @@ html[data-theme='light'] .btn-neon {
   border-color: rgba(26, 137, 170, 0.40) !important;
   box-shadow: 0 5px 16px rgba(54, 103, 126, 0.12) !important;
 }
-
 html[data-theme='light'] .btn-depth {
   background: linear-gradient(180deg, #b9f4fc 0%, #79d9ed 58%, #4da9c7 100%) !important;
   color: #082b3a !important;
   border-color: rgba(63, 165, 194, 0.58) !important;
   box-shadow: 0 5px 0 #398aa6, 0 10px 18px rgba(39, 120, 148, 0.20) !important;
 }
-html[data-theme='light'] .btn-depth:active {
-  box-shadow: 0 2px 0 #398aa6, 0 5px 10px rgba(39, 120, 148, 0.18) !important;
-}
-
+html[data-theme='light'] .btn-depth:active { box-shadow: 0 2px 0 #398aa6, 0 5px 10px rgba(39, 120, 148, 0.18) !important; }
 html[data-theme='light'] .btn-gold {
   background: linear-gradient(135deg, #83e7f5, #b1dff4 52%, #f2be82) !important;
   color: #173245 !important;
+}
+
+/* Keep the dark operational sidebar in light mode and force all category copy to white. */
+html[data-theme='light'] .aq-category-sidebar {
+  background: rgba(0,8,22,0.94) !important;
+  border-color: rgba(0,200,255,0.18) !important;
+}
+html[data-theme='light'] .aq-category-sidebar .aq-category-title,
+html[data-theme='light'] .aq-category-sidebar .aq-category-status,
+html[data-theme='light'] .aq-category-sidebar .aq-category-desc,
+html[data-theme='light'] .aq-category-sidebar .aq-sidebar-heading {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+html[data-theme='light'] .aq-category-sidebar .aq-category-status {
+  border-color: rgba(255,255,255,0.42) !important;
+  background-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Floating operational buttons must retain white labels/icons in light mode. */
+html[data-theme='light'] .aq-emergency-label,
+html[data-theme='light'] .aq-assistant-label,
+html[data-theme='light'] .btn-emergency,
+html[data-theme='light'] .btn-emergency * {
+  color: #ffffff !important;
+  opacity: 1 !important;
 }
 
 html[data-theme='light'] .report-content { color: #203b4e !important; }
@@ -201,11 +197,7 @@ html[data-theme='light'] .report-content a { color: #075f88 !important; text-dec
 html[data-theme='light'] .report-content code { color: #6b3c00 !important; background: rgba(128, 91, 25, 0.08); }
 
 html[data-theme='light'] .theme-option { background: rgba(246, 251, 253, 0.90); }
-html[data-theme='light'] .theme-option-active {
-  background: rgba(60, 179, 209, 0.16) !important;
-  color: #124b64 !important;
-}
-
+html[data-theme='light'] .theme-option-active { background: rgba(60, 179, 209, 0.16) !important; color: #124b64 !important; }
 html[data-theme='light'] ::selection { background: rgba(22, 145, 181, 0.22); color: #102f42; }
 html[data-theme='light'] ::-webkit-scrollbar-thumb { background: rgba(34, 120, 148, 0.34); }
 

@@ -26,9 +26,6 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
   const [page, setPage] = useState('unknown');
   const [pos, setPos] = useState({ x: 24, y: 24 });
   const dragRef = useRef({ dragging: false, moved: false, sx: 0, sy: 0, px: 24, py: 24 });
-  // Tracks the exact listener functions currently attached to window so an
-  // unmount mid-drag (route change, logout) can remove them even though
-  // onDragMove/onDragEnd are recreated on every render.
   const dragListenersRef = useRef(null);
   const suppressClickRef = useRef(false);
 
@@ -66,7 +63,6 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
     }, ms);
   }, []);
 
-  // TTS: browser SpeechSynthesis only — no network/AudioContext dependency
   const speakText = useCallback((text, onDone) => {
     if (!text?.trim()) { onDone?.(); return; }
 
@@ -106,8 +102,6 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
       setTimeout(() => { if (!fired) { fired = true; synth.removeEventListener('voiceschanged', onVC); go(); } }, 1000);
     }
   }, []);
-
-  // ─── Microphone startup ──────────────────────────────────────────────
 
   startMicFn.current = () => {
     if (!SR || !onRef.current || statusRef.current !== S.IDLE) return;
@@ -282,7 +276,7 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
           {on && (
             <motion.div key="status"
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-mono tracking-wider border-red-300/45 text-red-100 bg-[linear-gradient(135deg,rgba(168,22,56,0.85),rgba(112,6,30,0.85))] backdrop-blur shadow-[0_6px_16px_rgba(140,0,28,0.45)]">
+              className="aq-assistant-label flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-mono tracking-wider border-red-300/45 text-red-100 bg-[linear-gradient(135deg,rgba(168,22,56,0.85),rgba(112,6,30,0.85))] backdrop-blur shadow-[0_6px_16px_rgba(140,0,28,0.45)]">
               <motion.span className={`w-1.5 h-1.5 rounded-full ${dot}`}
                 animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
               {statusText}
@@ -295,8 +289,6 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
           onTouchStart={onDragStart}
           onClick={() => {
             if (dragRef.current.moved || suppressClickRef.current) return;
-            // Chrome: to work from an async SpeechSynthesis callback, the first
-            // speak() must happen inside a user gesture — warm it up with a silent utterance
             if (!on && window.speechSynthesis) {
               const warmup = new SpeechSynthesisUtterance(' ');
               warmup.volume = 0;
@@ -305,7 +297,7 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
             }
             setOn(o => !o);
           }}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-mono tracking-wider transition-all shadow-[0_8px_24px_rgba(0,0,0,0.4)] ${
+          className={`aq-assistant-label flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-mono tracking-wider transition-all shadow-[0_8px_24px_rgba(0,0,0,0.4)] ${
             on
               ? 'btn-emergency emergency-pulse text-white border-red-300'
               : 'btn-emergency text-white/85 border-red-400/70 opacity-90 hover:opacity-100'
