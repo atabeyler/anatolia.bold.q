@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import http from 'node:http';
 import jwt from 'jsonwebtoken';
-import Database from 'better-sqlite3';
 import { createFakePool } from './syncTestHelpers.js';
 
 // True multi-device end-to-end coverage: the REAL desktop sync engine
@@ -17,19 +16,17 @@ import { createFakePool } from './syncTestHelpers.js';
 //
 // Desktop's sync/queue/conflict/entityHandlers modules have zero external
 // npm dependencies of their own (only node:fs/path/crypto plus sibling
-// imports), so importing them here by relative path works fine. The local
-// SQLite db itself is built inline (mirroring desktop/testHelpers.js)
-// rather than importing that file directly, so better-sqlite3 resolves
-// from THIS package's own node_modules (added as a server devDependency)
-// instead of requiring the server CI job to also install the root
-// package's dependencies (which would pull in Electron just for this).
-const { runMigrations } = await import('../../../desktop/db/migrate.js');
-function createTestDb() {
-  const db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  runMigrations(db);
-  return db;
-}
+// imports). desktop/testHelpers.js does need better-sqlite3, but resolves
+// it from the repo ROOT's node_modules (better-sqlite3 is already a real
+// root dependency, needed by the desktop app itself) -- NOT from a copy
+// added to server/package.json. A better-sqlite3 devDependency was tried
+// here once and reverted: `npm install --prefix server` (render.yaml's
+// build command) installs devDependencies too and tries to compile its
+// native addon against Render's build image, which fails there. The CI
+// "server" job installs root dependencies as an extra step instead (see
+// .github/workflows/ci.yml) so this import resolves in CI without
+// touching what Render's production build ever installs.
+const { createTestDb } = await import('../../../desktop/testHelpers.js');
 
 let fakePool;
 vi.mock('../services/database.js', () => ({ getPool: () => fakePool }));
