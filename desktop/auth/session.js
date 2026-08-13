@@ -1,3 +1,5 @@
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+
 function decodeJwtPayload(jwt) {
   try {
     const [, payloadB64] = jwt.split('.');
@@ -7,11 +9,29 @@ function decodeJwtPayload(jwt) {
   }
 }
 
-// Orchestrates: online login → register this device with the account
-// (server/src/routes/devices.js) → cache the session + device authorization
-// locally, so a later launch with no network can still open the app for
-// this same account (spec 5: "offline login only on a previously
-// authorized device").
+function makePasswordVerifier(password) {
+  if (typeof password !== 'string' || password.length === 0) return null;
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 32);
+  return `${salt.toString('base64')}:${hash.toString('base64')}`;
+}
+
+function verifyPassword(password, verifier) {
+  if (typeof password !== 'string' || !verifier) return false;
+  try {
+    const [saltB64, hashB64] = verifier.split(':');
+    const salt = Buffer.from(saltB64, 'base64');
+    const expected = Buffer.from(hashB64, 'base64');
+    const actual = scryptSync(password, salt, expected.length);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
+
+// Orchestrates: online login → register this device with the account → cache
+// the session and a one-way password verifier inside Electron safeStorage.
+// The real password is never persisted by the desktop shell.
 export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fetchImpl = fetch, platform = 'win32', appVersion }) {
   function upsertDeviceMeta(fields) {
     const existing = db.prepare('SELECT device_id FROM device_meta WHERE device_id = ?').get(deviceId);
@@ -28,11 +48,9 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     }
   }
 
-  // Call once the renderer's existing login flow (the same LoginPage /
-  // api.js the web app already uses) has produced a valid JWT. This is the
-  // "must be online once" step -- it both saves the session locally and
-  // authorizes this device_id against the account on the server.
-  async function establishOnlineSession(jwt) {
+  // Called only after the normal cloud login has succeeded. Password is used
+  // solely to derive a salted scrypt verifier; it is never stored verbatim.
+  async function establishOnlineSession(jwt, password) {
     const payload = decodeJwtPayload(jwt);
     if (!payload?.userCode) throw new Error('Geçersiz oturum belirteci');
 
@@ -46,35 +64,41 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       throw new Error(body.error || `Cihaz kaydı başarısız (HTTP ${res.status})`);
     }
 
-    secureStore.save({ jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin });
+    const passwordVerifier = makePasswordVerifier(password);
+    secureStore.save({ jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin, passwordVerifier });
     upsertDeviceMeta({ platform, userId: payload.userCode, ts: new Date().toISOString() });
     return { userCode: payload.userCode };
   }
 
-  // Returns the cached session even if the JWT itself has since expired --
-  // an expired-but-previously-valid token still proves "this device was
-  // authorized for this account" for the purpose of unlocking local SQLite
-  // access while offline. Any actual server call still goes through
-  // authMiddleware normally and is rejected/refreshed like any expired
-  // token once connectivity returns (handled as an ordinary sync failure,
-  // not a fatal desktop error).
   function getSession() {
-    return secureStore.load();
+    const stored = secureStore.load();
+    if (!stored) return null;
+    // Never expose the verifier to the renderer.
+    const { passwordVerifier: _passwordVerifier, ...session } = stored;
+    return session;
   }
 
   function isOfflineLoginAllowed(userCode) {
     const row = db.prepare('SELECT last_authorized_user_id FROM device_meta WHERE device_id = ?').get(deviceId);
-    return !!row && row.last_authorized_user_id === userCode;
+    const stored = secureStore.load();
+    return !!row && row.last_authorized_user_id === userCode && stored?.userCode === userCode && !!stored?.passwordVerifier;
   }
 
-  // Explicit logout revokes this device's offline capability too -- the
-  // next login on this machine must be online again.
+  function verifyOfflineLogin(userCode, password) {
+    const normalized = String(userCode || '').trim();
+    if (!isOfflineLoginAllowed(normalized)) return { ok: false };
+    const stored = secureStore.load();
+    if (!verifyPassword(password, stored.passwordVerifier)) return { ok: false };
+    return { ok: true, userCode: stored.userCode, isAdmin: !!stored.isAdmin, jwt: stored.jwt };
+  }
+
+  // Explicit logout revokes this device's offline capability too.
   function logout() {
     secureStore.clear();
     db.prepare('UPDATE device_meta SET last_authorized_user_id = NULL WHERE device_id = ?').run(deviceId);
   }
 
-  return { establishOnlineSession, getSession, isOfflineLoginAllowed, logout };
+  return { establishOnlineSession, getSession, isOfflineLoginAllowed, verifyOfflineLogin, logout };
 }
 
-export const _internal = { decodeJwtPayload };
+export const _internal = { decodeJwtPayload, makePasswordVerifier, verifyPassword };
