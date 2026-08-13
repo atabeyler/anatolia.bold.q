@@ -16,36 +16,17 @@
     "dist:win": "npm run build && electron-builder --win",
     "prepare": "husky"
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
+  "engines": { "node": ">=20.0.0" },
   "build": {
     "appId": "com.boldkimya.anatoliaq",
     "productName": "ANATOLIA-Q",
     "copyright": "Copyright © BOLD Kimya",
-    "directories": {
-      "output": "release",
-      "buildResources": "desktop/build"
-    },
-    "files": [
-      "desktop/**/*",
-      "client/dist/**/*",
-      "!desktop/**/*.test.js",
-      "!desktop/**/*.md"
-    ],
+    "directories": { "output": "release", "buildResources": "desktop/build" },
+    "files": ["desktop/**/*", "client/dist/**/*", "!desktop/**/*.test.js", "!desktop/**/*.md"],
     "extraResources": [],
-    "asarUnpack": [
-      "**/node_modules/better-sqlite3/**/*"
-    ],
+    "asarUnpack": ["**/node_modules/better-sqlite3/**/*"],
     "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "desktop/build/icon.ico",
       "artifactName": "ANATOLIA-Q-Setup-${version}.${ext}"
     },
@@ -60,7 +41,6 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
-    "better-sqlite3": "^11.10.0",
     "concurrently": "^9.2.0",
     "cross-env": "^7.0.3",
     "electron": "^33.4.11",
@@ -70,6 +50,7 @@
     "wait-on": "^8.0.4"
   },
   "dependencies": {
+    "better-sqlite3": "^11.10.0",
     "electron-updater": "^6.6.2"
   }
 }
