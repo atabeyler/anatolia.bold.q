@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Shield, CheckCircle, XCircle, Wifi, Cpu, Activity, Menu as MenuIcon, Settings as SettingsIcon } from 'lucide-react';
 import { api, setJWT } from '../services/api.js';
-import { isDesktop, desktopAuth, desktopConnectivity } from '../services/desktopBridge.js';
+import { isNativeApp, nativeAuth, nativeConnectivity } from '../services/nativeBridge.js';
 import EmergencyButton from '../components/EmergencyButton.jsx';
 import { useLang } from '../services/langContext.jsx';
 import { localeFor } from '../services/i18n.js';
@@ -12,19 +12,20 @@ import AppFooter from '../components/AppFooter.jsx';
 
 const STAGES = { IDLE: 'idle', AWAITING_APPROVAL: 'awaiting', APPROVED: 'approved', EXPIRED: 'expired' };
 
-// Authorizes this desktop install's device_id against the account (see
-// desktop/auth/session.js) right after an ordinary online login succeeds --
-// this is the "online authorization" step spec point 5 requires before
-// offline login is allowed on this machine. Also caches a bcrypt hash of
-// the password just used (never the plaintext) so a later offline login on
-// this same device can be verified locally. A no-op on the web build
-// (isDesktop is false there) and never blocks the login flow if it fails --
-// the user is still online and logged in either way, they just won't be
-// able to log in offline on this device until it succeeds once.
-function registerDesktopSession(jwt, password) {
-  if (!isDesktop || !jwt) return;
-  desktopAuth.establishOnlineSession(jwt, password).catch((err) => {
-    console.warn('[ANATOLIA-Q Desktop] Device authorization failed:', err?.message || err);
+// Authorizes this install's device_id against the account (see
+// desktop/auth/session.js / client/src/mobile/auth/session.js) right after
+// an ordinary online login succeeds -- this is the "online authorization"
+// step spec point 5 requires before offline login is allowed on this
+// device. Also caches a bcrypt hash of the password just used (never the
+// plaintext) so a later offline login on this same device can be verified
+// locally. A no-op on the web build (isNativeApp is false there) and never
+// blocks the login flow if it fails -- the user is still online and logged
+// in either way, they just won't be able to log in offline on this device
+// until it succeeds once.
+function registerNativeSession(jwt, password) {
+  if (!isNativeApp || !jwt) return;
+  nativeAuth.establishOnlineSession(jwt, password).catch((err) => {
+    console.warn('[ANATOLIA-Q] Device authorization failed:', err?.message || err);
   });
 }
 
@@ -315,7 +316,7 @@ export default function LoginPage({ onLogin }) {
         if (r.status === 'approved') {
           clearInterval(pollRef.current);
           setJWT(r.jwt);
-          registerDesktopSession(r.jwt, password);
+          registerNativeSession(r.jwt, password);
           setStage(STAGES.APPROVED);
           setTimeout(() => onLogin({ userCode: r.userCode }), 1500);
         } else if (r.status === 'expired' || r.status === 'not_found') {
@@ -338,7 +339,7 @@ export default function LoginPage({ onLogin }) {
   // instead of hitting the network — only succeeds for an account that has
   // actually authorized this exact device online before (spec point 5).
   const attemptOfflineLogin = async () => {
-    const result = await desktopAuth.verifyOfflineLogin(userCode.trim(), password);
+    const result = await nativeAuth.verifyOfflineLogin(userCode.trim(), password);
     if (!result?.ok) {
       setError(result?.error || 'Çevrimdışı giriş başarısız.');
       return;
@@ -355,7 +356,7 @@ export default function LoginPage({ onLogin }) {
     // the password itself is never written to localStorage.
     localStorage.setItem('aq_saved_code', userCode.trim());
     try {
-      if (isDesktop && (await desktopConnectivity.getState()) === 'local') {
+      if (isNativeApp && (await nativeConnectivity.getState()) === 'local') {
         // Already known to be offline -- skip straight to local verification
         // instead of waiting out a network request that can't succeed.
         await attemptOfflineLogin();
@@ -365,7 +366,7 @@ export default function LoginPage({ onLogin }) {
       // Admin: gets JWT directly, no approval wait
       if (r.status === 'approved' && r.jwt) {
         setJWT(r.jwt);
-        registerDesktopSession(r.jwt, password);
+        registerNativeSession(r.jwt, password);
         onLogin({ userCode: r.userCode, isAdmin: r.isAdmin });
         return;
       }
@@ -378,7 +379,7 @@ export default function LoginPage({ onLogin }) {
       // state was stale. A rejection the server actually sent back (wrong
       // password, blocked account, ...) is a real answer and must be shown
       // as-is, not masked by an unrelated offline-login error.
-      if (isDesktop && err instanceof TypeError) {
+      if (isNativeApp && err instanceof TypeError) {
         await attemptOfflineLogin();
         return;
       }

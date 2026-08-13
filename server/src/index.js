@@ -33,10 +33,24 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// The desktop (Electron) and mobile (Capacitor) apps load the SPA from a
+// local origin that is never the deployed backend origin, so their API/
+// socket calls are cross-origin even though they're the same app -- see
+// desktop/main.js's STATIC_SERVER_PORT and client/src/services/api.js's
+// baseFor(). These fixed origins must always be allowlisted, in addition to
+// APP_URL, regardless of environment.
+const NATIVE_APP_ORIGINS = [
+  'http://127.0.0.1:57813', // Electron desktop static server (desktop/main.js)
+  'capacitor://localhost',  // Capacitor Android WebView
+  'https://localhost',      // Capacitor Android WebView (some configs)
+  'http://localhost',       // Capacitor Android WebView (cleartext, some configs)
+];
+
 // In production, restrict cross-origin access to the app's own deployed
-// origin (APP_URL) instead of reflecting any origin. Locally (no APP_URL /
-// non-production) all origins are still allowed for developer convenience.
-const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL] : true;
+// origin (APP_URL) plus the native app origins above, instead of reflecting
+// any origin. Locally (no APP_URL / non-production) all origins are still
+// allowed for developer convenience.
+const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL, ...NATIVE_APP_ORIGINS] : true;
 
 const app = express();
 const server = http.createServer(app);

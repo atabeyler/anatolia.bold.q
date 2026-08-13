@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, Laptop, Cloud } from 'lucide-react';
-import { isDesktop, desktopSync } from '../services/desktopBridge.js';
+import { isNativeApp, nativeSync } from '../services/nativeBridge.js';
 
 const POLL_MS = 15000;
 
@@ -23,22 +23,23 @@ function VersionCard({ icon: Icon, label, payload, deleted, accent }) {
   );
 }
 
-// Desktop-only: surfaces unresolved sync conflicts (two devices edited the
-// same offline record) and lets the user pick a side instead of anything
-// being silently overwritten -- backed by desktop/sync/conflict.js's
-// listConflicts/resolveConflict. Renders nothing on the web build or when
-// there is nothing to resolve.
+// Native-app-only: surfaces unresolved sync conflicts (two devices edited
+// the same offline record) and lets the user pick a side instead of
+// anything being silently overwritten -- backed by desktop/sync/conflict.js
+// / client/src/mobile/sync/conflict.js's listConflicts/resolveConflict.
+// Covers both Electron and Capacitor/Android (see services/nativeBridge.js);
+// renders nothing on the web build or when there is nothing to resolve.
 export default function DesktopConflictModal() {
   const [conflicts, setConflicts] = useState([]);
   const [resolving, setResolving] = useState(null);
 
   const refresh = useCallback(() => {
-    if (!isDesktop) return;
-    desktopSync.listConflicts().then((rows) => setConflicts(rows || [])).catch(() => {});
+    if (!isNativeApp) return;
+    nativeSync.listConflicts().then((rows) => setConflicts(rows || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!isDesktop) return undefined;
+    if (!isNativeApp) return undefined;
     refresh();
     const timer = setInterval(refresh, POLL_MS);
     return () => clearInterval(timer);
@@ -47,14 +48,14 @@ export default function DesktopConflictModal() {
   const resolve = async (conflictId, resolution) => {
     setResolving(conflictId);
     try {
-      await desktopSync.resolveConflict(conflictId, resolution);
+      await nativeSync.resolveConflict(conflictId, resolution);
       refresh();
     } finally {
       setResolving(null);
     }
   };
 
-  if (!isDesktop || conflicts.length === 0) return null;
+  if (!isNativeApp || conflicts.length === 0) return null;
   const current = conflicts[0];
 
   return (
@@ -71,7 +72,7 @@ export default function DesktopConflictModal() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <VersionCard icon={Laptop} label="Bu bilgisayardaki (yerel)" payload={current.localPayload} accent="border-cyan-400/40 bg-cyan-950/20 text-cyan-100" />
+            <VersionCard icon={Laptop} label="Bu cihazdaki (yerel)" payload={current.localPayload} accent="border-cyan-400/40 bg-cyan-950/20 text-cyan-100" />
             <VersionCard icon={Cloud} label="Buluttaki" payload={current.serverPayload} deleted={current.serverDeleted} accent="border-gold/40 bg-gold/5 text-gold" />
           </div>
 

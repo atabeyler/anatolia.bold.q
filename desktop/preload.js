@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Same default/override as main.js's CLOUD_URL -- duplicated rather than
+// imported because the preload script runs in its own isolated context
+// (see contextIsolation below) and doesn't share module state with main.js.
+const CLOUD_URL = process.env.ANATOLIA_CLOUD_URL || 'https://anatolia-q.onrender.com';
+
 // contextIsolation is on and nodeIntegration is off (see main.js) — this is
 // the *only* surface the renderer (the ordinary client/ React app) gets
 // into the main process. Every call is a thin ipcRenderer.invoke wrapper;
@@ -7,6 +12,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('anatoliaDesktop', {
   isDesktop: true,
   platform: process.platform,
+  // The window loads client/dist from a local static server (see
+  // staticServer.js), not the real backend origin -- api.js reads this to
+  // know where actual /api/* calls need to go instead of a same-origin
+  // relative fetch that would hit nothing.
+  cloudUrl: CLOUD_URL,
 
   auth: {
     establishOnlineSession: (jwt, password) => ipcRenderer.invoke('auth:establishOnlineSession', jwt, password),

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ANATOLIA-Q</string>
+    <string name="title_activity_main">ANATOLIA-Q</string>
+    <string name="package_name">com.boldkimya.anatoliaq</string>
+    <string name="custom_url_scheme">com.boldkimya.anatoliaq</string>
+</resources>

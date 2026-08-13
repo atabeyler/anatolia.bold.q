@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.121-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.122-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -151,6 +151,24 @@ The web app is unaffected by any of this — `desktop/` only ever loads the alre
 
 ---
 
+## Android (Capacitor)
+
+`mobile/` contains a Capacitor shell around the same `client/` React app, reusing the desktop app's offline-first sync architecture, device auth, and local AI — ported to Capacitor's async native APIs. Distributed as a sideloaded APK only (never Google Play), matching the desktop app's closed institutional distribution model — see **[mobile/README.md](./mobile/README.md)** for the full architecture, signing, and release process.
+
+```bash
+cd client && npm run build   # produces client/dist, which mobile/ wraps
+cd ../mobile && npm ci
+npm run sync                 # cap sync android — copies client/dist into the Android project
+npm run open                 # opens the project in Android Studio
+
+cd android && ./gradlew assembleDebug     # unsigned debug APK
+                ./gradlew assembleRelease  # release APK, signed if keystore.properties exists
+```
+
+The web and desktop apps are unaffected — `mobile/` only ever consumes the already-built `client/dist`, and its SQLite/sync code lives under `client/src/mobile/` alongside (not instead of) the desktop equivalents.
+
+---
+
 ## Environment Variables
 
 ### Critical
@@ -178,6 +196,7 @@ The web app is unaffected by any of this — `desktop/` only ever loads the alre
 | `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |
 | `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
 | `ANATOLIA_CLOUD_URL` | Desktop-only: deployed API/web origin the Electron app syncs against (defaults to the production Render URL) |
+| `VITE_MOBILE_CLOUD_URL` | Mobile-only, build-time: deployed API/web origin the Capacitor Android app syncs against (defaults to the production Render URL) |
 
 ### Quantum
 

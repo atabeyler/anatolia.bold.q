@@ -6,11 +6,12 @@ import { Download, FileText, Eye, Loader2, Search, FileDown, Share2, ShieldCheck
 import { api, getToken } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 import { shareOrDownloadBlob } from '../services/shareFile.js';
-import { isDesktop, desktopAnalyses } from '../services/desktopBridge.js';
+import { isNativeApp, nativeAnalyses } from '../services/nativeBridge.js';
 
-// The desktop app's local SQLite copy uses camelCase fields (see
-// desktop/db/analysesRepo.js); HistoryView (and the rest of the app) expect
-// the same snake_case shape the server's /api/history returns.
+// Both native apps' local SQLite copies use camelCase fields (see
+// desktop/db/analysesRepo.js / client/src/mobile/db/analysesRepo.js);
+// HistoryView (and the rest of the app) expect the same snake_case shape
+// the server's /api/history returns.
 function localRecordToHistoryJson(row) {
   return {
     id: row.id,
@@ -86,11 +87,11 @@ export default function HistoryView({ showTitle = true }) {
   const [category, setCategory] = useState('all');
 
   useEffect(() => {
-    // Desktop reads its own local SQLite copy first (kept current by the
-    // sync engine's push/pull) so the report list is available with no
-    // network at all — see desktop/sync/engine.js.
-    const listing = isDesktop
-      ? desktopAnalyses.list().then((rows) => (rows || []).map(localRecordToHistoryJson))
+    // Native apps read their own local SQLite copy first (kept current by
+    // the sync engine's push/pull) so the report list is available with no
+    // network at all — see desktop/sync/engine.js / client/src/mobile/sync/engine.js.
+    const listing = isNativeApp
+      ? nativeAnalyses.list().then((rows) => (rows || []).map(localRecordToHistoryJson))
       : api.historyList();
     listing
       .then(setItems)
@@ -136,11 +137,11 @@ export default function HistoryView({ showTitle = true }) {
 
   const view = async (id) => {
     try {
-      const a = isDesktop
-        ? localRecordToHistoryJson(await desktopAnalyses.get(id))
+      const a = isNativeApp
+        ? localRecordToHistoryJson(await nativeAnalyses.get(id))
         : await api.historyGet(id);
       setSelected(a);
-      if (!isDesktop) loadAudit(id); // audit trail is a cloud-only decision-intelligence feature
+      if (!isNativeApp) loadAudit(id); // audit trail is a cloud-only decision-intelligence feature
     } catch (e) {
       alert(`${t('errorPrefix')}: ${e.message}`);
     }

@@ -43,6 +43,8 @@ export default [
         sessionStorage: 'readonly',
         Element: 'readonly',
         File: 'readonly',
+        crypto: 'readonly',
+        AbortController: 'readonly',
       },
     },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },

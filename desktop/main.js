@@ -20,6 +20,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The deployed web app is the source of truth this points at by default;
 // override with ANATOLIA_CLOUD_URL for a self-hosted/staging server.
 const CLOUD_URL = process.env.ANATOLIA_CLOUD_URL || 'https://anatolia-q.onrender.com';
+// Fixed (not random) so it can be allowlisted in the server's CORS config
+// (server/src/index.js) -- see the loadURL call below.
+const STATIC_SERVER_PORT = 57813;
 // ANATOLIA_DESKTOP_FORCE_PROD lets an unpackaged checkout (npm run desktop,
 // or this project's own smoke tests) exercise the production static-server
 // load path without needing a full electron-builder build first.
@@ -153,7 +156,10 @@ async function createWindow() {
     await mainWindow.loadURL('http://localhost:5173');
   } else {
     const clientDist = path.join(__dirname, '..', 'client', 'dist');
-    const { url } = await serveStaticDir(clientDist);
+    // Fixed, not random, port: this origin needs to be allowlisted in the
+    // server's CORS config (server/src/index.js's ELECTRON_APP_ORIGIN) for
+    // api.js's cross-origin calls to CLOUD_URL to work at all.
+    const { url } = await serveStaticDir(clientDist, { port: STATIC_SERVER_PORT });
     await mainWindow.loadURL(url);
   }
 

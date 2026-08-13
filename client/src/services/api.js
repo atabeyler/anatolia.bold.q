@@ -1,15 +1,25 @@
-// Exposed so services/socket.js can point Socket.IO at the same origin as
-// the REST calls above.
-export function getSocketBaseUrl() {
-  return '/';
+// On the web, the page's own origin *is* the cloud server (server/src/index.js
+// serves the built SPA and the API from the same origin), so a same-origin
+// relative fetch just works. Desktop (Electron) and mobile (Capacitor) load
+// the built SPA from their own local origin instead -- a bundled static
+// server for desktop, capacitor://localhost for Android -- so relative
+// fetches there would hit nothing. Both bridges make the real deployed API
+// origin discoverable; resolved on every call (not cached at module load)
+// since window.anatoliaDesktop is only guaranteed to exist by the time
+// preload.js has run, and Capacitor's platform check has no such ordering
+// concern but is equally cheap.
+function baseFor() {
+  if (typeof window !== 'undefined' && window.anatoliaDesktop?.cloudUrl) {
+    return window.anatoliaDesktop.cloudUrl;
+  }
+  if (typeof window !== 'undefined' && window.anatoliaMobile?.cloudUrl) {
+    return window.anatoliaMobile.cloudUrl;
+  }
+  return '';
 }
 
-// Every call targets the current page's own origin -- that origin is always
-// the cloud server.
-const API = '';
-
-function baseFor() {
-  return API;
+export function getSocketBaseUrl() {
+  return baseFor() || '/';
 }
 
 function getJWT() { return localStorage.getItem('anatolia_jwt'); }
@@ -65,7 +75,7 @@ export const api = {
     const jwt = getJWT();
     if (jwt) headers.Authorization = `Bearer ${jwt}`;
 
-    const res = await fetch(API + '/api/analysis/chat', {
+    const res = await fetch(baseFor() + '/api/analysis/chat', {
       method: 'POST',
       headers,
       body: JSON.stringify({ message, history, documentContext, imageData }),
@@ -109,7 +119,7 @@ export const api = {
     const jwt = getJWT();
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(API + '/api/analysis/upload', {
+    const res = await fetch(baseFor() + '/api/analysis/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
       body: formData,
@@ -125,7 +135,7 @@ export const api = {
     const jwt = getJWT();
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(API + '/api/files/upload', {
+    const res = await fetch(baseFor() + '/api/files/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
       body: formData,
@@ -141,7 +151,7 @@ export const api = {
     const jwt = getJWT();
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(API + '/api/analysis/upload', {
+    const res = await fetch(baseFor() + '/api/analysis/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
       body: formData,
