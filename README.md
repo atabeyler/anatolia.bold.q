@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.114-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.115-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -133,6 +133,24 @@ Tests: `npm test --prefix server` and `npm test --prefix client`.
 
 ---
 
+## Windows Desktop (Electron)
+
+`desktop/` contains a production Electron shell around the same `client/` React app, adding an offline-first SQLite cache and a bidirectional sync engine against the existing Postgres backend — see **[desktop/README.md](./desktop/README.md)** for the full architecture, sync protocol, local AI design, and packaging instructions.
+
+```bash
+npm install                 # root devDependencies: electron, better-sqlite3, electron-builder, ...
+npx electron-rebuild -f -w better-sqlite3   # rebuild the native SQLite addon against Electron's Node ABI
+npm run desktop:dev         # dev mode: Vite dev server + Electron window
+npm run dist:win            # production Windows installer (release/ANATOLIA-Q-Setup-*.exe)
+
+npm rebuild better-sqlite3  # switch the native module back to the system Node ABI...
+npm run test:desktop        # ...before running desktop/**/*.test.js (see desktop/README.md)
+```
+
+The web app is unaffected by any of this — `desktop/` only ever loads the already-built `client/dist`, and the sync API additions (`/api/sync/*`, `/api/devices/*`) are additive endpoints alongside the existing ones.
+
+---
+
 ## Environment Variables
 
 ### Critical
@@ -159,6 +177,7 @@ Tests: `npm test --prefix server` and `npm test --prefix client`.
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional Web Push configuration |
 | `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |
 | `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
+| `ANATOLIA_CLOUD_URL` | Desktop-only: deployed API/web origin the Electron app syncs against (defaults to the production Render URL) |
 
 ### Quantum
 

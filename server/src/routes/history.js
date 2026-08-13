@@ -1,5 +1,5 @@
 import express from 'express';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { analyses, emergencyLogs } from '../db/schema.js';
@@ -95,11 +95,11 @@ router.get('/list', authMiddleware, async (req, res) => {
     if (!isDbConfigured()) return res.json([]);
 
     const scoped = req.user?.isAdmin
-      ? getDb().select().from(analyses).orderBy(desc(analyses.createdAt)).limit(100)
+      ? getDb().select().from(analyses).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(100)
       : getDb()
           .select()
           .from(analyses)
-          .where(eq(analyses.userCode, req.user.userCode))
+          .where(and(eq(analyses.userCode, req.user.userCode), isNull(analyses.deletedAt)))
           .orderBy(desc(analyses.createdAt))
           .limit(100);
 
@@ -122,11 +122,11 @@ router.get('/feed', authMiddleware, async (req, res) => {
     const isAdmin = !!req.user?.isAdmin;
     const [analysisRows, emergencyRows] = await Promise.all([
       isAdmin
-        ? db.select().from(analyses).orderBy(desc(analyses.createdAt)).limit(15)
+        ? db.select().from(analyses).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(15)
         : db
             .select()
             .from(analyses)
-            .where(eq(analyses.userCode, req.user.userCode))
+            .where(and(eq(analyses.userCode, req.user.userCode), isNull(analyses.deletedAt)))
             .orderBy(desc(analyses.createdAt))
             .limit(15),
       isAdmin
@@ -175,7 +175,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     if (!isDbConfigured()) return res.status(404).json({ error: 'DB yok' });
 
     const [row] = await getDb().select().from(analyses).where(eq(analyses.id, Number(req.params.id)));
-    if (!row) return res.status(404).json({ error: 'Bulunamadi' });
+    if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
     }
@@ -190,7 +190,7 @@ router.get('/:id/download', authMiddleware, async (req, res) => {
     if (!isDbConfigured()) return res.status(404).json({ error: 'DB yok' });
 
     const [row] = await getDb().select().from(analyses).where(eq(analyses.id, Number(req.params.id)));
-    if (!row) return res.status(404).json({ error: 'Bulunamadi' });
+    if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
     }
@@ -216,7 +216,7 @@ router.get('/:id/download-pdf', authMiddleware, async (req, res) => {
     if (!isDbConfigured()) return res.status(404).json({ error: 'DB yok' });
 
     const [row] = await getDb().select().from(analyses).where(eq(analyses.id, Number(req.params.id)));
-    if (!row) return res.status(404).json({ error: 'Bulunamadi' });
+    if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
     }

@@ -1,5 +1,6 @@
 ﻿import express from 'express';
 import multer from 'multer';
+import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { authMiddleware } from '../middleware/auth.js';
 import { publicActionLimiter, analysisLimiter } from '../middleware/rateLimit.js';
@@ -19,7 +20,7 @@ import {
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
 import { sendAnalysisReport } from '../services/email.js';
-import { eq, and, inArray, isNotNull, asc } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull, asc, sql } from 'drizzle-orm';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { analyses, messages } from '../db/schema.js';
 import {
@@ -404,6 +405,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           aiProvider: result.provider,
           fraudTransactionCount: fraudComputation ? fraudComputation.transactionCount : null,
           fraudFlaggedCount: fraudComputation ? fraudComputation.flaggedCount : null,
+          clientId: randomUUID(),
+          deviceId: 'web',
         })
         .returning({ id: analyses.id });
       analysisId = row.id;
@@ -497,7 +500,12 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
               const section = buildScenarioHardwareSection(hardwareScenarios, hw.hardwareVerification);
               if (analysisId && isDbConfigured() && section) {
                 await getDb().update(analyses)
-                  .set({ content: finalContent + section })
+                  .set({
+                    content: finalContent + section,
+                    version: sql`${analyses.version} + 1`,
+                    updatedAt: new Date(),
+                    syncRevision: sql`nextval('analyses_sync_revision_seq')`,
+                  })
                   .where(eq(analyses.id, analysisId));
               }
               broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
@@ -510,7 +518,12 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
               const section = buildFraudHardwareSection(hw.hardwareVerification);
               if (analysisId && isDbConfigured() && section) {
                 await getDb().update(analyses)
-                  .set({ content: finalContent + section })
+                  .set({
+                    content: finalContent + section,
+                    version: sql`${analyses.version} + 1`,
+                    updatedAt: new Date(),
+                    syncRevision: sql`nextval('analyses_sync_revision_seq')`,
+                  })
                   .where(eq(analyses.id, analysisId));
               }
               broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
@@ -552,6 +565,8 @@ router.post('/scenario-deep-dive', authMiddleware, analysisLimiter, async (req, 
           title: `[ALT-SENARYO] ${scenarioId}`,
           content: result.content,
           aiProvider: result.provider,
+          clientId: randomUUID(),
+          deviceId: 'web',
         })
         .returning({ id: analyses.id });
       analysisId = row.id;

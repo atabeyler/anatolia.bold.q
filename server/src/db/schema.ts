@@ -5,7 +5,7 @@
  * file generates no migrations, it only provides a typed query layer.
  * approval_tokens is NOT here — kept out of scope along with auth.js.
  */
-import { pgTable, serial, varchar, text, boolean, timestamp, jsonb, integer } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, boolean, timestamp, jsonb, integer, uuid, bigint } from 'drizzle-orm/pg-core';
 
 export const analyses = pgTable('analyses', {
   id: serial('id').primaryKey(),
@@ -20,6 +20,40 @@ export const analyses = pgTable('analyses', {
   // /fraud-trend endpoint.
   fraudTransactionCount: integer('fraud_transaction_count'),
   fraudFlaggedCount: integer('fraud_flagged_count'),
+  createdAt: timestamp('created_at').defaultNow(),
+  // Desktop/multi-device sync metadata -- see routes/sync.js and
+  // services/database.js for the matching ALTER TABLE statements.
+  clientId: uuid('client_id'),
+  deviceId: varchar('device_id', { length: 64 }).default('web'),
+  version: integer('version').notNull().default(1),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  deletedAt: timestamp('deleted_at'),
+  syncRevision: bigint('sync_revision', { mode: 'number' }),
+});
+
+export const devices = pgTable('devices', {
+  id: serial('id').primaryKey(),
+  deviceId: varchar('device_id', { length: 64 }).notNull().unique(),
+  userCode: varchar('user_code', { length: 50 }).notNull(),
+  deviceName: varchar('device_name', { length: 200 }),
+  platform: varchar('platform', { length: 50 }),
+  appVersion: varchar('app_version', { length: 20 }),
+  authorizedAt: timestamp('authorized_at').defaultNow(),
+  lastSeenAt: timestamp('last_seen_at').defaultNow(),
+  revokedAt: timestamp('revoked_at'),
+});
+
+export const syncOperations = pgTable('sync_operations', {
+  operationId: uuid('operation_id').primaryKey(),
+  userCode: varchar('user_code', { length: 50 }).notNull(),
+  deviceId: varchar('device_id', { length: 64 }).notNull(),
+  entityType: varchar('entity_type', { length: 50 }).notNull(),
+  entityClientId: uuid('entity_client_id'),
+  op: varchar('op', { length: 20 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull(),
+  serverVersion: integer('server_version'),
+  serverPayload: jsonb('server_payload'),
+  error: text('error'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
