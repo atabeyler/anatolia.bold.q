@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Shield, CheckCircle, XCircle, Wifi, Cpu, Activity, Menu as MenuIcon, Settings as SettingsIcon } from 'lucide-react';
 import { api, setJWT } from '../services/api.js';
-import { isDesktop, desktopAuth } from '../services/desktopBridge.js';
+import { isDesktop, desktopAuth, desktopConnectivity } from '../services/desktopBridge.js';
 import EmergencyButton from '../components/EmergencyButton.jsx';
 import { useLang } from '../services/langContext.jsx';
 import { localeFor } from '../services/i18n.js';
@@ -15,13 +15,15 @@ const STAGES = { IDLE: 'idle', AWAITING_APPROVAL: 'awaiting', APPROVED: 'approve
 // Authorizes this desktop install's device_id against the account (see
 // desktop/auth/session.js) right after an ordinary online login succeeds --
 // this is the "online authorization" step spec point 5 requires before
-// offline login is allowed on this machine. A no-op on the web build
+// offline login is allowed on this machine. Also caches a bcrypt hash of
+// the password just used (never the plaintext) so a later offline login on
+// this same device can be verified locally. A no-op on the web build
 // (isDesktop is false there) and never blocks the login flow if it fails --
 // the user is still online and logged in either way, they just won't be
 // able to log in offline on this device until it succeeds once.
-function registerDesktopSession(jwt) {
+function registerDesktopSession(jwt, password) {
   if (!isDesktop || !jwt) return;
-  desktopAuth.establishOnlineSession(jwt).catch((err) => {
+  desktopAuth.establishOnlineSession(jwt, password).catch((err) => {
     console.warn('[ANATOLIA-Q Desktop] Device authorization failed:', err?.message || err);
   });
 }
@@ -242,7 +244,7 @@ function StatusBar() {
 export default function LoginPage({ onLogin }) {
   const { t, lang, setLang } = useLang();
   const [userCode, setUserCode] = useState(() => localStorage.getItem('aq_saved_code') || '');
-  const [password, setPassword] = useState(() => localStorage.getItem('aq_saved_pass') || '');
+  const [password, setPassword] = useState('');
   const [stage, setStage] = useState(STAGES.IDLE);
   const [token, setToken] = useState(null);
   const [error, setError] = useState('');
@@ -313,7 +315,7 @@ export default function LoginPage({ onLogin }) {
         if (r.status === 'approved') {
           clearInterval(pollRef.current);
           setJWT(r.jwt);
-          registerDesktopSession(r.jwt);
+          registerDesktopSession(r.jwt, password);
           setStage(STAGES.APPROVED);
           setTimeout(() => onLogin({ userCode: r.userCode }), 1500);
         } else if (r.status === 'expired' || r.status === 'not_found') {
@@ -323,27 +325,63 @@ export default function LoginPage({ onLogin }) {
       } catch (e) { console.error(e); }
     }, 2500);
     return () => clearInterval(pollRef.current);
+  // password is intentionally read from this effect's closure rather than
+  // listed as a dependency: the login form (and the password field with
+  // it) is unmounted while AWAITING_APPROVAL is shown, so it can't change
+  // during the poll -- adding it here would only restart the interval
+  // pointlessly on unrelated re-renders.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, token, onLogin]);
+
+  // Desktop-only: verifies the entered credentials locally (bcrypt hash
+  // cached at the last successful online login, see desktop/auth/session.js)
+  // instead of hitting the network — only succeeds for an account that has
+  // actually authorized this exact device online before (spec point 5).
+  const attemptOfflineLogin = async () => {
+    const result = await desktopAuth.verifyOfflineLogin(userCode.trim(), password);
+    if (!result?.ok) {
+      setError(result?.error || 'Çevrimdışı giriş başarısız.');
+      return;
+    }
+    setJWT(result.jwt);
+    onLogin({ userCode: result.userCode, isAdmin: result.isAdmin });
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    // Save credentials
+    // Only the (non-sensitive) user code is remembered for next time --
+    // the password itself is never written to localStorage.
     localStorage.setItem('aq_saved_code', userCode.trim());
-    localStorage.setItem('aq_saved_pass', password);
     try {
+      if (isDesktop && (await desktopConnectivity.getState()) === 'local') {
+        // Already known to be offline -- skip straight to local verification
+        // instead of waiting out a network request that can't succeed.
+        await attemptOfflineLogin();
+        return;
+      }
       const r = await api.loginRequest(userCode.trim(), password);
       // Admin: gets JWT directly, no approval wait
       if (r.status === 'approved' && r.jwt) {
         setJWT(r.jwt);
-        registerDesktopSession(r.jwt);
+        registerDesktopSession(r.jwt, password);
         onLogin({ userCode: r.userCode, isAdmin: r.isAdmin });
         return;
       }
       setToken(r.token);
       setStage(STAGES.AWAITING_APPROVAL);
     } catch (err) {
+      // Only a genuine network-level failure (fetch() itself rejecting,
+      // surfaced as a TypeError -- e.g. "Failed to fetch") falls back to
+      // offline verification, in case the connectivity monitor's cached
+      // state was stale. A rejection the server actually sent back (wrong
+      // password, blocked account, ...) is a real answer and must be shown
+      // as-is, not masked by an unrelated offline-login error.
+      if (isDesktop && err instanceof TypeError) {
+        await attemptOfflineLogin();
+        return;
+      }
       setError(err.message);
     } finally {
       setLoading(false);

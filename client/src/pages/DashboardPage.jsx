@@ -14,6 +14,7 @@ import UserManagementModal from '../components/UserManagement.jsx';
 import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from '../components/AppMenus.jsx';
 import AppFooter from '../components/AppFooter.jsx';
 import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
+import DesktopConflictModal from '../components/DesktopConflictModal.jsx';
 import { api, setJWT, getToken } from '../services/api.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -547,6 +548,8 @@ export default function DashboardPage({ user, onLogout }) {
       <AppFooter />
 
       <EmergencyButton authenticated={true} />
+
+      <DesktopConflictModal />
 
       <AnimatePresence>
         {voiceChatOpen && <VoiceChatModal onClose={() => setVoiceChatOpen(false)} />}

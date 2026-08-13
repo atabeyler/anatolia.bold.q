@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.116",
+  "version": "2.1.117",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "private": true,
@@ -60,7 +60,6 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
-    "better-sqlite3": "^11.10.0",
     "concurrently": "^9.2.0",
     "cross-env": "^7.0.3",
     "electron": "^33.4.11",
@@ -70,6 +69,8 @@
     "wait-on": "^8.0.4"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.10.0",
     "electron-updater": "^6.6.2"
   }
 }

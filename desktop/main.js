@@ -59,11 +59,12 @@ async function performSync() {
 }
 
 function registerIpcHandlers() {
-  ipcMain.handle('auth:establishOnlineSession', async (_e, jwt) => {
-    const result = await sessionManager.establishOnlineSession(jwt);
+  ipcMain.handle('auth:establishOnlineSession', async (_e, jwt, password) => {
+    const result = await sessionManager.establishOnlineSession(jwt, password);
     performSync().catch(() => {});
     return result;
   });
+  ipcMain.handle('auth:verifyOfflineLogin', (_e, userCode, password) => sessionManager.verifyOfflineLogin(userCode, password));
   ipcMain.handle('auth:getSession', () => sessionManager.getSession());
   ipcMain.handle('auth:isOfflineLoginAllowed', (_e, userCode) => sessionManager.isOfflineLoginAllowed(userCode));
   ipcMain.handle('auth:logout', () => sessionManager.logout());

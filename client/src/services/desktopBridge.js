@@ -8,7 +8,8 @@ export const isDesktop = typeof window !== 'undefined' && !!window.anatoliaDeskt
 const bridge = isDesktop ? window.anatoliaDesktop : null;
 
 export const desktopAuth = {
-  establishOnlineSession: (jwt) => bridge?.auth.establishOnlineSession(jwt),
+  establishOnlineSession: (jwt, password) => bridge?.auth.establishOnlineSession(jwt, password),
+  verifyOfflineLogin: (userCode, password) => bridge?.auth.verifyOfflineLogin(userCode, password),
   getSession: () => bridge?.auth.getSession(),
   isOfflineLoginAllowed: (userCode) => bridge?.auth.isOfflineLoginAllowed(userCode),
   logout: () => bridge?.auth.logout(),

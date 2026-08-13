@@ -1,3 +1,5 @@
+import bcrypt from 'bcryptjs';
+
 function decodeJwtPayload(jwt) {
   try {
     const [, payloadB64] = jwt.split('.');
@@ -32,7 +34,17 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // api.js the web app already uses) has produced a valid JWT. This is the
   // "must be online once" step -- it both saves the session locally and
   // authorizes this device_id against the account on the server.
-  async function establishOnlineSession(jwt) {
+  //
+  // `password` is the plaintext the user just typed into the real login
+  // form -- it is NEVER persisted as-is. It's hashed here (bcrypt, same
+  // cost factor the server itself uses for auth_users, see
+  // server/src/routes/auth.js) purely so a *later offline* login attempt on
+  // this same device can be verified locally without ever storing or
+  // needing the plaintext again. If establishOnlineSession is ever called
+  // without a password (shouldn't happen from the real login flow), offline
+  // login for this account on this device simply stays unavailable until it
+  // is.
+  async function establishOnlineSession(jwt, password) {
     const payload = decodeJwtPayload(jwt);
     if (!payload?.userCode) throw new Error('Geçersiz oturum belirteci');
 
@@ -46,9 +58,31 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       throw new Error(body.error || `Cihaz kaydı başarısız (HTTP ${res.status})`);
     }
 
-    secureStore.save({ jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin });
+    const offlinePasswordHash = password ? bcrypt.hashSync(password, 10) : undefined;
+    secureStore.save({
+      jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin,
+      offlinePasswordHash,
+    });
     upsertDeviceMeta({ platform, userId: payload.userCode, ts: new Date().toISOString() });
     return { userCode: payload.userCode };
+  }
+
+  // The actual offline login check: requires both (a) this device having
+  // been online-authorized for this exact account before, and (b) the
+  // entered password matching the bcrypt hash cached at that time --
+  // verified locally, never against plaintext, never over the network.
+  function verifyOfflineLogin(userCode, password) {
+    if (!isOfflineLoginAllowed(userCode)) {
+      return { ok: false, error: 'Bu cihaz bu hesap için daha önce çevrimiçi yetkilendirilmemiş.' };
+    }
+    const cached = secureStore.load();
+    if (!cached || cached.userCode !== userCode || !cached.offlinePasswordHash) {
+      return { ok: false, error: 'Çevrimdışı oturum bilgisi bulunamadı — lütfen önce çevrimiçi giriş yapın.' };
+    }
+    if (!bcrypt.compareSync(password || '', cached.offlinePasswordHash)) {
+      return { ok: false, error: 'Kullanıcı kodu veya şifre hatalı.' };
+    }
+    return { ok: true, jwt: cached.jwt, userCode: cached.userCode, nickname: cached.nickname, isAdmin: cached.isAdmin };
   }
 
   // Returns the cached session even if the JWT itself has since expired --
@@ -74,7 +108,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     db.prepare('UPDATE device_meta SET last_authorized_user_id = NULL WHERE device_id = ?').run(deviceId);
   }
 
-  return { establishOnlineSession, getSession, isOfflineLoginAllowed, logout };
+  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logout };
 }
 
 export const _internal = { decodeJwtPayload };

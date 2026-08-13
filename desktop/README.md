@@ -81,6 +81,10 @@ and queues a durable row in `sync_queue` with a client-generated
    `sync/conflict.js` exposes `resolveConflict(conflictId, 'kept_local' |
    'kept_server')` to settle it, re-queuing the local edit against the
    now-known server version or overwriting the local copy, respectively.
+   `client/src/components/DesktopConflictModal.jsx` is the actual user-
+   facing side of this: it polls `sync.listConflicts()` and shows both
+   versions side by side with "Yerel sürümü kullan" / "Bulut sürümünü
+   kullan" buttons.
 
 Retries use exponential backoff (`sync/queue.js`, capped at 30 minutes,
 giving up after 8 attempts but always keeping the row and its `last_error`
@@ -95,9 +99,23 @@ persisted once. `auth/session.js` ties an online login to that device via
 `POST /api/devices/register` (requires a fresh JWT) — this is the "online
 authorization" step that later gates offline login: `isOfflineLoginAllowed`
 only returns true for a `(deviceId, userCode)` pair that has actually
-authorized online at least once. The session (JWT) itself is encrypted at
-rest via Electron's `safeStorage` (`auth/secureStore.js`, DPAPI on Windows)
-— never `localStorage`, and never reachable from the renderer at all
+authorized online at least once.
+
+**Offline login** is a real login, not a silently-resumed session: the same
+LoginPage form is shown, and `verifyOfflineLogin(userCode, password)`
+checks the entered password against a **bcrypt hash** (cost 10, matching
+the server's own `auth_users` convention) cached locally at the last
+successful online login — the plaintext password is never written to disk
+or to `localStorage` at any point (see `client/src/pages/LoginPage.jsx`,
+which also no longer persists a remembered password for the web app for
+the same reason). `client/src/pages/LoginPage.jsx` takes the offline path
+either when the connectivity monitor already reports `local`, or when the
+online login request itself fails with a genuine network error (not a
+credential rejection from a reachable server).
+
+The whole cached session object (JWT + password hash) is encrypted at rest
+via Electron's `safeStorage` (`auth/secureStore.js`, DPAPI on Windows) —
+never `localStorage`, and never reachable from the renderer at all
 (`contextIsolation: true`, `nodeIntegration: false`).
 
 ## Local AI
@@ -130,6 +148,18 @@ Building the NSIS installer's icon/version-resource step requires `wine` on
 Linux (a known electron-builder limitation, unrelated to code signing) — it
 is not needed at all when building on an actual Windows machine or a
 Windows CI runner.
+
+`better-sqlite3` and `bcryptjs` are listed under `dependencies`, not
+`devDependencies` — the packaged app needs both at runtime (native SQLite
+addon and offline-password hashing respectively), and some CI pipelines run
+`npm ci --omit=dev` before invoking electron-builder, which would silently
+drop anything left in `devDependencies`.
+
+See **[MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md)** for the
+scenarios that can only be verified on a real Windows machine (offline
+login, cross-device conflict resolution, a clean-machine installer run,
+...) — none of those can be exercised inside a Linux sandbox with no
+display and no live deployment.
 
 ## Native module ABI note
 

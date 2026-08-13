@@ -71,6 +71,52 @@ describe('offline login gate (spec test I)', () => {
   });
 });
 
+describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
+  it('accepts the correct password for a previously online-authorized account', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+
+    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    expect(result.ok).toBe(true);
+    expect(result.jwt).toBeTruthy();
+  });
+
+  it('rejects a wrong password', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+
+    const result = manager.verifyOfflineLogin('BOLD-001', 'WrongPassword');
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects offline login for a device never authorized for that account', () => {
+    const { manager } = buildManager({ fetchImpl: vi.fn() });
+    const result = manager.verifyOfflineLogin('BOLD-001', 'whatever');
+    expect(result.ok).toBe(false);
+  });
+
+  it('never stores the plaintext password anywhere in the cached session', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager, secureStore } = buildManager({ fetchImpl });
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+
+    const stored = JSON.stringify(secureStore.load());
+    expect(stored).not.toContain('CorrectHorse123');
+    expect(secureStore.load().offlinePasswordHash).toMatch(/^\$2[aby]\$/); // a real bcrypt hash, not plaintext
+  });
+
+  it('rejects offline login after logout, even with the correct password', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+    manager.logout();
+
+    expect(manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123').ok).toBe(false);
+  });
+});
+
 describe('logout', () => {
   it('clears the cached session and revokes offline capability for this device', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
