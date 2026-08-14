@@ -7,10 +7,10 @@ describe('openDatabase / migrations', () => {
     const db = await createTestMobileDb();
     const tables = await dbAll(db, "SELECT name FROM sqlite_master WHERE type='table'");
     const names = tables.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(['analyses', 'sync_queue', 'conflicts', 'sync_state', 'device_meta', '_migrations']));
+    expect(names).toEqual(expect.arrayContaining(['analyses', 'sync_queue', 'conflicts', 'sync_state', 'device_meta', 'diagnostics_log', '_migrations']));
 
     const migrations = await dbAll(db, 'SELECT name FROM _migrations');
-    expect(migrations).toHaveLength(1); // not re-applied on a second connection
+    expect(migrations).toHaveLength(2); // not re-applied on a second connection
   });
 
   it('dbRun/dbGet/dbAll round-trip a row', async () => {

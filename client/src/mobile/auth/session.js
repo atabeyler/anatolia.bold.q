@@ -103,6 +103,19 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     return !!row && row.last_authorized_user_id === userCode;
   }
 
+  // True once the cached JWT's own `exp` claim has passed -- mirrors
+  // desktop/auth/session.js's needsReauth() exactly (same reasoning: no
+  // server-side refresh-token endpoint, so a long offline stretch leaves a
+  // stale cached token that would otherwise fail every sync call with 401
+  // forever until the user happens to log out and back in).
+  async function needsReauth() {
+    const cached = await secureStore.load();
+    if (!cached?.jwt) return false;
+    const payload = decodeJwtPayload(cached.jwt);
+    if (!payload?.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  }
+
   // Explicit logout revokes this device's offline capability too -- the
   // next login on this machine must be online again.
   async function logout() {
@@ -110,7 +123,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     await dbRun(db, 'UPDATE device_meta SET last_authorized_user_id = NULL WHERE device_id = ?', [deviceId]);
   }
 
-  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logout };
+  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logout, needsReauth };
 }
 
 export const _internal = { decodeJwtPayload };

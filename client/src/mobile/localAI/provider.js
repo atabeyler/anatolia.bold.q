@@ -8,7 +8,7 @@ import { selectProvider } from './registry.js';
 // Report *generation* stays cloud-only via the existing /api/analysis
 // endpoints; this module only ever answers read-only questions about
 // reports already sitting in the local database.
-export function createLocalAIProvider({ db, userId }) {
+export function createLocalAIProvider({ db, userId, diagnostics }) {
   const provider = selectProvider();
   const runQuery = provider.createQuery({ db, userId });
   return {
@@ -20,7 +20,9 @@ export function createLocalAIProvider({ db, userId }) {
         // Never throws past this boundary (spec: a missing/broken local AI
         // backend must not crash the app) — reported as a capability flag
         // instead, so the UI can show "yerel AI şu anda kullanılamıyor"
-        // rather than an unhandled error.
+        // rather than an unhandled error. err.message only, never the
+        // request/response content itself (may contain report text).
+        diagnostics?.error('local_ai_failure', { message: err.message, capability: provider.capability });
         return { ok: false, error: 'Yerel AI kullanılamıyor', detail: err.message };
       }
     },

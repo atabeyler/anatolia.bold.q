@@ -1,7 +1,11 @@
-import migrationSql from './migrations/001_init.sql?raw';
+import migration001 from './migrations/001_init.sql?raw';
+import migration002 from './migrations/002_diagnostics.sql?raw';
 
 const DB_NAME = 'anatoliaq';
-const MIGRATION_NAME = '001_init.sql';
+const MIGRATIONS = [
+  ['001_init.sql', migration001],
+  ['002_diagnostics.sql', migration002],
+];
 
 // Opens (creating if needed) the on-device SQLite database via the given
 // @capacitor-community/sqlite connection and applies the schema if it
@@ -21,11 +25,12 @@ export async function openDatabase(sqlite) {
 
 async function runMigrations(db) {
   await db.execute('CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL);');
-  const applied = await dbAll(db, 'SELECT name FROM _migrations');
-  if (applied.some((row) => row.name === MIGRATION_NAME)) return;
-
-  await db.execute(migrationSql);
-  await dbRun(db, 'INSERT INTO _migrations (name, applied_at) VALUES (?, ?)', [MIGRATION_NAME, new Date().toISOString()]);
+  const applied = new Set((await dbAll(db, 'SELECT name FROM _migrations')).map((row) => row.name));
+  for (const [name, sql] of MIGRATIONS) {
+    if (applied.has(name)) continue;
+    await db.execute(sql);
+    await dbRun(db, 'INSERT INTO _migrations (name, applied_at) VALUES (?, ?)', [name, new Date().toISOString()]);
+  }
 }
 
 // Thin helpers normalizing the plugin's {values:[...]}/{changes:{...}}

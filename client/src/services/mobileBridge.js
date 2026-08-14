@@ -10,6 +10,7 @@ import { createSessionManager } from '../mobile/auth/session.js';
 import { runSync } from '../mobile/sync/engine.js';
 import { listUnresolvedConflicts, resolveConflict } from '../mobile/sync/conflict.js';
 import { createLocalAIProvider } from '../mobile/localAI/provider.js';
+import { createDiagnostics } from '../mobile/diagnostics.js';
 
 // Android (Capacitor) equivalent of desktopBridge.js -- same exported API
 // shape (auth/analyses/sync/ai/connectivity) so the UI layer can treat both
@@ -31,10 +32,12 @@ if (typeof window !== 'undefined' && isMobileApp) {
 }
 
 let dbPromise = null;
+let diagnosticsPromise = null;
 let sessionManagerPromise = null;
 let deviceId = null;
 let connectivityState = 'local';
 const connectivityListeners = new Set();
+const reauthListeners = new Set();
 
 function getDb() {
   if (!dbPromise) {
@@ -42,6 +45,14 @@ function getDb() {
     dbPromise = openDatabase(sqlite);
   }
   return dbPromise;
+}
+
+// Mirrors desktop/main.js's module-level `diagnostics` -- lazy instead of
+// eager (there's no app.whenReady() equivalent here to create it upfront),
+// but every call site below awaits this the same way it awaits getDb().
+function getDiagnostics() {
+  if (!diagnosticsPromise) diagnosticsPromise = getDb().then(createDiagnostics);
+  return diagnosticsPromise;
 }
 
 async function getSessionManager() {
@@ -68,6 +79,7 @@ function setConnectivity(state) {
   if (state === connectivityState) return;
   connectivityState = state;
   connectivityListeners.forEach((fn) => fn(state));
+  getDiagnostics().then((d) => d.info('connectivity_change', { state })).catch(() => {});
 }
 
 async function checkConnectivity() {
@@ -87,9 +99,42 @@ async function performSync() {
   const manager = await getSessionManager();
   const session = await manager.getSession();
   if (!session) return;
+
+  // A cached JWT past its own exp claim is a guaranteed 401 on every call
+  // -- there's no server-side refresh-token endpoint to silently renew it
+  // with, so skip the doomed network round-trip and tell the UI to prompt
+  // for a fresh online login instead. Mirrors desktop/main.js's
+  // performSync(). The sync queue and local data are untouched either way;
+  // whatever is queued gets pushed automatically the moment
+  // establishOnlineSession succeeds again (it already triggers a sync
+  // right after).
+  const diagnostics = await getDiagnostics();
+  if (await manager.needsReauth()) {
+    diagnostics.warn('reauth_required', {});
+    reauthListeners.forEach((fn) => fn());
+    return { ok: false, error: 'reauth_required', reauthRequired: true };
+  }
+
   setConnectivity('sync');
+  diagnostics.info('sync_start', {});
   const db = await getDb();
-  const result = await runSync(db, { apiBaseUrl: CLOUD_URL, getToken: () => session.jwt, deviceId, userId: session.userCode });
+  let result;
+  try {
+    result = await runSync(db, { apiBaseUrl: CLOUD_URL, getToken: () => session.jwt, deviceId, userId: session.userCode });
+  } catch (err) {
+    diagnostics.error('sync_failed', { message: err.message });
+    throw err;
+  }
+  if (result?.ok === false) {
+    diagnostics.warn('sync_failed', { message: result.error });
+  } else {
+    diagnostics.info('sync_success', {
+      pushed: result?.push?.pushed ?? 0,
+      pulled: result?.pull?.pulled ?? 0,
+    });
+    const conflicts = result?.push?.conflicts ?? 0;
+    if (conflicts > 0) diagnostics.warn('sync_conflict', { count: conflicts });
+  }
   await checkConnectivity();
   return result;
 }
@@ -111,12 +156,15 @@ export const mobileAuth = {
   verifyOfflineLogin: guard(async (userCode, password) => (await getSessionManager()).verifyOfflineLogin(userCode, password)),
   getSession: guard(async () => (await getSessionManager()).getSession()),
   isOfflineLoginAllowed: guard(async (userCode) => (await getSessionManager()).isOfflineLoginAllowed(userCode)),
-  // Desktop-only for now (see desktop/auth/session.js's needsReauth) --
-  // stubbed here so callers (e.g. a future shared reauth-prompt component)
-  // can call nativeAuth.needsReauth()/onReauthRequired() unconditionally
-  // without branching on platform, matching desktopBridge.js's shape.
-  needsReauth: guard(async () => false),
-  onReauthRequired: () => () => {},
+  needsReauth: guard(async () => (await getSessionManager()).needsReauth()),
+  // Always returns a real (safely no-op-able) unsubscribe function, even on
+  // web/desktop where the callback is simply never added -- matches
+  // mobileConnectivity.onChange's shape below.
+  onReauthRequired: (callback) => {
+    if (!isMobileApp) return () => {};
+    reauthListeners.add(callback);
+    return () => reauthListeners.delete(callback);
+  },
   logout: guard(async () => (await getSessionManager()).logout()),
 };
 
@@ -172,7 +220,7 @@ export const mobileAI = {
   query: guard(async (request) => {
     const userId = await currentUserId();
     if (!userId) return { ok: false, error: 'Oturum açılmamış' };
-    return createLocalAIProvider({ db: await getDb(), userId }).query(request);
+    return createLocalAIProvider({ db: await getDb(), userId, diagnostics: await getDiagnostics() }).query(request);
   }),
 };
 
@@ -192,6 +240,10 @@ export const mobileConnectivity = {
 // installed Android app -- mirrors desktop/main.js's app.whenReady()
 // sequence, just inline since there's no separate main process here.
 if (isMobileApp) {
+  getDiagnostics().then((d) => d.info('app_start', {
+    version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined,
+    platform: Capacitor.getPlatform(),
+  })).catch(() => {});
   checkConnectivity();
   setInterval(checkConnectivity, 30000);
   // A reconnect (local -> cloud) triggers an immediate sync instead of

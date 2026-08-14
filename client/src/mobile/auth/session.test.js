@@ -109,6 +109,43 @@ describe('getSession', () => {
   });
 });
 
+describe('needsReauth', () => {
+  it('is false with no cached session at all', async () => {
+    const { manager } = await buildManager({ fetchImpl: vi.fn() });
+    expect(await manager.needsReauth()).toBe(false);
+  });
+
+  it('is false right after a normal online login (fresh, non-expired JWT)', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = await buildManager({ fetchImpl });
+    const freshJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) + 3600 });
+
+    await manager.establishOnlineSession(freshJwt);
+    expect(await manager.needsReauth()).toBe(false);
+  });
+
+  it('is true once the cached JWT\'s exp claim has passed (e.g. after a long offline stretch)', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = await buildManager({ fetchImpl });
+    const expiredJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) - 3600 });
+
+    await manager.establishOnlineSession(expiredJwt);
+    expect(await manager.needsReauth()).toBe(true);
+  });
+
+  it('goes back to false once a fresh online login replaces the expired cached session', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = await buildManager({ fetchImpl });
+    const expiredJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) - 3600 });
+    await manager.establishOnlineSession(expiredJwt);
+    expect(await manager.needsReauth()).toBe(true);
+
+    const freshJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) + 3600 });
+    await manager.establishOnlineSession(freshJwt);
+    expect(await manager.needsReauth()).toBe(false);
+  });
+});
+
 describe('logout', () => {
   it('clears the cached session and revokes offline capability for this device', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
