@@ -117,6 +117,7 @@ html[data-theme='light'] [class*='border-gold'] { border-color: rgba(160, 117, 3
 html[data-theme='light'] [class*='border-white/'] { border-color: rgba(32, 67, 88, 0.16) !important; }
 html[data-theme='light'] [class*='bg-white/5'],
 html[data-theme='light'] [class*='bg-white/10'] { background-color: rgba(30, 104, 135, 0.07) !important; }
+html[data-theme='light'] [class*='bg-white/30'] { background-color: rgba(75, 95, 108, 0.55) !important; }
 
 html[data-theme='light'] [class*='bg-cyan-900/'],
 html[data-theme='light'] [class*='bg-yellow-900/'],
