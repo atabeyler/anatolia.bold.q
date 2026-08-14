@@ -7,23 +7,17 @@ name: Desktop Release
 # is needed: GITHUB_TOKEN is provided automatically by Actions and is scoped
 # to this repository, which is all the GitHub-provider publisher needs.
 #
-# Fires automatically on a push to main that actually touches desktop code
-# (path-filtered so an unrelated server/client-only commit doesn't spend a
-# ~10-minute Windows runner for nothing), on a `desktop-v*` tag, or on a
-# manual "Run workflow" click.
+# Fires automatically on every push to main (unfiltered by path -- every
+# commit bumps the app version via scripts/bump-version.js, so every commit
+# is a distinct release and gets its own installer, whether or not it
+# touched desktop code), on a `desktop-v*` tag, or on a manual "Run
+# workflow" click.
 on:
   push:
     tags:
       - 'desktop-v*'
     branches:
       - main
-    paths:
-      - 'desktop/**'
-      - 'client/src/services/desktopBridge.js'
-      - 'client/src/components/Desktop*.jsx'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
     inputs:
       allow_unsigned:

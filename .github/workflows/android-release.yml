@@ -18,21 +18,14 @@ name: Android Release
 # (this one or desktop-release.yml) runs first for a given version creates
 # that draft release; the other one finds it by tag and adds its asset.
 #
-# Fires on a push to main that touches mobile/client code, or on a manual
-# "Run workflow" click.
-#
-# Watches all of client/** (not just the mobile-specific files) because the
-# "Build the web bundle" step below builds the whole client/ app and syncs
-# it into the Android project -- any client change (e.g. a shared theme.css
-# fix) ships in the next APK, so any client change must trigger a rebuild.
+# Fires automatically on every push to main (unfiltered by path -- every
+# commit bumps the app version via scripts/bump-version.js, so every commit
+# is a distinct release and gets its own APK, whether or not it touched
+# mobile/client code), or on a manual "Run workflow" click.
 on:
   push:
     branches:
       - main
-    paths:
-      - 'mobile/**'
-      - 'client/**'
-      - '.github/workflows/android-release.yml'
   workflow_dispatch:
     inputs:
       allow_unsigned:
