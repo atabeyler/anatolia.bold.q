@@ -20,15 +20,18 @@ name: Android Release
 #
 # Fires on a push to main that touches mobile/client code, or on a manual
 # "Run workflow" click.
+#
+# Watches all of client/** (not just the mobile-specific files) because the
+# "Build the web bundle" step below builds the whole client/ app and syncs
+# it into the Android project -- any client change (e.g. a shared theme.css
+# fix) ships in the next APK, so any client change must trigger a rebuild.
 on:
   push:
     branches:
       - main
     paths:
       - 'mobile/**'
-      - 'client/src/mobile/**'
-      - 'client/src/services/mobileBridge.js'
-      - 'client/src/services/nativeBridge.js'
+      - 'client/**'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:
     inputs:
