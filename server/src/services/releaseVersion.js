@@ -1,9 +1,10 @@
 // Looks up the latest published GitHub Release so the Android/desktop
-// clients never have to talk to GitHub's API directly (an institutional
-// deployment constraint — client devices only ever talk to this server).
-// The actual installer/APK *download* still points at GitHub's asset URL
-// once the client approves the update; only this version-check metadata
-// call is proxied.
+// clients never have to talk to GitHub at all -- an institutional
+// deployment constraint, client devices only ever talk to this server.
+// Both the version-check metadata *and* the actual installer/APK download
+// are proxied through here (see routes/version.js's /download/:platform,
+// which streams the browser_download_url this returns) -- the client
+// never sees a github.com address anywhere in the update flow.
 const REPO = 'atabeyler/anatolia.bold.q';
 const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes -- avoids hitting GitHub's API on every client check
@@ -12,7 +13,7 @@ let cache = null; // { fetchedAt, data }
 
 function pickAsset(assets, suffix) {
   const asset = (assets || []).find((a) => a.name?.endsWith(suffix));
-  return asset ? { url: asset.browser_download_url, size: asset.size } : null;
+  return asset ? { url: asset.browser_download_url, name: asset.name, size: asset.size } : null;
 }
 
 async function fetchLatestRelease() {

@@ -32,18 +32,19 @@ export async function checkForUpdate(apiBaseUrl, currentVersion, fetchImpl = fet
   if (!info.version || !exe?.url || !isNewer(info.version, currentVersion)) {
     return { available: false };
   }
-  return { available: true, version: info.version, notes: info.notes, url: exe.url, size: exe.size };
+  return { available: true, version: info.version, notes: info.notes, url: exe.url, name: exe.name, size: exe.size };
 }
 
-// Streams the installer to disk with progress callbacks -- the file itself
-// still comes straight from GitHub's release asset URL (approved scope:
-// only the version-check metadata is proxied through our own server, not
-// the multi-megabyte binary).
-export async function downloadUpdate(url, destDir, onProgress, fetchImpl = fetch) {
+// Streams the installer to disk with progress callbacks -- both this
+// request and the version check above go to this app's own server (see
+// server/src/routes/version.js's /download/:platform), which itself
+// proxies the bytes from GitHub. The client process never opens a
+// connection to github.com at any point in the update flow.
+export async function downloadUpdate(url, fileName, destDir, onProgress, fetchImpl = fetch) {
   const res = await fetchImpl(url);
   if (!res.ok || !res.body) throw new Error(`İndirme başarısız (HTTP ${res.status})`);
   const total = Number(res.headers.get('content-length')) || 0;
-  const destPath = path.join(destDir, path.basename(new URL(url).pathname));
+  const destPath = path.join(destDir, fileName);
   let received = 0;
 
   await fs.promises.mkdir(destDir, { recursive: true });

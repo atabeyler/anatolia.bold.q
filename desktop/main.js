@@ -174,7 +174,7 @@ function registerIpcHandlers() {
   ipcMain.handle('update:approve', async () => {
     if (!pendingUpdate) return { ok: false, error: 'Güncelleme bulunamadı' };
     try {
-      const destPath = await downloadUpdate(pendingUpdate.url, app.getPath('temp'), (progress) => {
+      const destPath = await downloadUpdate(pendingUpdate.url, pendingUpdate.name, app.getPath('temp'), (progress) => {
         mainWindow?.webContents.send('update:progress', progress);
       });
       downloadedInstallerPath = destPath;

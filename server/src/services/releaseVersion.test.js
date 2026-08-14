@@ -32,8 +32,8 @@ describe('getLatestVersionInfo', () => {
     const info = await getLatestVersionInfo();
 
     expect(info.version).toBe('2.1.140');
-    expect(info.assets.androidApk).toEqual({ url: 'https://x/apk', size: 100 });
-    expect(info.assets.desktopExe).toEqual({ url: 'https://x/exe', size: 200 });
+    expect(info.assets.androidApk).toEqual({ url: 'https://x/apk', name: 'ANATOLIA-Q-2.1.140.apk', size: 100 });
+    expect(info.assets.desktopExe).toEqual({ url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

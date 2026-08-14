@@ -19,18 +19,21 @@ describe('isNewer', () => {
 });
 
 describe('checkForUpdate', () => {
-  it('reports available:true with the exe url when the server has a newer version', async () => {
+  it('reports available:true with the exe url/name when the server has a newer version', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
       json: async () => ({
         version: '2.1.140',
         notes: 'notlar',
-        assets: { desktopExe: { url: 'https://x/exe', size: 123 } },
+        assets: { desktopExe: { url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 123 } },
       }),
     }));
 
     const result = await checkForUpdate('https://api.test', '2.1.139', fetchImpl);
-    expect(result).toEqual({ available: true, version: '2.1.140', notes: 'notlar', url: 'https://x/exe', size: 123 });
+    expect(result).toEqual({
+      available: true, version: '2.1.140', notes: 'notlar',
+      url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 123,
+    });
   });
 
   it('reports available:false when the server version is not newer', async () => {
@@ -60,7 +63,7 @@ describe('downloadUpdate', () => {
     const dir = tmpDir();
     const progress = [];
 
-    const destPath = await downloadUpdate('https://x/ANATOLIA-Q-Setup-2.1.140.exe', dir, (p) => progress.push(p), fetchImpl);
+    const destPath = await downloadUpdate('https://x/api/version/download/desktop', 'ANATOLIA-Q-Setup-2.1.140.exe', dir, (p) => progress.push(p), fetchImpl);
 
     expect(path.basename(destPath)).toBe('ANATOLIA-Q-Setup-2.1.140.exe');
     expect(fs.readFileSync(destPath).length).toBe(1000);
@@ -69,6 +72,6 @@ describe('downloadUpdate', () => {
 
   it('throws when the download request itself fails', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: false, status: 404, body: null }));
-    await expect(downloadUpdate('https://x/y.exe', tmpDir(), undefined, fetchImpl)).rejects.toThrow('404');
+    await expect(downloadUpdate('https://x/y', 'y.exe', tmpDir(), undefined, fetchImpl)).rejects.toThrow('404');
   });
 });
