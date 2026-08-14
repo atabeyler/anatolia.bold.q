@@ -45,6 +45,7 @@ export default [
         File: 'readonly',
         crypto: 'readonly',
         AbortController: 'readonly',
+        AbortSignal: 'readonly',
       },
     },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
