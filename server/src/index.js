@@ -54,6 +54,12 @@ const NATIVE_APP_ORIGINS = [
 const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL, ...NATIVE_APP_ORIGINS] : true;
 
 const app = express();
+// Render (and any reverse proxy) terminates TLS upstream and forwards plain
+// HTTP internally -- without this, req.protocol always reads back 'http'
+// regardless of what the client actually connected over, which leaked into
+// routes/version.js's self-referential download URLs as an insecure
+// http:// address (the client apps then failed to open/fetch it).
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
