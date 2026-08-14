@@ -133,6 +133,16 @@ jobs:
       # tag v<version> -- the same tag electron-builder's GitHub publisher
       # uses for the Windows installer -- so both artifacts end up as
       # assets on one release instead of two separate ones.
+      #
+      # draft MUST be false: GitHub's "get release by tag" lookup (used
+      # below to find an already-created release before creating a new
+      # one) does not return draft releases -- a draft's tag isn't a real
+      # git ref until it's published. A draft here would make this
+      # find-or-create race with desktop-release.yml's publish step
+      # (package.json's build.publish also needs draft:false for the same
+      # reason): whichever runs second would fail to find the first one's
+      # draft and create a duplicate, orphaned, publicly-invisible release
+      # instead of attaching its asset to the shared one.
       - name: Publish to GitHub Releases
         working-directory: mobile/android/app/build/outputs/apk/release
         env:
@@ -153,7 +163,7 @@ jobs:
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/releases" \
-              -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":true,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")" \
+              -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":false,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")" \
               | jq -r .id)
           fi
 
