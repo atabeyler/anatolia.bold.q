@@ -2,6 +2,12 @@
 
 All notable changes to ANATOLIA-Q are documented in this file, grouped by date. Format loosely follows [Keep a Changelog](https://keepachangelog.com/). The current release version is tracked in `package.json` / `server/package.json` / `client/package.json` and bumped automatically on every commit (`scripts/bump-version.js`, run via a pre-commit hook) — this file groups the *meaningful* changes behind those version bumps, not every patch increment.
 
+## 2026-08-14
+
+### Fixed
+- Desktop and Android release publishing left every release in `draft` state (`android-release.yml`'s raw REST call defaulted to it; electron-builder's GitHub publisher defaults `releaseType` to `draft` when unset) — draft releases don't appear on the public Releases page, and GitHub's "get release by tag" lookup can't find drafts either, so the two workflows raced and created duplicate, invisible releases per version instead of sharing one. Both now publish immediately (`releaseType: "release"` in `package.json`'s `build.publish`, `"draft":false` in the curl call), so `electron-updater`'s auto-update check on desktop has a real `latest.yml` to find.
+- Android's `needsReauth()`/diagnostics gap vs. desktop (see this file's git history) — Android now detects an expired offline session and logs app/sync/error events locally the same way desktop does.
+
 ## 2026-08-06
 
 ### Added
