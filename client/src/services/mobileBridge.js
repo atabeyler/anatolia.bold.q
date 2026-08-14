@@ -224,6 +224,43 @@ export const mobileAI = {
   }),
 };
 
+// Numeric dotted-version compare (2.1.9 < 2.1.10) -- lexical comparison
+// would get that wrong. Mirrors desktop/appUpdate.js's isNewer; duplicated
+// rather than imported since that's a Node/Electron-main file and this one
+// ships in the browser/WebView bundle.
+function isNewerVersion(latestVersion, currentVersion) {
+  const a = latestVersion.split('.').map(Number);
+  const b = currentVersion.split('.').map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] || 0;
+    const y = b[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+export const mobileUpdate = {
+  // Checked via this app's own server (server/src/routes/version.js), never
+  // GitHub's API directly -- see that route's comment. Android has no
+  // Play-Store-style silent auto-install; approving just hands the GitHub
+  // Releases APK URL off to the system browser/download manager (see
+  // UpdateBanner.jsx), same as a user manually downloading it, and Android
+  // itself still requires an explicit tap on the downloaded file to install.
+  check: guard(async () => {
+    try {
+      const res = await fetch(`${CLOUD_URL}/api/version/latest`, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return { available: false };
+      const info = await res.json();
+      const apk = info.assets?.androidApk;
+      const current = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null;
+      if (!info.version || !apk?.url || !current || !isNewerVersion(info.version, current)) return { available: false };
+      return { available: true, version: info.version, notes: info.notes, url: apk.url };
+    } catch {
+      return { available: false };
+    }
+  }),
+};
+
 export const mobileConnectivity = {
   getState: guard(async () => connectivityState),
   // Always returns a real (safely no-op-able) unsubscribe function, even on

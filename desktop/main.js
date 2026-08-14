@@ -1,8 +1,6 @@
 import { app, BrowserWindow, Menu, ipcMain, shell, safeStorage, session } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import electronUpdater from 'electron-updater';
-const { autoUpdater } = electronUpdater;
 
 import { createDiagnostics } from './diagnostics.js';
 import { openDatabase } from './db/index.js';
@@ -15,6 +13,7 @@ import { listUnresolvedConflicts, resolveConflict } from './sync/conflict.js';
 import { createLocalAIProvider } from './localAI/provider.js';
 import { createConnectivityMonitor } from './connectivity.js';
 import { serveStaticDir } from './staticServer.js';
+import { checkForUpdate, downloadUpdate } from './appUpdate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,6 +47,10 @@ let syncTimer = null;
 // below even before that assignment runs (only during the brief window
 // before whenReady resolves, which none of this code executes in).
 let diagnostics = null;
+// Set once checkAppUpdate() finds a newer version, read by the
+// update:approve/update:install IPC handlers below.
+let pendingUpdate = null;
+let downloadedInstallerPath = null;
 
 function currentUserCode() {
   return sessionManager?.getSession()?.userCode || null;
@@ -162,6 +165,35 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('connectivity:getState', () => connectivity.getState());
+
+  // The renderer's update banner (see ReauthBanner-style UI) calls these
+  // once the user has explicitly approved installing the version reported
+  // by the 'update:available' event below. See appUpdate.js's header
+  // comment for why this doesn't go through electron-updater's own
+  // GitHub-facing check.
+  ipcMain.handle('update:approve', async () => {
+    if (!pendingUpdate) return { ok: false, error: 'Güncelleme bulunamadı' };
+    try {
+      const destPath = await downloadUpdate(pendingUpdate.url, app.getPath('temp'), (progress) => {
+        mainWindow?.webContents.send('update:progress', progress);
+      });
+      downloadedInstallerPath = destPath;
+      diagnostics?.info('update_downloaded', { version: pendingUpdate.version });
+      return { ok: true };
+    } catch (err) {
+      diagnostics?.error('update_download_failed', { message: err?.message });
+      return { ok: false, error: err?.message || 'İndirme başarısız' };
+    }
+  });
+  ipcMain.handle('update:install', () => {
+    if (!downloadedInstallerPath) return { ok: false, error: 'İndirilen kurulum dosyası yok' };
+    shell.openPath(downloadedInstallerPath);
+    // NSIS installers expect the running app to exit so they can replace
+    // its files -- a short delay so openPath's spawn has actually started
+    // the installer process before this process disappears.
+    setTimeout(() => app.quit(), 500);
+    return { ok: true };
+  });
 }
 
 async function createWindow() {
@@ -308,15 +340,23 @@ app.whenReady().then(async () => {
   syncTimer.unref?.();
 
   if (!isDev && app.isPackaged) {
-    // Publish target is GitHub Releases (package.json's build.publish),
-    // populated by .github/workflows/desktop-release.yml on a
-    // `desktop-v*` tag push. Failure here (no releases published yet,
-    // machine offline, ...) is never fatal -- the app just runs the
-    // version it already has.
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.warn('[AutoUpdate] check failed:', err?.message || err);
-      diagnostics.error('auto_update_failed', { message: err?.message });
-    });
+    // Checked via this app's own server (appUpdate.js / server/src/routes/
+    // version.js), never GitHub's API directly. Only surfaces a banner for
+    // the renderer to show -- nothing downloads until the user approves it
+    // via the update:approve IPC handler above. Failure here (no releases
+    // published yet, machine offline, ...) is never fatal -- the app just
+    // runs the version it already has.
+    checkForUpdate(CLOUD_URL, app.getVersion())
+      .then((result) => {
+        if (!result.available) return;
+        pendingUpdate = result;
+        diagnostics.info('update_available', { version: result.version });
+        mainWindow?.webContents.send('update:available', result);
+      })
+      .catch((err) => {
+        console.warn('[AppUpdate] check failed:', err?.message || err);
+        diagnostics.error('update_check_failed', { message: err?.message });
+      });
   }
 
   app.on('activate', () => {

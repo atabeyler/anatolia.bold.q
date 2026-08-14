@@ -59,4 +59,21 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
       return () => ipcRenderer.removeListener('connectivity:change', listener);
     },
   },
+
+  update: {
+    // Fires at most once per app launch, if the server-side version check
+    // (see main.js's checkAppUpdate) found something newer than app.getVersion().
+    onAvailable: (callback) => {
+      const listener = (_event, info) => callback(info);
+      ipcRenderer.on('update:available', listener);
+      return () => ipcRenderer.removeListener('update:available', listener);
+    },
+    onProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress);
+      ipcRenderer.on('update:progress', listener);
+      return () => ipcRenderer.removeListener('update:progress', listener);
+    },
+    approve: () => ipcRenderer.invoke('update:approve'),
+    install: () => ipcRenderer.invoke('update:install'),
+  },
 });

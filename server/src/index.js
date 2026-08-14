@@ -25,6 +25,7 @@ import weatherRoutes from './routes/weather.js';
 import platformRoutes from './routes/platform.js';
 import syncRoutes from './routes/sync.js';
 import deviceRoutes from './routes/devices.js';
+import versionRoutes from './routes/version.js';
 import { startMorningBriefScheduler } from './services/morningBrief.js';
 import { startSelfPing } from './services/selfPing.js';
 
@@ -102,6 +103,7 @@ app.use('/api/v1/platform', platformRoutes);
 // Desktop/multi-device offline sync -- see routes/sync.js and desktop/sync/.
 app.use('/api/sync', syncRoutes);
 app.use('/api/devices', deviceRoutes);
+app.use('/api/version', versionRoutes);
 
 // Socket.IO handlers
 initSocketHandlers(io);

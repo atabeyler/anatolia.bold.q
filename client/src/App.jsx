@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import GlobalVoiceAssistant from './components/GlobalVoiceAssistant.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
+import UpdateBanner from './components/UpdateBanner.jsx';
 import { getCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
 import { useLang } from './services/langContext.jsx';
 
@@ -55,6 +56,7 @@ export default function App() {
   return (
     <>
       {showSplash && <SplashScreen />}
+      <UpdateBanner />
       <Suspense fallback={<div className="fixed inset-0 bg-[#0a0e1a]" />}>
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />} />

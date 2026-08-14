@@ -40,3 +40,10 @@ export const desktopConnectivity = {
   getState: () => bridge?.connectivity.getState(),
   onChange: (callback) => bridge?.connectivity.onChange(callback) || (() => {}),
 };
+
+export const desktopUpdate = {
+  onAvailable: (callback) => bridge?.update.onAvailable(callback) || (() => {}),
+  onProgress: (callback) => bridge?.update.onProgress(callback) || (() => {}),
+  approve: () => bridge?.update.approve(),
+  install: () => bridge?.update.install(),
+};
