@@ -6,6 +6,8 @@ import { analyses, emergencyLogs } from '../db/schema.js';
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
 import { getTodayBriefing, getBriefingByDate, listBriefingDates, generateMorningBriefIfNeeded } from '../services/morningBrief.js';
+import { classifyData } from '../services/decisionIntelligence.js';
+import { canAccessClassification } from '../lib/rbac.js';
 
 const router = express.Router();
 
@@ -170,6 +172,16 @@ router.get('/feed', authMiddleware, async (req, res) => {
   }
 });
 
+// The `analyses` table itself carries no classification -- it's derived
+// the same way decisionIntelligence.js's saveDecisionRecord() does
+// (classifyData(category)), so a role that couldn't have generated a
+// CONFIDENTIAL/RESTRICTED report in the first place (see routes/analysis.js's
+// /generate gate) also can't read/export/download one after the fact --
+// including one belonging to another user that an admin is looking up.
+function blockedByClassification(req, row) {
+  return !canAccessClassification(req.user, classifyData(row.category));
+}
+
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     if (!isDbConfigured()) return res.status(404).json({ error: 'DB yok' });
@@ -178,6 +190,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
     if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
+    }
+    if (blockedByClassification(req, row)) {
+      return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
     }
     res.json(toAnalysisJson(row));
   } catch (err) {
@@ -193,6 +208,9 @@ router.get('/:id/download', authMiddleware, async (req, res) => {
     if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
+    }
+    if (blockedByClassification(req, row)) {
+      return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
     }
 
     const buf = await generateReportDocx({
@@ -219,6 +237,9 @@ router.get('/:id/download-pdf', authMiddleware, async (req, res) => {
     if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
+    }
+    if (blockedByClassification(req, row)) {
+      return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
     }
 
     const buf = await generateReportPdf({

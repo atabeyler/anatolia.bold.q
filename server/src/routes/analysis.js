@@ -31,6 +31,8 @@ import { gatherResearchContext } from '../services/analysisResearch.js';
 import { resolveResultSource } from '../services/analysisOrchestrator.js';
 import { runQuantumEngines, isHardwareVerificationPending, scheduleHardwareVerification } from '../services/analysisQuantumEngines.js';
 import { isRealTransactionArray, isRealScenarioArray, isRealOptimizationProblem } from '../services/analysisParsers.js';
+import { classifyData } from '../services/decisionIntelligence.js';
+import { canAccessClassification } from '../lib/rbac.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -231,6 +233,16 @@ router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
       return res.status(400).json({ error: 'category ve prompt zorunlu' });
     }
 
+    // Blocks generation itself (not just later read/export/download) when
+    // the requester's role can't access the classification this category
+    // maps to (see lib/rbac.js) -- the cheapest point to enforce this,
+    // since a blocked request never reaches the AI/quantum engines or gets
+    // persisted at all.
+    const requestedClassification = classifyData(category, req.body.dataClassification);
+    if (!canAccessClassification(req.user, requestedClassification)) {
+      return res.status(403).json({ error: 'Bu veri sınıfında analiz üretme yetkiniz yok' });
+    }
+
     const fraudCategory = isFraudCategory(category);
     const hasRealTransactions = fraudCategory && isRealTransactionArray(realTransactions);
     const hasRealScenarios = !fraudCategory && isRealScenarioArray(realScenarios);
@@ -408,6 +420,10 @@ router.post('/scenario-deep-dive', authMiddleware, analysisLimiter, async (req, 
   try {
     const { category, scenarioId, scenarioSummary, lang = 'tr' } = req.body;
     const userCode = req.user.userCode;
+
+    if (!canAccessClassification(req.user, classifyData(category, req.body.dataClassification))) {
+      return res.status(403).json({ error: 'Bu veri sınıfında analiz üretme yetkiniz yok' });
+    }
 
     const systemPrompt = getScenarioDeepDivePrompt(category, scenarioId, scenarioSummary, lang);
     const userPrompt = `"${scenarioId}" senaryosunun tam derinlemesine analizini hazırla.\nSenaryo özeti: ${scenarioSummary}\nSanki bu birincil senaryoymuş gibi eksiksiz bir BOLD raporu yaz.`;

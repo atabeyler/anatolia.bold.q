@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-server",
-  "version": "2.1.161",
+  "version": "2.1.162",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "loadtest": "node scripts/load-test.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
