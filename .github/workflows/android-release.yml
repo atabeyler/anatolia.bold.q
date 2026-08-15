@@ -151,20 +151,42 @@ jobs:
         run: |
           set -euo pipefail
 
-          HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/releases/tags/$TAG")
+          find_release() {
+            HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/releases/tags/$TAG")
+            [ "$HTTP_CODE" = "200" ] && jq -r .id release.json
+          }
 
-          if [ "$HTTP_CODE" = "200" ]; then
-            RELEASE_ID=$(jq -r .id release.json)
-          else
-            RELEASE_ID=$(curl -sf -X POST \
+          RELEASE_ID=$(find_release || true)
+
+          if [ -z "$RELEASE_ID" ]; then
+            CREATE_HTTP_CODE=$(curl -s -o create.json -w '%{http_code}' -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/releases" \
-              -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":false,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")" \
-              | jq -r .id)
+              -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":false,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")")
+
+            if [ "$CREATE_HTTP_CODE" = "201" ]; then
+              RELEASE_ID=$(jq -r .id create.json)
+            else
+              # desktop-release.yml races this same find-or-create for the same tag on
+              # every push -- a 422 here almost always means it won the race and just
+              # published the release a moment ago. Poll for it instead of failing.
+              echo "Release creation returned $CREATE_HTTP_CODE (likely a concurrent create by desktop-release.yml) -- polling for the release instead."
+              for attempt in 1 2 3 4 5; do
+                sleep 3
+                RELEASE_ID=$(find_release || true)
+                [ -n "$RELEASE_ID" ] && break
+              done
+            fi
+          fi
+
+          if [ -z "$RELEASE_ID" ]; then
+            echo "::error::Could not find or create a release for tag $TAG"
+            cat create.json 2>/dev/null || true
+            exit 1
           fi
 
           curl -sf -X POST \
