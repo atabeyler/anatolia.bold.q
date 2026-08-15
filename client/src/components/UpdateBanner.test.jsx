@@ -93,24 +93,43 @@ describe('UpdateBanner (desktop)', () => {
 });
 
 describe('UpdateBanner (Android)', () => {
-  it('checks the server on mount and opens the system browser on approval', async () => {
+  it('checks the server on mount and downloads/installs the APK on approval', async () => {
     vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.resetModules();
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
     // mobileBridge's own bootstrap does a plain fetch() health check -- keep it harmless.
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
 
     const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
     const mobileBridge = await import('../services/mobileBridge.js');
     mobileBridge.mobileUpdate.check = vi.fn(async () => ({ available: true, version: '2.1.140', url: 'https://x/app.apk' }));
+    const approve = vi.fn(async () => {});
+    mobileBridge.mobileUpdate.approve = approve;
 
     render(<UpdateBanner />);
     await waitFor(() => expect(screen.getByText('Yeni sürüm mevcut: v2.1.140')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Güncelle'));
-    expect(openSpy).toHaveBeenCalledWith('https://x/app.apk', '_system');
+    expect(approve).toHaveBeenCalledWith('https://x/app.apk');
 
-    openSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows an error state when the download/install hand-off fails', async () => {
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
+    vi.resetModules();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    const mobileBridge = await import('../services/mobileBridge.js');
+    mobileBridge.mobileUpdate.check = vi.fn(async () => ({ available: true, version: '2.1.140', url: 'https://x/app.apk' }));
+    mobileBridge.mobileUpdate.approve = vi.fn(async () => { throw new Error('boom'); });
+
+    render(<UpdateBanner />);
+    await waitFor(() => expect(screen.getByText('Güncelle')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Güncelle'));
+
+    await waitFor(() => expect(screen.getByText('İndirme başarısız oldu.')).toBeInTheDocument());
+
     vi.unstubAllGlobals();
   });
 });

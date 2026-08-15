@@ -129,10 +129,16 @@ version creates that draft release; the other finds it by tag and adds its
 asset alongside. The uploaded file is named `ANATOLIA-Q-<version>.apk`.
 
 Distribution from there is direct download + manual "Install from unknown
-sources" on each device (or an MDM push) — there is no store listing and
-no auto-update channel yet (unlike the desktop app's `electron-updater`
-integration); the app does not currently check for or prompt about newer
-APK releases.
+sources" on each device (or an MDM push) — there is no store listing. The
+app does check for and prompt about newer APK releases: `UpdateBanner.jsx`
+polls this server's own `/api/version/latest` (never GitHub directly), and
+approving downloads the APK itself and hands it straight to the system
+package installer via a `FileProvider` intent (`mobileUpdate.approve` in
+`client/src/services/mobileBridge.js`, using `@capacitor/filesystem` +
+`@capacitor-community/file-opener`) — not a Play-Store-style silent
+auto-install, but it skips routing the download through Chrome, which
+otherwise flags sideloaded `.apk` downloads with its own warning on top of
+Android's own unknown-sources install prompt.
 
 ## Testing
 

@@ -7,10 +7,11 @@ import { isMobileApp, mobileUpdate } from '../services/mobileBridge.js';
 // newer published version (never GitHub directly, see
 // server/src/routes/version.js) and asks the user before doing anything.
 // Desktop drives the whole download/install itself via IPC
-// (desktop/appUpdate.js); Android hands the APK URL to the system
-// browser/download manager since a sideloaded app has no silent-install
-// path (see mobileBridge.js's mobileUpdate.check comment). Renders nothing
-// on the web build or once dismissed/no update found.
+// (desktop/appUpdate.js); Android downloads the APK itself and hands it to
+// the system package installer via a FileProvider intent (see
+// mobileBridge.js's mobileUpdate.approve) rather than routing the download
+// through Chrome. Renders nothing on the web build or once dismissed/no
+// update found.
 export default function UpdateBanner() {
   const [info, setInfo] = useState(null);
   const [stage, setStage] = useState('idle'); // idle | downloading | ready | error | dismissed
@@ -41,8 +42,13 @@ export default function UpdateBanner() {
       const result = await desktopUpdate.approve();
       setStage(result?.ok ? 'ready' : 'error');
     } else if (isMobileApp) {
-      window.open(info.url, '_system');
-      setStage('dismissed'); // Android's system download manager/installer takes over from here
+      setStage('downloading');
+      try {
+        await mobileUpdate.approve(info.url);
+        setStage('dismissed'); // Android's own install prompt takes over from here
+      } catch {
+        setStage('error');
+      }
     }
   };
 

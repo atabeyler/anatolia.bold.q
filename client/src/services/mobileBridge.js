@@ -1,6 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { SQLiteConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileOpener } from '@capacitor-community/file-opener';
 
 import { openDatabase } from '../mobile/db/index.js';
 import { listAnalyses, getAnalysis, createAnalysis, updateAnalysis, deleteAnalysis } from '../mobile/db/analysesRepo.js';
@@ -239,13 +241,22 @@ function isNewerVersion(latestVersion, currentVersion) {
   return false;
 }
 
+// Converts an ArrayBuffer to base64 in fixed-size chunks -- String.fromCharCode(...bytes)
+// on the whole ~15MB APK in one call blows the JS engine's argument-count/call-stack
+// limit on some WebViews. 32KB keeps each intermediate string small.
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const CHUNK_SIZE = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE));
+  }
+  return btoa(binary);
+}
+
 export const mobileUpdate = {
   // Checked via this app's own server (server/src/routes/version.js), never
-  // GitHub's API directly -- see that route's comment. Android has no
-  // Play-Store-style silent auto-install; approving just hands the GitHub
-  // Releases APK URL off to the system browser/download manager (see
-  // UpdateBanner.jsx), same as a user manually downloading it, and Android
-  // itself still requires an explicit tap on the downloaded file to install.
+  // GitHub's API directly -- see that route's comment.
   check: guard(async () => {
     try {
       const res = await fetch(`${CLOUD_URL}/api/version/latest`, { signal: AbortSignal.timeout(8000) });
@@ -258,6 +269,25 @@ export const mobileUpdate = {
     } catch {
       return { available: false };
     }
+  }),
+  // Downloads the APK ourselves and hands the local file straight to the
+  // system package installer via a FileProvider content:// intent, instead
+  // of the old window.open(url, '_system') which routed the download
+  // through Chrome -- Chrome's Safe Browsing flags any downloaded .apk with
+  // its own "may be harmful" warning, on top of (and before) Android's own
+  // unknown-sources install prompt, which looked broken/untrustworthy to
+  // users. This path only triggers Android's own, expected install prompt.
+  // Android still requires an explicit tap to install (no Play-Store-style
+  // silent auto-install), so this hands off to the OS installer rather than
+  // completing the update itself.
+  approve: guard(async (url) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`APK indirilemedi (${res.status})`);
+    const data = arrayBufferToBase64(await res.arrayBuffer());
+    const path = 'anatolia-q-update.apk';
+    await Filesystem.writeFile({ path, data, directory: Directory.Cache });
+    const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+    await FileOpener.open({ filePath: uri, contentType: 'application/vnd.android.package-archive' });
   }),
 };
 

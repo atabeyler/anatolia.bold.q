@@ -38,4 +38,13 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the in-app update flow (mobileUpdate.approve, see mobileBridge.js)
+         hand a downloaded APK straight to the system package installer via a
+         FileProvider content:// intent, instead of routing the download
+         through Chrome (which flags sideloaded .apk downloads with its own
+         "may be harmful" Safe Browsing warning on top of Android's own
+         unknown-sources install prompt). Required on Android 8+ for any app
+         that triggers ACTION_INSTALL_PACKAGE / opens an APK with an install
+         intent. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>
