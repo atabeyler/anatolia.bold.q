@@ -70,6 +70,9 @@ The machine-readable API definition for the new versioned platform surface is in
 
 | Method & Path | Auth | Description |
 |---|---|---|
+| `GET /push/vapid-public-key` | — | Public VAPID key for registering a Web Push subscription |
+| `POST /push/subscribe` | auth | Save a browser's Web Push subscription for emergency broadcasts |
+| `POST /push/unsubscribe` | — | Remove a Web Push subscription by endpoint |
 | `POST /center` | — | Notify the central mailbox of an emergency |
 | `POST /users` | auth | Broadcast an emergency notification to other users |
 | `POST /region` | — | Report a regional emergency |
@@ -107,6 +110,37 @@ The machine-readable API definition for the new versioned platform surface is in
 | Method & Path | Auth | Description |
 |---|---|---|
 | `GET /current?lat=&lng=` | auth | Current temperature for a coordinate (proxies Open-Meteo) |
+
+## Devices (`/api/devices`)
+
+| Method & Path | Auth | Description |
+|---|---|---|
+| `POST /register` | auth | Authorize (or re-authorize) a device for the current account while online, enabling later offline login for that device |
+| `GET /` | auth | List the account's registered devices |
+| `DELETE /:deviceId` | auth | Revoke a device (e.g. lost/stolen laptop) |
+
+## Sync (`/api/sync`)
+
+Offline-first sync for the desktop app; see [desktop/README.md](./desktop/README.md).
+
+| Method & Path | Auth | Description |
+|---|---|---|
+| `POST /push` | auth | Apply a batch of queued offline operations (create/update/delete), idempotent by `operationId`, reporting per-operation conflicts |
+| `GET /pull` | auth | Pull records changed since a cursor (`since`/`nextCursor`) |
+| `GET /status` | auth | Device authorization state and the latest server-side sync cursor |
+
+## Version (`/api/version`)
+
+| Method & Path | Auth | Description |
+|---|---|---|
+| `GET /latest` | — | Latest published release version, notes and download URLs for the Android/desktop installers |
+| `GET /download/:platform` | — | Streams the Android APK or Windows installer from GitHub Releases through this server (`platform` is `android` or `desktop`) |
+
+## Health
+
+| Method & Path | Auth | Description |
+|---|---|---|
+| `GET /api/health` | — | Root-level process liveness probe (distinct from `/api/platform/health/live`) |
 
 ---
 

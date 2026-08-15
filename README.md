@@ -206,7 +206,6 @@ The web and desktop apps are unaffected — `mobile/` only ever consumes the alr
 | `IBM_QUANTUM_INSTANCE` | IBM Quantum Platform/Qiskit Runtime service-instance CRN |
 | `IBM_QUANTUM_WAIT_SECONDS` | Maximum wait for the optional hardware-verification lane; defaults to 60 seconds |
 | `PYTHON_BIN` | Optional Python executable override for Qiskit subprocesses |
-| `PYTHON_VERSION` | Deployment Python version; the `Dockerfile` pins the supported release |
 
 Platform-provided variables such as `NODE_ENV` and `PORT` are supplied by the deployment environment where applicable.
 
@@ -232,7 +231,7 @@ Production runs on [Northflank](https://northflank.com), which builds the repo's
 |---|---|---|
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
 | `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases (see [mobile/README.md](./mobile/README.md)) |
-| `.github/workflows/desktop-release.yml` | Push of a `desktop-v*` tag / manual dispatch | Builds the Windows installer on a `windows-latest` runner and publishes it to GitHub Releases (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
+| `.github/workflows/desktop-release.yml` | Push to `main`, push of a `desktop-v*` tag / manual dispatch | Builds the Windows installer on a `windows-latest` runner and publishes it to GitHub Releases (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
 
 A deployment should be treated as live only after CI completes successfully and the Northflank build/deploy finishes.
 

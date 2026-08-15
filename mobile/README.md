@@ -75,7 +75,7 @@ npm run open                           # opens the project in Android Studio
 ```
 
 Requires the Android SDK (`ANDROID_HOME`/`ANDROID_SDK_ROOT`) with
-`platform-tools`, `platforms;android-35`, and `build-tools;35.0.0` installed,
+`platform-tools`, `platforms;android-36`, and `build-tools;36.0.0` installed,
 and a JDK (17+; CI uses Temurin 21).
 
 ```bash
@@ -113,11 +113,12 @@ against.
 
 ## Releases
 
-`.github/workflows/android-release.yml` fires automatically on a push to
-`main` that touches `mobile/**` or the mobile-specific client code (or via
-a manual `workflow_dispatch`): it builds `client/dist`, syncs it into the
-Android project, builds and signs the release APK, and uploads it to a
-GitHub Release.
+`.github/workflows/android-release.yml` fires automatically on every push to
+`main` — unfiltered by path, since every commit bumps the app version via
+`scripts/bump-version.js` and so is a distinct release — or via a manual
+`workflow_dispatch`: it builds `client/dist`, syncs it into the Android
+project, builds and signs the release APK, and uploads it to a GitHub
+Release.
 
 The APK is attached to the **same versioned release as the Windows
 installer** — tag `v<version>`, read from the root `package.json` (kept in
@@ -125,8 +126,10 @@ sync across `package.json`/`client`/`server` by `scripts/bump-version.js`
 on every commit, see `CLAUDE.md`) — rather than a separate tag, so both
 installers for a given app version live in one place. Whichever release
 workflow (this one, or `desktop-release.yml`) runs first for a given
-version creates that draft release; the other finds it by tag and adds its
-asset alongside. The uploaded file is named `ANATOLIA-Q-<version>.apk`.
+version creates that release (published immediately, not a draft — a
+GitHub draft release can't be found by tag lookup, which used to cause the
+two workflows to race and duplicate); the other finds it by tag and adds
+its asset alongside. The uploaded file is named `ANATOLIA-Q-<version>.apk`.
 
 Distribution from there is direct download + manual "Install from unknown
 sources" on each device (or an MDM push) — there is no store listing. The
@@ -142,7 +145,7 @@ Android's own unknown-sources install prompt.
 
 ## Testing
 
-`client/src/mobile/**/*.test.js` — 50 tests, run via the client's normal
+`client/src/mobile/**/*.test.js` — 59 tests, run via the client's normal
 `npm test` (they're colocated with the rest of `client/src` so they run in
 the same Vitest suite). Since there is no real device/emulator in this
 sandbox, native-plugin-dependent code (`db/index.js`,

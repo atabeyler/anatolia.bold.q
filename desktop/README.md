@@ -191,20 +191,22 @@ Windows CI runner, which is exactly what the release workflow below uses.
 
 `electron-updater` (`main.js`) is wired to check GitHub Releases on every
 launch (`build.publish` in `package.json` — provider `github`, this repo).
-Cutting a release:
+
+`.github/workflows/desktop-release.yml` fires automatically on every push to
+`main` — unfiltered by path, since every commit bumps the app version via
+`scripts/bump-version.js` and so is a distinct release — as well as on a
+push of a `desktop-v*` tag, or a manual `workflow_dispatch`. It builds on an
+actual `windows-latest` GitHub-hosted runner (no wine needed there) and
+uploads the installer + `latest.yml` to a GitHub Release via the
+Actions-provided `GITHUB_TOKEN` — no manually-managed secret required. Once
+a release exists, every previously-installed copy of the app picks it up
+automatically the next time it's online. Cutting a release explicitly (e.g.
+to rebuild an older commit) still works the same way:
 
 ```bash
 git tag desktop-v2.2.0
 git push origin desktop-v2.2.0
 ```
-
-This triggers `.github/workflows/desktop-release.yml`, which builds on an
-actual `windows-latest` GitHub-hosted runner (no wine needed there) and
-uploads the installer + `latest.yml` to a GitHub Release via the
-Actions-provided `GITHUB_TOKEN` — no manually-managed secret required. Once
-a release exists, every previously-installed copy of the app picks it up
-automatically the next time it's online. A `workflow_dispatch` trigger is
-also available for an on-demand rebuild without cutting a new tag.
 
 `better-sqlite3` and `bcryptjs` are listed under `dependencies`, not
 `devDependencies` — the packaged app needs both at runtime (native SQLite
