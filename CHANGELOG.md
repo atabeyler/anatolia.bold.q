@@ -9,6 +9,7 @@ All notable changes to ANATOLIA-Q are documented in this file, grouped by date. 
 
 ### Fixed
 - `android-release.yml` and `desktop-release.yml` both find-or-create the same tagged GitHub Release on every push; when their timing overlapped closely, Android's create call could be rejected as a duplicate and the workflow failed instead of just looking the release back up. It now retries the lookup a few times before giving up.
+- Android's in-app update flow handed the downloaded APK to Chrome (`window.open(url, '_system')`), which flags any `.apk` from an unrecognized source with its own "may be harmful" warning on top of Android's own unknown-sources install prompt. It now downloads the APK itself and hands it straight to the system package installer via a `FileProvider` intent, skipping Chrome entirely.
 
 ## 2026-08-14
 
