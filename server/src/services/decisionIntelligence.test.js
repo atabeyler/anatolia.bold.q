@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyData, hashRecord, publicModelRegistry, verifyDecisionRecordIntegrity } from './decisionIntelligence.js';
+import { classifyData, computeOutcomeCalibration, hashRecord, publicModelRegistry, verifyDecisionRecordIntegrity } from './decisionIntelligence.js';
 import { getMetricsSnapshot, recordRequestMetric } from '../lib/requestMetrics.js';
 
 describe('decision intelligence', () => {
@@ -67,6 +67,51 @@ describe('decision record integrity', () => {
 
   it('reports not-found for a missing record', () => {
     expect(verifyDecisionRecordIntegrity(null)).toEqual({ ok: false, reason: 'not-found' });
+  });
+});
+
+describe('outcome calibration', () => {
+  it('returns null when either predicted or actual is missing', () => {
+    expect(computeOutcomeCalibration(null, { realizedScenarioId: 'A' })).toBeNull();
+    expect(computeOutcomeCalibration({ scenario: { candidates: [] } }, null)).toBeNull();
+  });
+
+  it('scores scenario calibration as the predicted probability of the realized scenario', () => {
+    const predicted = { scenario: { candidates: [{ id: 'A', probability: 62 }, { id: 'B', probability: 38 }] } };
+    const result = computeOutcomeCalibration(predicted, { realizedScenarioId: 'A' });
+    expect(result.scenario).toEqual({ realizedScenarioId: 'A', predictedProbability: 62, accuracy: 62 });
+  });
+
+  it('scores a realized scenario the engine never even considered as zero accuracy', () => {
+    const predicted = { scenario: { candidates: [{ id: 'A', probability: 62 }] } };
+    const result = computeOutcomeCalibration(predicted, { realizedScenarioId: 'Z' });
+    expect(result.scenario.accuracy).toBe(0);
+  });
+
+  it('computes fraud precision/recall/f1 against the confirmed set', () => {
+    const predicted = { fraud: { flaggedIds: ['TXN-1', 'TXN-2', 'TXN-3'] } };
+    const result = computeOutcomeCalibration(predicted, { confirmedFraudIds: ['TXN-1', 'TXN-2', 'TXN-4'] });
+    expect(result.fraud.precision).toBeCloseTo(2 / 3);
+    expect(result.fraud.recall).toBeCloseTo(2 / 3);
+    expect(result.fraud.f1).toBeCloseTo(2 / 3);
+  });
+
+  it('computes optimizer error percent against the realized value', () => {
+    const predicted = { optimizer: { totalValue: 80 } };
+    const result = computeOutcomeCalibration(predicted, { realizedValue: 100 });
+    expect(result.optimizer).toEqual({ predictedValue: 80, realizedValue: 100, errorPercent: 25 });
+  });
+
+  it('scores every engine present at once', () => {
+    const predicted = {
+      scenario: { candidates: [{ id: 'A', probability: 50 }] },
+      fraud: { flaggedIds: ['TXN-1'] },
+      optimizer: { totalValue: 100 },
+    };
+    const result = computeOutcomeCalibration(predicted, {
+      realizedScenarioId: 'A', confirmedFraudIds: ['TXN-1'], realizedValue: 100,
+    });
+    expect(Object.keys(result)).toEqual(['scenario', 'fraud', 'optimizer']);
   });
 });
 

@@ -71,17 +71,75 @@ export function resolveResultSource(computation) {
   return RESULT_SOURCE_TYPES.QISKIT_AER_SIMULATION;
 }
 
-export function assessDataQuality({ provenance, recordCount = 0, warnings = [] } = {}) {
-  let score = provenance?.verifiedInput ? 85 : 55;
-  if (provenance?.type === DATA_SOURCE_TYPES.INSTITUTIONAL_API) score = 95;
-  if (recordCount > 0) score += Math.min(5, Math.floor(recordCount / 20));
-  score -= Math.min(25, (warnings?.length || 0) * 5);
-  score = Math.max(0, Math.min(100, score));
+// How much of the expected data is actually present -- verified real
+// records (uploaded/institutional) score far higher than an AI-generated
+// stand-in, and a larger verified record count nudges it further up.
+function computeCompleteness({ provenance, recordCount }) {
+  if (!provenance?.verifiedInput) return 50;
+  return Math.min(100, 90 + Math.min(10, Math.floor(recordCount / 10)));
+}
+
+// How recent the underlying data is. An explicit `asOfDate` (when the
+// caller knows it) is used directly; otherwise this falls back to a
+// provenance-based estimate (a live institutional feed is assumed current,
+// an upload is a point-in-time snapshot, and AI-generated content has no
+// real temporal anchor at all).
+function computeFreshness({ provenance, asOfDate }) {
+  if (asOfDate) {
+    const ageDays = (Date.now() - new Date(asOfDate).getTime()) / 86400000;
+    if (ageDays <= 1) return 100;
+    if (ageDays <= 7) return 90;
+    if (ageDays <= 30) return 75;
+    if (ageDays <= 90) return 55;
+    return 30;
+  }
+  if (provenance?.type === DATA_SOURCE_TYPES.INSTITUTIONAL_API) return 90;
+  if (provenance?.type === DATA_SOURCE_TYPES.UPLOADED) return 70;
+  return 50;
+}
+
+// Internal coherence of the analysis -- each data-quality warning raised
+// during the run (parsing ambiguity, truncation, missing fields, etc.)
+// lowers this; floors at 40 rather than 0 since a warning flags a specific
+// issue, not a wholesale failure of the rest of the data.
+function computeConsistency({ warnings }) {
+  return Math.max(40, 100 - Math.min(60, (warnings?.length || 0) * 15));
+}
+
+// Trustworthiness of the source itself, independent of how much data it
+// provided or how fresh it is.
+function computeAuthority({ provenance }) {
+  switch (provenance?.type) {
+    case DATA_SOURCE_TYPES.INSTITUTIONAL_API: return 95;
+    case DATA_SOURCE_TYPES.UPLOADED: return 80;
+    case DATA_SOURCE_TYPES.MANUAL: return 70;
+    default: return 50;
+  }
+}
+
+/**
+ * Breaks data quality into four independently-computed sub-metrics
+ * (completeness, freshness, consistency, source authority) instead of one
+ * opaque blended score, while still returning the same overall
+ * score/level/warningCount shape existing callers rely on.
+ */
+export function assessDataQuality({ provenance, recordCount = 0, warnings = [], asOfDate = null } = {}) {
+  const completeness = computeCompleteness({ provenance, recordCount });
+  const freshness = computeFreshness({ provenance, asOfDate });
+  const consistency = computeConsistency({ warnings });
+  const authority = computeAuthority({ provenance });
+
+  // Completeness and authority weighted heaviest -- whether real data was
+  // actually supplied, and how trustworthy that source is, matter more to
+  // an analysis' reliability than freshness or the (already-punitive)
+  // consistency warning count.
+  const score = Math.round(completeness * 0.3 + freshness * 0.15 + consistency * 0.25 + authority * 0.3);
 
   return {
     score,
     level: score >= 85 ? 'high' : score >= 65 ? 'medium' : 'limited',
     warningCount: warnings?.length || 0,
+    metrics: { completeness, freshness, consistency, authority },
   };
 }
 

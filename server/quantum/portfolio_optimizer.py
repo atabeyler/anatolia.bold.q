@@ -25,11 +25,21 @@ Only the FINAL sampling run, using the optimized parameters, optionally
 goes to real IBM Quantum hardware when IBM_QUANTUM_TOKEN and
 IBM_QUANTUM_INSTANCE are both configured (see _ibm_backend.py).
 
+Above MAX_ITEMS (one QAOA circuit's capacity), items are solved via a
+hybrid quantum-classical decomposition instead (see hybrid_solve()):
+partitioned by value/cost ratio into MAX_ITEMS-sized groups, each solved by
+its own QAOA circuit against a budget slice, and combined -- an
+approximation rather than a single globally optimal circuit, made visible
+via the classicalBenchmark (exact DP knapsack) comparison either way.
+
 Input:  JSON via stdin -> {"items": [{"id": "...", "value": 35, "cost": 30}, ...],
-        "budgetPercent": 60}
+        "budgetPercent": 60, "seed": 12345 (optional -- omit to generate one;
+        pass a previously-returned seed back in to reproduce the same COBYLA
+        initial parameters, e.g. for a decision replay)}
 Output: JSON via stdout -> {"backend", "qubits", "circuitDepth", "circuitDiagram",
         "selected": ["..."], "totalValue", "totalCost", "budgetPercent",
-        "items": [{..., "selected": bool}]}
+        "items": [{..., "selected": bool}], "seed", "qaoaLayers",
+        "hybrid": bool, "partitionCount"}
 """
 import sys
 import json
@@ -47,7 +57,17 @@ PENALTY = 3.0
 OPT_SHOTS = 1024
 OPT_MAXITER = 80
 FINAL_SHOTS = 4096
+# Per-circuit item cap -- a single QAOA circuit encodes this many items (plus
+# slack qubits) at once. Above this, main() switches to the hybrid
+# quantum-classical decomposition (see hybrid_solve()) instead of raising
+# this directly, since qubit count and COBYLA iterations both blow the
+# 45s Node-side timeout well before a single circuit could fit more.
 MAX_ITEMS = 8
+# Overall accepted input size -- bounds how many partitions the hybrid
+# decomposition below runs (each partition is a full QAOA circuit, so this
+# directly multiplies runtime; see portfolioOptimizer.js's TIMEOUT_MS which
+# scales with partition count).
+MAX_TOTAL_ITEMS = 24
 
 # Upper bound on slack qubits used to encode the budget constraint. Without
 # this, slack_bits = ceil(log2(budget+1)) grows directly with budgetPercent,
@@ -179,24 +199,45 @@ def evaluate_bitstring(bits, values, costs, budget, n):
 
 
 def classical_optimal(values, costs, budget):
-    """Exact brute-force solution to the same budget-constrained selection
-    problem QAOA is solving, used to score QAOA's result against the true
-    optimum (see optimality gap in main()). n is capped at MAX_ITEMS (8), so
-    the full 2**n <= 256 subset space is enumerated directly -- no need for
-    a smarter (e.g. DP) solver at this size, and brute force is trivially
-    correct, which is the point of using it as ground truth."""
+    """Exact 0/1 knapsack via dynamic programming over a bounded, quantized
+    budget dimension -- O(n * resolution). Used as ground truth to score
+    QAOA against (see optimality gap in main()), including for the hybrid
+    decomposition path (hybrid_solve()) where n can exceed what brute force
+    could handle. Costs/budget are quantized the same way
+    _quantize_for_encoding() does for the QUBO -- this can only make the
+    reported "optimum" a coarser approximation of the true unquantized
+    optimum, never wrong in a way that flatters QAOA's comparison against
+    it, and for the original small-item-count case (n <= MAX_ITEMS, costs/
+    budget already <= the resolution) it is exact, matching brute force."""
     n = len(values)
-    best_val, best_cost, best_mask = 0, 0, 0
-    for mask in range(1 << n):
-        val = sum(values[i] for i in range(n) if mask & (1 << i))
-        cost = sum(costs[i] for i in range(n) if mask & (1 << i))
-        if cost <= budget and val > best_val:
-            best_val, best_cost, best_mask = val, cost, mask
-    selected = [bool(best_mask & (1 << i)) for i in range(n)]
+    resolution = 4000
+    scale_base = max(budget, max(costs) if costs else 1)
+    scale = resolution / scale_base if scale_base > resolution else 1.0
+    q_costs = [max(1, round(c * scale)) for c in costs]
+    q_budget = max(1, round(budget * scale))
+
+    dp = [0] * (q_budget + 1)
+    choice = [[False] * (q_budget + 1) for _ in range(n)]
+    for i in range(n):
+        for b in range(q_budget, q_costs[i] - 1, -1):
+            candidate = dp[b - q_costs[i]] + values[i]
+            if candidate > dp[b]:
+                dp[b] = candidate
+                choice[i][b] = True
+
+    selected = [False] * n
+    b = q_budget
+    for i in range(n - 1, -1, -1):
+        if choice[i][b]:
+            selected[i] = True
+            b -= q_costs[i]
+
+    best_val = sum(values[i] for i in range(n) if selected[i])
+    best_cost = sum(costs[i] for i in range(n) if selected[i])
     return best_val, best_cost, selected
 
 
-def optimize(values, costs, budget):
+def optimize(values, costs, budget, seed=None, try_hardware=True):
     n = len(values)
     lin, quad, num_qubits, slack_bits = build_qubo(values, costs, budget, PENALTY)
     h, J, offset = qubo_to_ising(lin, quad, num_qubits)
@@ -208,12 +249,21 @@ def optimize(values, costs, budget):
         result = backend.run(tqc, shots=OPT_SHOTS).result()
         return counts_to_expected_energy(result.get_counts(), h, J, offset, num_qubits)
 
-    x0 = np.random.uniform(0, np.pi, 2 * QAOA_LAYERS)
+    # Seeded so a replay (see routes/platform.js's /decisions/:id/replay) can
+    # reproduce the exact same QAOA initial parameters -- the seed itself is
+    # returned to the caller and stored in the decision record either way.
+    if seed is None:
+        seed = int.from_bytes(np.random.bytes(4), 'big')
+    rng = np.random.RandomState(seed)
+    x0 = rng.uniform(0, np.pi, 2 * QAOA_LAYERS)
     res = minimize(expected_cost, x0, method='COBYLA', options={'maxiter': OPT_MAXITER})
 
     final_circuit = qaoa_circuit(h, J, num_qubits, QAOA_LAYERS, res.x)
 
-    ibm_result = run_on_ibm_hardware(final_circuit, FINAL_SHOTS)
+    # In the hybrid decomposition (hybrid_solve() below), only the first
+    # partition attempts real IBM hardware -- doing it for every partition
+    # would multiply the IBM queue wait by the partition count.
+    ibm_result = run_on_ibm_hardware(final_circuit, FINAL_SHOTS) if try_hardware else None
     if ibm_result:
         counts, backend_name = ibm_result
     else:
@@ -251,70 +301,151 @@ def optimize(values, costs, budget):
         'circuitDepth': final_circuit.depth(),
         'circuitDiagram': diagram,
         'best': best,
+        'seed': int(seed),
+        'qaoaLayers': QAOA_LAYERS,
+    }
+
+
+def hybrid_solve(items, values, costs, budget, seed=None):
+    """Hybrid quantum-classical decomposition for item counts beyond a
+    single QAOA circuit's capacity (MAX_ITEMS). Items are ordered by
+    value/cost ratio (a classical greedy heuristic) and split into
+    MAX_ITEMS-sized partitions; each partition runs its own QAOA circuit
+    against a budget slice (capped by whatever of the total budget remains
+    after earlier, higher-ratio partitions), and results are combined.
+
+    This is an approximation, not a globally optimal solve -- a single
+    monolithic circuit over all items would in principle explore trade-offs
+    across partition boundaries that this greedy budget split can't. That's
+    the standard trade-off for scaling a NISQ-era circuit past its qubit
+    budget, and main()'s classicalBenchmark (an exact DP knapsack over the
+    FULL item set, see classical_optimal) makes the resulting gap visible
+    rather than hidden.
+    """
+    order = sorted(range(len(items)), key=lambda i: -(values[i] / costs[i]))
+    partitions = [order[i:i + MAX_ITEMS] for i in range(0, len(order), MAX_ITEMS)]
+
+    remaining_budget = budget
+    out_items = [None] * len(items)
+    total_value = 0
+    total_cost = 0
+    primary_result = None
+
+    for p_idx, partition in enumerate(partitions):
+        p_values = [values[i] for i in partition]
+        p_costs = [costs[i] for i in partition]
+        p_budget = min(remaining_budget, sum(p_costs))
+
+        best = None
+        result = None
+        if p_budget > 0 and len(partition) >= 2:
+            # Only the first (highest value/cost) partition attempts real
+            # IBM hardware -- see optimize()'s try_hardware.
+            result = optimize(p_values, p_costs, p_budget, seed=seed, try_hardware=(p_idx == 0))
+            best = result['best']
+        if p_idx == 0 and result is not None:
+            primary_result = result
+
+        if best is None:
+            for i in partition:
+                out_items[i] = {"id": items[i].get("id"), "value": values[i], "cost": costs[i], "selected": False}
+            continue
+
+        selected_bits = best[2]
+        for local_i, global_i in enumerate(partition):
+            selected = selected_bits[local_i] == '1'
+            out_items[global_i] = {"id": items[global_i].get("id"), "value": values[global_i], "cost": costs[global_i], "selected": selected}
+            if selected:
+                total_value += values[global_i]
+                total_cost += costs[global_i]
+        remaining_budget -= best[1]
+
+    return {
+        'backend': primary_result['backend'] if primary_result else 'qiskit-aer-simulator',
+        'qubits': primary_result['qubits'] if primary_result else 0,
+        'circuitDepth': primary_result['circuitDepth'] if primary_result else 0,
+        'circuitDiagram': primary_result['circuitDiagram'] if primary_result else '',
+        'seed': primary_result['seed'] if primary_result else (seed if seed is not None else 0),
+        'qaoaLayers': QAOA_LAYERS,
+        'outItems': out_items,
+        'totalValue': total_value,
+        'totalCost': total_cost,
+        'partitionCount': len(partitions),
     }
 
 
 def main():
     raw = sys.stdin.read() or "{}"
     payload = json.loads(raw)
-    items = payload.get("items", [])[:MAX_ITEMS]
+    items = payload.get("items", [])[:MAX_TOTAL_ITEMS]
     budget = max(MIN_BUDGET, int(payload.get("budgetPercent") or 60))
+    seed = payload.get("seed")
+    seed = int(seed) if seed is not None else None
 
     if len(items) < 2:
         print(json.dumps({
             "backend": "qiskit-aer-simulator", "qubits": 0, "circuitDepth": 0,
             "circuitDiagram": "", "selected": [], "totalValue": 0, "totalCost": 0,
             "budgetPercent": budget, "items": [], "ibmHardwareAttempted": False,
+            "hybrid": False, "partitionCount": 1,
         }))
         return
 
     values = [max(1, int(it.get("value") or 1)) for it in items]
     costs = [max(1, int(it.get("cost") or 1)) for it in items]
 
-    result = optimize(values, costs, budget)
-    best = result['best']
+    is_hybrid = len(items) > MAX_ITEMS
 
-    if best is None:
-        # No sampled outcome satisfied the budget constraint even after the
-        # resample retry in optimize() -- report this as a failure (Node
-        # side falls back to the LLM's unscored narrative) instead of a
-        # confident-looking "0 items selected" result.
-        print(json.dumps({"error": "no_feasible_solution_found"}), file=sys.stderr)
-        sys.exit(1)
-
-    selected_bits = best[2]
-
-    out_items = []
-    for i, it in enumerate(items):
-        out_items.append({
-            "id": it.get("id"),
-            "value": values[i],
-            "cost": costs[i],
-            "selected": selected_bits[i] == '1',
-        })
+    if is_hybrid:
+        hybrid = hybrid_solve(items, values, costs, budget, seed=seed)
+        out_items = hybrid['outItems']
+        total_value = hybrid['totalValue']
+        total_cost = hybrid['totalCost']
+        meta = hybrid
+    else:
+        result = optimize(values, costs, budget, seed=seed)
+        best = result['best']
+        if best is None:
+            # No sampled outcome satisfied the budget constraint even after
+            # the resample retry in optimize() -- report this as a failure
+            # (Node side falls back to the LLM's unscored narrative)
+            # instead of a confident-looking "0 items selected" result.
+            print(json.dumps({"error": "no_feasible_solution_found"}), file=sys.stderr)
+            sys.exit(1)
+        selected_bits = best[2]
+        out_items = [
+            {"id": it.get("id"), "value": values[i], "cost": costs[i], "selected": selected_bits[i] == '1'}
+            for i, it in enumerate(items)
+        ]
+        total_value, total_cost = best[0], best[1]
+        meta = result
 
     classical_val, classical_cost, classical_selected_mask = classical_optimal(values, costs, budget)
     optimality_gap_percent = (
-        round((classical_val - best[0]) / classical_val * 100, 2) if classical_val > 0 else 0.0
+        round((classical_val - total_value) / classical_val * 100, 2) if classical_val > 0 else 0.0
     )
 
     print(json.dumps({
-        "backend": result['backend'],
-        "qubits": result['qubits'],
-        "circuitDepth": result['circuitDepth'],
-        "circuitDiagram": result['circuitDiagram'],
+        "backend": meta['backend'],
+        "qubits": meta['qubits'],
+        "circuitDepth": meta['circuitDepth'],
+        "circuitDiagram": meta['circuitDiagram'],
         "selected": [it["id"] for it in out_items if it["selected"]],
-        "totalValue": best[0],
-        "totalCost": best[1],
+        "totalValue": total_value,
+        "totalCost": total_cost,
         "budgetPercent": budget,
         "items": out_items,
         "ibmHardwareAttempted": is_ibm_configured(),
+        "seed": meta['seed'],
+        "qaoaLayers": meta['qaoaLayers'],
+        "hybrid": is_hybrid,
+        "partitionCount": meta.get('partitionCount', 1),
         "classicalBenchmark": {
             "totalValue": classical_val,
             "totalCost": classical_cost,
             "selected": [items[i].get("id") for i in range(len(items)) if classical_selected_mask[i]],
             "optimalityGapPercent": optimality_gap_percent,
-            "matchesOptimal": best[0] >= classical_val,
+            "matchesOptimal": total_value >= classical_val,
         },
     }))
 

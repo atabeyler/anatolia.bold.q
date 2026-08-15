@@ -364,6 +364,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             hardwareVerification: fraudComputation.hardwareVerification || null,
             ibmDiagnostic: fraudComputation.ibmDiagnostic || null,
             classicalBenchmark: fraudComputation.classicalBenchmark || null,
+            prefiltered: !!fraudComputation.prefiltered,
+            excludedByPrefilter: fraudComputation.excludedByPrefilter || 0,
             hardwarePending: hardwarePending && !!hardwareTransactions,
           }
         : null,
@@ -380,6 +382,10 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             dataSource: optimizerComputation.dataSource,
             resultSource: resolveResultSource(optimizerComputation),
             classicalBenchmark: optimizerComputation.classicalBenchmark || null,
+            seed: optimizerComputation.seed ?? null,
+            qaoaLayers: optimizerComputation.qaoaLayers ?? null,
+            hybrid: !!optimizerComputation.hybrid,
+            partitionCount: optimizerComputation.partitionCount ?? 1,
           }
         : null
     });

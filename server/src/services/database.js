@@ -1,6 +1,7 @@
 import pkg from 'pg';
 import { randomUUID } from 'crypto';
 import { logger } from '../lib/logger.js';
+import { recordRequestMetric } from '../lib/requestMetrics.js';
 const { Pool } = pkg;
 
 let pool;
@@ -167,6 +168,11 @@ export async function initDatabase() {
   // auth_users may already exist from before the "blocked"/"email" columns were added.
   await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE;`);
   await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS email VARCHAR(255);`);
+  // Abstract RBAC role (admin/analyst/viewer, see lib/rbac.js) -- distinct
+  // from is_admin, which stays the source of truth for the 'admin' role so
+  // existing admin accounts and login logic are unaffected. Non-admin
+  // accounts default to 'analyst' (the same access level they already had).
+  await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'analyst';`);
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -229,7 +235,15 @@ async function backfillAnalysesSyncMetadata(p) {
 
 export async function query(text, params) {
   const p = getPool();
-  return p.query(text, params);
+  const startedAt = Date.now();
+  try {
+    const result = await p.query(text, params);
+    recordRequestMetric('db.query', Date.now() - startedAt, 200);
+    return result;
+  } catch (err) {
+    recordRequestMetric('db.query', Date.now() - startedAt, 500);
+    throw err;
+  }
 }
 
 // Email notification recipients -- users who are offline/inactive still need

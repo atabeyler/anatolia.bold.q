@@ -7,11 +7,13 @@ import { checkQuantumWorkerHealth } from '../services/quantumProcess.js';
 import { isS3Configured } from '../lib/objectStorage.js';
 import { getConnectorStatuses, listConnectors } from '../services/connectors.js';
 import { getMetricsSnapshot } from '../lib/requestMetrics.js';
+import { canAccessClassification, requireRole, ROLES } from '../lib/rbac.js';
 import {
   ANALYSIS_PROMPT_VERSION,
   DEFAULT_RETENTION_DAYS,
   getDecisionByAnalysisId,
   getDecisionOverview,
+  getEngineAccuracyStats,
   getRiskOverview,
   publicModelRegistry,
   updateDecisionOutcome,
@@ -21,10 +23,7 @@ import {
 const router = express.Router();
 const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
-function requireAdmin(req, res, next) {
-  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Yetkisiz' });
-  next();
-}
+const requireAdmin = requireRole(ROLES.ADMIN);
 
 async function databaseHealth() {
   if (!process.env.DATABASE_URL) return { configured: false, ok: false };
@@ -110,29 +109,52 @@ router.get('/risk', requireAdmin, asyncRoute(async (req, res) => {
   res.json({ items: await getRiskOverview(req.query.limit) });
 }));
 
+// Aggregate AI/quantum engine accuracy from calibrated outcomes (see
+// computeOutcomeCalibration in decisionIntelligence.js), grouped by
+// category and model so engines can be compared on real historical
+// decisions rather than judged per-report in isolation.
+router.get('/decisions/accuracy', requireAdmin, asyncRoute(async (req, res) => {
+  res.json({ stats: await getEngineAccuracyStats() });
+}));
+
+// getDecisionByAnalysisId already scopes non-admins to their own records;
+// canAccessClassification is an additional ABAC layer on top of that
+// ownership check -- a 'viewer'-role account (max INTERNAL) is still
+// blocked from a CONFIDENTIAL/RESTRICTED record even if it's their own,
+// e.g. a role downgrade after the fact or a shared/service account.
 router.get('/decisions/:analysisId', asyncRoute(async (req, res) => {
   const record = await getDecisionByAnalysisId(Number(req.params.analysisId), req.user);
   if (!record) return res.status(404).json({ error: 'Karar izi bulunamadı' });
+  if (!canAccessClassification(req.user, record.data_classification)) {
+    return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
+  }
   res.json({ record });
 }));
 
 router.get('/decisions/:analysisId/integrity', asyncRoute(async (req, res) => {
   const record = await getDecisionByAnalysisId(Number(req.params.analysisId), req.user);
   if (!record) return res.status(404).json({ error: 'Karar izi bulunamadı' });
+  if (!canAccessClassification(req.user, record.data_classification)) {
+    return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
+  }
   res.json(verifyDecisionRecordIntegrity(record));
 }));
 
 router.post('/decisions/:analysisId/outcome', asyncRoute(async (req, res) => {
   const analysisId = Number(req.params.analysisId);
-  const { status, summary, score, notes } = req.body || {};
-  if (!status && !summary && score === undefined && !notes) {
+  const { status, summary, score, notes, actual } = req.body || {};
+  if (!status && !summary && score === undefined && !notes && !actual) {
     return res.status(400).json({ error: 'Sonuç bilgisi gerekli' });
   }
+  // `actual` (realizedScenarioId / confirmedFraudIds / realizedValue) drives
+  // automatic calibration against what each engine predicted at analysis
+  // time -- see computeOutcomeCalibration in decisionIntelligence.js.
   const record = await updateDecisionOutcome(analysisId, req.user, {
     status: status || null,
     summary: summary || null,
     score: Number.isFinite(Number(score)) ? Number(score) : null,
     notes: notes || null,
+    actual: actual || null,
     recordedBy: req.user.userCode,
     recordedAt: new Date().toISOString(),
   });

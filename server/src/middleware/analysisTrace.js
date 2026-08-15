@@ -18,6 +18,53 @@ function recordCountFromRequest(body = {}) {
   return 0;
 }
 
+// Everything needed to reproduce the quantum-mode computations of an
+// analysis: per-engine backend/qubit/shot counts and (for the optimizer)
+// the COBYLA seed -- see quantum/portfolio_optimizer.py's optimize().
+export function buildQuantumParams(body = {}) {
+  const params = {};
+  if (body.quantum) {
+    params.scenario = {
+      backend: body.quantum.backend, qubits: body.quantum.qubits,
+      shots: body.quantum.shots, batches: body.quantum.batches, circuitDepth: body.quantum.circuitDepth,
+    };
+  }
+  if (body.fraud) {
+    params.fraud = { backend: body.fraud.backend, qubits: body.fraud.qubits, circuitDepth: body.fraud.circuitDepth };
+  }
+  if (body.optimizer) {
+    params.optimizer = {
+      backend: body.optimizer.backend, qubits: body.optimizer.qubits, circuitDepth: body.optimizer.circuitDepth,
+      seed: body.optimizer.seed, qaoaLayers: body.optimizer.qaoaLayers,
+    };
+  }
+  return params;
+}
+
+// Snapshots what each engine actually predicted, in a shape that can later
+// be compared against a real-world outcome (see computeOutcomeCalibration
+// in decisionIntelligence.js) without having to re-parse the full report.
+export function buildPredictedOutcome(body = {}) {
+  const predicted = {};
+  if (Array.isArray(body.scenarios) && body.scenarios.some((s) => s.quantumProbability !== undefined)) {
+    predicted.scenario = {
+      candidates: body.scenarios
+        .filter((s) => s.quantumProbability !== undefined)
+        .map((s) => ({ id: s.id, title: s.title, probability: Number(s.quantumProbability) })),
+    };
+  }
+  if (body.fraud?.transactions?.length) {
+    predicted.fraud = {
+      transactionCount: body.fraud.transactionCount,
+      flaggedIds: body.fraud.transactions.filter((t) => t.flagged).map((t) => t.id),
+    };
+  }
+  if (body.optimizer) {
+    predicted.optimizer = { totalValue: body.optimizer.totalValue, totalCost: body.optimizer.totalCost, selected: body.optimizer.selected };
+  }
+  return predicted;
+}
+
 function sanitizeRequest(body = {}) {
   return {
     category: body.category || null,
@@ -105,6 +152,8 @@ export function analysisTraceMiddleware(req, res, next) {
         aiProvider: body.provider,
         dataClassification,
         durationMs,
+        quantumParams: buildQuantumParams(body),
+        predictedOutcome: buildPredictedOutcome(body),
       }).catch(() => {});
 
       body.decisionMeta = {

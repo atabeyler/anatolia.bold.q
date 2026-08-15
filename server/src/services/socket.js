@@ -8,6 +8,7 @@ import * as onlineState from '../lib/onlineState.js';
 import { logger } from '../lib/logger.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
 import { sendPushToUsers } from '../lib/webPush.js';
+import { recordRequestMetric } from '../lib/requestMetrics.js';
 
 const adminSockets = new Set();
 const activeMeetingByRoom = new Map();
@@ -54,6 +55,12 @@ function verifyToken(token) {
 export function initSocketHandlers(io) {
   io.on('connection', (socket) => {
     logger.info({ socketId: socket.id }, 'New connection');
+    recordRequestMetric('socket.connection', 0, 200);
+
+    socket.on('error', (err) => {
+      logger.warn({ err, socketId: socket.id }, 'Socket error');
+      recordRequestMetric('socket.connection', 0, 500);
+    });
 
     socket.on('register', async (payload) => {
       const token = typeof payload === 'string' ? socket.handshake.auth?.token : (payload?.token || socket.handshake.auth?.token);

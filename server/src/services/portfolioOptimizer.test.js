@@ -103,4 +103,28 @@ describe('mergeOptimizerResults', () => {
     const note = mergeOptimizerResults(result);
     expect(note).toContain('%25 daha düşük değerli');
   });
+
+  it('notes the hybrid decomposition when the item count exceeded one circuit', () => {
+    const result = {
+      backend: 'qiskit-aer-simulator', qubits: 14, circuitDepth: 20, circuitDiagram: '',
+      selected: ['A'], totalValue: 30, totalCost: 25, budgetPercent: 60, ibmHardwareAttempted: false,
+      hybrid: true, partitionCount: 3,
+      items: Array.from({ length: 20 }, (_, i) => ({ id: `I${i}`, value: 10, cost: 10, selected: i === 0 })),
+      classicalBenchmark: { totalValue: 30, totalCost: 25, selected: ['A'], optimalityGapPercent: 0, matchesOptimal: true },
+    };
+    const note = mergeOptimizerResults(result);
+    expect(note).toContain('Hibrit çözüm');
+    expect(note).toContain('3 gruba');
+    expect(note).toContain('QAOA (hibrit)');
+  });
+
+  it('does not mention the hybrid decomposition for a single-circuit result', () => {
+    const result = {
+      backend: 'qiskit-aer-simulator', qubits: 11, circuitDepth: 20, circuitDiagram: '',
+      selected: ['A'], totalValue: 30, totalCost: 25, budgetPercent: 60, ibmHardwareAttempted: false,
+      items: [{ id: 'A', value: 30, cost: 25, selected: true }],
+    };
+    const note = mergeOptimizerResults(result);
+    expect(note).not.toContain('Hibrit çözüm');
+  });
 });

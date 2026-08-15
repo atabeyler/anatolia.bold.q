@@ -83,6 +83,16 @@ export async function ensureDecisionTables() {
   await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS input_hash VARCHAR(64);`);
   await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS evidence_hash VARCHAR(64);`);
   await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS record_hash VARCHAR(64);`);
+  // Everything needed to reproduce an analysis' quantum-mode computations
+  // exactly: backend/qubit/shot counts per engine plus the QAOA COBYLA seed
+  // (see quantum/portfolio_optimizer.py) -- distinct from prompt_version/
+  // model_name above, which cover the AI side of reproducibility.
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS quantum_params JSONB;`);
+  // What each engine actually predicted at analysis time (scenario
+  // probabilities, fraud-flagged set, optimizer totals) -- compared against
+  // the real-world outcome later recorded via updateDecisionOutcome() to
+  // auto-calibrate engine accuracy (see computeOutcomeCalibration below).
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS predicted_outcome JSONB;`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_analysis ON decision_records(analysis_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_user ON decision_records(user_code, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_category ON decision_records(category, created_at DESC);`);
@@ -127,6 +137,8 @@ export async function saveDecisionRecord({
   aiProvider,
   dataClassification,
   durationMs,
+  quantumParams,
+  predictedOutcome,
 }) {
   if (!process.env.DATABASE_URL || !userCode) return null;
   try {
@@ -143,8 +155,9 @@ export async function saveDecisionRecord({
       `INSERT INTO decision_records
        (analysis_id, replay_of, user_code, category, title, prompt, request_payload,
         provenance, data_quality, evidence, decision_trace, ai_provider, model_name,
-        prompt_version, data_classification, duration_ms, input_hash, evidence_hash, record_hash)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19)
+        prompt_version, data_classification, duration_ms, input_hash, evidence_hash, record_hash,
+        quantum_params, predicted_outcome)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb)
        RETURNING id`,
       [
         analysisId, replayOf, userCode, category || null, title || null, prompt || null,
@@ -152,7 +165,8 @@ export async function saveDecisionRecord({
         JSON.stringify(dataQuality || {}), JSON.stringify(evidence || {}),
         JSON.stringify(decisionTrace || {}), aiProvider || null, modelForProvider(aiProvider),
         ANALYSIS_PROMPT_VERSION, resolvedClassification, durationMs || null,
-        inputHash, evidenceHash, recordHash,
+        inputHash, evidenceHash, recordHash, JSON.stringify(quantumParams || {}),
+        JSON.stringify(predictedOutcome || {}),
       ]
     );
     return rows[0]?.id || null;
@@ -175,16 +189,120 @@ export async function getDecisionByAnalysisId(analysisId, user) {
   return rows[0] || null;
 }
 
+/**
+ * Compares what each engine predicted (see buildPredictedOutcome in
+ * middleware/analysisTrace.js) against the real-world outcome supplied via
+ * updateDecisionOutcome()'s `actual` field, producing a per-engine accuracy
+ * score. Pure function so it's independently testable without a database.
+ *
+ * `actual` shape (all optional -- only present engines are scored):
+ *   { realizedScenarioId, confirmedFraudIds: string[], realizedValue }
+ */
+export function computeOutcomeCalibration(predicted, actual) {
+  if (!predicted || !actual) return null;
+  const calibration = {};
+
+  if (predicted.scenario?.candidates?.length && actual.realizedScenarioId) {
+    const match = predicted.scenario.candidates.find((c) => c.id === actual.realizedScenarioId);
+    calibration.scenario = {
+      realizedScenarioId: actual.realizedScenarioId,
+      predictedProbability: match?.probability ?? 0,
+      // The engine "called it" well if it assigned a high probability to
+      // the scenario that actually happened -- the predicted probability
+      // itself is the accuracy score (0 if the realized scenario wasn't
+      // even among the candidates it considered).
+      accuracy: match?.probability ?? 0,
+    };
+  }
+
+  if (predicted.fraud && Array.isArray(actual.confirmedFraudIds)) {
+    const flagged = new Set(predicted.fraud.flaggedIds || []);
+    const confirmed = new Set(actual.confirmedFraudIds);
+    const truePositives = [...flagged].filter((id) => confirmed.has(id)).length;
+    const precision = flagged.size ? truePositives / flagged.size : null;
+    const recall = confirmed.size ? truePositives / confirmed.size : null;
+    calibration.fraud = {
+      precision, recall,
+      f1: precision != null && recall != null && (precision + recall) > 0
+        ? (2 * precision * recall) / (precision + recall)
+        : null,
+    };
+  }
+
+  if (predicted.optimizer && Number.isFinite(actual.realizedValue)) {
+    const predictedValue = predicted.optimizer.totalValue || 0;
+    const errorPercent = predictedValue > 0
+      ? Math.abs(actual.realizedValue - predictedValue) / predictedValue * 100
+      : null;
+    calibration.optimizer = { predictedValue, realizedValue: actual.realizedValue, errorPercent };
+  }
+
+  return Object.keys(calibration).length ? calibration : null;
+}
+
 export async function updateDecisionOutcome(analysisId, user, outcome) {
   if (!process.env.DATABASE_URL) return null;
   const existing = await getDecisionByAnalysisId(analysisId, user);
   if (!existing) return null;
+
+  const calibration = outcome?.actual
+    ? computeOutcomeCalibration(existing.predicted_outcome, outcome.actual)
+    : null;
+  const outcomeToStore = calibration ? { ...outcome, calibration } : outcome;
+
   const { rows } = await query(
     `UPDATE decision_records SET outcome = $1::jsonb, outcome_updated_at = NOW()
      WHERE id = $2 RETURNING *`,
-    [JSON.stringify(outcome || {}), existing.id]
+    [JSON.stringify(outcomeToStore || {}), existing.id]
   );
   return rows[0] || null;
+}
+
+/**
+ * Aggregates recorded outcome calibrations by category, AI model, and
+ * engine, so AI/quantum performance can be compared against real
+ * historical decisions instead of judged in isolation per report.
+ */
+export async function getEngineAccuracyStats() {
+  if (!process.env.DATABASE_URL) return [];
+  const { rows } = await query(
+    `SELECT category, model_name, outcome
+     FROM decision_records
+     WHERE outcome -> 'calibration' IS NOT NULL
+     ORDER BY created_at DESC
+     LIMIT 2000`
+  );
+
+  const buckets = new Map();
+  const bump = (key, engine, value) => {
+    if (value == null || !Number.isFinite(value)) return;
+    const bucket = buckets.get(key) || {};
+    const engineBucket = bucket[engine] || { sum: 0, count: 0 };
+    engineBucket.sum += value;
+    engineBucket.count += 1;
+    bucket[engine] = engineBucket;
+    buckets.set(key, bucket);
+  };
+
+  for (const row of rows) {
+    const key = `${row.category || 'unknown'}|${row.model_name || 'unknown'}`;
+    const cal = row.outcome?.calibration;
+    if (!cal) continue;
+    if (cal.scenario) bump(key, 'scenario', cal.scenario.accuracy);
+    if (cal.fraud) bump(key, 'fraud', cal.fraud.f1);
+    if (cal.optimizer && cal.optimizer.errorPercent != null) bump(key, 'optimizer', 100 - Math.min(100, cal.optimizer.errorPercent));
+  }
+
+  return Array.from(buckets.entries()).map(([key, engines]) => {
+    const [category, model] = key.split('|');
+    return {
+      category,
+      model,
+      engines: Object.fromEntries(
+        Object.entries(engines).map(([engine, { sum, count }]) => [engine, { avgAccuracy: Math.round((sum / count) * 100) / 100, sampleSize: count }])
+      ),
+    };
+  });
 }
 
 export async function getDecisionOverview() {

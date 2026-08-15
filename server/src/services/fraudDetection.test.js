@@ -79,6 +79,17 @@ describe('mergeFraudResults', () => {
     expect(note).toContain('| TXN-001 | 15000.5 | 3 | 4 | Evet | Hayır | 88.5 | 🚩 İŞARETLENDİ |');
   });
 
+  it('notes when a classical pre-filter picked the kernel candidates from a larger set', () => {
+    const result = {
+      backend: 'qiskit-statevector-kernel', qubits: 5, circuitDepth: 12, circuitDiagram: '',
+      transactionCount: 60, flaggedCount: 3, prefiltered: true, excludedByPrefilter: 140,
+      transactions: [{ id: 'TXN-1', amount: 100, hour: 1, frequency: 1, newCounterparty: 0, crossBorder: 0, riskScore: 90, flagged: true }],
+    };
+    const note = mergeFraudResults(result);
+    expect(note).toContain('200 kayıt arasından');
+    expect(note).toContain('en riskli görünen 60 kaydı');
+  });
+
   it('adds a classical-benchmark comparison section when present', () => {
     const result = {
       backend: 'qiskit-statevector-kernel',

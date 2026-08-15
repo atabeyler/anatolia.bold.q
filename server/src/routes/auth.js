@@ -10,6 +10,7 @@ import * as onlineState from '../lib/onlineState.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
 import { escapeHtml } from '../lib/escapeHtml.js';
 import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '../lib/loginThrottle.js';
+import { ROLES } from '../lib/rbac.js';
 
 const router = express.Router();
 
@@ -104,11 +105,11 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
     // Admin: no mail approval, direct JWT
     if (user.is_admin) {
       const jwtToken = jwt.sign(
-        { userCode: user.user_code, nickname: user.nickname, isAdmin: true },
+        { userCode: user.user_code, nickname: user.nickname, isAdmin: true, role: ROLES.ADMIN },
         JWT_SECRET,
         { expiresIn: '4h' }
       );
-      return res.json({ status: 'approved', jwt: jwtToken, userCode: user.user_code, nickname: user.nickname, isAdmin: true });
+      return res.json({ status: 'approved', jwt: jwtToken, userCode: user.user_code, nickname: user.nickname, isAdmin: true, role: ROLES.ADMIN });
     }
 
     const token = uuid();
@@ -211,8 +212,9 @@ router.get('/check/:token', async (req, res) => {
       return res.status(403).json({ status: 'blocked', error: 'Hesabınız engellenmiş' });
     }
     const nickname = user?.nickname || t.user_code;
-    const jwtToken = jwt.sign({ userCode: t.user_code, nickname }, JWT_SECRET, { expiresIn: '2h' });
-    res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname });
+    const role = user?.role || ROLES.ANALYST;
+    const jwtToken = jwt.sign({ userCode: t.user_code, nickname, role }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname, role });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -245,7 +247,7 @@ router.get('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
 
 router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   try {
-    const { userCode, password, nickname, isAdmin, email } = req.body;
+    const { userCode, password, nickname, isAdmin, email, role } = req.body;
     if (!userCode || !password) {
       return res.status(400).json({ error: 'Kullanıcı kodu ve şifre zorunlu' });
     }
@@ -255,19 +257,26 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
     if (!validEmail(email)) {
       return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
     }
+    if (role !== undefined && !Object.values(ROLES).includes(role)) {
+      return res.status(400).json({ error: 'Geçersiz rol' });
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    // isAdmin stays the source of truth for the 'admin' role (see
+    // lib/rbac.js's resolveRole) -- an explicit role is honored, otherwise
+    // it's derived from isAdmin so existing admin-only clients keep working.
+    const resolvedRole = role || (isAdmin ? ROLES.ADMIN : ROLES.ANALYST);
     const { rows } = await query(
-      `INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email, role)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (user_code) DO NOTHING
-       RETURNING user_code, nickname, email, is_admin, blocked, created_at`,
-      [userCode, passwordHash, nickname || userCode, !!isAdmin, email || null]
+       RETURNING user_code, nickname, email, is_admin, role, blocked, created_at`,
+      [userCode, passwordHash, nickname || userCode, !!isAdmin, email || null, resolvedRole]
     );
     if (rows.length === 0) {
       return res.status(409).json({ error: 'Bu kullanıcı kodu zaten kayıtlı' });
     }
-    await logAuditEvent(req.user, 'user_added', userCode, { nickname: rows[0].nickname, isAdmin: rows[0].is_admin });
+    await logAuditEvent(req.user, 'user_added', userCode, { nickname: rows[0].nickname, isAdmin: rows[0].is_admin, role: rows[0].role });
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -277,13 +286,16 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
 router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { userCode } = req.params;
-    const { password, nickname, isAdmin, blocked, email } = req.body;
+    const { password, nickname, isAdmin, blocked, email, role } = req.body;
 
     if (blocked === true && userCode === req.user.userCode) {
       return res.status(400).json({ error: 'Kendi hesabınızı engelleyemezsiniz' });
     }
     if (!validEmail(email)) {
       return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
+    }
+    if (role !== undefined && !Object.values(ROLES).includes(role)) {
+      return res.status(400).json({ error: 'Geçersiz rol' });
     }
 
     const sets = [];
@@ -305,6 +317,10 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
       params.push(!!isAdmin);
       sets.push(`is_admin = $${params.length}`);
     }
+    if (role !== undefined) {
+      params.push(role);
+      sets.push(`role = $${params.length}`);
+    }
     if (blocked !== undefined) {
       params.push(!!blocked);
       sets.push(`blocked = $${params.length}`);
@@ -313,7 +329,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
 
     params.push(userCode);
     const r = await query(
-      `UPDATE auth_users SET ${sets.join(', ')} WHERE user_code = $${params.length} RETURNING user_code, nickname, email, is_admin, blocked, created_at`,
+      `UPDATE auth_users SET ${sets.join(', ')} WHERE user_code = $${params.length} RETURNING user_code, nickname, email, is_admin, role, blocked, created_at`,
       params
     );
     if (r.rowCount === 0) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
@@ -324,6 +340,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
     if (nickname !== undefined) auditDetails.nickname = nickname;
     if (email !== undefined) auditDetails.email = email;
     if (isAdmin !== undefined) auditDetails.isAdmin = !!isAdmin;
+    if (role !== undefined) auditDetails.role = role;
     if (blocked !== undefined) auditDetails.blocked = !!blocked;
     await logAuditEvent(
       req.user,

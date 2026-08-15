@@ -29,11 +29,17 @@ it scores whatever transaction records it is given (uploaded by the user,
 or synthesized by the LLM from a described scenario), the same way the
 rest of ANATOLIA-Q only ever reasons over what it's given.
 
+Above MAX_KERNEL_TRANSACTIONS records, a cheap classical (non-quantum)
+pre-filter pass (see classical_anomaly_detection) scores every record in
+O(n) and keeps only the most anomalous-looking MAX_KERNEL_TRANSACTIONS for
+the O(n^2) quantum kernel -- so a larger input set can still be scored
+without the accuracy loss of a blind "first N records" truncation.
+
 Input:  JSON via stdin -> {"transactions": [{"id": "...", "amount": 15000,
         "hour": 3, "frequency": 4, "newCounterparty": 1, "crossBorder": 1}, ...]}
 Output: JSON via stdout -> {"backend", "qubits", "circuitDepth", "circuitDiagram",
         "transactions": [{..., "riskScore": 0-100, "flagged": bool}, ...],
-        "hardwareVerification", "ibmDiagnostic"}
+        "hardwareVerification", "ibmDiagnostic", "prefiltered", "excludedByPrefilter"}
 """
 import sys
 import json
@@ -46,11 +52,15 @@ from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
 
 FEATURES = ["amount", "hour", "frequency", "newCounterparty", "crossBorder"]
 
-# The exact pairwise kernel is O(n^2) statevector inner products. Unlike the
-# QAOA optimizer (which caps items via MAX_ITEMS), this had no upper bound,
-# so a large LLM-generated transaction table could run past the Node-side
-# subprocess timeout on every request. Cap it the same way.
-MAX_TRANSACTIONS = 60
+# The exact pairwise kernel is O(n^2) statevector inner products, so the set
+# that actually goes through it is capped -- above this, a fast classical
+# pre-filter (see detect()) picks the most anomalous-looking candidates
+# instead of just taking the first N records.
+MAX_KERNEL_TRANSACTIONS = 60
+# Overall input accepted at all (mirrored on the Node side in
+# fraudDetection.js) -- bounds the cost of the O(n) classical pre-filter
+# pass itself and the JSON payload size.
+MAX_INPUT_TRANSACTIONS = 300
 
 
 def robust_normalize(transactions):
@@ -140,10 +150,27 @@ def build_swap_test_circuit(circuit_a, circuit_b):
 
 
 def detect(transactions, skip_hardware=False):
-    n = len(transactions)
-    if n < 3:
+    n_total = len(transactions)
+    if n_total < 3:
         return None  # too few points for a meaningful outlier comparison
 
+    prefiltered = False
+    excluded_by_prefilter = 0
+    if n_total > MAX_KERNEL_TRANSACTIONS:
+        # Pre-score every transaction with the cheap classical (non-quantum)
+        # detector and keep only the most anomalous-looking
+        # MAX_KERNEL_TRANSACTIONS for the expensive O(n^2) quantum kernel --
+        # a real anomaly located later in a large uploaded/generated table
+        # is no longer silently dropped the way a blind first-N slice would.
+        full_norm_rows = robust_normalize(transactions)
+        prescores, _ = classical_anomaly_detection(full_norm_rows)
+        ranked = sorted(range(n_total), key=lambda i: -prescores[i])[:MAX_KERNEL_TRANSACTIONS]
+        ranked.sort()  # preserve original relative order for a readable report
+        transactions = [transactions[i] for i in ranked]
+        prefiltered = True
+        excluded_by_prefilter = n_total - len(transactions)
+
+    n = len(transactions)
     norm_rows = robust_normalize(transactions)
     circuits = [feature_map_circuit(x) for x in norm_rows]
     states = [Statevector.from_instruction(qc) for qc in circuits]
@@ -242,13 +269,15 @@ def detect(transactions, skip_hardware=False):
         "hardwareVerification": hardware_verification,
         "ibmDiagnostic": ibm_diagnostic,
         "classicalBenchmark": classical_benchmark,
+        "prefiltered": prefiltered,
+        "excludedByPrefilter": excluded_by_prefilter,
     }
 
 
 def main():
     raw = sys.stdin.read() or "{}"
     payload = json.loads(raw)
-    transactions = payload.get("transactions", [])[:MAX_TRANSACTIONS]
+    transactions = payload.get("transactions", [])[:MAX_INPUT_TRANSACTIONS]
     skip_hardware = bool(payload.get("skipHardware"))
     result = detect(transactions, skip_hardware)
     print(json.dumps(result if result is not None else {
@@ -256,6 +285,7 @@ def main():
         "featureNames": FEATURES, "transactionCount": len(transactions),
         "flaggedCount": 0, "circuitDepth": 0, "circuitDiagram": "", "transactions": [],
         "hardwareVerification": None, "ibmDiagnostic": None, "classicalBenchmark": None,
+        "prefiltered": False, "excludedByPrefilter": 0,
     }))
 
 

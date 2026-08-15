@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { logger } from '../lib/logger.js';
+import { recordRequestMetric } from '../lib/requestMetrics.js';
 
 /**
  * Resolves the (command, args) to spawn for a quantum worker call:
@@ -94,9 +95,10 @@ export function getQuantumWorkerPoolStats() {
  * @param {{mode: string, scriptPath: string, payload: object, timeoutMs: number, label: string}} opts
  */
 export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, label }) {
+  const startedAt = Date.now();
   await acquireSlot();
   try {
-    return await new Promise((resolve) => {
+    const result = await new Promise((resolve) => {
       let settled = false;
       const finish = (value) => {
         if (settled) return;
@@ -151,6 +153,8 @@ export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, l
       proc.stdin.write(JSON.stringify(payload));
       proc.stdin.end();
     });
+    recordRequestMetric(`quantum.${label}`, Date.now() - startedAt, result === null ? 500 : 200);
+    return result;
   } finally {
     releaseSlot();
   }

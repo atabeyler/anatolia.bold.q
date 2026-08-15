@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkQuantumWorkerHealth, getQuantumWorkerPoolStats, runQuantumWorker } from './quantumProcess.js';
+import { getMetricsSnapshot } from '../lib/requestMetrics.js';
 
 describe('quantum worker pool', () => {
   it('reports idle pool stats with the configured concurrency cap', () => {
@@ -29,6 +30,21 @@ describe('quantum worker pool', () => {
     try {
       await runQuantumWorker({ mode: 'scenario', scriptPath: '/tmp/x.py', payload: {}, timeoutMs: 2000, label: 'Test' });
       expect(getQuantumWorkerPoolStats().active).toBe(0);
+    } finally {
+      if (original === undefined) delete process.env.PYTHON_BIN;
+      else process.env.PYTHON_BIN = original;
+    }
+  });
+
+  it('records a failed-run metric under quantum.<label> for observability', async () => {
+    const original = process.env.PYTHON_BIN;
+    process.env.PYTHON_BIN = '/no/such/interpreter';
+    const label = `MetricsTest-${Date.now()}`;
+    try {
+      await runQuantumWorker({ mode: 'scenario', scriptPath: '/tmp/x.py', payload: {}, timeoutMs: 2000, label });
+      const entry = getMetricsSnapshot().find((m) => m.name === `quantum.${label}`);
+      expect(entry.count).toBe(1);
+      expect(entry.errorRate).toBe(100);
     } finally {
       if (original === undefined) delete process.env.PYTHON_BIN;
       else process.env.PYTHON_BIN = original;

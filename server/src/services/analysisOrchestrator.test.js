@@ -36,9 +36,32 @@ describe('analysisOrchestrator', () => {
     const provenance = resolveDataProvenance({ institutionalSource: 'institution-x' });
     const clean = assessDataQuality({ provenance, recordCount: 100 });
     const warned = assessDataQuality({ provenance, recordCount: 100, warnings: ['a', 'b'] });
-    expect(clean.score).toBe(100);
+    expect(clean.score).toBe(97);
     expect(clean.level).toBe('high');
     expect(warned.score).toBe(90);
+    expect(warned.score).toBeLessThan(clean.score);
+  });
+
+  it('breaks the score into completeness/freshness/consistency/authority sub-metrics', () => {
+    const provenance = resolveDataProvenance({ institutionalSource: 'institution-x' });
+    const { metrics } = assessDataQuality({ provenance, recordCount: 100 });
+    expect(metrics).toEqual({ completeness: 100, freshness: 90, consistency: 100, authority: 95 });
+  });
+
+  it('scores AI-generated (unverified) data lowest across every sub-metric', () => {
+    const provenance = resolveDataProvenance();
+    const { metrics, level } = assessDataQuality({ provenance });
+    expect(metrics.completeness).toBe(50);
+    expect(metrics.authority).toBe(50);
+    expect(level).toBe('limited');
+  });
+
+  it('derives freshness from an explicit asOfDate when provided', () => {
+    const provenance = resolveDataProvenance({ hasRealScenarios: true });
+    const fresh = assessDataQuality({ provenance, asOfDate: new Date().toISOString() });
+    const stale = assessDataQuality({ provenance, asOfDate: new Date(Date.now() - 200 * 86400000).toISOString() });
+    expect(fresh.metrics.freshness).toBe(100);
+    expect(stale.metrics.freshness).toBe(30);
   });
 
   it('builds an internal decision trace without requiring user engine choices', () => {

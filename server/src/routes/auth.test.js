@@ -20,7 +20,7 @@ function resetFakeDb() {
 }
 
 function publicUserFields(row) {
-  return { user_code: row.user_code, nickname: row.nickname, email: row.email ?? null, is_admin: row.is_admin, blocked: row.blocked, created_at: row.created_at };
+  return { user_code: row.user_code, nickname: row.nickname, email: row.email ?? null, is_admin: row.is_admin, role: row.role ?? 'analyst', blocked: row.blocked, created_at: row.created_at };
 }
 
 const queryMock = vi.fn(async (sql, params = []) => {
@@ -35,10 +35,10 @@ const queryMock = vi.fn(async (sql, params = []) => {
   // Checked before the shorter seed-insert pattern below, since both share
   // the same "INSERT INTO auth_users (...) VALUES (...) ON CONFLICT" prefix
   // and only differ in whether a RETURNING clause follows.
-  if (s.startsWith('INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email)') && s.includes('RETURNING')) {
-    const [userCode, password_hash, nickname, is_admin, email] = params;
+  if (s.startsWith('INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email, role)') && s.includes('RETURNING')) {
+    const [userCode, password_hash, nickname, is_admin, email, role] = params;
     if (authUsers.has(userCode)) return { rows: [], rowCount: 0 };
-    const row = { user_code: userCode, password_hash, nickname, is_admin, email: email ?? null, blocked: false, created_at: new Date() };
+    const row = { user_code: userCode, password_hash, nickname, is_admin, email: email ?? null, role: role ?? 'analyst', blocked: false, created_at: new Date() };
     authUsers.set(userCode, row);
     return { rows: [publicUserFields(row)], rowCount: 1 };
   }
@@ -61,12 +61,13 @@ const queryMock = vi.fn(async (sql, params = []) => {
     const row = authUsers.get(userCode);
     if (!row) return { rows: [], rowCount: 0 };
     // Order must match the SET-clause construction order in routes/auth.js's
-    // PATCH handler: password_hash, nickname, email, is_admin, blocked.
+    // PATCH handler: password_hash, nickname, email, is_admin, role, blocked.
     const setFields = [];
     if (s.includes('password_hash = $')) setFields.push('password_hash');
     if (s.includes('nickname = $')) setFields.push('nickname');
     if (s.includes('email = $')) setFields.push('email');
     if (s.includes('is_admin = $')) setFields.push('is_admin');
+    if (s.includes('role = $')) setFields.push('role');
     if (s.includes('blocked = $')) setFields.push('blocked');
     setFields.forEach((field, i) => { row[field] = params[i]; });
     return { rows: [publicUserFields(row)], rowCount: 1 };
