@@ -2,6 +2,14 @@
 
 All notable changes to ANATOLIA-Q are documented in this file, grouped by date. Format loosely follows [Keep a Changelog](https://keepachangelog.com/). The current release version is tracked in `package.json` / `server/package.json` / `client/package.json` and bumped automatically on every commit (`scripts/bump-version.js`, run via a pre-commit hook) — this file groups the *meaningful* changes behind those version bumps, not every patch increment.
 
+## 2026-08-15
+
+### Changed
+- Production deployment moved from Render to Northflank (Dockerfile-based build instead of a buildpack, since the app needs both Node and Python/Qiskit at runtime). Render-specific config (`render.yaml`, the Render deploy workflow, the free-tier self-ping keep-alive) removed; desktop/mobile apps' default cloud URL updated accordingly. The Postgres database itself stays on Render for now.
+
+### Fixed
+- `android-release.yml` and `desktop-release.yml` both find-or-create the same tagged GitHub Release on every push; when their timing overlapped closely, Android's create call could be rejected as a duplicate and the workflow failed instead of just looking the release back up. It now retries the lookup a few times before giving up.
+
 ## 2026-08-14
 
 ### Added
