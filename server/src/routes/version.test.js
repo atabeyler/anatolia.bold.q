@@ -30,7 +30,9 @@ describe('GET /api/version/latest', () => {
       notes: '',
       assets: {
         androidApk: { url: 'https://github.com/x/apk', name: 'ANATOLIA-Q-2.1.140.apk', size: 100 },
-        desktopExe: { url: 'https://github.com/x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 },
+        desktopWin: { url: 'https://github.com/x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 },
+        desktopMac: { url: 'https://github.com/x/dmg', name: 'ANATOLIA-Q-2.1.140.dmg', size: 300 },
+        desktopLinux: { url: 'https://github.com/x/appimage', name: 'ANATOLIA-Q-2.1.140.AppImage', size: 400 },
       },
     });
 
@@ -41,11 +43,17 @@ describe('GET /api/version/latest', () => {
     expect(res.body.assets.androidApk).toEqual({
       url: expect.stringMatching(/\/api\/version\/download\/android$/), name: 'ANATOLIA-Q-2.1.140.apk', size: 100,
     });
-    expect(res.body.assets.desktopExe).toEqual({
-      url: expect.stringMatching(/\/api\/version\/download\/desktop$/), name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200,
+    expect(res.body.assets.desktopWin).toEqual({
+      url: expect.stringMatching(/\/api\/version\/download\/windows$/), name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200,
+    });
+    expect(res.body.assets.desktopMac).toEqual({
+      url: expect.stringMatching(/\/api\/version\/download\/mac$/), name: 'ANATOLIA-Q-2.1.140.dmg', size: 300,
+    });
+    expect(res.body.assets.desktopLinux).toEqual({
+      url: expect.stringMatching(/\/api\/version\/download\/linux$/), name: 'ANATOLIA-Q-2.1.140.AppImage', size: 400,
     });
     expect(res.body.assets.androidApk.url).not.toContain('github.com');
-    expect(res.body.assets.desktopExe.url).not.toContain('github.com');
+    expect(res.body.assets.desktopWin.url).not.toContain('github.com');
   });
 
   it('returns 502 without leaking the underlying error when the lookup fails', async () => {
@@ -64,7 +72,7 @@ describe('GET /api/version/download/:platform', () => {
       version: '2.1.140',
       assets: {
         androidApk: { url: 'https://github.com/x/ANATOLIA-Q-2.1.140.apk', name: 'ANATOLIA-Q-2.1.140.apk', size: 4 },
-        desktopExe: { url: 'https://github.com/x/ANATOLIA-Q-Setup-2.1.140.exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 4 },
+        desktopWin: { url: 'https://github.com/x/ANATOLIA-Q-Setup-2.1.140.exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 4 },
       },
     };
   }
@@ -94,7 +102,7 @@ describe('GET /api/version/download/:platform', () => {
     getLatestVersionInfoMock.mockResolvedValue(releaseInfo());
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, body: null })));
 
-    const res = await request(buildApp()).get('/api/version/download/desktop');
+    const res = await request(buildApp()).get('/api/version/download/windows');
     expect(res.status).toBe(502);
   });
 });

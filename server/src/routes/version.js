@@ -4,7 +4,12 @@ import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
-const PLATFORM_ASSET_KEY = { android: 'androidApk', desktop: 'desktopExe' };
+const PLATFORM_ASSET_KEY = {
+  android: 'androidApk',
+  windows: 'desktopWin',
+  mac: 'desktopMac',
+  linux: 'desktopLinux',
+};
 
 function baseUrl(req) {
   return `${req.protocol}://${req.get('host')}`;
@@ -26,8 +31,14 @@ router.get('/latest', async (req, res) => {
         androidApk: info.assets.androidApk
           ? { url: `${baseUrl(req)}/api/version/download/android`, name: info.assets.androidApk.name, size: info.assets.androidApk.size }
           : null,
-        desktopExe: info.assets.desktopExe
-          ? { url: `${baseUrl(req)}/api/version/download/desktop`, name: info.assets.desktopExe.name, size: info.assets.desktopExe.size }
+        desktopWin: info.assets.desktopWin
+          ? { url: `${baseUrl(req)}/api/version/download/windows`, name: info.assets.desktopWin.name, size: info.assets.desktopWin.size }
+          : null,
+        desktopMac: info.assets.desktopMac
+          ? { url: `${baseUrl(req)}/api/version/download/mac`, name: info.assets.desktopMac.name, size: info.assets.desktopMac.size }
+          : null,
+        desktopLinux: info.assets.desktopLinux
+          ? { url: `${baseUrl(req)}/api/version/download/linux`, name: info.assets.desktopLinux.name, size: info.assets.desktopLinux.size }
           : null,
       },
     });

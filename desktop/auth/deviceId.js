@@ -3,10 +3,14 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 // Generated once per install and persisted alongside the local database —
-// AQ-WIN-XXXXXXXX, per spec. Deliberately just an identifier (no secret
-// material) so it's fine to log/display and to send to the server on every
-// sync call.
-export function getOrCreateDeviceId(userDataDir) {
+// AQ-WIN-XXXXXXXX / AQ-MAC-XXXXXXXX / AQ-LINUX-XXXXXXXX depending on the
+// host OS (see server/src/routes/devices.js's DEVICE_ID_RE, which is
+// deliberately loose to accept all three). Deliberately just an identifier
+// (no secret material) so it's fine to log/display and to send to the
+// server on every sync call.
+const PLATFORM_TAG = { win32: 'WIN', darwin: 'MAC', linux: 'LINUX' };
+
+export function getOrCreateDeviceId(userDataDir, platform = process.platform) {
   const file = path.join(userDataDir, 'device.json');
   fs.mkdirSync(userDataDir, { recursive: true });
 
@@ -20,8 +24,9 @@ export function getOrCreateDeviceId(userDataDir) {
     }
   }
 
+  const tag = PLATFORM_TAG[platform] || 'DESKTOP';
   const suffix = randomBytes(4).toString('hex').toUpperCase();
-  const deviceId = `AQ-WIN-${suffix}`;
+  const deviceId = `AQ-${tag}-${suffix}`;
   fs.writeFileSync(file, JSON.stringify({ deviceId, createdAt: new Date().toISOString() }, null, 2));
   return deviceId;
 }

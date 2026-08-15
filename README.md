@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.158-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.159-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -133,15 +133,17 @@ Tests: `npm test --prefix server` and `npm test --prefix client`.
 
 ---
 
-## Windows Desktop (Electron)
+## Desktop (Electron — Windows, macOS, Linux)
 
-`desktop/` contains a production Electron shell around the same `client/` React app, adding an offline-first SQLite cache and a bidirectional sync engine against the existing Postgres backend — see **[desktop/README.md](./desktop/README.md)** for the full architecture, sync protocol, local AI design, and packaging instructions.
+`desktop/` contains a production Electron shell around the same `client/` React app, adding an offline-first SQLite cache and a bidirectional sync engine against the existing Postgres backend — see **[desktop/README.md](./desktop/README.md)** for the full architecture, sync protocol, local AI design, and packaging instructions. Windows ships a code-signed NSIS installer; macOS (dmg) and Linux (AppImage) build and publish alongside it but are currently unsigned (see desktop/README.md's Code signing section).
 
 ```bash
 npm install                 # root devDependencies: electron, better-sqlite3, electron-builder, ...
 npx electron-rebuild -f -w better-sqlite3   # rebuild the native SQLite addon against Electron's Node ABI
 npm run desktop:dev         # dev mode: Vite dev server + Electron window
 npm run dist:win            # production Windows installer (release/ANATOLIA-Q-Setup-*.exe)
+npm run dist:mac            # production macOS disk image (must run on macOS; release/ANATOLIA-Q-*.dmg)
+npm run dist:linux          # production Linux AppImage (release/ANATOLIA-Q-*.AppImage)
 
 npm rebuild better-sqlite3  # switch the native module back to the system Node ABI...
 npm run test:desktop        # ...before running desktop/**/*.test.js (see desktop/README.md)
@@ -231,7 +233,7 @@ Production runs on [Northflank](https://northflank.com), which builds the repo's
 |---|---|---|
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
 | `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases (see [mobile/README.md](./mobile/README.md)) |
-| `.github/workflows/desktop-release.yml` | Push to `main`, push of a `desktop-v*` tag / manual dispatch | Builds the Windows installer on a `windows-latest` runner and publishes it to GitHub Releases (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
+| `.github/workflows/desktop-release.yml` | Push to `main`, push of a `desktop-v*` tag / manual dispatch | Matrix build across `windows-latest`/`macos-latest`/`ubuntu-latest`; builds the Windows/macOS/Linux installers and publishes them all to the same GitHub Release (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
 
 A deployment should be treated as live only after CI completes successfully and the Northflank build/deploy finishes.
 

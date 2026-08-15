@@ -30,7 +30,9 @@ async function fetchLatestRelease() {
     notes: release.body || '',
     assets: {
       androidApk: pickAsset(release.assets, '.apk'),
-      desktopExe: pickAsset(release.assets, '.exe'),
+      desktopWin: pickAsset(release.assets, '.exe'),
+      desktopMac: pickAsset(release.assets, '.dmg'),
+      desktopLinux: pickAsset(release.assets, '.AppImage'),
     },
   };
 }

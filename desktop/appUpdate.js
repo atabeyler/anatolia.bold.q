@@ -24,15 +24,20 @@ function isNewer(latestVersion, currentVersion) {
   return false;
 }
 
-export async function checkForUpdate(apiBaseUrl, currentVersion, fetchImpl = fetch) {
+// Maps Electron's process.platform to the asset key /api/version/latest
+// returns for that OS (see server/src/services/releaseVersion.js).
+const ASSET_KEY_BY_PLATFORM = { win32: 'desktopWin', darwin: 'desktopMac', linux: 'desktopLinux' };
+
+export async function checkForUpdate(apiBaseUrl, currentVersion, platform = process.platform, fetchImpl = fetch) {
   const res = await fetchImpl(`${apiBaseUrl}/api/version/latest`, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Sürüm kontrolü başarısız (HTTP ${res.status})`);
   const info = await res.json();
-  const exe = info.assets?.desktopExe;
-  if (!info.version || !exe?.url || !isNewer(info.version, currentVersion)) {
+  const assetKey = ASSET_KEY_BY_PLATFORM[platform];
+  const asset = assetKey ? info.assets?.[assetKey] : null;
+  if (!info.version || !asset?.url || !isNewer(info.version, currentVersion)) {
     return { available: false };
   }
-  return { available: true, version: info.version, notes: info.notes, url: exe.url, name: exe.name, size: exe.size };
+  return { available: true, version: info.version, notes: info.notes, url: asset.url, name: asset.name, size: asset.size, platform };
 }
 
 // Streams the installer to disk with progress callbacks -- both this

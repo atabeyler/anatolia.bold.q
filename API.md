@@ -133,8 +133,8 @@ Offline-first sync for the desktop app; see [desktop/README.md](./desktop/README
 
 | Method & Path | Auth | Description |
 |---|---|---|
-| `GET /latest` | — | Latest published release version, notes and download URLs for the Android/desktop installers |
-| `GET /download/:platform` | — | Streams the Android APK or Windows installer from GitHub Releases through this server (`platform` is `android` or `desktop`) |
+| `GET /latest` | — | Latest published release version, notes and download URLs for the Android/Windows/macOS/Linux installers |
+| `GET /download/:platform` | — | Streams the requested installer from GitHub Releases through this server (`platform` is `android`, `windows`, `mac`, or `linux`) |
 
 ## Health
 

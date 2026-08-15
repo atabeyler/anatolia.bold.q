@@ -19,36 +19,55 @@ describe('isNewer', () => {
 });
 
 describe('checkForUpdate', () => {
-  it('reports available:true with the exe url/name when the server has a newer version', async () => {
+  it('reports available:true with the windows asset url/name when the server has a newer version', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
       json: async () => ({
         version: '2.1.140',
         notes: 'notlar',
-        assets: { desktopExe: { url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 123 } },
+        assets: { desktopWin: { url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 123 } },
       }),
     }));
 
-    const result = await checkForUpdate('https://api.test', '2.1.139', fetchImpl);
+    const result = await checkForUpdate('https://api.test', '2.1.139', 'win32', fetchImpl);
     expect(result).toEqual({
       available: true, version: '2.1.140', notes: 'notlar',
-      url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 123,
+      url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 123, platform: 'win32',
     });
+  });
+
+  it('picks the mac asset on darwin and the linux asset on linux', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        version: '2.1.140',
+        assets: {
+          desktopMac: { url: 'https://x/dmg', name: 'ANATOLIA-Q-2.1.140.dmg', size: 10 },
+          desktopLinux: { url: 'https://x/appimage', name: 'ANATOLIA-Q-2.1.140.AppImage', size: 20 },
+        },
+      }),
+    }));
+
+    const mac = await checkForUpdate('https://api.test', '2.1.139', 'darwin', fetchImpl);
+    expect(mac).toMatchObject({ available: true, url: 'https://x/dmg', platform: 'darwin' });
+
+    const linux = await checkForUpdate('https://api.test', '2.1.139', 'linux', fetchImpl);
+    expect(linux).toMatchObject({ available: true, url: 'https://x/appimage', platform: 'linux' });
   });
 
   it('reports available:false when the server version is not newer', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ version: '2.1.139', assets: { desktopExe: { url: 'https://x/exe', size: 1 } } }),
+      json: async () => ({ version: '2.1.139', assets: { desktopWin: { url: 'https://x/exe', size: 1 } } }),
     }));
 
-    const result = await checkForUpdate('https://api.test', '2.1.139', fetchImpl);
+    const result = await checkForUpdate('https://api.test', '2.1.139', 'win32', fetchImpl);
     expect(result).toEqual({ available: false });
   });
 
   it('throws when the version-check request itself fails', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: false, status: 502 }));
-    await expect(checkForUpdate('https://api.test', '2.1.139', fetchImpl)).rejects.toThrow('502');
+    await expect(checkForUpdate('https://api.test', '2.1.139', 'win32', fetchImpl)).rejects.toThrow('502');
   });
 });
 

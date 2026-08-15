@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, ipcMain, shell, safeStorage, session } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -187,10 +188,20 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('update:install', () => {
     if (!downloadedInstallerPath) return { ok: false, error: 'İndirilen kurulum dosyası yok' };
+    if (process.platform === 'linux') {
+      // AppImages aren't downloaded with the executable bit set -- without
+      // this, openPath below just opens an "Open With..." file-type prompt
+      // instead of running it.
+      try { fs.chmodSync(downloadedInstallerPath, 0o755); } catch { /* best-effort */ }
+    }
     shell.openPath(downloadedInstallerPath);
-    // NSIS installers expect the running app to exit so they can replace
-    // its files -- a short delay so openPath's spawn has actually started
-    // the installer process before this process disappears.
+    // Windows: the NSIS installer needs this process to exit so it can
+    // replace the running app's files. macOS: opening the .dmg only mounts
+    // it in Finder -- quitting first means the currently-running .app isn't
+    // locked when the user drags the new one over it. Linux: openPath
+    // launches the downloaded AppImage as a separate process, so quitting
+    // avoids two copies of the app running side by side. A short delay so
+    // openPath's spawn has actually started before this process disappears.
     setTimeout(() => app.quit(), 500);
     return { ok: true };
   });
@@ -346,7 +357,7 @@ app.whenReady().then(async () => {
     // via the update:approve IPC handler above. Failure here (no releases
     // published yet, machine offline, ...) is never fatal -- the app just
     // runs the version it already has.
-    checkForUpdate(CLOUD_URL, app.getVersion())
+    checkForUpdate(CLOUD_URL, app.getVersion(), process.platform)
       .then((result) => {
         if (!result.available) return;
         pendingUpdate = result;

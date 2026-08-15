@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.158",
+  "version": "2.1.159",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
@@ -19,7 +19,11 @@
     "desktop:dev": "concurrently -k \"npm run dev:client\" \"wait-on http://localhost:5173 && cross-env ANATOLIA_DESKTOP_DEV=1 electron .\"",
     "test:desktop": "vitest run desktop",
     "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
     "release:win": "npm run build && electron-builder --win --publish always",
+    "release:mac": "npm run build && electron-builder --mac --publish always",
+    "release:linux": "npm run build && electron-builder --linux --publish always",
     "prepare": "husky"
   },
   "engines": {
@@ -61,6 +65,34 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ANATOLIA-Q"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "desktop/build/icon-mac.png",
+      "category": "public.app-category.business",
+      "artifactName": "ANATOLIA-Q-${version}.${ext}",
+      "identity": null
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/build/icon-mac.png",
+      "category": "Office",
+      "artifactName": "ANATOLIA-Q-${version}.${ext}"
     },
     "publish": {
       "provider": "github",
