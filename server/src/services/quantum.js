@@ -4,12 +4,10 @@
  * quantum circuit (Qiskit Aer simulator) instead of relying solely on the
  * LLM's textual estimate. Spawns the server/quantum/scenario_quantum.py process.
  */
-import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { logger } from '../lib/logger.js';
 import { withIbmTimeout } from '../lib/quantumTimeout.js';
-import { resolveQuantumCommand } from './quantumProcess.js';
+import { runQuantumWorker } from './quantumProcess.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/scenario_quantum.py');
@@ -42,67 +40,13 @@ function parsePercentToWeight(raw) {
 export function computeQuantumProbabilities(scenarios, shots = 4096, opts = {}) {
   if (!Array.isArray(scenarios) || scenarios.length === 0) return Promise.resolve(null);
 
-  const payload = JSON.stringify({
+  const payload = {
     shots,
     skipHardware: !!opts.skipHardware,
     scenarios: scenarios.slice(0, MAX_SCENARIOS).map((s) => ({ id: s.id, weight: parsePercentToWeight(s.probability) })),
-  });
+  };
 
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    let proc;
-    try {
-      const { bin, args } = resolveQuantumCommand('scenario', SCRIPT_PATH);
-      proc = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
-    } catch (err) {
-      logger.warn({ err }, '[Quantum] Failed to start Python process');
-      return finish(null);
-    }
-
-    let out = '';
-    let err = '';
-    const timer = setTimeout(() => {
-      logger.warn('[Quantum] Timed out — proceeding with LLM estimates');
-      proc.kill('SIGKILL');
-      finish(null);
-    }, TIMEOUT_MS);
-
-    proc.stdout.on('data', (d) => { out += d; });
-    proc.stderr.on('data', (d) => { err += d; });
-    proc.on('error', (e) => {
-      clearTimeout(timer);
-      logger.warn({ err: e }, '[Quantum] Process error');
-      finish(null);
-    });
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (settled) return;
-      if (code !== 0) {
-        logger.warn({ code, stderr: err.trim().slice(0, 300) }, '[Quantum] Qiskit process failed');
-        return finish(null);
-      }
-      try {
-        const parsed = JSON.parse(out);
-        if (parsed.error) {
-          logger.warn({ circuitError: parsed.error }, '[Quantum] Circuit error');
-          return finish(null);
-        }
-        finish(parsed);
-      } catch (e) {
-        logger.warn({ err: e }, '[Quantum] Failed to parse output');
-        finish(null);
-      }
-    });
-
-    proc.stdin.write(payload);
-    proc.stdin.end();
-  });
+  return runQuantumWorker({ mode: 'scenario', scriptPath: SCRIPT_PATH, payload, timeoutMs: TIMEOUT_MS, label: 'Quantum' });
 }
 
 /**

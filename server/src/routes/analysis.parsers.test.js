@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toNumber, parseScenarios, parseTransactions, parseOptimizationProblem } from './analysis.js';
+import { toNumber, parseScenarios, parseTransactions, parseOptimizationProblem } from '../services/analysisParsers.js';
 
 describe('toNumber', () => {
   it('parses plain integers and decimals', () => {

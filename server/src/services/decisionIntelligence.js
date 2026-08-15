@@ -1,8 +1,58 @@
+import crypto from 'crypto';
 import { query } from './database.js';
 import { logger } from '../lib/logger.js';
 
 export const ANALYSIS_PROMPT_VERSION = '2026-08-12-v1';
 export const DEFAULT_RETENTION_DAYS = Number(process.env.DECISION_RETENTION_DAYS || 365);
+
+/**
+ * Deterministic hash of a JSON-shaped value: sorts object keys recursively
+ * so the same logical content always hashes the same way regardless of key
+ * insertion order, then sha256s the canonical string. Used to make
+ * decision records, evidence and analysis inputs tamper-evident.
+ */
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = canonicalize(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
+export function hashRecord(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(canonicalize(value || {}))).digest('hex');
+}
+
+/**
+ * Recomputes the input/evidence/record hashes from a stored decision_records
+ * row and compares them against the hashes captured at write time. Returns
+ * per-field ok flags plus an overall verdict — used to detect any
+ * out-of-band modification of a record after it was saved.
+ */
+export function verifyDecisionRecordIntegrity(row) {
+  if (!row) return { ok: false, reason: 'not-found' };
+  const checks = {
+    input: !row.input_hash || hashRecord(row.request_payload) === row.input_hash,
+    evidence: !row.evidence_hash || hashRecord(row.evidence) === row.evidence_hash,
+    record: !row.record_hash || hashRecord({
+      analysisId: row.analysis_id,
+      userCode: row.user_code,
+      category: row.category,
+      requestPayload: row.request_payload,
+      provenance: row.provenance,
+      dataQuality: row.data_quality,
+      evidence: row.evidence,
+      decisionTrace: row.decision_trace,
+      aiProvider: row.ai_provider,
+      promptVersion: row.prompt_version,
+      dataClassification: row.data_classification,
+    }) === row.record_hash,
+  };
+  return { ok: checks.input && checks.evidence && checks.record, checks };
+}
 
 export async function ensureDecisionTables() {
   if (!process.env.DATABASE_URL) return;
@@ -30,6 +80,9 @@ export async function ensureDecisionTables() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS input_hash VARCHAR(64);`);
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS evidence_hash VARCHAR(64);`);
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS record_hash VARCHAR(64);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_analysis ON decision_records(analysis_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_user ON decision_records(user_code, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_category ON decision_records(category, created_at DESC);`);
@@ -77,19 +130,29 @@ export async function saveDecisionRecord({
 }) {
   if (!process.env.DATABASE_URL || !userCode) return null;
   try {
+    const resolvedClassification = dataClassification || classifyData(category);
+    const inputHash = hashRecord(requestPayload);
+    const evidenceHash = hashRecord(evidence);
+    const recordHash = hashRecord({
+      analysisId, userCode, category: category || null, requestPayload: requestPayload || {},
+      provenance: provenance || {}, dataQuality: dataQuality || {}, evidence: evidence || {},
+      decisionTrace: decisionTrace || {}, aiProvider: aiProvider || null,
+      promptVersion: ANALYSIS_PROMPT_VERSION, dataClassification: resolvedClassification,
+    });
     const { rows } = await query(
       `INSERT INTO decision_records
        (analysis_id, replay_of, user_code, category, title, prompt, request_payload,
         provenance, data_quality, evidence, decision_trace, ai_provider, model_name,
-        prompt_version, data_classification, duration_ms)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16)
+        prompt_version, data_classification, duration_ms, input_hash, evidence_hash, record_hash)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING id`,
       [
         analysisId, replayOf, userCode, category || null, title || null, prompt || null,
         JSON.stringify(requestPayload || {}), JSON.stringify(provenance || {}),
         JSON.stringify(dataQuality || {}), JSON.stringify(evidence || {}),
         JSON.stringify(decisionTrace || {}), aiProvider || null, modelForProvider(aiProvider),
-        ANALYSIS_PROMPT_VERSION, dataClassification || classifyData(category), durationMs || null,
+        ANALYSIS_PROMPT_VERSION, resolvedClassification, durationMs || null,
+        inputHash, evidenceHash, recordHash,
       ]
     );
     return rows[0]?.id || null;

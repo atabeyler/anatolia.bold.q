@@ -11,6 +11,7 @@ import { logger } from './lib/logger.js';
 import { attachSentryErrorHandler } from './lib/sentry.js';
 import { initDatabase, initMemoryTables } from './services/database.js';
 import { ensureDecisionTables, purgeExpiredDecisionRecords } from './services/decisionIntelligence.js';
+import { ensureQuantumJobTables, startQuantumJobWorker } from './services/quantumJobQueue.js';
 import { initSocketHandlers } from './services/socket.js';
 import { requestMetricsMiddleware } from './lib/requestMetrics.js';
 import { analysisTraceMiddleware } from './middleware/analysisTrace.js';
@@ -67,12 +68,43 @@ const io = new Server(server, {
 });
 
 app.use(cors({ origin: allowedOrigins }));
-// CSP is left disabled: the client is a Vite SPA served from this same
-// server (see the static-file block below) and hasn't been audited for a
-// restrictive script/style CSP -- enabling it blind risks breaking the app.
-// The other baseline headers (X-Frame-Options, X-Content-Type-Options, HSTS,
-// etc.) are still valuable on their own.
-app.use(helmet({ contentSecurityPolicy: false }));
+// Audited against the actual Vite production build (client/dist/index.html)
+// and every external-origin reference in client/src before enabling:
+// - No inline <script> tags and no eval()/new Function() anywhere in the
+//   client -- scriptSrc can stay 'self'-only, no 'unsafe-inline'/'unsafe-eval'.
+// - Google Fonts CSS + font files (index.html <link> tags) -- styleSrc needs
+//   fonts.googleapis.com, fontSrc needs fonts.gstatic.com.
+// - React inline `style={{...}}` props (13 components) count as inline
+//   styles under CSP -- styleSrc needs 'unsafe-inline' (CSS injection is a
+//   much lower-severity vector than script injection, so this is a
+//   reasonable trade-off vs. a full nonce-based rewrite).
+// - Planet/globe textures are self-hosted (client/public/textures/*.jpg),
+//   no external image CDN.
+// - Socket.IO connects back to this same origin (see socket.js) --
+//   connectSrc needs ws:/wss: in addition to 'self' (some browsers don't
+//   treat 'self' as covering a scheme change from https to wss).
+// - EmergencyButton's WebRTC calling feature uses Google's public STUN
+//   servers for ICE candidate gathering -- connectSrc must explicitly allow
+//   the stun: scheme (a bare scheme-source token; a full "stun:host:port"
+//   source is invalid CSP syntax and gets silently dropped by the browser)
+//   or emergency video/audio calls silently stop connecting.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      mediaSrc: ["'self'", 'blob:'],
+      connectSrc: ["'self'", 'ws:', 'wss:', 'stun:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+}));
 app.use(pinoHttp({
   logger,
   // Authorization headers (raw JWTs) must never land in log output.
@@ -139,8 +171,10 @@ server.listen(PORT, () => {
 initDatabase()
   .then(() => initMemoryTables())
   .then(() => ensureDecisionTables())
+  .then(() => ensureQuantumJobTables())
   .then(() => {
     startMorningBriefScheduler();
+    startQuantumJobWorker(io);
     purgeExpiredDecisionRecords().catch((err) => logger.warn({ err }, 'Decision retention sweep failed'));
     const retentionTimer = setInterval(() => {
       purgeExpiredDecisionRecords().catch((err) => logger.warn({ err }, 'Decision retention sweep failed'));

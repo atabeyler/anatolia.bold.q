@@ -46,6 +46,31 @@ export function resolveDataProvenance({
   };
 }
 
+export const RESULT_SOURCE_TYPES = Object.freeze({
+  AI_ESTIMATE: 'ai_estimate',
+  QISKIT_AER_SIMULATION: 'qiskit_aer_simulation',
+  IBM_HARDWARE_VERIFIED: 'ibm_hardware_verified',
+});
+
+/**
+ * Normalizes the three quantum engines' backend/hardwareVerification shape
+ * into one consistent label so the UI/reports can show a single, unambiguous
+ * "where did this number come from" badge instead of reading engine-specific
+ * fields: AI's own estimate (Python worker unavailable/skipped), the local
+ * Qiskit Aer circuit simulator, or a result additionally confirmed on real
+ * IBM Quantum hardware.
+ */
+export function resolveResultSource(computation) {
+  if (!computation) return RESULT_SOURCE_TYPES.AI_ESTIMATE;
+  // Scenario/fraud engines report a separate hardwareVerification sub-result
+  // alongside the (always-present) simulator result; the portfolio optimizer
+  // instead swaps its own `backend` field to the IBM backend name when the
+  // final measurement ran there. Both mean "confirmed on real hardware".
+  if (computation.hardwareVerification) return RESULT_SOURCE_TYPES.IBM_HARDWARE_VERIFIED;
+  if (computation.backend && computation.backend !== 'qiskit-aer-simulator') return RESULT_SOURCE_TYPES.IBM_HARDWARE_VERIFIED;
+  return RESULT_SOURCE_TYPES.QISKIT_AER_SIMULATION;
+}
+
 export function assessDataQuality({ provenance, recordCount = 0, warnings = [] } = {}) {
   let score = provenance?.verifiedInput ? 85 : 55;
   if (provenance?.type === DATA_SOURCE_TYPES.INSTITUTIONAL_API) score = 95;
@@ -95,13 +120,13 @@ export function buildEvidenceSummary({ provenance, dataQuality, provider, quantu
     dataQuality: dataQuality || null,
     aiProvider: provider || null,
     quantum: quantum
-      ? { backend: quantum.backend || null, shots: quantum.shots || null, dataSource: quantum.dataSource || null }
+      ? { backend: quantum.backend || null, shots: quantum.shots || null, dataSource: quantum.dataSource || null, resultSource: resolveResultSource(quantum) }
       : null,
     fraud: fraud
-      ? { backend: fraud.backend || null, transactionCount: fraud.transactionCount || 0, flaggedCount: fraud.flaggedCount || 0, dataSource: fraud.dataSource || null }
+      ? { backend: fraud.backend || null, transactionCount: fraud.transactionCount || 0, flaggedCount: fraud.flaggedCount || 0, dataSource: fraud.dataSource || null, resultSource: resolveResultSource(fraud) }
       : null,
     optimizer: optimizer
-      ? { backend: optimizer.backend || null, dataSource: optimizer.dataSource || null }
+      ? { backend: optimizer.backend || null, dataSource: optimizer.dataSource || null, resultSource: resolveResultSource(optimizer) }
       : null,
   };
 }

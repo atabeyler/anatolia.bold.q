@@ -80,4 +80,27 @@ describe('mergeOptimizerResults', () => {
     const note = mergeOptimizerResults(result);
     expect(note).toContain('kuyruk/zaman aşımı');
   });
+
+  it('reports a matching optimality when QAOA equals the classical optimum', () => {
+    const result = {
+      backend: 'qiskit-aer-simulator', qubits: 11, circuitDepth: 20, circuitDiagram: '',
+      selected: ['A'], totalValue: 35, totalCost: 30, budgetPercent: 60, ibmHardwareAttempted: false,
+      items: [{ id: 'A', value: 35, cost: 30, selected: true }],
+      classicalBenchmark: { totalValue: 35, totalCost: 30, selected: ['A'], optimalityGapPercent: 0, matchesOptimal: true },
+    };
+    const note = mergeOptimizerResults(result);
+    expect(note).toContain('Klasik Optimum Karşılaştırması');
+    expect(note).toContain('optimality gap: %0');
+  });
+
+  it('reports the gap when QAOA falls short of the classical optimum', () => {
+    const result = {
+      backend: 'qiskit-aer-simulator', qubits: 11, circuitDepth: 20, circuitDiagram: '',
+      selected: ['A'], totalValue: 30, totalCost: 25, budgetPercent: 60, ibmHardwareAttempted: false,
+      items: [{ id: 'A', value: 30, cost: 25, selected: true }],
+      classicalBenchmark: { totalValue: 40, totalCost: 30, selected: ['A', 'B'], optimalityGapPercent: 25, matchesOptimal: false },
+    };
+    const note = mergeOptimizerResults(result);
+    expect(note).toContain('%25 daha düşük değerli');
+  });
 });

@@ -78,4 +78,32 @@ describe('mergeFraudResults', () => {
     // simulator values, unaffected by the hardware verification numbers.
     expect(note).toContain('| TXN-001 | 15000.5 | 3 | 4 | Evet | Hayır | 88.5 | 🚩 İŞARETLENDİ |');
   });
+
+  it('adds a classical-benchmark comparison section when present', () => {
+    const result = {
+      backend: 'qiskit-statevector-kernel',
+      qubits: 5,
+      circuitDepth: 12,
+      circuitDiagram: '',
+      transactionCount: 3,
+      flaggedCount: 1,
+      transactions: [
+        { id: 'TXN-001', amount: 15000, hour: 3, frequency: 4, newCounterparty: 1, crossBorder: 0, riskScore: 90, flagged: true },
+        { id: 'TXN-002', amount: 250, hour: 14, frequency: 1, newCounterparty: 0, crossBorder: 1, riskScore: 10, flagged: false },
+        { id: 'TXN-003', amount: 300, hour: 15, frequency: 1, newCounterparty: 0, crossBorder: 0, riskScore: 8, flagged: false },
+      ],
+      classicalBenchmark: {
+        flaggedCount: 1,
+        agreementCount: 3,
+        agreementPercent: 100,
+        quantumOnlyFlags: 0,
+        classicalOnlyFlags: 0,
+        method: 'euclidean-distance-from-centroid (mean+std threshold)',
+      },
+    };
+
+    const note = mergeFraudResults(result);
+    expect(note).toContain('Klasik Anomali Tespiti Karşılaştırması');
+    expect(note).toContain('Uyum oranı: %100');
+  });
 });

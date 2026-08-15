@@ -5,12 +5,10 @@
  * relying solely on the LLM's narrative judgment. Spawns
  * server/quantum/fraud_detection.py.
  */
-import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { logger } from '../lib/logger.js';
 import { withIbmTimeout } from '../lib/quantumTimeout.js';
-import { resolveQuantumCommand } from './quantumProcess.js';
+import { runQuantumWorker } from './quantumProcess.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/fraud_detection.py');
@@ -32,72 +30,21 @@ const MAX_TRANSACTIONS = 60;
  *          Returns null if the Python process fails (no python/qiskit, timeout, too few records, etc.)
  *          — the caller should then proceed with the LLM's narrative report unscored.
  */
-export function computeFraudRiskScores(transactions, opts = {}) {
-  if (!Array.isArray(transactions) || transactions.length < 3) return Promise.resolve(null);
+export async function computeFraudRiskScores(transactions, opts = {}) {
+  if (!Array.isArray(transactions) || transactions.length < 3) return null;
 
   const originalCount = transactions.length;
   const truncated = originalCount > MAX_TRANSACTIONS;
-  const payload = JSON.stringify({ transactions: transactions.slice(0, MAX_TRANSACTIONS), skipHardware: !!opts.skipHardware });
+  const payload = { transactions: transactions.slice(0, MAX_TRANSACTIONS), skipHardware: !!opts.skipHardware };
 
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    let proc;
-    try {
-      const { bin, args } = resolveQuantumCommand('fraud', SCRIPT_PATH);
-      proc = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
-    } catch (err) {
-      logger.warn({ err }, '[FraudDetection] Failed to start Python process');
-      return finish(null);
-    }
-
-    let out = '';
-    let err = '';
-    const timer = setTimeout(() => {
-      logger.warn('[FraudDetection] Timed out — proceeding without risk scores');
-      proc.kill('SIGKILL');
-      finish(null);
-    }, TIMEOUT_MS);
-
-    proc.stdout.on('data', (d) => { out += d; });
-    proc.stderr.on('data', (d) => { err += d; });
-    proc.on('error', (e) => {
-      clearTimeout(timer);
-      logger.warn({ err: e }, '[FraudDetection] Process error');
-      finish(null);
-    });
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (settled) return;
-      if (code !== 0) {
-        logger.warn({ code, stderr: err.trim().slice(0, 300) }, '[FraudDetection] Kernel process failed');
-        return finish(null);
-      }
-      try {
-        const parsed = JSON.parse(out);
-        if (parsed.error) {
-          logger.warn({ kernelError: parsed.error }, '[FraudDetection] Kernel error');
-          return finish(null);
-        }
-        if (truncated) {
-          parsed.truncated = true;
-          parsed.originalCount = originalCount;
-        }
-        finish(parsed);
-      } catch (e) {
-        logger.warn({ err: e }, '[FraudDetection] Failed to parse output');
-        finish(null);
-      }
-    });
-
-    proc.stdin.write(payload);
-    proc.stdin.end();
+  const result = await runQuantumWorker({
+    mode: 'fraud', scriptPath: SCRIPT_PATH, payload, timeoutMs: TIMEOUT_MS, label: 'FraudDetection',
   });
+  if (result && truncated) {
+    result.truncated = true;
+    result.originalCount = originalCount;
+  }
+  return result;
 }
 
 /**
@@ -151,6 +98,7 @@ export function mergeFraudResults(fraudResult) {
     : '';
 
   const hardwareSection = buildFraudHardwareSection(fraudResult.hardwareVerification);
+  const benchmarkSection = buildFraudClassicalBenchmarkSection(fraudResult.classicalBenchmark);
 
   const note = `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n` +
     `${fraudResult.transactionCount} işlem kaydı, ${fraudResult.qubits}-kübitlik bir öznitelik-haritalama (feature-map) devresine kodlanıp ` +
@@ -160,7 +108,25 @@ export function mergeFraudResults(fraudResult) {
     `Backend: ${fraudResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${fraudResult.circuitDepth} — gerçek banka/operatör sistemlerine canlı bağlantı yoktur, bu bölüm sadece sağlanan/üretilen kayıtları puanlar).\n\n` +
     `**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**\n\n` +
     `| İşlem ID | Tutar (TL) | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk Skoru | Durum |\n|---|---|---|---|---|---|---|---|\n${rows}\n\n` +
-    `### Öznitelik-Haritalama Devresi (en yüksek riskli kayıt)\n\`\`\`\n${fraudResult.circuitDiagram}\n\`\`\`\n${hardwareSection}`;
+    `### Öznitelik-Haritalama Devresi (en yüksek riskli kayıt)\n\`\`\`\n${fraudResult.circuitDiagram}\n\`\`\`\n${hardwareSection}${benchmarkSection}`;
 
   return note;
+}
+
+/**
+ * Compares the quantum kernel's flagged set against a classical (Euclidean
+ * distance-from-centroid) anomaly detector run on the same normalized
+ * features (see classical_anomaly_detection() in fraud_detection.py), so
+ * the report shows how often the two methods agree instead of asserting
+ * the quantum result in isolation.
+ */
+export function buildFraudClassicalBenchmarkSection(benchmark) {
+  if (!benchmark) return '';
+  return `\n### Klasik Anomali Tespiti Karşılaştırması\n` +
+    `Aynı normalize edilmiş öznitelikler üzerinde klasik bir mesafe-tabanlı (merkezden Öklid uzaklığı, ortalama+std eşiği) anomali tespit yöntemi de çalıştırılmış ve kuantum çekirdek sonucuyla karşılaştırılmıştır:\n\n` +
+    `| Yöntem | İşaretlenen Kayıt |\n|---|---|\n` +
+    `| Kuantum çekirdek | ${benchmark.agreementCount + benchmark.quantumOnlyFlags} |\n` +
+    `| Klasik (${benchmark.method}) | ${benchmark.flaggedCount} |\n\n` +
+    `**Uyum oranı: %${benchmark.agreementPercent}** (${benchmark.agreementCount} kayıtta aynı karar) — ` +
+    `yalnızca kuantumun işaretlediği: ${benchmark.quantumOnlyFlags}, yalnızca klasik yöntemin işaretlediği: ${benchmark.classicalOnlyFlags}.\n`;
 }

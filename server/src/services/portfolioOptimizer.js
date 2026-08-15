@@ -4,12 +4,10 @@
  * projects/items to fund within a budget) with QAOA instead of relying on
  * the LLM's own judgment. Spawns server/quantum/portfolio_optimizer.py.
  */
-import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { logger } from '../lib/logger.js';
 import { withIbmTimeout } from '../lib/quantumTimeout.js';
-import { resolveQuantumCommand } from './quantumProcess.js';
+import { runQuantumWorker } from './quantumProcess.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/portfolio_optimizer.py');
@@ -28,62 +26,12 @@ const TIMEOUT_MS = withIbmTimeout(45000);
 export function computeOptimalAllocation(items, budgetPercent) {
   if (!Array.isArray(items) || items.length < 2) return Promise.resolve(null);
 
-  const payload = JSON.stringify({ items, budgetPercent });
-
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    let proc;
-    try {
-      const { bin, args } = resolveQuantumCommand('portfolio', SCRIPT_PATH);
-      proc = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
-    } catch (err) {
-      logger.warn({ err }, '[PortfolioOptimizer] Failed to start Python process');
-      return finish(null);
-    }
-
-    let out = '';
-    let err = '';
-    const timer = setTimeout(() => {
-      logger.warn('[PortfolioOptimizer] Timed out — proceeding without optimizer result');
-      proc.kill('SIGKILL');
-      finish(null);
-    }, TIMEOUT_MS);
-
-    proc.stdout.on('data', (d) => { out += d; });
-    proc.stderr.on('data', (d) => { err += d; });
-    proc.on('error', (e) => {
-      clearTimeout(timer);
-      logger.warn({ err: e }, '[PortfolioOptimizer] Process error');
-      finish(null);
-    });
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (settled) return;
-      if (code !== 0) {
-        logger.warn({ code, stderr: err.trim().slice(0, 300) }, '[PortfolioOptimizer] QAOA process failed');
-        return finish(null);
-      }
-      try {
-        const parsed = JSON.parse(out);
-        if (parsed.error) {
-          logger.warn({ qaoaError: parsed.error }, '[PortfolioOptimizer] QAOA error');
-          return finish(null);
-        }
-        finish(parsed);
-      } catch (e) {
-        logger.warn({ err: e }, '[PortfolioOptimizer] Failed to parse output');
-        finish(null);
-      }
-    });
-
-    proc.stdin.write(payload);
-    proc.stdin.end();
+  return runQuantumWorker({
+    mode: 'portfolio',
+    scriptPath: SCRIPT_PATH,
+    payload: { items, budgetPercent },
+    timeoutMs: TIMEOUT_MS,
+    label: 'PortfolioOptimizer',
   });
 }
 
@@ -115,7 +63,28 @@ export function mergeOptimizerResults(optimizerResult) {
     `Sonuç, bütçeyi aşmayan (fizibıl) ölçümler arasından en yüksek değerli olanıdır.${hardwareNote}${sourceNote}\n\n` +
     `**Toplam değer: ${optimizerResult.totalValue} · Toplam maliyet: %${optimizerResult.totalCost} / %${optimizerResult.budgetPercent} bütçe**\n\n` +
     `| Kalem | Değer | Maliyet | Durum |\n|---|---|---|---|\n${rows}\n\n` +
-    `### QAOA Devresi\n\`\`\`\n${optimizerResult.circuitDiagram}\n\`\`\`\n`;
+    `### QAOA Devresi\n\`\`\`\n${optimizerResult.circuitDiagram}\n\`\`\`\n` +
+    buildClassicalBenchmarkSection(optimizerResult);
 
   return note;
+}
+
+/**
+ * Compares the QAOA result against a classical brute-force optimum computed
+ * on the same problem (see classical_optimal() in portfolio_optimizer.py),
+ * so the report doesn't just assert QAOA found a good answer — it shows the
+ * true optimum and the exact gap.
+ */
+export function buildClassicalBenchmarkSection(optimizerResult) {
+  const benchmark = optimizerResult?.classicalBenchmark;
+  if (!benchmark) return '';
+  const status = benchmark.matchesOptimal
+    ? '✅ QAOA sonucu klasik optimuma eşit (optimality gap: %0).'
+    : `⚠️ QAOA sonucu klasik optimumdan %${benchmark.optimalityGapPercent} daha düşük değerli.`;
+  return `\n### Klasik Optimum Karşılaştırması (Brute-Force Benchmark)\n` +
+    `Aynı problem, tüm alt kümeler (2^n) taranarak klasik (kuantum içermeyen) bir kaba kuvvet algoritmasıyla da çözülmüş ve QAOA sonucuyla karşılaştırılmıştır:\n\n` +
+    `| Yöntem | Toplam Değer | Toplam Maliyet |\n|---|---|---|\n` +
+    `| QAOA (kuantum) | ${optimizerResult.totalValue} | ${optimizerResult.totalCost} |\n` +
+    `| Klasik optimum (brute-force) | ${benchmark.totalValue} | ${benchmark.totalCost} |\n\n` +
+    `${status}\n`;
 }

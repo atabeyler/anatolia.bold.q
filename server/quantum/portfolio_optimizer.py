@@ -178,6 +178,24 @@ def evaluate_bitstring(bits, values, costs, budget, n):
     return val, cost, cost <= budget
 
 
+def classical_optimal(values, costs, budget):
+    """Exact brute-force solution to the same budget-constrained selection
+    problem QAOA is solving, used to score QAOA's result against the true
+    optimum (see optimality gap in main()). n is capped at MAX_ITEMS (8), so
+    the full 2**n <= 256 subset space is enumerated directly -- no need for
+    a smarter (e.g. DP) solver at this size, and brute force is trivially
+    correct, which is the point of using it as ground truth."""
+    n = len(values)
+    best_val, best_cost, best_mask = 0, 0, 0
+    for mask in range(1 << n):
+        val = sum(values[i] for i in range(n) if mask & (1 << i))
+        cost = sum(costs[i] for i in range(n) if mask & (1 << i))
+        if cost <= budget and val > best_val:
+            best_val, best_cost, best_mask = val, cost, mask
+    selected = [bool(best_mask & (1 << i)) for i in range(n)]
+    return best_val, best_cost, selected
+
+
 def optimize(values, costs, budget):
     n = len(values)
     lin, quad, num_qubits, slack_bits = build_qubo(values, costs, budget, PENALTY)
@@ -275,6 +293,11 @@ def main():
             "selected": selected_bits[i] == '1',
         })
 
+    classical_val, classical_cost, classical_selected_mask = classical_optimal(values, costs, budget)
+    optimality_gap_percent = (
+        round((classical_val - best[0]) / classical_val * 100, 2) if classical_val > 0 else 0.0
+    )
+
     print(json.dumps({
         "backend": result['backend'],
         "qubits": result['qubits'],
@@ -286,6 +309,13 @@ def main():
         "budgetPercent": budget,
         "items": out_items,
         "ibmHardwareAttempted": is_ibm_configured(),
+        "classicalBenchmark": {
+            "totalValue": classical_val,
+            "totalCost": classical_cost,
+            "selected": [items[i].get("id") for i in range(len(items)) if classical_selected_mask[i]],
+            "optimalityGapPercent": optimality_gap_percent,
+            "matchesOptimal": best[0] >= classical_val,
+        },
     }))
 
 

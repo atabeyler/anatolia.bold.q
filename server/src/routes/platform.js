@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { query } from '../services/database.js';
 import { getStatus as getAiStatus } from '../services/ai.js';
 import { isIbmHardwareConfigured } from '../services/quantum.js';
+import { checkQuantumWorkerHealth } from '../services/quantumProcess.js';
 import { isS3Configured } from '../lib/objectStorage.js';
 import { getConnectorStatuses, listConnectors } from '../services/connectors.js';
 import { getMetricsSnapshot } from '../lib/requestMetrics.js';
@@ -14,6 +15,7 @@ import {
   getRiskOverview,
   publicModelRegistry,
   updateDecisionOutcome,
+  verifyDecisionRecordIntegrity,
 } from '../services/decisionIntelligence.js';
 
 const router = express.Router();
@@ -39,15 +41,25 @@ router.get('/health/live', (req, res) => {
 });
 
 router.get('/health/ready', asyncRoute(async (req, res) => {
-  const db = await databaseHealth();
+  const [db, quantumWorker] = await Promise.all([databaseHealth(), checkQuantumWorkerHealth()]);
   const ai = getAiStatus();
   const aiReady = Object.values(ai).some(Boolean);
+  // Quantum worker health degrades readiness (not a hard failure): every
+  // quantum-mode call already falls back to the LLM's own estimate when the
+  // Python process is unavailable (see quantum.js/fraudDetection.js/
+  // portfolioOptimizer.js), so a broken interpreter shouldn't take the whole
+  // service out of rotation -- it's reported so operators can see it.
   const ready = aiReady && (!process.env.DATABASE_URL || db.ok);
   res.status(ready ? 200 : 503).json({
     ready,
     database: db,
-    ai: { configured: aiReady },
-    quantum: { simulatorExpected: true, ibmConfigured: isIbmHardwareConfigured() },
+    ai: { configured: aiReady, providers: ai },
+    quantum: {
+      simulatorExpected: true,
+      workerOk: quantumWorker.ok,
+      workerError: quantumWorker.ok ? null : quantumWorker.error,
+      ibmConfigured: isIbmHardwareConfigured(),
+    },
     storage: { persistentObjectStorageConfigured: isS3Configured() },
     redis: { configured: !!process.env.REDIS_URL },
   });
@@ -102,6 +114,12 @@ router.get('/decisions/:analysisId', asyncRoute(async (req, res) => {
   const record = await getDecisionByAnalysisId(Number(req.params.analysisId), req.user);
   if (!record) return res.status(404).json({ error: 'Karar izi bulunamadı' });
   res.json({ record });
+}));
+
+router.get('/decisions/:analysisId/integrity', asyncRoute(async (req, res) => {
+  const record = await getDecisionByAnalysisId(Number(req.params.analysisId), req.user);
+  if (!record) return res.status(404).json({ error: 'Karar izi bulunamadı' });
+  res.json(verifyDecisionRecordIntegrity(record));
 }));
 
 router.post('/decisions/:analysisId/outcome', asyncRoute(async (req, res) => {

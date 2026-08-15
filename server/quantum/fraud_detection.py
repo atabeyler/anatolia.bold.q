@@ -76,6 +76,31 @@ def robust_normalize(transactions):
     return rows
 
 
+def classical_anomaly_detection(norm_rows):
+    """Classical (non-quantum) baseline for the same outlier problem: each
+    transaction's anomaly score is its Euclidean distance from the centroid
+    of the same normalized feature rows the quantum kernel encodes, and the
+    same mean+std flagging rule is applied for a like-for-like comparison
+    (a standard distance-based / multivariate z-score outlier detector --
+    no ML dependency needed). Used purely as a benchmark against the quantum
+    kernel result, never to make the actual flagging decision -- see
+    module docstring."""
+    n = len(norm_rows)
+    dims = len(norm_rows[0]) if n else 0
+    centroid = [sum(row[d] for row in norm_rows) / n for d in range(dims)]
+    distances = [math.sqrt(sum((row[d] - centroid[d]) ** 2 for d in range(dims))) for row in norm_rows]
+
+    mean_d = sum(distances) / n
+    std_d = math.sqrt(sum((d - mean_d) ** 2 for d in distances) / n)
+    threshold = mean_d + std_d
+
+    lo, hi = min(distances), max(distances)
+    span = (hi - lo) or 1.0
+    scores = [round(float((d - lo) / span * 100), 1) for d in distances]
+    flags = [bool(d > threshold) for d in distances]
+    return scores, flags
+
+
 def feature_map_circuit(x):
     """RY angle-encodes each (already [-1,1]-bounded) feature, then a CX/RY
     entangling layer mixes in pairwise feature interactions -- genuine
@@ -146,14 +171,30 @@ def detect(transactions, skip_hardware=False):
     std_raw = math.sqrt(sum((s - mean_raw) ** 2 for s in raw_scores) / n)
     threshold = mean_raw + std_raw
 
+    classical_scores, classical_flags = classical_anomaly_detection(norm_rows)
+
     out = []
     for i, t in enumerate(transactions):
         out.append({
             **{k: t.get(k) for k in ["id", *FEATURES]},
             "riskScore": risk_scores[i],
             "flagged": bool(raw_scores[i] > threshold),
+            "classicalScore": classical_scores[i],
+            "classicalFlagged": classical_flags[i],
         })
     out.sort(key=lambda t: -t["riskScore"])
+
+    agreement_count = sum(1 for t in out if t["flagged"] == t["classicalFlagged"])
+    quantum_only = sum(1 for t in out if t["flagged"] and not t["classicalFlagged"])
+    classical_only = sum(1 for t in out if t["classicalFlagged"] and not t["flagged"])
+    classical_benchmark = {
+        "flaggedCount": sum(1 for t in out if t["classicalFlagged"]),
+        "agreementCount": agreement_count,
+        "agreementPercent": round(agreement_count / n * 100, 1),
+        "quantumOnlyFlags": quantum_only,
+        "classicalOnlyFlags": classical_only,
+        "method": "euclidean-distance-from-centroid (mean+std threshold)",
+    }
 
     top_idx = raw_scores.index(max(raw_scores))
     typical_idx = raw_scores.index(min(raw_scores))
@@ -200,6 +241,7 @@ def detect(transactions, skip_hardware=False):
         "transactions": out,
         "hardwareVerification": hardware_verification,
         "ibmDiagnostic": ibm_diagnostic,
+        "classicalBenchmark": classical_benchmark,
     }
 
 
@@ -213,7 +255,7 @@ def main():
         "backend": "qiskit-statevector-kernel", "qubits": len(FEATURES),
         "featureNames": FEATURES, "transactionCount": len(transactions),
         "flaggedCount": 0, "circuitDepth": 0, "circuitDiagram": "", "transactions": [],
-        "hardwareVerification": None, "ibmDiagnostic": None,
+        "hardwareVerification": None, "ibmDiagnostic": None, "classicalBenchmark": None,
     }))
 
 

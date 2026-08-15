@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DATA_SOURCE_TYPES,
+  RESULT_SOURCE_TYPES,
   resolveDataProvenance,
+  resolveResultSource,
   assessDataQuality,
   createDecisionTrace,
   markDecisionStage,
@@ -58,6 +60,23 @@ describe('analysisOrchestrator', () => {
     expect(evidence.aiProvider).toBe('provider-x');
     expect(evidence.quantum.shots).toBe(4096);
     expect(evidence.source).toBe(DATA_SOURCE_TYPES.UPLOADED);
+  });
+
+  it('labels a missing computation as an AI estimate', () => {
+    expect(resolveResultSource(null)).toBe(RESULT_SOURCE_TYPES.AI_ESTIMATE);
+  });
+
+  it('labels a plain simulator result as qiskit-aer', () => {
+    expect(resolveResultSource({ backend: 'qiskit-aer-simulator' })).toBe(RESULT_SOURCE_TYPES.QISKIT_AER_SIMULATION);
+  });
+
+  it('labels a hardwareVerification sub-result as IBM-verified (scenario/fraud shape)', () => {
+    expect(resolveResultSource({ backend: 'qiskit-aer-simulator', hardwareVerification: { backend: 'ibm_brisbane' } }))
+      .toBe(RESULT_SOURCE_TYPES.IBM_HARDWARE_VERIFIED);
+  });
+
+  it('labels a non-simulator backend as IBM-verified (optimizer shape)', () => {
+    expect(resolveResultSource({ backend: 'ibm_brisbane' })).toBe(RESULT_SOURCE_TYPES.IBM_HARDWARE_VERIFIED);
   });
 
   it('runs orchestration stages sequentially and records them', async () => {

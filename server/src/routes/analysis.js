@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import multer from 'multer';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
@@ -14,57 +14,26 @@ import {
   getConsultationPrompt,
   getStatus,
   isFraudCategory,
-  getCategoryGroup,
-  CATEGORY_GROUP_SOURCES
 } from '../services/ai.js';
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
 import { sendAnalysisReport } from '../services/email.js';
-import { eq, and, inArray, isNotNull, asc, sql } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull, asc } from 'drizzle-orm';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { analyses, messages } from '../db/schema.js';
-import {
-  computeQuantumProbabilities, mergeQuantumResults,
-  isIbmHardwareConfigured, verifyScenarioHardwareAsync, buildScenarioHardwareSection,
-} from '../services/quantum.js';
-import {
-  computeFraudRiskScores, mergeFraudResults,
-  verifyFraudHardwareAsync, buildFraudHardwareSection,
-} from '../services/fraudDetection.js';
-import { broadcastToUser } from '../services/socket.js';
-import { computeOptimalAllocation, mergeOptimizerResults } from '../services/portfolioOptimizer.js';
+import { computeQuantumProbabilities } from '../services/quantum.js';
 import { parseTransactionFile } from '../services/transactionSource.js';
 import { parseScenarioFile, parseOptimizationFile } from '../services/scenarioDataSource.js';
 import { sheetToText } from '../services/tableParsing.js';
 import { isWeatherQuery, getLiveWeatherReply } from '../services/weather.js';
 import { researchWeb, formatResearchContext } from '../services/webResearch.js';
+import { gatherResearchContext } from '../services/analysisResearch.js';
+import { resolveResultSource } from '../services/analysisOrchestrator.js';
+import { runQuantumEngines, isHardwareVerificationPending, scheduleHardwareVerification } from '../services/analysisQuantumEngines.js';
+import { isRealTransactionArray, isRealScenarioArray, isRealOptimizationProblem } from '../services/analysisParsers.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
-
-// Runs two searches in parallel: a general topic search (same pattern as
-// /chat below), and one steered toward the category group's official local
-// + international sources (mevzuat.gov.tr/resmigazete.gov.tr always
-// included, plus e.g. tcmb.gov.tr/imf.org for economic reports) via `site:`
-// filters. Grounds report content (mevzuat/kurum references) in real search
-// results instead of the model's training-data recall, which for
-// law/regulation numbers is a real hallucination risk.
-async function gatherResearchContext(category, topic) {
-  const group = getCategoryGroup(category);
-  const sources = CATEGORY_GROUP_SOURCES[group];
-  const siteFilter = [...sources.local, ...sources.international].map((d) => `site:${d}`).join(' OR ');
-  const topicQuery = (topic || '').slice(0, 150);
-
-  const queries = [topicQuery, siteFilter ? `${topicQuery} mevzuat kanun yönetmelik ${siteFilter}` : null].filter(Boolean);
-
-  try {
-    const results = (await Promise.all(queries.map((q) => researchWeb(q).catch(() => [])))).flat();
-    return formatResearchContext(results);
-  } catch (e) {
-    logger.warn({ err: e }, '[WebResearch] generate search error');
-    return '';
-  }
-}
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const require = createRequire(import.meta.url);
 
@@ -241,18 +210,6 @@ router.post('/upload', authMiddleware, analysisLimiter, upload.single('file'), a
   }
 });
 
-function isRealTransactionArray(v) {
-  return Array.isArray(v) && v.length >= 3 && v.every((t) => t && typeof t.amount !== 'undefined');
-}
-
-function isRealScenarioArray(v) {
-  return Array.isArray(v) && v.length >= 2 && v.every((s) => s && s.title && typeof s.probability !== 'undefined');
-}
-
-function isRealOptimizationProblem(v) {
-  return v && Array.isArray(v.items) && v.items.length >= 2 && v.items.every((it) => it && typeof it.value !== 'undefined' && typeof it.cost !== 'undefined');
-}
-
 /**
  * Standard Analysis — quantum mode optional
  * Body: { category, title, prompt, quantumMode?, documentContext?, realTransactions?, realScenarios?, realOptimization? }
@@ -321,77 +278,15 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       ? await generateAnalysisWithVision(systemPrompt, enrichedPrompt, imageData.base64, imageData.mimetype)
       : await generateAnalysis(systemPrompt, enrichedPrompt);
 
-    let scenarios = quantumMode && !fraudCategory
-      ? (hasRealScenarios ? realScenarios : parseScenarios(result.content))
-      : null;
-    let quantumComputation = null;
-    let fraudComputation = null;
-    let optimizerComputation = null;
-    let finalContent = result.content;
-    // Surfaced to the client (and appended to the report) whenever quantum
-    // mode was requested but the real circuit computation didn't happen --
-    // previously this failed completely silently (only a server log line),
-    // so a broken Python/Qiskit worker looked identical to a healthy one
-    // that just used the AI's own estimates.
-    let quantumWarning = null;
-
-    // Hardware verification (when IBM_QUANTUM_TOKEN/INSTANCE are configured)
-    // waits on IBM's job queue for up to IBM_QUANTUM_WAIT_SECONDS -- always
-    // fetched with skipHardware so /generate responds on the fast local
-    // simulator alone; the hardware lane (if any) runs after the response
-    // is sent, see the background verification block below.
-    let hardwareTransactions = null;
-    let hardwareScenarios = null;
-
-    if (quantumMode && fraudCategory) {
-      const transactions = hasRealTransactions ? realTransactions : parseTransactions(result.content);
-      if (transactions?.length) {
-        fraudComputation = await computeFraudRiskScores(transactions, { skipHardware: true });
-        if (fraudComputation) {
-          hardwareTransactions = transactions;
-          fraudComputation.dataSource = hasRealTransactions ? 'uploaded' : 'ai-generated';
-          const note = mergeFraudResults(fraudComputation);
-          if (note) finalContent += note;
-        } else {
-          logger.warn('[FraudDetection] Kernel result unavailable — proceeding with AI narrative only');
-          quantumWarning = 'Kuantum çekirdek (kernel) hesaplaması başarısız oldu — bu rapor yalnızca YZ anlatısına dayanmaktadır, gerçek kuantum doğrulaması içermemektedir.';
-        }
-      }
-    } else if (quantumMode) {
-      if (scenarios?.length) {
-        quantumComputation = await computeQuantumProbabilities(scenarios, 4096, { skipHardware: true });
-        if (quantumComputation) {
-          quantumComputation.dataSource = hasRealScenarios ? 'uploaded' : 'ai-generated';
-          const merged = mergeQuantumResults(scenarios, quantumComputation);
-          scenarios = merged.scenarios;
-          hardwareScenarios = merged.scenarios;
-          if (merged.note) finalContent += merged.note;
-        } else {
-          logger.warn('[Quantum] Circuit result unavailable — proceeding with AI estimates');
-          quantumWarning = 'Kuantum devre hesaplaması başarısız oldu — gösterilen olasılıklar YZ tahminleridir, gerçek kuantum ölçümüyle doğrulanmamıştır.';
-        }
-      } else {
-        logger.warn('[Quantum] No parseable scenario matrix in the AI response — quantum computation skipped');
-        quantumWarning = 'Kuantum modu seçildi ancak raporda ayrıştırılabilir bir senaryo matrisi bulunamadığından kuantum hesaplaması yapılamadı.';
-      }
-
-      // Independent of the scenario matrix: only present when the topic is
-      // shaped like a budget-constrained resource-allocation decision, or
-      // when the user uploaded one directly.
-      const optimizationProblem = hasRealOptimization ? realOptimization : parseOptimizationProblem(result.content);
-      if (optimizationProblem?.items?.length) {
-        optimizerComputation = await computeOptimalAllocation(optimizationProblem.items, optimizationProblem.budgetPercent);
-        if (optimizerComputation) {
-          optimizerComputation.dataSource = hasRealOptimization ? 'uploaded' : 'ai-generated';
-          const note = mergeOptimizerResults(optimizerComputation);
-          if (note) finalContent += note;
-        } else {
-          logger.warn('[PortfolioOptimizer] QAOA result unavailable — proceeding without it');
-        }
-      }
-    }
-
-    if (quantumWarning) finalContent += `\n\n> ⚠️ ${quantumWarning}`;
+    const {
+      scenarios, quantumComputation, fraudComputation, optimizerComputation,
+      finalContent, quantumWarning, hardwareScenarios, hardwareTransactions,
+    } = await runQuantumEngines({
+      quantumMode, fraudCategory, resultContent: result.content,
+      hasRealTransactions, realTransactions,
+      hasRealScenarios, realScenarios,
+      hasRealOptimization, realOptimization,
+    });
 
     let analysisId = null;
     if (isDbConfigured()) {
@@ -430,7 +325,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     sendAnalysisReport(userCode, category, title || prompt.slice(0, 80), docxBuffer)
       .catch(e => logger.error({ err: e }, 'Mail error'));
 
-    const hardwarePending = isIbmHardwareConfigured() && !!(hardwareScenarios || hardwareTransactions);
+    const hardwarePending = isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions });
 
     res.json({
       success: true,
@@ -450,6 +345,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             batches: quantumComputation.batches,
             circuitDepth: quantumComputation.circuitDepth,
             dataSource: quantumComputation.dataSource,
+            resultSource: resolveResultSource(quantumComputation),
             hardwareVerification: quantumComputation.hardwareVerification || null,
             ibmDiagnostic: quantumComputation.ibmDiagnostic || null,
             hardwarePending: hardwarePending && !!hardwareScenarios,
@@ -464,8 +360,10 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             flaggedCount: fraudComputation.flaggedCount,
             transactions: fraudComputation.transactions,
             dataSource: fraudComputation.dataSource,
+            resultSource: resolveResultSource(fraudComputation),
             hardwareVerification: fraudComputation.hardwareVerification || null,
             ibmDiagnostic: fraudComputation.ibmDiagnostic || null,
+            classicalBenchmark: fraudComputation.classicalBenchmark || null,
             hardwarePending: hardwarePending && !!hardwareTransactions,
           }
         : null,
@@ -480,61 +378,16 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             budgetPercent: optimizerComputation.budgetPercent,
             items: optimizerComputation.items,
             dataSource: optimizerComputation.dataSource,
+            resultSource: resolveResultSource(optimizerComputation),
+            classicalBenchmark: optimizerComputation.classicalBenchmark || null,
           }
         : null
     });
 
-    // Deferred, non-blocking: the response above already went out on the
-    // fast local-simulator result. If IBM hardware verification is
-    // configured, run it now in the background (this is what can take up
-    // to IBM_QUANTUM_WAIT_SECONDS) and, once it resolves, append the result
-    // to the saved report and push it to the user's socket if still online
-    // — see the "background quantum jobs" roadmap item this replaces.
     if (hardwarePending) {
-      const io = req.app.get('io');
-      (async () => {
-        try {
-          if (hardwareScenarios) {
-            const hw = await verifyScenarioHardwareAsync(hardwareScenarios);
-            if (hw?.hardwareVerification) {
-              const section = buildScenarioHardwareSection(hardwareScenarios, hw.hardwareVerification);
-              if (analysisId && isDbConfigured() && section) {
-                await getDb().update(analyses)
-                  .set({
-                    content: finalContent + section,
-                    version: sql`${analyses.version} + 1`,
-                    updatedAt: new Date(),
-                    syncRevision: sql`nextval('analyses_sync_revision_seq')`,
-                  })
-                  .where(eq(analyses.id, analysisId));
-              }
-              broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
-                analysisId, kind: 'quantum', hardwareVerification: hw.hardwareVerification, ibmDiagnostic: hw.ibmDiagnostic,
-              }).catch(() => {});
-            }
-          } else if (hardwareTransactions) {
-            const hw = await verifyFraudHardwareAsync(hardwareTransactions);
-            if (hw?.hardwareVerification) {
-              const section = buildFraudHardwareSection(hw.hardwareVerification);
-              if (analysisId && isDbConfigured() && section) {
-                await getDb().update(analyses)
-                  .set({
-                    content: finalContent + section,
-                    version: sql`${analyses.version} + 1`,
-                    updatedAt: new Date(),
-                    syncRevision: sql`nextval('analyses_sync_revision_seq')`,
-                  })
-                  .where(eq(analyses.id, analysisId));
-              }
-              broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
-                analysisId, kind: 'fraud', hardwareVerification: hw.hardwareVerification, ibmDiagnostic: hw.ibmDiagnostic,
-              }).catch(() => {});
-            }
-          }
-        } catch (err) {
-          logger.warn({ err }, '[Analysis] Background hardware verification failed');
-        }
-      })();
+      scheduleHardwareVerification({
+        io: req.app.get('io'), analysisId, userCode, hardwareScenarios, hardwareTransactions, finalContent,
+      });
     }
   } catch (err) {
     logger.error({ err }, 'Analysis error');
@@ -667,139 +520,4 @@ router.post('/chat', authMiddleware, analysisLimiter, async (req, res) => {
   }
 });
 
-// Parses a number that may be in Turkish notation ("." thousands separator,
-// "," decimal separator, e.g. "15.000,50") as well as plain notation.
-// Only treats "." as a thousands separator when it's unambiguous — either a
-// "," decimal separator is also present, or the whole string is a pure
-// digit-grouping ("15.000") with no fractional remainder — so ordinary
-// decimals like "0.5" are left untouched.
-function toNumber(s) {
-  let str = String(s).replace(/[^\d.,-]/g, '').trim();
-  if (!str) return 0;
-  const hasComma = str.includes(',');
-  const hasDot = str.includes('.');
-  if (hasComma && hasDot) {
-    str = str.replace(/\./g, '').replace(',', '.');
-  } else if (hasComma) {
-    str = str.replace(',', '.');
-  } else if (hasDot && /^-?\d{1,3}(\.\d{3})+$/.test(str)) {
-    str = str.replace(/\./g, '');
-  }
-  const n = parseFloat(str);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function parseScenarios(content) {
-  try {
-    const scenarios = [];
-    // "MATR.S." (wildcard for İ/I) avoids depending on a literal diacritic
-    // character matching byte-for-byte against whatever encoding the LLM
-    // used for the Turkish İ in "MATRİSİ".
-    const matrixMatch = content.match(/KUANTUM OLASILIK MATR.S.[\s\S]*?\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([\s\S]*?)(?=\n##|\n---|\n\n##|$)/i);
-    if (!matrixMatch) return null;
-
-    // The AI sometimes wraps the scenario cell in markdown bold
-    // ("| **SENARYO-A...** | ..."), which a plain startsWith('| SENARYO')
-    // check misses entirely -- silently dropping every scenario row and
-    // disabling the quantum computation for the whole report. Tolerate
-    // leading emphasis markers, and strip them from every cell so ids/
-    // titles don't carry literal asterisks through to the UI or the
-    // Qiskit worker payload.
-    const lines = content.split('\n').filter(l => /^\|\s*\*{0,2}SENARYO/.test(l.trim()));
-    for (const line of lines) {
-      const parts = line.split('|').map(s => s.trim().replace(/\*+/g, '')).filter(Boolean);
-      if (parts.length >= 3) {
-        scenarios.push({
-          id: parts[0].split(' ')[0] + ' ' + (parts[0].split(' ')[1] || ''),
-          title: parts[0],
-          probability: parts[1],
-          timeframe: parts[2],
-          trigger: parts[3] || ''
-        });
-      }
-    }
-    return scenarios.length > 0 ? scenarios : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseTransactions(content) {
-  try {
-    const transactions = [];
-    // "LEM KAYITLARI" (drops the leading İ/I/Ş/S entirely) sidesteps both the
-    // diacritic-encoding risk above AND the İŞLEM (with Ş) vs. an ASCII
-    // "ISLEM" transliteration mismatch.
-    const tableMatch = content.match(/LEM KAYITLARI[\s\S]*?\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([^\n]+)\|([\s\S]*?)(?=\n##|\n---|\n\n##|$)/i);
-    if (!tableMatch) return null;
-
-    // Same emphasis-marker tolerance as parseScenarios below -- the AI can
-    // wrap the row's leading cell in markdown bold.
-    const lines = content.split('\n').filter(l => /^\|\s*\*{0,2}TXN/.test(l.trim()));
-    for (const line of lines) {
-      const parts = line.split('|').map(s => s.trim().replace(/\*+/g, '')).filter(Boolean);
-      if (parts.length >= 6) {
-        transactions.push({
-          id: parts[0],
-          amount: toNumber(parts[1]),
-          hour: toNumber(parts[2]),
-          frequency: toNumber(parts[3]),
-          newCounterparty: toNumber(parts[4]),
-          crossBorder: toNumber(parts[5]),
-        });
-      }
-    }
-    return transactions.length > 0 ? transactions : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseOptimizationProblem(content) {
-  try {
-    // "OPT.M.ZASYON PROBLEM" (wildcards for the İ/I in "OPTİMİZASYON", drops
-    // the trailing İ) sidesteps the diacritic mojibake risk -- same
-    // reasoning as parseScenarios' "MATR.S." and parseTransactions'
-    // "LEM KAYITLARI". This previously used a literal ASCII "OPTIMIZASYON",
-    // but the AI's actual uppercase Turkish text uses İ (U+0130), which is
-    // NOT case-fold-equivalent to ASCII I/i -- so the heading never
-    // matched and this parser always returned null in production.
-    const headingIdx = content.search(/OPT.M.ZASYON PROBLEM/i);
-    if (headingIdx === -1) return null;
-
-    // Bounded by the next section heading (like the other parsers), with a
-    // generous cap so a missing heading marker can't run away indefinitely.
-    const rest = content.slice(headingIdx);
-    const endMatch = rest.match(/\n##|\n---|\n\n##/);
-    const section = rest.slice(0, Math.min(endMatch ? endMatch.index : rest.length, 8000));
-
-    // Prefer a "%N" that appears near the word "bütçe" so an unrelated
-    // percentage mentioned earlier in the section isn't mistaken for it.
-    const budgetMatch = section.match(/b[üu]tçe[^%]{0,40}%\s*(\d+(?:[.,]\d+)?)/i)
-      || section.match(/%\s*(\d+(?:[.,]\d+)?)[^%]{0,40}b[üu]tçe/i)
-      || section.match(/%\s*(\d+(?:[.,]\d+)?)/);
-    const budgetPercent = budgetMatch ? toNumber(budgetMatch[1]) : 60;
-
-    const lines = section.split('\n').filter(l => l.trim().startsWith('|'));
-    const items = [];
-    for (const line of lines) {
-      const parts = line.split('|').map(s => s.trim().replace(/\*+/g, '')).filter(Boolean);
-      if (parts.length < 3) continue;
-      if (/^-+$/.test(parts[1])) continue; // separator row
-      if (toNumber(parts[1]) === 0 && toNumber(parts[2]) === 0) continue; // header row
-      items.push({ id: parts[0], value: toNumber(parts[1]), cost: toNumber(parts[2]) });
-    }
-
-    return items.length >= 2 ? { budgetPercent, items } : null;
-  } catch {
-    return null;
-  }
-}
-
-// Exported for unit tests — these are LLM-output parsers, the most format-
-// fragile code in this file, and previously had a bug that silently broke
-// scenario parsing.
-export { toNumber, parseScenarios, parseTransactions, parseOptimizationProblem };
-
 export default router;
-
