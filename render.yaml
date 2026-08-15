@@ -11,6 +11,25 @@ services:
     # --ignore-installed sidesteps the uninstall attempt entirely.
     buildCommand: "rm -rf client/dist client/node_modules/.vite && npm install --prefix server && npm install --prefix client && npm run build --prefix client && pip3 install --ignore-installed -r server/quantum/requirements.txt"
     startCommand: "npm run start --prefix server"
+    # autoDeployTrigger defaults to "commit", so *every* push to main deploys
+    # -- but the build command above only ever touches client/, server/, and
+    # server/quantum/; it never reads desktop/, mobile/, .github/, or the
+    # root markdown/spec docs. A push that only touches those paths would
+    # still trigger a full (client build + npm installs + qiskit's pip
+    # install) rebuild for a server binary that comes out byte-for-byte
+    # identical -- purely wasted free-tier build-minute quota. See the
+    # sibling anatolia.bold.sim project's render.yaml, which hit this same
+    # problem from a run of doc-only commits and fixed it the same way.
+    # ignoredPaths skips the rebuild for those; changes to render.yaml
+    # itself are always processed regardless (Render's own behavior, not
+    # something this filter controls).
+    buildFilter:
+      ignoredPaths:
+        - "*.md"
+        - "*.yaml"
+        - "desktop/**"
+        - "mobile/**"
+        - ".github/**"
     envVars:
       - key: NODE_ENV
         value: production
