@@ -27,7 +27,6 @@ import syncRoutes from './routes/sync.js';
 import deviceRoutes from './routes/devices.js';
 import versionRoutes from './routes/version.js';
 import { startMorningBriefScheduler } from './services/morningBrief.js';
-import { startSelfPing } from './services/selfPing.js';
 
 dotenv.config();
 
@@ -54,11 +53,11 @@ const NATIVE_APP_ORIGINS = [
 const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL, ...NATIVE_APP_ORIGINS] : true;
 
 const app = express();
-// Render (and any reverse proxy) terminates TLS upstream and forwards plain
-// HTTP internally -- without this, req.protocol always reads back 'http'
-// regardless of what the client actually connected over, which leaked into
-// routes/version.js's self-referential download URLs as an insecure
-// http:// address (the client apps then failed to open/fetch it).
+// The deployment platform's reverse proxy terminates TLS upstream and
+// forwards plain HTTP internally -- without this, req.protocol always reads
+// back 'http' regardless of what the client actually connected over, which
+// leaked into routes/version.js's self-referential download URLs as an
+// insecure http:// address (the client apps then failed to open/fetch it).
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -114,9 +113,6 @@ app.use('/api/version', versionRoutes);
 // Socket.IO handlers
 initSocketHandlers(io);
 app.set('io', io);
-
-// Keeps the Render free-tier instance warm (see services/selfPing.js) — no-op off Render
-startSelfPing();
 
 // After all routes — forwards uncaught errors to Sentry (no-op if SENTRY_DSN is unset)
 attachSentryErrorHandler(app);

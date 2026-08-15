@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.153-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.154-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -195,8 +195,8 @@ The web and desktop apps are unaffected — `mobile/` only ever consumes the alr
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional Web Push configuration |
 | `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |
 | `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
-| `ANATOLIA_CLOUD_URL` | Desktop-only: deployed API/web origin the Electron app syncs against (defaults to the production Render URL) |
-| `VITE_MOBILE_CLOUD_URL` | Mobile-only, build-time: deployed API/web origin the Capacitor Android app syncs against (defaults to the production Render URL) |
+| `ANATOLIA_CLOUD_URL` | Desktop-only: deployed API/web origin the Electron app syncs against (defaults to the production Northflank URL) |
+| `VITE_MOBILE_CLOUD_URL` | Mobile-only, build-time: deployed API/web origin the Capacitor Android app syncs against (defaults to the production Northflank URL) |
 
 ### Quantum
 
@@ -206,9 +206,9 @@ The web and desktop apps are unaffected — `mobile/` only ever consumes the alr
 | `IBM_QUANTUM_INSTANCE` | IBM Quantum Platform/Qiskit Runtime service-instance CRN |
 | `IBM_QUANTUM_WAIT_SECONDS` | Maximum wait for the optional hardware-verification lane; defaults to 60 seconds |
 | `PYTHON_BIN` | Optional Python executable override for Qiskit subprocesses |
-| `PYTHON_VERSION` | Deployment Python version; `render.yaml` pins the supported release |
+| `PYTHON_VERSION` | Deployment Python version; the `Dockerfile` pins the supported release |
 
-Platform-provided variables such as `NODE_ENV`, `PORT`, and `RENDER_EXTERNAL_URL` are supplied by the deployment environment where applicable.
+Platform-provided variables such as `NODE_ENV` and `PORT` are supplied by the deployment environment where applicable.
 
 ---
 
@@ -226,16 +226,15 @@ Platform-provided variables such as `NODE_ENV`, `PORT`, and `RENDER_EXTERNAL_URL
 
 ## Deployment
 
-The application is deployed through the repository workflows and `render.yaml` configuration.
+Production runs on [Northflank](https://northflank.com), which builds the repo's `Dockerfile` and deploys automatically on every push to `main` via its own GitHub integration (not a GitHub Actions workflow).
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
-| `.github/workflows/deploy.yml` | Successful CI on `main` | Deploy to Render |
-| `.github/workflows/keep-alive.yml` | Scheduled (every 10 minutes, offset from the top of the hour) / manual dispatch | Keeps the configured deployment warm by calling `/api/health` |
+| `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases (see [mobile/README.md](./mobile/README.md)) |
 | `.github/workflows/desktop-release.yml` | Push of a `desktop-v*` tag / manual dispatch | Builds the Windows installer on a `windows-latest` runner and publishes it to GitHub Releases (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
 
-A deployment should be treated as live only after the corresponding CI and deploy workflows complete successfully.
+A deployment should be treated as live only after CI completes successfully and the Northflank build/deploy finishes.
 
 ---
 

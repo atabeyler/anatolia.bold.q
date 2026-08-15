@@ -36,8 +36,8 @@ jobs:
       - run: npm ci
       # sync.e2e.test.js imports desktop/testHelpers.js (better-sqlite3),
       # which is a root dependency, not a server one -- installing it here
-      # only affects this CI job, never Render's production build
-      # (render.yaml only ever runs `npm install --prefix server`).
+      # only affects this CI job, never the production Docker build (the
+      # Dockerfile only ever installs server/'s and client/'s own deps).
       - name: Install root dependencies (for desktop/testHelpers.js, used by sync.e2e.test.js)
         working-directory: .
         run: npm ci

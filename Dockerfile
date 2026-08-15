@@ -5,16 +5,15 @@
 # Only server/ and client/ are ever installed here -- never the repo root
 # package.json, which is the Electron desktop app's manifest and pulls in
 # better-sqlite3 (a native addon) and electron itself. Installing that at the
-# image root broke both Render (native compile against an unsupported Node
-# ABI) and, identically, Northflank's buildpack auto-detection (which installs
-# from whatever package.json it finds at the repo root). Mirrors render.yaml's
-# buildCommand, which sidesteps the same problem the same way.
+# image root broke Northflank's buildpack auto-detection (which installs
+# from whatever package.json it finds at the repo root, and tried to compile
+# better-sqlite3's native addon there).
 FROM node:22-bookworm-slim
 
-# python3 on bookworm is 3.11, matching PYTHON_VERSION in render.yaml -- picked
-# there because it's the last release with prebuilt wheels for qiskit's
-# symengine dependency (3.12+ falls back to a from-source build that fails,
-# since the SymEngine C++ library isn't installed).
+# python3 on bookworm is 3.11 -- picked because it's the last release with
+# prebuilt wheels for qiskit's symengine dependency (3.12+ falls back to a
+# from-source build that fails, since the SymEngine C++ library isn't
+# installed).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -32,7 +31,7 @@ COPY server/quantum/requirements.txt server/quantum/requirements.txt
 # dist-packages) that pip can't uninstall (no RECORD metadata, "installed by
 # debian"), which would otherwise abort the whole install before qiskit gets
 # to install -- silently leaving quantum mode broken (falls back to AI-only
-# estimates with no visible error). See render.yaml for the same fix.
+# estimates with no visible error).
 RUN pip3 install --break-system-packages --ignore-installed -r server/quantum/requirements.txt
 
 COPY server/ server/

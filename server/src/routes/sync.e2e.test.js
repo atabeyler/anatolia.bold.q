@@ -20,12 +20,12 @@ import { createFakePool } from './syncTestHelpers.js';
 // it from the repo ROOT's node_modules (better-sqlite3 is already a real
 // root dependency, needed by the desktop app itself) -- NOT from a copy
 // added to server/package.json. A better-sqlite3 devDependency was tried
-// here once and reverted: `npm install --prefix server` (render.yaml's
-// build command) installs devDependencies too and tries to compile its
-// native addon against Render's build image, which fails there. The CI
-// "server" job installs root dependencies as an extra step instead (see
-// .github/workflows/ci.yml) so this import resolves in CI without
-// touching what Render's production build ever installs.
+// here once and reverted: `npm install --prefix server` installs
+// devDependencies too and tries to compile its native addon against the
+// build image's Node ABI, which fails there. The CI "server" job installs
+// root dependencies as an extra step instead (see .github/workflows/ci.yml)
+// so this import resolves in CI without touching what the production
+// Docker build ever installs (server/'s and client/'s own deps only).
 const { createTestDb } = await import('../../../desktop/testHelpers.js');
 
 let fakePool;

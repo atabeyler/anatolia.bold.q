@@ -19,7 +19,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // The deployed web app is the source of truth this points at by default;
 // override with ANATOLIA_CLOUD_URL for a self-hosted/staging server.
-const CLOUD_URL = process.env.ANATOLIA_CLOUD_URL || 'https://anatolia-q.onrender.com';
+const CLOUD_URL = process.env.ANATOLIA_CLOUD_URL || 'https://site--anatoliaboldq--6ftfc8q7458m.code.run';
 // Fixed (not random) so it can be allowlisted in the server's CORS config
 // (server/src/index.js) -- see the loadURL call below.
 const STATIC_SERVER_PORT = 57813;
