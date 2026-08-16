@@ -435,11 +435,13 @@ export default function LoginPage({ onLogin }) {
           <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-gold/60" />
 
           {/* Top strip */}
-          <div className="flex items-center justify-between mb-5 text-xs font-mono tracking-widest">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between mb-5 text-xs font-mono tracking-wide sm:tracking-widest">
             <span className="text-cyan-300/85 uppercase">{t('projectCode')}: QTR-200120401018</span>
-            <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.8, repeat: Infinity }}
-              className="text-emerald-400/80 uppercase">● {t('secureLabel')}</motion.span>
-            <span className="text-cyan-300/85 uppercase">{t('classifiedShort')}</span>
+            <div className="flex items-center justify-between sm:contents">
+              <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.8, repeat: Infinity }}
+                className="text-emerald-400/80 uppercase">● {t('secureLabel')}</motion.span>
+              <span className="text-cyan-300/85 uppercase">{t('classifiedShort')}</span>
+            </div>
           </div>
 
           {/* Logo */}
