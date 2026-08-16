@@ -86,6 +86,12 @@ describe('SettingsPanel', () => {
     expect(screen.queryByText('settingsAppearance')).not.toBeInTheDocument();
   });
 
+  it('does not render the sidebar-collapse button when setSidebarCollapsed is absent (e.g. LoginPage)', () => {
+    renderSettings({ showAppearance: true, sidebarCollapsed: undefined, setSidebarCollapsed: undefined });
+    fireEvent.click(screen.getByText('settingsAppearance'));
+    expect(screen.queryByText('settingsCollapseSidebar')).not.toBeInTheDocument();
+  });
+
   it('opens the usage guide from the about tab', () => {
     const props = renderSettings();
     fireEvent.click(screen.getByText('settingsAbout'));

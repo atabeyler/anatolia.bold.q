@@ -2,13 +2,39 @@
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Trash2, Loader2, User, Bot, MessageSquare } from 'lucide-react';
+import { Send, Trash2, Loader2, User, Bot, MessageSquare, WifiOff, Cloud, HardDrive } from 'lucide-react';
 import { api } from '../services/api.js';
 import VoiceButton from './VoiceButton.jsx';
 import FileAttach, { describeStructuredUpload } from './FileAttach.jsx';
 import { useLang } from '../services/langContext.jsx';
+import { isNativeApp, nativeAI, nativeConnectivity } from '../services/nativeBridge.js';
 
 const STORAGE_KEY = 'aq_consult_history';
+
+// Formats the offline extractive-search engine's structured result
+// (see mobile/localAI + desktop/localAI's offlineExtractive.js) as
+// markdown, since it answers with report matches/summaries/comparisons,
+// not free-text prose the way the cloud assistant does.
+function formatLocalAIResult(t, response) {
+  if (!response?.ok) return `⚠ ${response?.error || t('localAiUnavailable')}`;
+  const { type, result } = response;
+  if (type === 'find') {
+    if (!result?.length) return `_${t('localAiNoResults')}_`;
+    return result.map((r) =>
+      `**${r.title}** _(${r.category}, ${new Date(r.createdAt).toLocaleDateString()})_\n${r.preview}${r.preview?.length >= 200 ? '…' : ''}`
+    ).join('\n\n---\n\n');
+  }
+  if (type === 'summary') {
+    if (!result) return `_${t('localAiNoResults')}_`;
+    return `**${result.title}**\n\n${result.summary}`;
+  }
+  if (type === 'compare') {
+    if (!result) return `_${t('localAiNoResults')}_`;
+    return `**${result.a.title}** vs **${result.b.title}**\n\n` +
+      `Ortak terim sayısı: ${result.commonTermCount} · Benzerlik: %${Math.round(result.similarity * 100)}`;
+  }
+  return `_${t('localAiNoResults')}_`;
+}
 
 export default function ConsultChat() {
   const { t } = useLang();
@@ -18,6 +44,8 @@ export default function ConsultChat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [aiFiles, setAIFiles] = useState([]);
+  const [connectivity, setConnectivity] = useState('cloud');
+  const isOffline = isNativeApp && connectivity === 'local';
 
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -37,6 +65,14 @@ export default function ConsultChat() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!isNativeApp) return;
+    let cancelled = false;
+    nativeConnectivity.getState().then((state) => { if (!cancelled) setConnectivity(state); }).catch(() => {});
+    const unsubscribe = nativeConnectivity.onChange((state) => setConnectivity(state));
+    return () => { cancelled = true; unsubscribe(); };
+  }, []);
 
   const removeFileAt = (idx) => setAIFiles((prev) => prev.filter((_, i) => i !== idx));
 
@@ -60,6 +96,18 @@ export default function ConsultChat() {
     setMessages(newMessages);
     setLoading(true);
 
+    if (isOffline) {
+      try {
+        const response = await nativeAI.query({ text });
+        setMessages(prev => [...prev, { role: 'assistant', content: formatLocalAIResult(t, response), source: 'local' }]);
+      } catch (e) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${e.message}`, error: true, source: 'local' }]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const history = newMessages.slice(-21, -1).map(m => ({ role: m.role, content: m.content }));
       const firstImageForApi = currentFiles.find((f) => f.type === 'image');
@@ -80,7 +128,7 @@ export default function ConsultChat() {
           setMessages((prev) => {
             if (!streamingStarted) {
               streamingStarted = true;
-              return [...prev, { role: 'assistant', content: full, streaming: true }];
+              return [...prev, { role: 'assistant', content: full, streaming: true, source: 'cloud' }];
             }
             const next = [...prev];
             next[next.length - 1] = { ...next[next.length - 1], content: full };
@@ -90,17 +138,17 @@ export default function ConsultChat() {
       );
 
       if (!streamingStarted) {
-        setMessages(prev => [...prev, { role: 'assistant', content: r.content }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: r.content, source: 'cloud', provider: r.provider }]);
       } else {
         setMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: 'assistant', content: r.content };
+          next[next.length - 1] = { role: 'assistant', content: r.content, source: 'cloud', provider: r.provider };
           return next;
         });
       }
     } catch (e) {
       const msg = e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message;
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}`, error: true }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}`, error: true, source: 'cloud' }]);
     } finally {
       setLoading(false);
     }
@@ -124,8 +172,13 @@ export default function ConsultChat() {
 
     {aiFiles.length > 0 && <div className="flex-shrink-0 px-4 py-1.5 bg-cyan-900/20 border-b border-cyan-500/20 text-[10px] text-cyan-400 font-mono">📎 {aiFiles.length} {t('filesAttached')}</div>}
 
+    {isOffline && <div className="flex-shrink-0 flex items-center gap-2 px-4 py-1.5 bg-amber-900/20 border-b border-amber-500/20 text-[10px] text-amber-400"><WifiOff className="w-3 h-3 flex-shrink-0" /><span>{t('consultOfflineBanner')}</span></div>}
+
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-      {messages.map((m, i) => <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-2.5 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed break-words ${m.role === 'user' ? 'bg-gold/20 text-gold border border-gold/30 rounded-tr-none' : m.error ? 'bg-red-950/40 text-red-400 border border-red-800/30 rounded-tl-none' : 'bg-navy/70 text-gold/90 border border-gold/15 rounded-tl-none report-content'}`}>{m.role === 'assistant' ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown> : <p className="whitespace-pre-wrap">{m.content}</p>}</div></motion.div>)}
+      {messages.map((m, i) => <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col gap-1 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+        {m.role === 'assistant' && <span className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wide text-gold/40 px-1">{m.source === 'local' ? <><HardDrive className="w-2.5 h-2.5" />{t('localAiBadge')}</> : <><Cloud className="w-2.5 h-2.5" />{m.provider || t('cloudAiBadge')}</>}</span>}
+        <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed break-words ${m.role === 'user' ? 'bg-gold/20 text-gold border border-gold/30 rounded-tr-none' : m.error ? 'bg-red-950/40 text-red-400 border border-red-800/30 rounded-tl-none' : 'bg-navy/70 text-gold/90 border border-gold/15 rounded-tl-none report-content'}`}>{m.role === 'assistant' ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown> : <p className="whitespace-pre-wrap">{m.content}</p>}</div>
+      </motion.div>)}
       {loading && <div className="text-gold/60 text-sm">{t('analyzing')}</div>}
     </div>
 

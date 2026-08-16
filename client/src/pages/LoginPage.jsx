@@ -609,7 +609,6 @@ export default function LoginPage({ onLogin }) {
             setSoundEnabled={setSoundEnabled}
             soundVolume={soundVolume}
             setSoundVolume={setSoundVolume}
-            showAppearance={false}
             onOpenGuide={() => { setGuideOpen(true); setSettingsOpen(false); }}
           />
         )}
