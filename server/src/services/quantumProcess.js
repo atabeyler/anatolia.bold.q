@@ -150,6 +150,7 @@ export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, l
         }
       });
 
+      proc.stdin.on('error', () => {});
       proc.stdin.write(JSON.stringify(payload));
       proc.stdin.end();
     });
