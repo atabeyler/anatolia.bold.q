@@ -46,14 +46,18 @@ function findControl({ target, selector, index = 0 } = {}) {
   return contains[Number(index) || 0] || contains[0] || null;
 }
 
+function isTag(el, tagName) {
+  return el?.tagName?.toLowerCase() === tagName;
+}
+
 function setNativeValue(el, value) {
   if (!el) return false;
-  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-  const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+  const proto = isTag(el, 'textarea') ? window.HTMLTextAreaElement?.prototype : window.HTMLInputElement?.prototype;
+  const descriptor = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
   if (descriptor?.set) descriptor.set.call(el, String(value ?? ''));
   else el.value = String(value ?? '');
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-  el.dispatchEvent(new Event('change', { bubbles: true }));
+  el.dispatchEvent(new window.Event('input', { bubbles: true }));
+  el.dispatchEvent(new window.Event('change', { bubbles: true }));
   el.focus();
   return true;
 }
@@ -77,7 +81,7 @@ const universalActions = [
     params: { target: 'field label/placeholder/name', value: 'value to enter', selector: 'optional CSS selector', index: 'optional zero-based match index' },
     handler: (p) => {
       const el = findControl(p);
-      if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) throw new Error(`Editable field not found: ${p?.target || ''}`);
+      if (!isTag(el, 'input') && !isTag(el, 'textarea')) throw new Error(`Editable field not found: ${p?.target || ''}`);
       setNativeValue(el, p?.value ?? '');
     },
   },
@@ -87,13 +91,13 @@ const universalActions = [
     params: { target: 'select label/name', value: 'option text or value', selector: 'optional CSS selector', index: 'optional zero-based match index' },
     handler: (p) => {
       const el = findControl(p);
-      if (!(el instanceof HTMLSelectElement)) throw new Error(`Select control not found: ${p?.target || ''}`);
+      if (!isTag(el, 'select')) throw new Error(`Select control not found: ${p?.target || ''}`);
       const q = normalize(p?.value);
       const option = Array.from(el.options).find((o) => normalize(o.value) === q || normalize(o.textContent) === q || normalize(o.textContent).includes(q));
       if (!option) throw new Error(`Select option not found: ${p?.value || ''}`);
       el.value = option.value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.dispatchEvent(new window.Event('input', { bubbles: true }));
+      el.dispatchEvent(new window.Event('change', { bubbles: true }));
       el.focus();
     },
   },
@@ -121,8 +125,8 @@ const universalActions = [
     handler: (p) => {
       const target = document.activeElement || document.body;
       const key = String(p?.key || 'Enter');
-      target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-      target.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+      target.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true }));
+      target.dispatchEvent(new window.KeyboardEvent('keyup', { key, bubbles: true }));
     },
   },
   {
