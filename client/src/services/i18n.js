@@ -67,17 +67,17 @@ export const reportTitleExamples = {
 // where body is a '|'-separated list of bullet lines. Kept as raw per-language
 // arrays (not run through t()) because it's long-form content, not short UI labels.
 // tr is the source of truth, kept in sync with actual UI behavior; en/de/fr/ar
-// currently lag behind it (older, shorter revision) pending translation.
+// are translated from it and should be kept equivalent section-for-section.
 export const guideModules = {
   tr: [
     ['1) Üst Çubuk', 'YENİ ANALİZ BAŞLAT yeni çalışma alanını açar.|SOHBET sesli/yazılı danışmayı açar.|GEÇMİŞ kayıtlı raporları açar.|PERSONEL RADARI yalnızca admin kullanıcılarda görünür.|BİLDİRİMLER sohbet, acil durum ve sistem bildirimlerini gösterir.|MENÜ bu kılavuzu ve kurumsal bilgileri açar.|AYARLAR dil, ses, push bildirimleri, tema ve sol menü görünümünü yönetir.|ÇIKIŞ oturumu güvenli şekilde kapatır.'],
     ['2) Ana Ekran ve Sistem Durumu', 'Canlı harita, günlük istihbarat özeti ve aktivite akışı operasyon görünümünü oluşturur.|SİSTEM DURUMU gerçek backend health verisini kullanır ve şu etiketleri gösterir:|PLATFORM: CHECK (kontrol ediliyor) / OFF (erişilemiyor) / READY (hazır) / LIMITED (kısmi hazır).|AI: CHECK / READY / OFF.|DATABASE: CHECK / N/A (yapılandırılmamış) / ONLINE / OFF.|IBM Q: READY (gerçek IBM donanımı yapılandırılmış) / LOCAL (yerel Qiskit Aer simülatörü kullanılıyor).|STORAGE: OBJECT (kalıcı nesne depolama) / LOCAL.|REDIS: ONLINE / MEMORY (yerel bellek fallback).|Konum izni verildiyse aynı ekranda güncel hava durumu widget\'i görünür (10 dakikada bir yenilenir).'],
     ['3) Analiz Kategorileri', 'Başlamadan önce alanı seçin: Savunma, Enerji, Saldırı, Ekonomi, Toplumsal Olaylar, Danışma, Sağlık, Çok Alanlı, BDDK ve BTK.|BDDK ve BTK, diğer sekiz kategoriden farklı olarak ayrı birer analiz kategorisidir; durum rozetlerinde "Kuantum" etiketiyle işaretlenir çünkü kuantum modunda gerçek işlem verisiyle çalışırlar (bkz. Gerçek Veri ile Kuantum Analiz).|Kullanıcının dahili AI veya kuantum motoru seçmesi gerekmez, sistem otomatik yönetir.'],
-    ['4) Analiz Oluşturma ve Dosya Yükleme', 'Net bir rapor başlığı ve analiz briefi girin; mümkün olan alanlarda sesli metin girişini kullanabilirsiniz.|Kaynak Dosya Ilistir ile PDF, DOCX, TXT, CSV, XLS/XLSX ve görüntü (jpg/png/gif/webp/svg/bmp) dosyaları eklenebilir; dosya boyutu üst sınırı 20MB\'dir.|Görüntüler doğrudan AI görsel analizine gönderilir; PDF/DOCX/TXT metne çevrilip analize dahil edilir.|CSV/Excel dosyaları sistem tarafından otomatik olarak üç yapıdan birine göre sınıflandırılır: işlem (transaction) tablosu, senaryo tablosu veya kaynak tahsisi (optimizasyon) tablosu — hangi sütunların bulunduğuna bakılarak karar verilir.|DETAYLI ANALİZ RAPORU ÜRET standart akışı çalıştırır; provider fallback, provenance ve trace bilgileri sistem tarafından otomatik yönetilir.'],
+    ['4) Analiz Oluşturma ve Dosya Yükleme', 'Net bir rapor başlığı ve analiz briefi girin; mümkün olan alanlarda sesli metin girişini kullanabilirsiniz.|Kaynak Dosya İliştir ile PDF, DOCX, TXT, CSV, XLS/XLSX ve görüntü (jpg/png/gif/webp/svg/bmp) dosyaları eklenebilir; dosya boyutu üst sınırı 20MB\'dir.|Görüntüler doğrudan AI görsel analizine gönderilir; PDF/DOCX/TXT metne çevrilip analize dahil edilir.|CSV/Excel dosyaları sistem tarafından otomatik olarak üç yapıdan birine göre sınıflandırılır: işlem (transaction) tablosu, senaryo tablosu veya kaynak tahsisi (optimizasyon) tablosu — hangi sütunların bulunduğuna bakılarak karar verilir.|DETAYLI ANALİZ RAPORU ÜRET standart akışı çalıştırır; provider fallback, provenance ve trace bilgileri sistem tarafından otomatik yönetilir.'],
     ['5) Gerçek Veri ile Kuantum Analiz', 'Kuantum modu açıkken, BDDK/BTK kategorilerinde gerçek işlem dökümü (CSV/Excel) yüklenebilir; zorunlu sütunlar "Tutar" ve "Saat" veya "Tarih"tir, en fazla 500 satır işlenir.|Yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek işlemleri puanlar; yapay zekaya bu tabloyu uydurmaması/değiştirmemesi açıkça talimatlandırılır.|Diğer kategorilerde gerçek senaryo verisi ("Senaryo"/"Olasılık" sütunlu) veya kaynak tahsisi tablosu ("Kalem"/"Değer"/"Maliyet" sütunlu, bütçe yüzdesi ile) yüklenebilir; yüklenirse kuantum motoru YZ tahmini yerine bu gerçek verileri kullanır.|Başarılı yükleme sonrası yeşil bir onay etiketi (örn. "✓ N gerçek işlem kaydı yüklendi") görünür; eksik/sorunlu sütunlar amber renkte uyarı olarak listelenir ve × ile kaldırılabilir.'],
     ['6) Kuantum Analiz Sonuçları', 'KUANTUM OLASILIK MODU çoklu senaryo, sahtecilik (fraud) tespiti veya kaynak optimizasyonu analizini destekler.|Sonuç ekranının üstünde çalışan motora göre şu bilgiler gösterilir: senaryo modunda backend adı, kübit sayısı ve ölçüm (shots) sayısı; sahtecilik modunda backend, kübit sayısı ve işaretlenen/toplam işlem sayısı; optimizasyon modunda backend, kübit sayısı ve kullanılan bütçe yüzdesi.|Grafik/tablo geçişli üç görsel bulunur: Senaryo Karşılaştırması (YZ tahmini vs kuantum sonucu, güven aralığı ile), Kuantum Anomali Tespiti (işaretlenen/normal işlem risk skorları) ve Kuantum Kaynak Tahsisi Optimizasyonu (seçilen/seçilmeyen kalemler).|Yetkili sonuç her zaman yerel deterministik hesaplama yolundan gelir; gerçek IBM donanımı yapılandırılmışsa bağımsız bir doğrulama katmanı olarak ayrıca çalışır, kullanıcının klasik/kuantum karşılaştırması yapması gerekmez.'],
     ['7) Senaryo Deep Dive (Alternatif Senaryo Analizi)', 'KUANTUM OLASILIK MATRİSİ bölümünde, ana senaryo dışındaki her alternatif senaryonun yanında ayrı bir ANALİZ ET butonu bulunur.|Bu butona basıldığında o senaryo için bağımsız, tam bir rapor üretilir; ekran ALTERNATİF SENARYO ANALİZİ başlığıyla değişir ve kendi DOCX/PDF indirme ile paylaşım seçeneklerine sahiptir.|← Ana Rapora Dön ile ana analiz sonucuna geri dönülür.'],
-    ['8) Raporlar, İndirme ve Paylaşım', 'Raporları ekranda inceleyin; DOWNLOAD .DOCX ve DOWNLOAD .PDF ile indirin, SHARE ile paylaşın.|Sesli çıktı butonu raporu sesli okutur.|Arşiv için açıklayıcı başlıklar kullanın.|Donanım doğrulaması gerçek bir IBM job\'ının çalıştığını gösterir; girdinin kurumsal kaynaktan geldiğini tek başına kanıtlamaz.'],
+    ['8) Raporlar, İndirme ve Paylaşım', 'Raporları ekranda inceleyin; .DOCX İNDİR ve .PDF İNDİR ile indirin, PAYLAŞ ile paylaşın.|Sesli çıktı butonu raporu sesli okutur.|Arşiv için açıklayıcı başlıklar kullanın.|Donanım doğrulaması gerçek bir IBM job\'ının çalıştığını gösterir; girdinin kurumsal kaynaktan geldiğini tek başına kanıtlamaz.'],
     ['9) Geçmiş Analizler', 'GEÇMİŞ ekranında "Başlık veya içerikte ara…" arama kutusu ve kategori filtre menüsü bulunur.|Her kart üzerinde görüntüle, DOCX indir, PDF indir ve paylaş butonları vardır.|Eski raporlarda daha az audit metadata bulunabilir.'],
     ['10) Analysis Audit', 'Bir raporu açtığınızda Analysis Audit paneli şu alanları gösterebilir: AI provider, Model, Prompt version, Data source, Data quality (puan/100), Classification, Analysis duration, Quantum backend, Quantum shots, Created.|Bu panel yalnızca çevrimiçi (bulut) modda görünür; masaüstü/native uygulamada çevrimdışı geçmiş kayıtlarında Audit paneli gösterilmez.|Eksik alan, o metadata\'nın kaydedilmediği anlamına gelir; doğrulanmış değer olarak kabul edilmemelidir.'],
     ['11) Çevrimdışı Kullanım ve Senkronizasyon', 'Masaüstü/native uygulamada GEÇMİŞ, cihazdaki yerel SQLite veritabanından okunur; bu modda Analysis Audit paneli gösterilmez.|Ekranın altında Q LOCAL / SYNC / Q CLOUD rozeti çalışma modunu gösterir; bu tamamen otomatik takip edilir, elle seçim yapılmaz.|Bir kayıt iki farklı cihazda çevrimdışıyken değiştirilirse Senkronizasyon Çakışması penceresi açılır; "Bu cihazdaki (yerel)" ve "Buluttaki" sürümler yan yana gösterilir, Yerel sürümü kullan veya Bulut sürümünü kullan seçeneklerinden biri seçilir.|Oturum süresi çevrimdışıyken dolarsa üstte bir uyarı şeridi belirir ve Tekrar Giriş Yap istenir; yerel veriler bu sırada kaybolmaz, bekleyen değişiklikler yeniden girişten sonra senkronize olur.'],
@@ -110,12 +110,12 @@ export const guideModules = {
 guideModules.de = [
   ['1) Obere Leiste', 'NEUE ANALYSE öffnet einen neuen Arbeitsbereich.|CHAT öffnet die Sprach-/Textberatung.|VERLAUF öffnet gespeicherte Berichte.|PERSONALRADAR ist nur für Admin-Benutzer sichtbar.|BENACHRICHTIGUNGEN zeigt Chat-, Notfall- und Systemereignisse.|MENÜ öffnet diese Anleitung und institutionelle Informationen.|EINSTELLUNGEN steuert Sprache, Ton, Push-Benachrichtigungen, Design und die Seitenleistenansicht.|ABMELDEN beendet die Sitzung sicher.'],
   ['2) Startseite & Systemstatus', 'Die Live-Karte, das Morgen-Briefing und der Aktivitätsfeed bieten die operative Übersicht.|SYSTEMSTATUS verwendet echte Backend-Health-Daten und zeigt genau diese Werte:|PLATTFORM: CHECK (wird geprüft) / OFF (nicht erreichbar) / READY / LIMITED (teilweise bereit).|KI: CHECK / READY / OFF.|DATENBANK: CHECK / N/A (nicht konfiguriert) / ONLINE / OFF.|IBM Q: READY (echte IBM-Hardware konfiguriert) / LOCAL (lokaler Qiskit-Aer-Simulator im Einsatz).|SPEICHER: OBJECT (persistenter Objektspeicher) / LOCAL.|REDIS: ONLINE / MEMORY (lokaler Fallback).|Bei erteilter Standortfreigabe zeigt dieselbe Ansicht ein Live-Wetter-Widget (alle 10 Minuten aktualisiert).'],
-  ['3) Analysekategorien', 'Wählen Sie vor dem Start den Fachbereich: Verteidigung, Energie, Offensive, Wirtschaft, Soziale Ereignisse, Beratung, Gesundheit, Multidomäne, BDDK und BTK.|BDDK und BTK sind zwei eigenständige Kategorien, getrennt von den anderen acht; ihr Status-Badge zeigt "Quantum", da sie im Quantenmodus mit echten Transaktionsdaten arbeiten (siehe Quantenanalyse mit echten Daten).|Benutzer müssen keine internen KI- oder Quanten-Engines auswählen — das geschieht automatisch.'],
+  ['3) Analysekategorien', 'Wählen Sie vor dem Start den Fachbereich: Verteidigung, Energie, Offensive, Wirtschaft, Gesellschaftliche Ereignisse, Beratung, Gesundheit, Multidomäne, BDDK und BTK.|BDDK und BTK sind zwei eigenständige Kategorien, getrennt von den anderen acht; ihr Status-Badge zeigt "Quantum", da sie im Quantenmodus mit echten Transaktionsdaten arbeiten (siehe Quantenanalyse mit echten Daten).|Benutzer müssen keine internen KI- oder Quanten-Engines auswählen — das geschieht automatisch.'],
   ['4) Analyse erstellen & Dateien hochladen', 'Geben Sie einen klaren Berichtstitel und ein präzises Analyse-Briefing ein; nutzen Sie Sprache-zu-Text, wo verfügbar.|Über Quelldatei anhängen können PDF, DOCX, TXT, CSV, XLS/XLSX oder Bilder (jpg/png/gif/webp/svg/bmp) bis 20 MB hochgeladen werden.|Bilder werden direkt an die KI-Bildanalyse gesendet; PDF/DOCX/TXT werden in Text umgewandelt und in die Analyse einbezogen.|CSV/Excel-Dateien werden anhand der vorhandenen Spalten automatisch einer von drei Strukturen zugeordnet: einer Transaktionstabelle, einer Szenariotabelle oder einer Ressourcenzuteilungs-(Optimierungs-)Tabelle.|DETAILLIERTEN ANALYSEBERICHT ERSTELLEN führt den Standardworkflow aus; Provider-Fallback, Herkunft und Trace-Metadaten werden automatisch verwaltet.'],
-  ['5) Quantenanalyse mit echten Daten', 'Bei aktivem Quantenmodus akzeptieren die Kategorien BDDK/BTK eine echte Transaktionsliste (CSV/Excel); erforderliche Spalten sind "Betrag" sowie "Uhrzeit" oder "Datum", bis zu 500 Zeilen.|Wird sie hochgeladen, bewertet die Quanten-Engine diese echten Transaktionen statt KI-generierter Beispieldaten; die KI wird ausdrücklich angewiesen, diese Tabelle nicht zu erfinden oder zu verändern.|Andere Kategorien akzeptieren echte Szenariodaten (Spalten "Szenario"/"Wahrscheinlichkeit") oder eine Ressourcenzuteilungstabelle (Spalten "Position"/"Wert"/"Kosten" mit Budgetprozentsatz); wird sie hochgeladen, nutzt die Quanten-Engine diese echten Daten statt einer KI-Schätzung.|Nach erfolgreichem Upload erscheint ein grünes Bestätigungs-Badge (z. B. "✓ N echte Transaktionsdatensätze geladen"); Spaltenprobleme werden als gelbe Warnungen aufgelistet, das Badge kann mit × entfernt werden.'],
+  ['5) Quantenanalyse mit echten Daten', 'Bei aktivem Quantenmodus akzeptieren die Kategorien BDDK/BTK eine echte Transaktionsliste (CSV/Excel); die Spaltenüberschriften müssen unabhängig von der App-Sprache auf Türkisch oder Englisch sein — erkannt werden "Tutar"/"Amount" sowie "Saat"/"Hour" oder "Tarih"/"Date", bis zu 500 Zeilen.|Wird sie hochgeladen, bewertet die Quanten-Engine diese echten Transaktionen statt KI-generierter Beispieldaten; die KI wird ausdrücklich angewiesen, diese Tabelle nicht zu erfinden oder zu verändern.|Andere Kategorien akzeptieren echte Szenariodaten (Spalten "Senaryo"/"Scenario" und "Olasılık"/"Probability") oder eine Ressourcenzuteilungstabelle (Spalten "Kalem"/"Item", "Değer"/"Value", "Maliyet"/"Cost" mit Budgetprozentsatz) — auch hier nur auf Türkisch oder Englisch; wird sie hochgeladen, nutzt die Quanten-Engine diese echten Daten statt einer KI-Schätzung.|Nach erfolgreichem Upload erscheint ein grünes Bestätigungs-Badge (z. B. "✓ N echte Transaktionsdatensätze geladen"); Spaltenprobleme werden als gelbe Warnungen aufgelistet, das Badge kann mit × entfernt werden.'],
   ['6) Quantenanalyse-Ergebnisse', 'QUANTEN-WAHRSCHEINLICHKEITSMODUS unterstützt Mehrszenario-Analysen, Betrugs-/Anomalieerkennung oder Ressourcenoptimierung.|Je nach aktiver Engine zeigt die Ergebniskopfzeile: Backend-Name, Qubit-Anzahl und Shot-Anzahl bei Szenarien; Backend, Qubits sowie markierte/gesamte Transaktionsanzahl bei der Betrugserkennung; Backend, Qubits und genutzten Budgetprozentsatz bei der Optimierung.|Drei Diagramme mit Tabellen-/Grafik-Umschalter sind verfügbar: Szenariovergleich (KI-Schätzung vs. Quantenergebnis mit Konfidenzintervall), Quanten-Anomalieerkennung (markierte vs. normale Transaktionsrisikowerte) und Quanten-Ressourcenzuteilungsoptimierung (ausgewählte vs. nicht ausgewählte Positionen).|Das maßgebliche Ergebnis folgt immer dem deterministischen lokalen Pfad; echte IBM-Hardware läuft, wenn konfiguriert, als unabhängige Verifikationsebene — ein manueller Vergleich von klassisch und Quanten ist nicht erforderlich.'],
   ['7) Szenario Deep Dive', 'Im Abschnitt QUANTEN-WAHRSCHEINLICHKEITSMATRIX hat jedes alternative Szenario (außer dem Hauptszenario) eine eigene Schaltfläche ANALYSIEREN.|Ein Klick darauf erzeugt einen separaten, vollständigen Bericht für dieses Szenario; die Ansicht wechselt zu einer Kopfzeile ALTERNATIVE SZENARIOANALYSE mit eigenen DOCX/PDF-Download- und Freigabeoptionen.|Mit "← Zurück zum Hauptbericht" kehren Sie zum Hauptergebnis zurück.'],
-  ['8) Berichte, Downloads & Freigabe', 'Berichte können am Bildschirm geprüft werden; mit DOCX HERUNTERLADEN und PDF HERUNTERLADEN laden Sie herunter, mit TEILEN geben Sie frei.|Die Sprachausgabe-Schaltfläche liest den Bericht vor.|Verwenden Sie aussagekräftige Titel für die Übersichtlichkeit im Archiv.|Die Hardware-Verifikation bestätigt, dass ein echter IBM-Job ausgeführt wurde; sie belegt nicht die institutionelle Herkunft der Eingabe.'],
+  ['8) Berichte, Downloads & Freigabe', 'Berichte können am Bildschirm geprüft werden; mit .DOCX HERUNTERLADEN und .PDF HERUNTERLADEN laden Sie herunter, mit TEILEN geben Sie frei.|Die Sprachausgabe-Schaltfläche liest den Bericht vor.|Verwenden Sie aussagekräftige Titel für die Übersichtlichkeit im Archiv.|Die Hardware-Verifikation bestätigt, dass ein echter IBM-Job ausgeführt wurde; sie belegt nicht die institutionelle Herkunft der Eingabe.'],
   ['9) Verlauf', 'VERLAUF bietet ein Suchfeld "Nach Titel oder Inhalt suchen…" und einen Kategoriefilter.|Jede Karte bietet Ansehen, DOCX herunterladen, PDF herunterladen und Teilen.|Ältere Berichte können weniger Audit-Metadaten enthalten.'],
   ['10) Analyse-Audit', 'Beim Öffnen eines Berichts kann ein Analyse-Audit-Panel Folgendes anzeigen: KI-Anbieter, Modell, Prompt-Version, Datenquelle, Datenqualität (Punktzahl/100), Klassifizierung, Analysedauer, Quanten-Backend, Quanten-Shots, Erstellt.|Dieses Panel ist nur online (Cloud) verfügbar; bei Offline-Verlauf auf Desktop-/Native-Builds wird das Audit-Panel nicht angezeigt.|Ein fehlendes Feld bedeutet, dass diese Metadaten nicht erfasst wurden, und darf nicht als verifizierter Wert gelten.'],
   ['11) Offline-Nutzung & Synchronisierung', 'Auf Desktop-/Native-Builds wird VERLAUF aus der lokalen SQLite-Datenbank des Geräts gelesen; das Analyse-Audit-Panel ist in diesem Modus nicht verfügbar.|Ein Badge unten zeigt Q LOCAL / SYNC / Q CLOUD — dies wird vollautomatisch verfolgt, keine manuelle Auswahl.|Wurde ein Datensatz offline auf zwei Geräten geändert, öffnet sich ein Synchronisierungskonflikt-Fenster mit den Versionen "Lokal (dieses Gerät)" und "Cloud" nebeneinander; wählen Sie "Lokale Version verwenden" oder "Cloud-Version verwenden".|Wird offline eine erneute Anmeldung benötigt, erscheint ein Banner mit der Aufforderung, sich erneut anzumelden; lokale Daten gehen dabei nie verloren, ausstehende Änderungen synchronisieren sich nach der Anmeldung.'],
@@ -131,7 +131,7 @@ guideModules.fr = [
   ['2) Accueil & état du système', 'La carte en direct, le briefing du matin et le flux d\'activité offrent la vue opérationnelle.|ÉTAT DU SYSTÈME utilise des données réelles de santé du backend et affiche exactement ces libellés :|PLATEFORME : CHECK (vérification) / OFF (inaccessible) / READY / LIMITED (partiellement prête).|IA : CHECK / READY / OFF.|BASE DE DONNÉES : CHECK / N/A (non configurée) / ONLINE / OFF.|IBM Q : READY (matériel IBM réel configuré) / LOCAL (simulateur Qiskit Aer local utilisé).|STOCKAGE : OBJECT (stockage objet persistant) / LOCAL.|REDIS : ONLINE / MEMORY (repli local).|Si la localisation est autorisée, le même écran affiche un widget météo en direct (actualisé toutes les 10 minutes).'],
   ['3) Catégories d’analyse', 'Choisissez le domaine avant de commencer : Défense, Énergie, Offensive, Économie, Événements sociaux, Consultation, Santé, Multi-domaine, BDDK et BTK.|BDDK et BTK sont deux catégories entièrement distinctes des huit autres ; leur badge de statut affiche « Quantum » car elles travaillent avec des données de transaction réelles en mode quantique (voir Analyse quantique avec données réelles).|Les utilisateurs n\'ont pas besoin de choisir les moteurs IA ou quantiques internes — c\'est géré automatiquement.'],
   ['4) Créer une analyse & téléverser des fichiers', 'Saisissez un titre de rapport clair et un brief d\'analyse ; utilisez la reconnaissance vocale lorsqu\'elle est disponible.|Joindre un fichier source permet de téléverser des PDF, DOCX, TXT, CSV, XLS/XLSX ou images (jpg/png/gif/webp/svg/bmp), jusqu\'à 20 Mo.|Les images sont envoyées directement à l\'analyse visuelle par IA ; les PDF/DOCX/TXT sont convertis en texte et inclus dans l\'analyse.|Les fichiers CSV/Excel sont automatiquement classés selon l\'une de trois structures — table de transactions, table de scénarios ou table d\'allocation de ressources (optimisation) — selon les colonnes présentes.|GÉNÉRER UN RAPPORT D\'ANALYSE DÉTAILLÉ exécute le flux standard ; le repli des fournisseurs, la provenance et les métadonnées de trace sont gérés automatiquement.'],
-  ['5) Analyse quantique avec données réelles', 'Mode quantique activé, les catégories BDDK/BTK acceptent un relevé de transactions réel (CSV/Excel) ; colonnes requises : « Montant » et « Heure » ou « Date », jusqu\'à 500 lignes.|Si téléversé, le moteur quantique évalue ces transactions réelles au lieu d\'enregistrements d\'exemple générés par IA ; l\'IA reçoit l\'instruction explicite de ne pas inventer ni modifier ce tableau.|Les autres catégories acceptent des données de scénario réelles (colonnes « Scénario »/« Probabilité ») ou une table d\'allocation de ressources (colonnes « Élément »/« Valeur »/« Coût » avec un pourcentage de budget) ; si téléversées, le moteur quantique utilise ces données réelles au lieu d\'une estimation IA.|Une étiquette de confirmation verte apparaît après un téléversement réussi (ex. « ✓ N transactions réelles chargées ») ; les problèmes de colonnes sont listés en avertissements ambrés et l\'étiquette peut être retirée avec ×.'],
+  ['5) Analyse quantique avec données réelles', 'Mode quantique activé, les catégories BDDK/BTK acceptent un relevé de transactions réel (CSV/Excel) ; les en-têtes de colonnes doivent être en turc ou en anglais, quelle que soit la langue de l\'application — reconnus : « Tutar »/« Amount » ainsi que « Saat »/« Hour » ou « Tarih »/« Date », jusqu\'à 500 lignes.|Si téléversé, le moteur quantique évalue ces transactions réelles au lieu d\'enregistrements d\'exemple générés par IA ; l\'IA reçoit l\'instruction explicite de ne pas inventer ni modifier ce tableau.|Les autres catégories acceptent des données de scénario réelles (colonnes « Senaryo »/« Scenario » et « Olasılık »/« Probability ») ou une table d\'allocation de ressources (colonnes « Kalem »/« Item », « Değer »/« Value », « Maliyet »/« Cost » avec un pourcentage de budget) — également uniquement en turc ou en anglais ; si téléversées, le moteur quantique utilise ces données réelles au lieu d\'une estimation IA.|Une étiquette de confirmation verte apparaît après un téléversement réussi (ex. « ✓ N transactions réelles chargées ») ; les problèmes de colonnes sont listés en avertissements ambrés et l\'étiquette peut être retirée avec ×.'],
   ['6) Résultats de l’analyse quantique', 'LE MODE PROBABILITÉ QUANTIQUE prend en charge l\'analyse multi-scénarios, la détection de fraude/anomalie ou l\'optimisation des ressources.|L\'en-tête du résultat affiche, selon le moteur actif : nom du backend, nombre de qubits et de shots pour les scénarios ; backend, qubits et nombre de transactions signalées/totales pour la détection de fraude ; backend, qubits et pourcentage de budget utilisé pour l\'optimisation.|Trois graphiques avec bascule tableau/graphique sont disponibles : Comparaison de scénarios (estimation IA vs résultat quantique avec intervalle de confiance), Détection quantique d\'anomalies (scores de risque des transactions signalées vs normales) et Optimisation quantique de l\'allocation des ressources (éléments sélectionnés vs non sélectionnés).|Le résultat de référence suit toujours le chemin de calcul local déterministe ; le matériel IBM réel, lorsqu\'il est configuré, fonctionne comme une voie de vérification indépendante — une comparaison manuelle classique/quantique n\'est pas nécessaire.'],
   ['7) Analyse approfondie de scénario', 'Dans la section MATRICE DE PROBABILITÉ QUANTIQUE, chaque scénario alternatif (autre que le principal) dispose de son propre bouton ANALYSER.|Un clic dessus génère un rapport complet distinct pour ce scénario ; l\'écran affiche l\'en-tête ANALYSE DE SCÉNARIO ALTERNATIF avec ses propres options de téléchargement DOCX/PDF et de partage.|« ← Retour au rapport principal » permet de revenir au résultat principal.'],
   ['8) Rapports, téléchargements & partage', 'Consultez les rapports à l\'écran ; utilisez TÉLÉCHARGER .DOCX et TÉLÉCHARGER .PDF pour télécharger, et PARTAGER pour partager.|Le bouton de sortie vocale lit le rapport à voix haute.|Utilisez des titres descriptifs pour la clarté de l\'archive.|La vérification matérielle confirme qu\'un job IBM réel a été exécuté ; elle ne prouve pas l\'origine institutionnelle de l\'entrée.'],
@@ -148,9 +148,9 @@ guideModules.fr = [
 guideModules.ar = [
   ['1) الشريط العلوي', 'يفتح "تحليل جديد" مساحة عمل جديدة.|تفتح "المحادثة" الاستشارة الصوتية/النصية.|يفتح "السجل" التقارير المحفوظة.|"رادار الأفراد" مرئي فقط لمستخدمي الإدارة.|تعرض "الإشعارات" أحداث المحادثة والطوارئ والنظام.|تفتح "القائمة" هذا الدليل والمعلومات المؤسسية.|تتحكم "الإعدادات" في اللغة والصوت وإشعارات الدفع والسمة ومظهر الشريط الجانبي.|"تسجيل الخروج" ينهي الجلسة بأمان.'],
   ['2) الرئيسية وحالة النظام', 'توفر الخريطة الحية والموجز الصباحي وتدفق النشاط نظرة تشغيلية عامة.|تستخدم "حالة النظام" بيانات صحة حقيقية من الخادم وتعرض هذه القيم بالضبط:|PLATFORM: CHECK (قيد الفحص) / OFF (غير متاح) / READY (جاهز) / LIMITED (جاهز جزئياً).|AI: CHECK / READY / OFF.|DATABASE: CHECK / N/A (غير مهيأة) / ONLINE / OFF.|IBM Q: READY (تم تهيئة عتاد IBM حقيقي) / LOCAL (يُستخدم محاكي Qiskit Aer المحلي).|STORAGE: OBJECT (تخزين كائنات دائم) / LOCAL.|REDIS: ONLINE / MEMORY (بديل محلي).|في حال منح إذن الموقع، تعرض نفس الشاشة أداة حالة الطقس الحية (تُحدَّث كل 10 دقائق).'],
-  ['3) فئات التحليل', 'اختر المجال قبل البدء: الدفاع، الطاقة، الهجوم، الاقتصاد، الأحداث الاجتماعية، الاستشارة، الصحة، متعدد المجالات، BDDK وBTK.|تُعد BDDK وBTK فئتين مستقلتين تماماً عن الفئات الثماني الأخرى؛ يظهر شارة حالتهما بعبارة "كمّي" لأنهما تعملان ببيانات معاملات حقيقية في الوضع الكمي (راجع التحليل الكمي بالبيانات الحقيقية).|لا يحتاج المستخدم إلى اختيار محركات الذكاء الاصطناعي أو الكم الداخلية — يُدار ذلك تلقائياً.'],
+  ['3) فئات التحليل', 'اختر المجال قبل البدء: الدفاع، الطاقة، الهجوم، الاقتصاد، الأحداث المجتمعية، الاستشارة، الصحة، متعدد المجالات، BDDK وBTK.|تُعد BDDK وBTK فئتين مستقلتين تماماً عن الفئات الثماني الأخرى؛ يظهر شارة حالتهما بعبارة "كمّي" لأنهما تعملان ببيانات معاملات حقيقية في الوضع الكمي (راجع التحليل الكمي بالبيانات الحقيقية).|لا يحتاج المستخدم إلى اختيار محركات الذكاء الاصطناعي أو الكم الداخلية — يُدار ذلك تلقائياً.'],
   ['4) إنشاء تحليل وتحميل الملفات', 'أدخل عنواناً واضحاً وموجزاً دقيقاً للتحليل؛ استخدم تحويل الصوت إلى نص عند توفره.|يتيح "إرفاق ملف مصدر" تحميل PDF وDOCX وTXT وCSV وXLS/XLSX أو صور (jpg/png/gif/webp/svg/bmp) حتى 20 ميغابايت.|تُرسَل الصور مباشرة إلى تحليل الرؤية بالذكاء الاصطناعي؛ تُحوَّل ملفات PDF/DOCX/TXT إلى نص وتُدرَج في التحليل.|تُصنَّف ملفات CSV/Excel تلقائياً ضمن إحدى ثلاث بنيات — جدول معاملات، جدول سيناريوهات، أو جدول تخصيص موارد (تحسين) — حسب الأعمدة الموجودة.|يشغّل "إنشاء تقرير تحليل مفصل" سير العمل القياسي؛ تُدار عملية تبديل المزود ومصدر البيانات وبيانات التتبع تلقائياً.'],
-  ['5) التحليل الكمي بالبيانات الحقيقية', 'عند تفعيل الوضع الكمي، تقبل فئتا BDDK/BTK كشف معاملات حقيقي (CSV/Excel)؛ الأعمدة المطلوبة هي "المبلغ" و"الساعة" أو "التاريخ"، بحد أقصى 500 صف.|إذا تم تحميله، يقوم المحرك الكمي بتقييم هذه المعاملات الحقيقية بدلاً من سجلات نموذجية يولّدها الذكاء الاصطناعي؛ يُوجَّه الذكاء الاصطناعي صراحةً بعدم اختلاق أو تعديل هذا الجدول.|تقبل الفئات الأخرى بيانات سيناريو حقيقية (أعمدة "السيناريو"/"الاحتمال") أو جدول تخصيص موارد (أعمدة "البند"/"القيمة"/"التكلفة" مع نسبة ميزانية)؛ إذا تم تحميلها، يستخدم المحرك الكمي هذه البيانات الحقيقية بدلاً من تقدير الذكاء الاصطناعي.|تظهر بعد التحميل الناجح علامة تأكيد خضراء (مثل "✓ تم تحميل N معاملة حقيقية")؛ تُعرض مشاكل الأعمدة كتحذيرات كهرمانية ويمكن إزالة العلامة بالضغط على ×.'],
+  ['5) التحليل الكمي بالبيانات الحقيقية', 'عند تفعيل الوضع الكمي، تقبل فئتا BDDK/BTK كشف معاملات حقيقي (CSV/Excel)؛ يجب أن تكون رؤوس الأعمدة بالتركية أو الإنجليزية بغض النظر عن لغة الواجهة — الأعمدة المعروفة هي "Tutar"/"Amount" و"Saat"/"Hour" أو "Tarih"/"Date"، بحد أقصى 500 صف.|إذا تم تحميله، يقوم المحرك الكمي بتقييم هذه المعاملات الحقيقية بدلاً من سجلات نموذجية يولّدها الذكاء الاصطناعي؛ يُوجَّه الذكاء الاصطناعي صراحةً بعدم اختلاق أو تعديل هذا الجدول.|تقبل الفئات الأخرى بيانات سيناريو حقيقية (أعمدة "Senaryo"/"Scenario" و"Olasılık"/"Probability") أو جدول تخصيص موارد (أعمدة "Kalem"/"Item" و"Değer"/"Value" و"Maliyet"/"Cost" مع نسبة ميزانية) — بالتركية أو الإنجليزية أيضاً؛ إذا تم تحميلها، يستخدم المحرك الكمي هذه البيانات الحقيقية بدلاً من تقدير الذكاء الاصطناعي.|تظهر بعد التحميل الناجح علامة تأكيد خضراء (مثل "✓ تم تحميل N معاملة حقيقية")؛ تُعرض مشاكل الأعمدة كتحذيرات كهرمانية ويمكن إزالة العلامة بالضغط على ×.'],
   ['6) نتائج التحليل الكمي', 'يدعم "وضع الاحتمالية الكمية" تحليل السيناريوهات المتعددة أو كشف الاحتيال/الشذوذ أو تحسين الموارد.|يعرض رأس النتيجة، حسب المحرك النشط: اسم الخادم الخلفي وعدد الكيوبتات وعدد القياسات في وضع السيناريوهات؛ الخادم والكيوبتات وعدد المعاملات المُعلَّمة/الإجمالية في كشف الاحتيال؛ الخادم والكيوبتات ونسبة الميزانية المستخدمة في التحسين.|تتوفر ثلاثة رسوم بيانية مع تبديل جدول/رسم: مقارنة السيناريوهات (تقدير الذكاء الاصطناعي مقابل النتيجة الكمية مع فاصل الثقة)، كشف الشذوذ الكمي (درجات مخاطر المعاملات المُعلَّمة مقابل الطبيعية)، وتحسين تخصيص الموارد الكمي (البنود المختارة مقابل غير المختارة).|النتيجة المعتمدة تتبع دائماً المسار الحتمي المحلي؛ يعمل عتاد IBM الحقيقي، عند تهيئته، كمسار تحقق مستقل — لا حاجة لمقارنة يدوية بين الكلاسيكي والكمي.'],
   ['7) التعمق في السيناريو', 'في قسم "مصفوفة الاحتمالية الكمية"، يحتوي كل سيناريو بديل (عدا الرئيسي) على زر "تحليل" خاص به.|يؤدي الضغط عليه إلى إنشاء تقرير كامل منفصل لهذا السيناريو؛ يتحول العرض إلى رأس "تحليل سيناريو بديل" بخيارات تحميل DOCX/PDF ومشاركة خاصة به.|يعيدك "← العودة إلى التقرير الرئيسي" إلى النتيجة الرئيسية.'],
   ['8) التقارير والتنزيلات والمشاركة', 'راجع التقارير على الشاشة؛ استخدم "تنزيل .DOCX" و"تنزيل .PDF" للتنزيل، و"مشاركة" للمشاركة.|يقرأ زر الإخراج الصوتي التقرير بصوت عالٍ.|استخدم عناوين وصفية لسهولة الأرشفة.|يؤكد التحقق بالعتاد تشغيل مهمة IBM حقيقية؛ ولا يثبت وحده المصدر المؤسسي للبيانات المدخلة.'],
@@ -335,6 +335,31 @@ export const translations = {
     errorPrefix: 'Hata',
     errAllProvidersFailed: 'Tüm YZ sağlayıcıları şu anda başarısız oluyor (kota/kredi/bağlantı sorunu olabilir). Lütfen daha sonra tekrar deneyin.',
 
+    historySearchPh: 'Başlık veya içerikte ara…', historyAllCategories: 'Tüm kategoriler',
+    historyNoResults: 'Arama sonucu bulunamadı.', historyDownloadPdfTitle: 'PDF indir',
+
+    syncConflictTitle: 'Senkronizasyon Çakışması',
+    syncConflictBody: 'Bu kayıt başka bir cihazda da değiştirilmiş. Hangi sürümün kalacağına siz karar verin',
+    syncConflictMultiSuffix: ' ({count} çakışmadan 1\'i gösteriliyor)',
+    syncConflictLocalLabel: 'Bu cihazdaki (yerel)', syncConflictCloudLabel: 'Buluttaki',
+    syncConflictDeletedText: 'Bu sürümde kayıt silinmiş.', syncConflictUntitled: '(başlıksız)',
+    syncConflictUseLocal: 'Yerel sürümü kullan', syncConflictUseCloud: 'Bulut sürümünü kullan',
+
+    reauthBannerText: 'Oturumunun süresi doldu — bekleyen değişikliklerin senkronize olabilmesi için tekrar giriş yapmalısın. Yerel verilerin güvende, kaybolmaz.',
+    reauthLoginAgainBtn: 'Tekrar Giriş Yap',
+
+    userMgmtTitle: 'KULLANICI YÖNETİMİ', userMgmtClose: 'Kapat',
+    userMgmtTabUsers: 'Kullanıcılar', userMgmtTabAuditLog: 'İşlem Kaydı', userMgmtTabFraudTrend: 'Fraud Trend',
+    userMgmtAddUserHeader: 'Yeni Kullanıcı Ekle', userMgmtUserCodePh: 'Kullanıcı kodu', userMgmtPasswordPh: 'Şifre (min 8 karakter)',
+    userMgmtNicknamePh: 'Rumuz (opsiyonel)', userMgmtEmailPh: 'E-posta (bildirimler için)', userMgmtAdminLabel: 'Admin yetkisi',
+    userMgmtEmailNote: 'E-posta girilirse, bu kullanıcı çevrimdışıyken de acil durum bildirimleri, mesajlar ve görüntülü toplantı başlatma uyarıları e-posta ile iletilir.',
+    userMgmtAddBtn: 'Ekle', userMgmtAddingBtn: 'Ekleniyor…', userMgmtLoading: 'Yükleniyor…', userMgmtNoUsers: 'Kayıtlı kullanıcı yok.',
+    userMgmtAdminBadge: 'ADMIN', userMgmtBlockedBadge: 'ENGELLİ', userMgmtNoEmailNote: 'E-posta yok — bildirimler iletilemez',
+    userMgmtEditTitle: 'Düzenle', userMgmtBlockTitle: 'Engelle', userMgmtUnblockTitle: 'Engeli kaldır', userMgmtDeleteTitle: 'Sil',
+    userMgmtEditNicknamePh: 'Rumuz', userMgmtEditPasswordPh: 'Yeni şifre (opsiyonel)',
+    userMgmtSaveBtn: 'Kaydet', userMgmtSavingBtn: 'Kaydediliyor…', userMgmtCancelBtn: 'Vazgeç',
+    userMgmtDeleteConfirm: '{code} kullanıcısını silmek istediğinize emin misiniz?',
+
     newAnalysisShort: 'ANALİZ',
     consultNav: 'SOHBET',
     consultTitle: 'ANATOLIA-Q · GENEL DANIŞMAN',
@@ -477,6 +502,31 @@ export const translations = {
     errorPrefix: 'Error',
     errAllProvidersFailed: 'All AI providers are currently failing (this may be a quota, billing, or connectivity issue). Please try again later.',
 
+    historySearchPh: 'Search by title or content…', historyAllCategories: 'All categories',
+    historyNoResults: 'No search results found.', historyDownloadPdfTitle: 'Download PDF',
+
+    syncConflictTitle: 'Sync Conflict',
+    syncConflictBody: 'This record was also changed on another device. Choose which version to keep',
+    syncConflictMultiSuffix: ' (showing 1 of {count} conflicts)',
+    syncConflictLocalLabel: 'This device (local)', syncConflictCloudLabel: 'Cloud',
+    syncConflictDeletedText: 'The record was deleted in this version.', syncConflictUntitled: '(untitled)',
+    syncConflictUseLocal: 'Use local version', syncConflictUseCloud: 'Use cloud version',
+
+    reauthBannerText: 'Your session has expired — you need to log in again so pending changes can sync. Your local data is safe and will not be lost.',
+    reauthLoginAgainBtn: 'Log In Again',
+
+    userMgmtTitle: 'USER MANAGEMENT', userMgmtClose: 'Close',
+    userMgmtTabUsers: 'Users', userMgmtTabAuditLog: 'Audit Log', userMgmtTabFraudTrend: 'Fraud Trend',
+    userMgmtAddUserHeader: 'Add New User', userMgmtUserCodePh: 'User code', userMgmtPasswordPh: 'Password (min 8 characters)',
+    userMgmtNicknamePh: 'Nickname (optional)', userMgmtEmailPh: 'Email (for notifications)', userMgmtAdminLabel: 'Admin privileges',
+    userMgmtEmailNote: 'If an email is entered, this user will also receive emergency notifications, messages, and video-meeting start alerts by email while offline.',
+    userMgmtAddBtn: 'Add', userMgmtAddingBtn: 'Adding…', userMgmtLoading: 'Loading…', userMgmtNoUsers: 'No registered users.',
+    userMgmtAdminBadge: 'ADMIN', userMgmtBlockedBadge: 'BLOCKED', userMgmtNoEmailNote: 'No email — notifications cannot be delivered',
+    userMgmtEditTitle: 'Edit', userMgmtBlockTitle: 'Block', userMgmtUnblockTitle: 'Unblock', userMgmtDeleteTitle: 'Delete',
+    userMgmtEditNicknamePh: 'Nickname', userMgmtEditPasswordPh: 'New password (optional)',
+    userMgmtSaveBtn: 'Save', userMgmtSavingBtn: 'Saving…', userMgmtCancelBtn: 'Cancel',
+    userMgmtDeleteConfirm: 'Are you sure you want to delete user {code}?',
+
     newAnalysisShort: 'ANALYSIS',
     consultNav: 'CHAT',
     consultTitle: 'ANATOLIA-Q · GENERAL ASSISTANT',
@@ -574,6 +624,31 @@ export const translations = {
     downloadDocxBtn: '.DOCX HERUNTERLADEN',
     errorPrefix: 'Fehler',
     errAllProvidersFailed: 'Alle KI-Anbieter schlagen derzeit fehl (möglicherweise ein Kontingent-, Abrechnungs- oder Verbindungsproblem). Bitte versuchen Sie es später erneut.',
+
+    historySearchPh: 'Nach Titel oder Inhalt suchen…', historyAllCategories: 'Alle Kategorien',
+    historyNoResults: 'Keine Suchergebnisse gefunden.', historyDownloadPdfTitle: 'PDF herunterladen',
+
+    syncConflictTitle: 'Synchronisierungskonflikt',
+    syncConflictBody: 'Dieser Datensatz wurde auch auf einem anderen Gerät geändert. Entscheiden Sie, welche Version erhalten bleibt',
+    syncConflictMultiSuffix: ' (1 von {count} Konflikten wird angezeigt)',
+    syncConflictLocalLabel: 'Dieses Gerät (lokal)', syncConflictCloudLabel: 'Cloud',
+    syncConflictDeletedText: 'Der Datensatz wurde in dieser Version gelöscht.', syncConflictUntitled: '(ohne Titel)',
+    syncConflictUseLocal: 'Lokale Version verwenden', syncConflictUseCloud: 'Cloud-Version verwenden',
+
+    reauthBannerText: 'Ihre Sitzung ist abgelaufen — melden Sie sich erneut an, damit ausstehende Änderungen synchronisiert werden können. Ihre lokalen Daten sind sicher und gehen nicht verloren.',
+    reauthLoginAgainBtn: 'Erneut Anmelden',
+
+    userMgmtTitle: 'BENUTZERVERWALTUNG', userMgmtClose: 'Schließen',
+    userMgmtTabUsers: 'Benutzer', userMgmtTabAuditLog: 'Protokoll', userMgmtTabFraudTrend: 'Betrugstrend',
+    userMgmtAddUserHeader: 'Neuen Benutzer hinzufügen', userMgmtUserCodePh: 'Benutzercode', userMgmtPasswordPh: 'Passwort (mind. 8 Zeichen)',
+    userMgmtNicknamePh: 'Spitzname (optional)', userMgmtEmailPh: 'E-Mail (für Benachrichtigungen)', userMgmtAdminLabel: 'Admin-Rechte',
+    userMgmtEmailNote: 'Wenn eine E-Mail-Adresse angegeben wird, erhält dieser Benutzer auch offline Notfallbenachrichtigungen, Nachrichten und Warnungen zum Start von Videokonferenzen per E-Mail.',
+    userMgmtAddBtn: 'Hinzufügen', userMgmtAddingBtn: 'Wird hinzugefügt…', userMgmtLoading: 'Wird geladen…', userMgmtNoUsers: 'Keine registrierten Benutzer.',
+    userMgmtAdminBadge: 'ADMIN', userMgmtBlockedBadge: 'GESPERRT', userMgmtNoEmailNote: 'Keine E-Mail — Benachrichtigungen können nicht zugestellt werden',
+    userMgmtEditTitle: 'Bearbeiten', userMgmtBlockTitle: 'Sperren', userMgmtUnblockTitle: 'Sperre aufheben', userMgmtDeleteTitle: 'Löschen',
+    userMgmtEditNicknamePh: 'Spitzname', userMgmtEditPasswordPh: 'Neues Passwort (optional)',
+    userMgmtSaveBtn: 'Speichern', userMgmtSavingBtn: 'Wird gespeichert…', userMgmtCancelBtn: 'Abbrechen',
+    userMgmtDeleteConfirm: 'Sind Sie sicher, dass Sie den Benutzer {code} löschen möchten?',
 
     newAnalysisShort: 'ANALYSE',
     consultNav: 'CHAT',
@@ -673,6 +748,31 @@ export const translations = {
     errorPrefix: 'Erreur',
     errAllProvidersFailed: 'Tous les fournisseurs d\'IA échouent actuellement (problème possible de quota, de facturation ou de connectivité). Veuillez réessayer plus tard.',
 
+    historySearchPh: 'Rechercher par titre ou contenu…', historyAllCategories: 'Toutes les catégories',
+    historyNoResults: 'Aucun résultat de recherche trouvé.', historyDownloadPdfTitle: 'Télécharger le PDF',
+
+    syncConflictTitle: 'Conflit de Synchronisation',
+    syncConflictBody: 'Cet enregistrement a également été modifié sur un autre appareil. Choisissez la version à conserver',
+    syncConflictMultiSuffix: ' (affichage de 1 sur {count} conflits)',
+    syncConflictLocalLabel: 'Cet appareil (local)', syncConflictCloudLabel: 'Cloud',
+    syncConflictDeletedText: 'L\'enregistrement a été supprimé dans cette version.', syncConflictUntitled: '(sans titre)',
+    syncConflictUseLocal: 'Utiliser la version locale', syncConflictUseCloud: 'Utiliser la version cloud',
+
+    reauthBannerText: 'Votre session a expiré — reconnectez-vous pour que les modifications en attente puissent se synchroniser. Vos données locales sont en sécurité et ne seront pas perdues.',
+    reauthLoginAgainBtn: 'Se Reconnecter',
+
+    userMgmtTitle: 'GESTION DES UTILISATEURS', userMgmtClose: 'Fermer',
+    userMgmtTabUsers: 'Utilisateurs', userMgmtTabAuditLog: 'Journal d\'Activité', userMgmtTabFraudTrend: 'Tendance de Fraude',
+    userMgmtAddUserHeader: 'Ajouter un Nouvel Utilisateur', userMgmtUserCodePh: 'Code utilisateur', userMgmtPasswordPh: 'Mot de passe (min. 8 caractères)',
+    userMgmtNicknamePh: 'Pseudonyme (facultatif)', userMgmtEmailPh: 'E-mail (pour les notifications)', userMgmtAdminLabel: 'Droits Administrateur',
+    userMgmtEmailNote: 'Si un e-mail est renseigné, cet utilisateur recevra aussi par e-mail les notifications d\'urgence, les messages et les alertes de démarrage de réunion vidéo lorsqu\'il est hors ligne.',
+    userMgmtAddBtn: 'Ajouter', userMgmtAddingBtn: 'Ajout en cours…', userMgmtLoading: 'Chargement…', userMgmtNoUsers: 'Aucun utilisateur enregistré.',
+    userMgmtAdminBadge: 'ADMIN', userMgmtBlockedBadge: 'BLOQUÉ', userMgmtNoEmailNote: 'Pas d\'e-mail — les notifications ne peuvent pas être envoyées',
+    userMgmtEditTitle: 'Modifier', userMgmtBlockTitle: 'Bloquer', userMgmtUnblockTitle: 'Débloquer', userMgmtDeleteTitle: 'Supprimer',
+    userMgmtEditNicknamePh: 'Pseudonyme', userMgmtEditPasswordPh: 'Nouveau mot de passe (facultatif)',
+    userMgmtSaveBtn: 'Enregistrer', userMgmtSavingBtn: 'Enregistrement…', userMgmtCancelBtn: 'Annuler',
+    userMgmtDeleteConfirm: 'Êtes-vous sûr de vouloir supprimer l\'utilisateur {code} ?',
+
     newAnalysisShort: 'ANALYSE',
     consultNav: 'CHAT',
     consultTitle: 'ANATOLIA-Q · CONSEILLER GÉNÉRAL',
@@ -771,6 +871,31 @@ export const translations = {
     errorPrefix: 'خطأ',
     errAllProvidersFailed: 'تفشل جميع مزودي الذكاء الاصطناعي حالياً (قد تكون مشكلة حصة أو فوترة أو اتصال). يرجى المحاولة مرة أخرى لاحقاً.',
 
+    historySearchPh: 'ابحث في العنوان أو المحتوى…', historyAllCategories: 'جميع الفئات',
+    historyNoResults: 'لم يتم العثور على نتائج بحث.', historyDownloadPdfTitle: 'تنزيل PDF',
+
+    syncConflictTitle: 'تعارض المزامنة',
+    syncConflictBody: 'تم تغيير هذا السجل أيضاً على جهاز آخر. اختر النسخة التي ستبقى',
+    syncConflictMultiSuffix: ' (يُعرض 1 من {count} تعارضات)',
+    syncConflictLocalLabel: 'هذا الجهاز (محلي)', syncConflictCloudLabel: 'السحابة',
+    syncConflictDeletedText: 'تم حذف السجل في هذه النسخة.', syncConflictUntitled: '(بدون عنوان)',
+    syncConflictUseLocal: 'استخدام النسخة المحلية', syncConflictUseCloud: 'استخدام نسخة السحابة',
+
+    reauthBannerText: 'انتهت صلاحية جلستك — يجب تسجيل الدخول مرة أخرى حتى تتم مزامنة التغييرات المعلقة. بياناتك المحلية آمنة ولن تُفقد.',
+    reauthLoginAgainBtn: 'تسجيل الدخول مرة أخرى',
+
+    userMgmtTitle: 'إدارة المستخدمين', userMgmtClose: 'إغلاق',
+    userMgmtTabUsers: 'المستخدمون', userMgmtTabAuditLog: 'سجل العمليات', userMgmtTabFraudTrend: 'اتجاه الاحتيال',
+    userMgmtAddUserHeader: 'إضافة مستخدم جديد', userMgmtUserCodePh: 'رمز المستخدم', userMgmtPasswordPh: 'كلمة المرور (8 أحرف على الأقل)',
+    userMgmtNicknamePh: 'الاسم المستعار (اختياري)', userMgmtEmailPh: 'البريد الإلكتروني (للإشعارات)', userMgmtAdminLabel: 'صلاحيات المسؤول',
+    userMgmtEmailNote: 'في حال إدخال بريد إلكتروني، سيتلقى هذا المستخدم أيضاً إشعارات الطوارئ والرسائل وتنبيهات بدء الاجتماعات المرئية عبر البريد الإلكتروني أثناء عدم الاتصال.',
+    userMgmtAddBtn: 'إضافة', userMgmtAddingBtn: 'جارٍ الإضافة…', userMgmtLoading: 'جارٍ التحميل…', userMgmtNoUsers: 'لا يوجد مستخدمون مسجلون.',
+    userMgmtAdminBadge: 'ADMIN', userMgmtBlockedBadge: 'محظور', userMgmtNoEmailNote: 'لا يوجد بريد إلكتروني — لا يمكن تسليم الإشعارات',
+    userMgmtEditTitle: 'تعديل', userMgmtBlockTitle: 'حظر', userMgmtUnblockTitle: 'إلغاء الحظر', userMgmtDeleteTitle: 'حذف',
+    userMgmtEditNicknamePh: 'الاسم المستعار', userMgmtEditPasswordPh: 'كلمة مرور جديدة (اختياري)',
+    userMgmtSaveBtn: 'حفظ', userMgmtSavingBtn: 'جارٍ الحفظ…', userMgmtCancelBtn: 'إلغاء',
+    userMgmtDeleteConfirm: 'هل أنت متأكد من حذف المستخدم {code}؟',
+
     newAnalysisShort: 'تحليل',
     consultNav: 'محادثة',
     consultTitle: 'ANATOLIA-Q · المستشار العام',
@@ -803,7 +928,7 @@ export const translations = {
 };
 
 export function t(lang, key) {
-  return translations[lang]?.[key] || translations.tr[key] || key;
+  return translations[lang]?.[key] || translations.en[key] || translations.tr[key] || key;
 }
 
 const LOCALE_MAP = { tr: 'tr-TR', en: 'en-GB', de: 'de-DE', fr: 'fr-FR', ar: 'ar-SA' };

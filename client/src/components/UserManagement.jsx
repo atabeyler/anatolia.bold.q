@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Trash2, ShieldOff, ShieldCheck, UserPlus, Pencil, ScrollText, TrendingUp } from 'lucide-react';
 import { adminApi, api } from '../services/api.js';
+import { t } from '../services/i18n.js';
 
 const AUDIT_ACTION_LABELS = {
   user_added: 'Kullanıcı eklendi',
@@ -111,7 +112,7 @@ function AuditLogTab() {
   );
 }
 
-function EditRow({ u, onCancel, onSaved, setError }) {
+function EditRow({ u, onCancel, onSaved, setError, lang }) {
   const [nickname, setNickname] = useState(u.nickname || '');
   const [email, setEmail] = useState(u.email || '');
   const [isAdmin, setIsAdmin] = useState(!!u.is_admin);
@@ -142,34 +143,34 @@ function EditRow({ u, onCancel, onSaved, setError }) {
     <form onSubmit={submit} className="border border-cyan-300/25 rounded px-3 py-2.5 bg-[#071225]/70 space-y-2">
       <div className="text-xs text-cyan-100/50 font-mono">{u.user_code}</div>
       <div className="grid grid-cols-2 gap-2">
-        <input placeholder="Rumuz" value={nickname} onChange={(e) => setNickname(e.target.value)}
+        <input placeholder={t(lang, 'userMgmtEditNicknamePh')} value={nickname} onChange={(e) => setNickname(e.target.value)}
           className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-1.5 text-sm text-cyan-100" />
-        <input type="password" placeholder="Yeni şifre (opsiyonel)" value={password}
+        <input type="password" placeholder={t(lang, 'userMgmtEditPasswordPh')} value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-1.5 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
-        <input type="email" placeholder="E-posta (bildirimler için)" value={email}
+        <input type="email" placeholder={t(lang, 'userMgmtEmailPh')} value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="col-span-2 bg-black/30 border border-cyan-300/20 rounded px-2.5 py-1.5 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
       </div>
       <label className="flex items-center gap-2 text-sm text-cyan-100/80">
         <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
-        Admin yetkisi
+        {t(lang, 'userMgmtAdminLabel')}
       </label>
       <div className="flex items-center gap-2">
         <button type="submit" disabled={saving}
           className="px-3 py-1.5 text-xs tracking-widest uppercase rounded bg-cyan-500/20 border border-cyan-300/40 text-cyan-100 hover:bg-cyan-500/30 transition disabled:opacity-50">
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          {saving ? t(lang, 'userMgmtSavingBtn') : t(lang, 'userMgmtSaveBtn')}
         </button>
         <button type="button" onClick={onCancel}
           className="px-3 py-1.5 text-xs tracking-widest uppercase rounded border border-cyan-300/20 text-cyan-100/60 hover:text-cyan-100 transition">
-          Vazgeç
+          {t(lang, 'userMgmtCancelBtn')}
         </button>
       </div>
     </form>
   );
 }
 
-export default function UserManagementModal({ onClose }) {
+export default function UserManagementModal({ onClose, lang = 'tr' }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -224,7 +225,7 @@ export default function UserManagementModal({ onClose }) {
   };
 
   const handleDelete = async (u) => {
-    if (!window.confirm(`${u.user_code} kullanıcısını silmek istediğinize emin misiniz?`)) return;
+    if (!window.confirm(t(lang, 'userMgmtDeleteConfirm').replace('{code}', u.user_code))) return;
     setBusyCode(u.user_code);
     setError('');
     try {
@@ -245,22 +246,22 @@ export default function UserManagementModal({ onClose }) {
         onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-2xl h-[88vh] sm:h-auto sm:max-h-[85vh] overflow-auto hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">KULLANICI YÖNETİMİ</h3>
-          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label="Kapat"><X className="w-5 h-5" /></button>
+          <h3 className="text-cyan-100 font-display tracking-widest text-sm sm:text-lg">{t(lang, 'userMgmtTitle')}</h3>
+          <button onClick={onClose} className="text-cyan-100/70 hover:text-cyan-100" aria-label={t(lang, 'userMgmtClose')}><X className="w-5 h-5" /></button>
         </div>
 
         <div className="flex gap-1 mb-4 border-b border-cyan-300/15">
           <button onClick={() => setTab('users')}
             className={`px-3 py-1.5 text-xs tracking-widest uppercase transition ${tab === 'users' ? 'text-cyan-200 border-b-2 border-cyan-400' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>
-            Kullanıcılar
+            {t(lang, 'userMgmtTabUsers')}
           </button>
           <button onClick={() => setTab('audit')}
             className={`px-3 py-1.5 text-xs tracking-widest uppercase transition flex items-center gap-1.5 ${tab === 'audit' ? 'text-cyan-200 border-b-2 border-cyan-400' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>
-            <ScrollText className="w-3.5 h-3.5" /> İşlem Kaydı
+            <ScrollText className="w-3.5 h-3.5" /> {t(lang, 'userMgmtTabAuditLog')}
           </button>
           <button onClick={() => setTab('fraud-trend')}
             className={`px-3 py-1.5 text-xs tracking-widest uppercase transition flex items-center gap-1.5 ${tab === 'fraud-trend' ? 'text-cyan-200 border-b-2 border-cyan-400' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>
-            <TrendingUp className="w-3.5 h-3.5" /> Fraud Trend
+            <TrendingUp className="w-3.5 h-3.5" /> {t(lang, 'userMgmtTabFraudTrend')}
           </button>
         </div>
 
@@ -275,43 +276,42 @@ export default function UserManagementModal({ onClose }) {
         <>
         <form onSubmit={handleAdd} className="mb-5 border border-cyan-300/25 rounded-lg p-3 bg-[#071225]/70">
           <div className="text-xs text-gold/70 tracking-widest uppercase mb-2 flex items-center gap-1.5">
-            <UserPlus className="w-3.5 h-3.5" /> Yeni Kullanıcı Ekle
+            <UserPlus className="w-3.5 h-3.5" /> {t(lang, 'userMgmtAddUserHeader')}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input required placeholder="Kullanıcı kodu" value={form.userCode}
+            <input required placeholder={t(lang, 'userMgmtUserCodePh')} value={form.userCode}
               onChange={(e) => setForm({ ...form, userCode: e.target.value })}
               className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-2 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
-            <input required type="password" placeholder="Şifre (min 8 karakter)" value={form.password}
+            <input required type="password" placeholder={t(lang, 'userMgmtPasswordPh')} value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-2 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
-            <input placeholder="Rumuz (opsiyonel)" value={form.nickname}
+            <input placeholder={t(lang, 'userMgmtNicknamePh')} value={form.nickname}
               onChange={(e) => setForm({ ...form, nickname: e.target.value })}
               className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-2 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
-            <input type="email" placeholder="E-posta (bildirimler için)" value={form.email}
+            <input type="email" placeholder={t(lang, 'userMgmtEmailPh')} value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="bg-black/30 border border-cyan-300/20 rounded px-2.5 py-2 text-sm text-cyan-100 placeholder:text-cyan-100/30" />
             <label className="flex items-center gap-2 text-sm text-cyan-100/80 px-1">
               <input type="checkbox" checked={form.isAdmin}
                 onChange={(e) => setForm({ ...form, isAdmin: e.target.checked })} />
-              Admin yetkisi
+              {t(lang, 'userMgmtAdminLabel')}
             </label>
           </div>
           <p className="text-xs text-gold/40 mt-2 leading-relaxed">
-            E-posta girilirse, bu kullanıcı çevrimdışıyken de acil durum bildirimleri, mesajlar ve
-            görüntülü toplantı başlatma uyarıları e-posta ile iletilir.
+            {t(lang, 'userMgmtEmailNote')}
           </p>
           <button type="submit" disabled={adding}
             className="mt-2.5 w-full sm:w-auto px-4 py-2 text-xs tracking-widest uppercase rounded bg-cyan-500/20 border border-cyan-300/40 text-cyan-100 hover:bg-cyan-500/30 transition disabled:opacity-50">
-            {adding ? 'Ekleniyor…' : 'Ekle'}
+            {adding ? t(lang, 'userMgmtAddingBtn') : t(lang, 'userMgmtAddBtn')}
           </button>
         </form>
 
         <div className="space-y-1.5">
-          {loading && <p className="text-sm text-cyan-100/50">Yükleniyor…</p>}
-          {!loading && users.length === 0 && <p className="text-sm text-cyan-100/50">Kayıtlı kullanıcı yok.</p>}
+          {loading && <p className="text-sm text-cyan-100/50">{t(lang, 'userMgmtLoading')}</p>}
+          {!loading && users.length === 0 && <p className="text-sm text-cyan-100/50">{t(lang, 'userMgmtNoUsers')}</p>}
           {users.map((u) => (
             editingCode === u.user_code ? (
-              <EditRow key={u.user_code} u={u} setError={setError}
+              <EditRow key={u.user_code} u={u} setError={setError} lang={lang}
                 onCancel={() => setEditingCode(null)}
                 onSaved={() => { setEditingCode(null); load(); }} />
             ) : (
@@ -321,21 +321,21 @@ export default function UserManagementModal({ onClose }) {
                   <div className="text-sm text-cyan-100 flex items-center gap-2 flex-wrap">
                     <span className="font-mono">{u.user_code}</span>
                     {u.nickname && <span className="text-cyan-100/50">· {u.nickname}</span>}
-                    {u.is_admin && <span className="text-xs px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">ADMIN</span>}
-                    {u.blocked && <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-400/30">ENGELLİ</span>}
+                    {u.is_admin && <span className="text-xs px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">{t(lang, 'userMgmtAdminBadge')}</span>}
+                    {u.blocked && <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-400/30">{t(lang, 'userMgmtBlockedBadge')}</span>}
                   </div>
                   {u.email
                     ? <div className="text-xs text-cyan-100/40 font-mono mt-0.5">{u.email}</div>
-                    : <div className="text-xs text-amber-400/60 mt-0.5">E-posta yok — bildirimler iletilemez</div>}
+                    : <div className="text-xs text-amber-400/60 mt-0.5">{t(lang, 'userMgmtNoEmailNote')}</div>}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button onClick={() => setEditingCode(u.user_code)} disabled={busyCode === u.user_code}
-                    title="Düzenle"
+                    title={t(lang, 'userMgmtEditTitle')}
                     className="p-1.5 rounded border border-cyan-300/30 text-cyan-200 hover:bg-cyan-500/10 transition disabled:opacity-40">
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button onClick={() => toggleBlock(u)} disabled={busyCode === u.user_code}
-                    title={u.blocked ? 'Engeli kaldır' : 'Engelle'}
+                    title={u.blocked ? t(lang, 'userMgmtUnblockTitle') : t(lang, 'userMgmtBlockTitle')}
                     className={`p-1.5 rounded border transition disabled:opacity-40 ${
                       u.blocked
                         ? 'border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/10'
@@ -344,7 +344,7 @@ export default function UserManagementModal({ onClose }) {
                     {u.blocked ? <ShieldCheck className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
                   </button>
                   <button onClick={() => handleDelete(u)} disabled={busyCode === u.user_code}
-                    title="Sil"
+                    title={t(lang, 'userMgmtDeleteTitle')}
                     className="p-1.5 rounded border border-red-400/30 text-red-300 hover:bg-red-500/10 transition disabled:opacity-40">
                     <Trash2 className="w-4 h-4" />
                   </button>

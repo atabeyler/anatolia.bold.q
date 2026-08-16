@@ -142,11 +142,11 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
       <button
         onClick={() => inputRef.current?.click()}
         disabled={loading}
-        title={onAIFile ? 'Dosya ekle - resim, PDF, her tur (AI gorebilir)' : onFile ? 'Dosya ekle - her tur dosya gonderilebilir' : 'PDF, DOCX veya TXT yukle - AI kaynak olarak kullanir'}
+        title={onAIFile ? 'Dosya ekle - resim, PDF, her tür (AI görebilir)' : onFile ? 'Dosya ekle - her tür dosya gönderilebilir' : 'PDF, DOCX veya TXT yükle - AI kaynak olarak kullanır'}
         className={`flex items-center gap-1 border border-gold/25 text-gold/50 hover:text-gold hover:border-gold/50 rounded transition disabled:opacity-40 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-1.5 text-xs'} font-mono tracking-wider`}
       >
         {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
-        {!compact && (loading ? 'Yukleniyor...' : (filename ? 'Ilave Dosya Ekle' : 'Dosya Ilistir'))}
+        {!compact && (loading ? 'Yükleniyor...' : (filename ? 'İlave Dosya Ekle' : 'Dosya İliştir'))}
       </button>
 
       {error && <span className="text-xs text-red-400 font-mono">{error}</span>}

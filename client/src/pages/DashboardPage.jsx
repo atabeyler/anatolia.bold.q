@@ -550,8 +550,8 @@ export default function DashboardPage({ user, onLogout }) {
 
       <EmergencyButton authenticated={true} />
 
-      <DesktopConflictModal />
-      <ReauthBanner onLogout={logout} />
+      <DesktopConflictModal lang={lang} />
+      <ReauthBanner onLogout={logout} lang={lang} />
 
       <AnimatePresence>
         {voiceChatOpen && <VoiceChatModal onClose={() => setVoiceChatOpen(false)} />}
@@ -594,7 +594,7 @@ export default function DashboardPage({ user, onLogout }) {
       </AnimatePresence>
       {radarOpen && <RadarModal onClose={() => setRadarOpen(false)} lang={lang} />}
       <AnimatePresence>
-        {userMgmtOpen && <UserManagementModal onClose={() => setUserMgmtOpen(false)} />}
+        {userMgmtOpen && <UserManagementModal onClose={() => setUserMgmtOpen(false)} lang={lang} />}
       </AnimatePresence>
 
       <AnimatePresence>

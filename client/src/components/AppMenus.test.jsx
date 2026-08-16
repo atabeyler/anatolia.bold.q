@@ -141,9 +141,9 @@ describe('GuideModal', () => {
     expect(screen.getByText('1) Top Bar')).toBeInTheDocument();
   });
 
-  it('falls back to Turkish for an unsupported language', () => {
+  it('falls back to English for an unsupported language', () => {
     render(<GuideModal onClose={vi.fn()} t={t} lang="xx" />);
-    expect(screen.getByText('1) Üst Çubuk')).toBeInTheDocument();
+    expect(screen.getByText('1) Top Bar')).toBeInTheDocument();
   });
 
   it('closes via the close button', () => {

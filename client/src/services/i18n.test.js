@@ -12,8 +12,8 @@ describe('t (translation function)', () => {
     expect(t('en', 'quantumMode')).toBe('QUANTUM PROBABILITY MODE');
   });
 
-  it('falls back to tr for an unsupported language', () => {
-    expect(t('xx', 'quantumMode')).toBe(t('tr', 'quantumMode'));
+  it('falls back to en for an unsupported language', () => {
+    expect(t('xx', 'quantumMode')).toBe(t('en', 'quantumMode'));
   });
 
   it('returns a key defined for de', () => {

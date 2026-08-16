@@ -151,7 +151,7 @@ function highlightMatch(text, query) {
 }
 
 function GuideModal({ onClose, t, lang }) {
-  const modules = guideModules[lang] || guideModules.tr;
+  const modules = guideModules[lang] || guideModules.en || guideModules.tr;
   const [query, setQuery] = useState('');
   const normalizedQuery = query.trim().toLocaleLowerCase('tr');
   const filtered = normalizedQuery
