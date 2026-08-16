@@ -31,11 +31,11 @@ export default function TurkeyMap() {
             </Suspense>
           </div>
 
-          <div className="absolute top-3 left-3 flex items-center gap-2 text-xs text-white/80">
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-            {t('liveMonitor')} · {new Date().toLocaleTimeString()}
+          <div className="absolute top-3 left-3 flex items-center gap-2 text-[10px] text-white/80 max-w-[55%] truncate">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
+            <span className="truncate">{t('liveMonitor')} · {new Date().toLocaleTimeString()}</span>
           </div>
-          <div className="absolute top-3 right-3 text-xs text-white/70">{t('monitorPoints')}</div>
+          <div className="absolute top-3 right-3 text-[10px] text-white/70 max-w-[40%] truncate text-right">{t('monitorPoints')}</div>
         </div>
       </div>
 

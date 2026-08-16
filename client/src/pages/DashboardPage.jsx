@@ -434,17 +434,17 @@ export default function DashboardPage({ user, onLogout }) {
   return (
     <div className="quantum-bg min-h-screen flex flex-col relative">
       <header className="relative z-20 px-3 sm:px-6 py-3 bg-navy-light/80 backdrop-blur border-b border-cyan-300/30 hud-panel overflow-visible">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:gap-4">
-        <div className="flex items-center gap-3 shrink-0 min-w-0 md:justify-self-start">
+        <div className="flex flex-wrap items-center justify-between gap-2 md:gap-4">
+        <div className="flex items-center gap-3 shrink-0">
           <QuantumLogo size="sm" />
-          <div className="min-w-0">
-            <h1 className="font-display text-gold text-base sm:text-lg tracking-[0.24em] sm:tracking-[0.3em] whitespace-nowrap overflow-hidden text-ellipsis">{t('appName')}</h1>
-            <p className="text-[8px] sm:text-[10px] text-gold/60 tracking-[0.16em] sm:tracking-widest uppercase whitespace-nowrap overflow-hidden text-ellipsis">{t('appSubtitle')}</p>
+          <div>
+            <h1 className="font-display text-gold text-base sm:text-lg tracking-[0.24em] sm:tracking-[0.3em] whitespace-nowrap">{t('appName')}</h1>
+            <p className="text-[8px] sm:text-[10px] text-gold/60 tracking-[0.16em] sm:tracking-widest uppercase whitespace-nowrap">{t('appSubtitle')}</p>
           </div>
           <span className="text-xs sm:text-sm font-serif text-cyan-200 hidden sm:inline md:hidden max-w-[130px] lg:max-w-[170px] truncate">{user.isAdmin ? 'BOLD' : (user.nickname || user.userCode || 'BOLD')}</span>
         </div>
 
-        <div className="flex items-center justify-end gap-1 flex-nowrap min-w-0 overflow-visible md:justify-self-end md:ml-auto">
+        <div className="flex items-center justify-end gap-1 flex-nowrap overflow-visible">
           <DesktopSyncBadge />
           <div className="relative" ref={calendarRef}>
             <button
