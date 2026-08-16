@@ -14,15 +14,29 @@ import { useLang } from './services/langContext.jsx';
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const ButtonShowcasePage = lazy(() => import('./pages/ButtonShowcasePage.jsx'));
 
-// True only when launched from a home-screen/desktop app icon (installed
-// PWA), not a normal browser tab -- covers desktop Chrome (display-mode:
-// standalone) and iOS Safari (navigator.standalone).
-const isStandalonePwa = () =>
-  window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true;
+// The branded launch screen belongs to installed/native app shells, not a
+// normal browser tab. ANATOLIA-Q ships in three such forms:
+//   - Electron desktop: preload exposes window.anatoliaDesktop.
+//   - Capacitor Android: the native bridge exposes window.Capacitor.
+//   - Installed browser PWA: display-mode is standalone (plus iOS legacy).
+// Do not rely on display-mode alone: Capacitor and Electron are not PWAs and
+// therefore legitimately report it as false.
+const isInstalledApp = () => {
+  const isDesktop = window.anatoliaDesktop?.isDesktop === true;
+  const isCapacitor = Boolean(
+    window.Capacitor?.isNativePlatform?.() ||
+    (window.Capacitor?.getPlatform?.() && window.Capacitor.getPlatform() !== 'web')
+  );
+  const isStandalonePwa =
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    window.navigator.standalone === true;
+
+  return isDesktop || isCapacitor || isStandalonePwa;
+};
 
 export default function App() {
   const [user, setUser] = useState(getCurrentUser());
-  const [showSplash] = useState(isStandalonePwa);
+  const [showSplash] = useState(isInstalledApp);
   const { lang } = useLang();
 
   // Event-driven instead of polling: setJWT() fires AUTH_CHANGED_EVENT on
