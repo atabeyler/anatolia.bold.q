@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.165",
+  "version": "2.1.166",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
@@ -78,7 +78,7 @@
       ],
       "icon": "desktop/build/icon-mac.png",
       "category": "public.app-category.business",
-      "artifactName": "ANATOLIA-Q-${version}.${ext}",
+      "artifactName": "ANATOLIA-Q-${version}-${arch}.${ext}",
       "identity": null
     },
     "linux": {
