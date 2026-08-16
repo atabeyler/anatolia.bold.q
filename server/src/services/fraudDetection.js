@@ -15,14 +15,16 @@ const SCRIPT_PATH = path.join(__dirname, '../../quantum/fraud_detection.py');
 // When IBM credentials are configured, detect() also runs a swap-test
 // verification on real hardware (see fraud_detection.py) -- the subprocess
 // timeout has to cover that wait too, or it gets SIGKILLed mid-computation.
-const TIMEOUT_MS = withIbmTimeout(20000);
+// Base budget covers the exact O(n^2) kernel at MAX_TRANSACTIONS (measured
+// ~30s for 3000 records locally) plus startup/margin.
+const TIMEOUT_MS = withIbmTimeout(60000);
 // Mirrors MAX_INPUT_TRANSACTIONS in fraud_detection.py -- the overall
-// accepted input size. Above MAX_KERNEL_TRANSACTIONS (60, enforced
+// accepted input size. Above MAX_KERNEL_TRANSACTIONS (3000, enforced
 // Python-side) the script itself pre-filters down to the most
 // anomalous-looking records via the cheap classical detector before
 // running the O(n^2) quantum kernel, instead of this cap silently
 // dropping everything past a fixed prefix.
-const MAX_TRANSACTIONS = 300;
+const MAX_TRANSACTIONS = 3000;
 
 /**
  * @param {Array<{id:string, amount:number, hour:number, frequency:number, newCounterparty:number, crossBorder:number}>} transactions

@@ -55,12 +55,14 @@ FEATURES = ["amount", "hour", "frequency", "newCounterparty", "crossBorder"]
 # The exact pairwise kernel is O(n^2) statevector inner products, so the set
 # that actually goes through it is capped -- above this, a fast classical
 # pre-filter (see detect()) picks the most anomalous-looking candidates
-# instead of just taking the first N records.
-MAX_KERNEL_TRANSACTIONS = 60
+# instead of just taking the first N records. Measured ~3.5us/pair locally,
+# so 3000 (9M pairs) stays under ~30s -- see TIMEOUT_MS in fraudDetection.js,
+# which has to cover this.
+MAX_KERNEL_TRANSACTIONS = 3000
 # Overall input accepted at all (mirrored on the Node side in
 # fraudDetection.js) -- bounds the cost of the O(n) classical pre-filter
 # pass itself and the JSON payload size.
-MAX_INPUT_TRANSACTIONS = 300
+MAX_INPUT_TRANSACTIONS = 3000
 
 
 def robust_normalize(transactions):

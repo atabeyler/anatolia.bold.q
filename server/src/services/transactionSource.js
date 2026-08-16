@@ -13,7 +13,10 @@
  */
 import { normalizeHeader, findColumn, toBool01, toNumber, extractHour, readSheetRows } from './tableParsing.js';
 
-const MAX_ROWS = 500;
+// Mirrors MAX_TRANSACTIONS in fraudDetection.js -- upload cap has to be at
+// least as large or a bigger file just gets truncated a step earlier than
+// the fraud-detection layer's own cap.
+const MAX_ROWS = 3000;
 
 const COLUMN_ALIASES = {
   amount: ['tutar', 'amount', 'miktar', 'tutar (tl)', 'işlem tutarı', 'islem tutari'],
