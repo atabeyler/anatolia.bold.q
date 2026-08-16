@@ -50,7 +50,7 @@ function Legend({ items }) {
   return (
     <div className="flex flex-wrap gap-4 mb-2">
       {items.map((it) => (
-        <div key={it.label} className="flex items-center gap-1.5 text-[10px] text-gold/60 tracking-wide">
+        <div key={it.label} className="flex items-center gap-1.5 text-xs text-gold/60 tracking-wide">
           <span className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: it.color }} />
           {it.icon && <span>{it.icon}</span>}
           {it.label}
@@ -66,10 +66,10 @@ function ChartCard({ title, subtitle, legend, children, tableToggle, showTable, 
       <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
         <div>
           <h4 className="font-display text-gold/90 tracking-widest text-xs uppercase">{title}</h4>
-          {subtitle && <p className="text-[10px] text-gold/40 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-gold/40 mt-0.5">{subtitle}</p>}
         </div>
         {tableToggle && (
-          <button onClick={onToggleTable} className="text-[10px] text-gold/50 hover:text-gold border border-gold/20 hover:border-gold/50 rounded px-2 py-1 tracking-wide flex-shrink-0">
+          <button onClick={onToggleTable} className="text-xs text-gold/50 hover:text-gold border border-gold/20 hover:border-gold/50 rounded px-2 py-1 tracking-wide flex-shrink-0">
             {showTable ? 'Grafik gorunumu' : 'Tablo gorunumu'}
           </button>
         )}

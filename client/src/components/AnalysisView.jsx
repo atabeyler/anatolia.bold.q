@@ -173,13 +173,13 @@ export default function AnalysisView({ category, onCategoryChange }) {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-[10px] text-gold/40 tracking-widest uppercase">Kaynak Dosya</span>
+            <span className="text-xs text-gold/40 tracking-widest uppercase">Kaynak Dosya</span>
             <FileAttach onAIFile={handleAIFile} />
-            {(documentContexts.length > 0 || imageFiles.length > 0) && <span className="text-[10px] text-emerald-400 font-mono">✓ {documentContexts.length + imageFiles.length} kaynak dosya eklendi</span>}
+            {(documentContexts.length > 0 || imageFiles.length > 0) && <span className="text-xs text-emerald-400 font-mono">✓ {documentContexts.length + imageFiles.length} kaynak dosya eklendi</span>}
           </div>
 
           {quantumMode && (
-            <p className="text-[10px] text-gold/40 leading-relaxed">
+            <p className="text-xs text-gold/40 leading-relaxed">
               {isFraudCategory
                 ? 'Gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz; yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.'
                 : 'Gerçek senaryo verisi ("Senaryo"/"Olasılık" sütunları) veya kaynak tahsisi tablosu ("Kalem"/"Değer"/"Maliyet" sütunları) yükleyebilirsiniz; yüklenirse kuantum motoru YZ tahmini yerine bu gerçek verileri kullanır.'}
@@ -188,36 +188,36 @@ export default function AnalysisView({ category, onCategoryChange }) {
 
           {realTransactions && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
+              <span className="text-xs bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
                 ✓ {realTransactions.transactions.length} gerçek işlem kaydı yüklendi ({realTransactions.filename})
               </span>
               <button type="button" onClick={() => setRealTransactions(null)} className="text-xs text-red-300">×</button>
               {realTransactions.warnings.map((w, i) => (
-                <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
+                <span key={i} className="text-xs text-amber-400/80">{w}</span>
               ))}
             </div>
           )}
 
           {realScenarios && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
+              <span className="text-xs bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
                 ✓ {realScenarios.scenarios.length} gerçek senaryo yüklendi ({realScenarios.filename})
               </span>
               <button type="button" onClick={() => setRealScenarios(null)} className="text-xs text-red-300">×</button>
               {realScenarios.warnings.map((w, i) => (
-                <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
+                <span key={i} className="text-xs text-amber-400/80">{w}</span>
               ))}
             </div>
           )}
 
           {realOptimization && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
+              <span className="text-xs bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
                 ✓ {realOptimization.items.length} gerçek kalem yüklendi, bütçe %{realOptimization.budgetPercent} ({realOptimization.filename})
               </span>
               <button type="button" onClick={() => setRealOptimization(null)} className="text-xs text-red-300">×</button>
               {realOptimization.warnings.map((w, i) => (
-                <span key={i} className="text-[10px] text-amber-400/80">{w}</span>
+                <span key={i} className="text-xs text-amber-400/80">{w}</span>
               ))}
             </div>
           )}
@@ -236,7 +236,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
           {documentContexts.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {documentContexts.map((doc, i) => (
-                <button key={`doc-${i}`} type="button" onClick={() => removeDocAt(i)} className="text-[10px] bg-cyan-900/30 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1">{doc.filename} ×</button>
+                <button key={`doc-${i}`} type="button" onClick={() => removeDocAt(i)} className="text-xs bg-cyan-900/30 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1">{doc.filename} ×</button>
               ))}
             </div>
           )}
@@ -276,17 +276,17 @@ export default function AnalysisView({ category, onCategoryChange }) {
             <div className="text-xs text-gold/60 flex items-center gap-2">
               {result.quantumMode && <Atom className="w-3 h-3 text-gold" />}
               {result.quantum && (
-                <span className="font-mono text-[10px] text-cyan-300/80" title="Qiskit Aer yerel kuantum devre simülatörü">
+                <span className="font-mono text-xs text-cyan-300/80" title="Qiskit Aer yerel kuantum devre simülatörü">
                   {result.quantum.backend} · {result.quantum.qubits} kübit · {result.quantum.shots} ölçüm
                 </span>
               )}
               {result.fraud && (
-                <span className="font-mono text-[10px] text-cyan-300/80" title="Kuantum çekirdek (kernel) anomali tespiti">
+                <span className="font-mono text-xs text-cyan-300/80" title="Kuantum çekirdek (kernel) anomali tespiti">
                   {result.fraud.backend} · {result.fraud.qubits} kübit · {result.fraud.flaggedCount}/{result.fraud.transactionCount} işaretlendi
                 </span>
               )}
               {result.optimizer && (
-                <span className="font-mono text-[10px] text-cyan-300/80" title="QAOA kaynak tahsisi optimizasyonu">
+                <span className="font-mono text-xs text-cyan-300/80" title="QAOA kaynak tahsisi optimizasyonu">
                   {result.optimizer.backend} · {result.optimizer.qubits} kübit · %{result.optimizer.totalCost}/%{result.optimizer.budgetPercent} bütçe kullanıldı
                 </span>
               )}
@@ -336,7 +336,7 @@ function ScenarioPanel({ scenarios, onDeepDive, loadingScenario, t }) {
             <div className="flex-1 min-w-0">
               <span className="text-gold/90 text-sm font-display tracking-wide truncate">{s.title}</span>
               {s.quantumProbability !== undefined && (
-                <div className="text-[10px] font-mono text-cyan-300/70 mt-0.5">
+                <div className="text-xs font-mono text-cyan-300/70 mt-0.5">
                   YZ tahmini %{s.llmEstimate} → kuantum devresi %{s.quantumProbability}
                 </div>
               )}

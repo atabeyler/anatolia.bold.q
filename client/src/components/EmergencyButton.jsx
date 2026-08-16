@@ -124,7 +124,7 @@ export default function EmergencyButton({ authenticated }) {
     <>
       <motion.button onMouseDown={onDragStart} onTouchStart={onDragStart} onClick={() => { if (!dragRef.current.moved) setOpen(true); }} className="fixed z-50 emergency-pulse rounded-full" style={{ right: `${pos.x}px`, bottom: `calc(${pos.y}px + env(safe-area-inset-bottom, 0px))` }} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.96 }} aria-label={t('emergencyCenter')}>
         <div className="relative w-8 h-8 sm:w-10 sm:h-10 md:w-14 md:h-14 rounded-full btn-emergency flex items-center justify-center"><AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 md:w-6 md:h-6 text-white" /></div>
-        <div className="absolute -top-7 sm:-top-8 md:-top-9 left-1/2 -translate-x-1/2 text-[7px] sm:text-[8px] md:text-[10px] tracking-[0.14em] sm:tracking-[0.2em] text-red-400 font-bold pointer-events-none text-center leading-tight whitespace-pre-line">
+        <div className="absolute -top-7 sm:-top-8 md:-top-9 left-1/2 -translate-x-1/2 text-xs md:text-sm tracking-[0.14em] sm:tracking-[0.2em] text-red-400 font-bold pointer-events-none text-center leading-tight whitespace-pre-line">
           {t('emergencyCenterButton')}
         </div>
       </motion.button>
@@ -150,7 +150,7 @@ function EmergencyModal({ authenticated, panel, setPanel, onClose }) {
   );
 }
 
-function TabBtn({ children, active, onClick, locked }) { return <button onClick={onClick} disabled={locked} className={`min-w-[130px] sm:min-w-0 flex-1 flex items-center justify-center px-3 sm:px-4 py-3 text-[10px] sm:text-xs tracking-widest uppercase border-r border-gold/10 transition ${active ? 'bg-gold/10 text-gold border-b-2 border-b-gold' : locked ? 'text-gold/30 cursor-not-allowed' : 'text-gold/60 hover:text-gold hover:bg-gold/5'}`}>{children}</button>; }
+function TabBtn({ children, active, onClick, locked }) { return <button onClick={onClick} disabled={locked} className={`min-w-[130px] sm:min-w-0 flex-1 flex items-center justify-center px-3 sm:px-4 py-3 text-xs sm:text-sm tracking-widest uppercase border-r border-gold/10 transition ${active ? 'bg-gold/10 text-gold border-b-2 border-b-gold' : locked ? 'text-gold/30 cursor-not-allowed' : 'text-gold/60 hover:text-gold hover:bg-gold/5'}`}>{children}</button>; }
 
 function CenterPanel() {
   const { t } = useLang();
@@ -170,9 +170,9 @@ function CenterPanel() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <span className="text-[10px] text-gold/40 tracking-widest uppercase">{t('attachFileLabel')}</span>
+        <span className="text-xs text-gold/40 tracking-widest uppercase">{t('attachFileLabel')}</span>
         <FileAttach onFile={(f) => f && setAttachedFiles((prev) => [...prev, f])} compact />
-        {attachedFiles.length > 0 && <span className="text-[10px] text-emerald-400 font-mono">✓ {attachedFiles.length} {t('filesAttached')}</span>}
+        {attachedFiles.length > 0 && <span className="text-xs text-emerald-400 font-mono">✓ {attachedFiles.length} {t('filesAttached')}</span>}
       </div>
       <div className="relative">
         <textarea value={msg} onChange={(e) => setMsg(e.target.value)}
@@ -203,9 +203,9 @@ function UsersPanel() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <span className="text-[10px] text-gold/40 tracking-widest uppercase">{t('attachFileLabel')}</span>
+        <span className="text-xs text-gold/40 tracking-widest uppercase">{t('attachFileLabel')}</span>
         <FileAttach onFile={(f) => f && setAttachedFiles((prev) => [...prev, f])} compact />
-        {attachedFiles.length > 0 && <span className="text-[10px] text-emerald-400 font-mono">✓ {attachedFiles.length} {t('filesAttached')}</span>}
+        {attachedFiles.length > 0 && <span className="text-xs text-emerald-400 font-mono">✓ {attachedFiles.length} {t('filesAttached')}</span>}
       </div>
       <div className="relative">
         <textarea value={msg} onChange={(e) => setMsg(e.target.value)}
@@ -712,7 +712,7 @@ function ChatPanel() {
       {meetingActive && (
         <div className="mb-3 grid sm:grid-cols-2 gap-2">
           <div className="bg-navy/60 border border-gold/20 rounded p-2 max-h-28 overflow-auto">
-            <div className="text-[10px] text-gold/60 mb-1">{t('participantsLabel')}</div>
+            <div className="text-xs text-gold/60 mb-1">{t('participantsLabel')}</div>
             <div className="space-y-1">
               {participants.map((p) => (
                 <div key={p.peerId} className="text-[11px] text-gold/90 flex items-center gap-1">
@@ -745,7 +745,7 @@ function ChatPanel() {
             </div>
           </div>
           <div className="bg-navy/60 border border-gold/20 rounded p-2 max-h-28 overflow-auto">
-            <div className="text-[10px] text-gold/60 mb-1">{t('meetingLogLabel')}</div>
+            <div className="text-xs text-gold/60 mb-1">{t('meetingLogLabel')}</div>
             <div className="space-y-1">
               {meetingLogs.slice(-6).map((l, i) => (
                 <div key={`${l.ts}-${i}`} className="text-[11px] text-gold/80">{fixMojibake(l.text)}</div>
@@ -762,11 +762,11 @@ function ChatPanel() {
           {mergedTargets.map(n => <option key={n} value={n}>{n} {onlineUsers.includes(n) ? '●' : '○'}</option>)}
         </select>
         <FileAttach onFile={(f) => f && setAttachedFiles((prev) => [...prev, f])} compact />
-        {attachedFiles.length > 0 && <span className="text-[10px] text-emerald-400 font-mono">📎 {attachedFiles.length} dosya</span>}
+        {attachedFiles.length > 0 && <span className="text-xs text-emerald-400 font-mono">📎 {attachedFiles.length} dosya</span>}
       </div>
       <div ref={scrollRef} className="flex-1 overflow-auto bg-navy/50 rounded p-3 space-y-2 mb-3">
         {messages.length === 0 && <p className="text-center text-gold/40 text-sm py-8">{t('noMessages')}</p>}
-        {messages.map((m, i) => <div key={i} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[75%] rounded-lg px-3 py-2 ${m.mine ? 'bg-gold/20 text-gold' : 'bg-navy-accent text-gold/90'}`}>{!m.mine && <div className="text-[10px] text-gold/50 mb-1">{m.from}</div>}<FileMessageContent text={m.message} /></div></div>)}
+        {messages.map((m, i) => <div key={i} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[75%] rounded-lg px-3 py-2 ${m.mine ? 'bg-gold/20 text-gold' : 'bg-navy-accent text-gold/90'}`}>{!m.mine && <div className="text-xs text-gold/50 mb-1">{m.from}</div>}<FileMessageContent text={m.message} /></div></div>)}
       </div>
       <div className="flex gap-2">
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder={attachedFiles.length > 0 ? t('fileNoteShortPlaceholder') : (otherUser ? `${otherUser} ${t('messagePh')}` : t('selectUser'))} disabled={!otherUser} className="flex-1 bg-navy/80 border border-gold/30 rounded px-3 py-2 text-gold/90 focus:border-gold focus:outline-none disabled:opacity-50" />

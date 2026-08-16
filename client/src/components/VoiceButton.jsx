@@ -53,7 +53,7 @@ export default function VoiceButton({ mode = 'input', text, onTranscript, size =
                 animate={{ scale: [1, 1.5, 1], opacity: [0.7, 0, 0.7] }}
                 transition={{ duration: 1.2, repeat: Infinity }}
               />
-              <span className="text-[10px] text-red-400 mt-1 absolute -bottom-5 whitespace-nowrap">
+              <span className="text-xs text-red-400 mt-1 absolute -bottom-5 whitespace-nowrap">
                 {t('voiceListening')}
               </span>
             </>

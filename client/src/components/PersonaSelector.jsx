@@ -125,7 +125,7 @@ export default function PersonaSelector({ onSave, initialProfile }) {
                   </div>
                   {isSelected && <Check className="w-3 h-3 text-gold" />}
                 </div>
-                <p className="text-[10px] text-gold/50 leading-relaxed">
+                <p className="text-xs text-gold/50 leading-relaxed">
                   {PERSONA_DESCS[p.id]?.[lang] || ''}
                 </p>
               </motion.button>

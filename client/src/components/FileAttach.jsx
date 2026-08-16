@@ -29,7 +29,7 @@ export function FileMessageContent({ text, className = '' }) {
         <a href={url} target="_blank" rel="noreferrer" download={filename} className="flex items-center gap-2 bg-black/20 border border-current/15 rounded px-3 py-2 hover:bg-black/30 transition">
           <Paperclip className="w-3.5 h-3.5 shrink-0 opacity-60" />
           <span className="text-xs font-mono truncate flex-1 opacity-80">{filename}</span>
-          <span className="text-[10px] opacity-40 shrink-0">↓ İndir</span>
+          <span className="text-xs opacity-40 shrink-0">↓ İndir</span>
         </a>
       )}
     </div>
@@ -132,7 +132,7 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
       <input key={inputKey} ref={inputRef} type="file" accept={accept} className="hidden" onChange={handleFile} />
 
       {filename && (
-        <span className="flex items-center gap-1 text-[10px] bg-cyan-900/40 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1 font-mono max-w-[180px]">
+        <span className="flex items-center gap-1 text-xs bg-cyan-900/40 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1 font-mono max-w-[180px]">
           <Paperclip className="w-3 h-3 shrink-0" />
           <span className="truncate">{filename}</span>
           <button onClick={remove} className="ml-0.5 hover:text-red-400 shrink-0" aria-label="Dosyayı kaldır"><X className="w-3 h-3" /></button>
@@ -143,13 +143,13 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         onClick={() => inputRef.current?.click()}
         disabled={loading}
         title={onAIFile ? 'Dosya ekle - resim, PDF, her tur (AI gorebilir)' : onFile ? 'Dosya ekle - her tur dosya gonderilebilir' : 'PDF, DOCX veya TXT yukle - AI kaynak olarak kullanir'}
-        className={`flex items-center gap-1 border border-gold/25 text-gold/50 hover:text-gold hover:border-gold/50 rounded transition disabled:opacity-40 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-1.5 text-[10px]'} font-mono tracking-wider`}
+        className={`flex items-center gap-1 border border-gold/25 text-gold/50 hover:text-gold hover:border-gold/50 rounded transition disabled:opacity-40 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-1.5 text-xs'} font-mono tracking-wider`}
       >
         {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
         {!compact && (loading ? 'Yukleniyor...' : (filename ? 'Ilave Dosya Ekle' : 'Dosya Ilistir'))}
       </button>
 
-      {error && <span className="text-[10px] text-red-400 font-mono">{error}</span>}
+      {error && <span className="text-xs text-red-400 font-mono">{error}</span>}
     </div>
   );
 }

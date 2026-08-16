@@ -58,7 +58,7 @@ export default function MemoryPanel({ onLoadConversation }) {
           {t('memoryArchiveTitle')}
         </h3>
         <button onClick={() => setShowArchived(!showArchived)}
-          className={`text-[10px] tracking-wider px-2 py-1 rounded border transition ${
+          className={`text-xs tracking-wider px-2 py-1 rounded border transition ${
             showArchived ? 'border-gold/40 text-gold bg-gold/10' : 'border-gold/20 text-gold/50 hover:border-gold/40'
           }`}>
           {showArchived ? t('memoryShowActive') : t('memoryShowArchived')}
@@ -101,13 +101,13 @@ export default function MemoryPanel({ onLoadConversation }) {
                   <p className="text-gold/90 text-sm font-display tracking-wide truncate">{conv.session_title}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <Clock className="w-3 h-3 text-gold/40" />
-                    <span className="text-[10px] text-gold/40">
+                    <span className="text-xs text-gold/40">
                       {new Date(conv.created_at).toLocaleDateString(localeFor(lang), {
                         day: '2-digit', month: 'short', year: 'numeric'
                       })}
                     </span>
                     {conv.archived && (
-                      <span className="text-[10px] bg-gold/10 text-gold/50 px-1.5 rounded">
+                      <span className="text-xs bg-gold/10 text-gold/50 px-1.5 rounded">
                         {t('memoryArchivedBadge')}
                       </span>
                     )}
@@ -125,7 +125,7 @@ export default function MemoryPanel({ onLoadConversation }) {
                     <div className="px-3 pb-3 space-y-3 border-t border-gold/15 pt-3">
                       {conv.summary && (
                         <div>
-                          <p className="text-[10px] text-gold/50 uppercase tracking-widest mb-1">
+                          <p className="text-xs text-gold/50 uppercase tracking-widest mb-1">
                             {t('memorySummaryLabel')}
                           </p>
                           <p className="text-xs text-gold/70 leading-relaxed">{conv.summary.slice(0, 300)}...</p>

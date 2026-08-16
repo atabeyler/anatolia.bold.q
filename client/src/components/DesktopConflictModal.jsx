@@ -8,7 +8,7 @@ const POLL_MS = 15000;
 function VersionCard({ icon: Icon, label, payload, deleted, accent }) {
   return (
     <div className={`flex-1 border rounded-lg p-3 ${accent}`}>
-      <div className="flex items-center gap-1.5 mb-2 text-[10px] tracking-widest uppercase opacity-80">
+      <div className="flex items-center gap-1.5 mb-2 text-xs tracking-widest uppercase opacity-80">
         <Icon className="w-3.5 h-3.5" /> {label}
       </div>
       {deleted ? (

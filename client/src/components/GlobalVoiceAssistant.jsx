@@ -302,7 +302,7 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
               ? 'btn-emergency emergency-pulse text-white border-red-300'
               : 'btn-emergency text-white/85 border-red-400/70 opacity-90 hover:opacity-100'
           }`}>
-          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${on ? 'bg-white/20 text-white' : 'bg-black/25 text-white'}`}>Q</span>
+          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${on ? 'bg-white/20 text-white' : 'bg-black/25 text-white'}`}>Q</span>
           {on
             ? (status === S.THINKING
                 ? <Loader2 className="w-3 h-3 animate-spin" />

@@ -32,7 +32,7 @@ export default function SplashScreen() {
           >
             ANATOLIA-Q
           </div>
-          <div className="text-gold text-[10px] tracking-[0.3em] uppercase">
+          <div className="text-gold text-xs tracking-[0.3em] uppercase">
             BOLD TECHNOLOGIES
           </div>
         </motion.div>

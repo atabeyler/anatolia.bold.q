@@ -26,7 +26,7 @@ export default function DesktopSyncBadge() {
   const { text, icon: Icon, className } = LABELS[state] || LABELS.local;
   return (
     <span
-      className={`btn-depth header-control h-[28px] sm:h-[30px] px-2.5 py-0 rounded text-[10px] tracking-widest font-display flex items-center gap-1.5 shrink-0 border ${className}`}
+      className={`btn-depth header-control h-[28px] sm:h-[30px] px-2.5 py-0 rounded text-xs tracking-widest font-display flex items-center gap-1.5 shrink-0 border ${className}`}
       title="ANATOLIA-Q çalışma modu"
     >
       <Icon className="w-3.5 h-3.5" />

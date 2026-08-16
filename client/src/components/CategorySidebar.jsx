@@ -67,7 +67,7 @@ export default function CategorySidebar({ activeCategory, onSelect, onHome, coll
           <span className={`${labelClass} tracking-widest text-xs uppercase`}>{t('newAnalysis')}</span>
         </button>
 
-        <div className={`${blockLabelClass} aq-sidebar-heading text-[10px] text-cyan-200/80 tracking-[0.3em] uppercase mb-3 px-3`}>
+        <div className={`${blockLabelClass} aq-sidebar-heading text-xs text-cyan-200/80 tracking-[0.3em] uppercase mb-3 px-3`}>
           {t('analysisCategories')}
         </div>
 
@@ -90,9 +90,9 @@ export default function CategorySidebar({ activeCategory, onSelect, onHome, coll
                 <div className={`${blockLabelClass} min-w-0 flex-1`}>
                   <div className="flex items-center gap-2">
                     <span className="aq-category-title font-display tracking-wider text-xs uppercase">{t(cat.nameKey)}</span>
-                    <span className="aq-category-status text-[9px] px-1.5 py-0.5 rounded-full border border-cyan-300/35 text-cyan-100/85">{status}</span>
+                    <span className="aq-category-status text-xs px-1.5 py-0.5 rounded-full border border-cyan-300/35 text-cyan-100/85">{status}</span>
                   </div>
-                  <div className="aq-category-desc text-[10px] text-cyan-200/65 mt-0.5 truncate">{desc}</div>
+                  <div className="aq-category-desc text-xs text-cyan-200/65 mt-0.5 truncate">{desc}</div>
                 </div>
                 {isActive && <div className={`ml-auto w-1.5 h-1.5 rounded-full bg-gold animate-pulse ${collapsed ? 'hidden' : 'block'}`} />}
               </button>

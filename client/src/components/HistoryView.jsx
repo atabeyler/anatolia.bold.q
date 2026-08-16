@@ -69,7 +69,7 @@ function AuditPanel({ record, loading }) {
           </div>
         ))}
       </div>
-      <div className="mt-3 text-[10px] leading-relaxed text-gold/40">
+      <div className="mt-3 text-xs leading-relaxed text-gold/40">
         This panel records how the analysis was produced. It is an audit trail, not a user-facing comparison between AI, classical and quantum engines.
       </div>
     </div>
@@ -210,10 +210,10 @@ export default function HistoryView({ showTitle = true }) {
             <motion.div key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-navy-light/70 border border-gold/20 hover:border-gold/50 rounded-lg p-4 transition">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <div className="text-[10px] tracking-[0.3em] uppercase text-gold/50 mb-1">{item.category} · {new Date(item.created_at).toLocaleString(t('locale'))}</div>
+                  <div className="text-xs tracking-[0.3em] uppercase text-gold/50 mb-1">{item.category} · {new Date(item.created_at).toLocaleString(t('locale'))}</div>
                   <h3 className="text-gold font-display tracking-wide leading-tight">{item.title}</h3>
                   <p className="text-xs text-gold/60 mt-2 line-clamp-2">{item.preview?.replace(/[#*]/g, '')}...</p>
-                  <div className="text-[10px] text-gold/40 mt-2">{item.ai_provider}</div>
+                  <div className="text-xs text-gold/40 mt-2">{item.ai_provider}</div>
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
@@ -231,7 +231,7 @@ export default function HistoryView({ showTitle = true }) {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 bg-black/80 backdrop-blur p-4 flex items-center justify-center" onClick={closeSelected}>
           <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} onClick={(e) => e.stopPropagation()} className="bg-navy-light gold-glow-strong rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-4 border-b border-gold/30 flex items-center justify-between">
-              <div><div className="text-[10px] uppercase tracking-widest text-gold/50">{selected.category}</div><h3 className="text-gold font-display tracking-wide">{selected.title}</h3></div>
+              <div><div className="text-xs uppercase tracking-widest text-gold/50">{selected.category}</div><h3 className="text-gold font-display tracking-wide">{selected.title}</h3></div>
               <button onClick={closeSelected} className="text-gold/60 hover:text-gold text-2xl" aria-label={t('close') || 'Kapat'}>✕</button>
             </div>
             <div className="flex-1 overflow-auto p-6 report-content">

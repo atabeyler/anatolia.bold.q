@@ -152,7 +152,7 @@ export function RadarModal({ onClose, lang }) {
 
             {userEntries.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-[10px] font-mono text-cyan-400/30 text-center">
+                <p className="text-xs font-mono text-cyan-400/30 text-center">
                   {translate(lang, 'noUserLocationData')}
                 </p>
               </div>
@@ -161,12 +161,12 @@ export function RadarModal({ onClose, lang }) {
 
           {/* Right panel */}
           <div className="flex flex-col sm:w-52 border-t sm:border-t-0 sm:border-l border-cyan-500/20 overflow-hidden flex-1 min-h-0">
-            <div className="px-3 py-2 border-b border-cyan-500/15 text-[9px] font-mono text-cyan-400/50 tracking-widest uppercase flex-shrink-0">
+            <div className="px-3 py-2 border-b border-cyan-500/15 text-xs font-mono text-cyan-400/50 tracking-widest uppercase flex-shrink-0">
               {translate(lang, 'personnelLabel')} ({userEntries.length})
             </div>
             <div className="overflow-y-auto flex-1">
               {userEntries.length === 0 ? (
-                <p className="text-[10px] text-cyan-400/30 font-mono p-3">
+                <p className="text-xs text-cyan-400/30 font-mono p-3">
                   {translate(lang, 'noActiveUsers')}
                 </p>
               ) : userEntries.map(([nick, loc]) => (
@@ -175,8 +175,8 @@ export function RadarModal({ onClose, lang }) {
                   className={`w-full text-left px-3 py-2.5 border-b border-cyan-500/10 flex items-center gap-2 transition ${selected?.nick === nick ? 'bg-gold/10' : 'hover:bg-cyan-400/5'}`}>
                   <User className="w-3 h-3 text-emerald-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-mono text-gold tracking-wider">{nick}</div>
-                    <div className="text-[9px] text-cyan-400/50 font-mono">{loc.lat.toFixed(2)}°, {loc.lng.toFixed(2)}°</div>
+                    <div className="text-xs font-mono text-gold tracking-wider">{nick}</div>
+                    <div className="text-xs text-cyan-400/50 font-mono">{loc.lat.toFixed(2)}°, {loc.lng.toFixed(2)}°</div>
                   </div>
                   <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }}
                     className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
@@ -191,16 +191,16 @@ export function RadarModal({ onClose, lang }) {
                   <div className="p-3 bg-gold/5">
                     <div className="flex items-center gap-1.5 mb-2">
                       <MapPin className="w-3 h-3 text-gold" />
-                      <span className="text-[10px] font-mono text-gold tracking-widest">{selected.nick}</span>
+                      <span className="text-xs font-mono text-gold tracking-widest">{selected.nick}</span>
                     </div>
-                    <div className="space-y-1 text-[9px] font-mono text-cyan-300/70">
+                    <div className="space-y-1 text-xs font-mono text-cyan-300/70">
                       <div>{translate(lang, 'latLabel')}: {formatCoord(selected.lat, 'N', 'S')}</div>
                       <div>{translate(lang, 'lngLabel')}: {formatCoord(selected.lng, 'E', 'W')}</div>
                       <div className="text-cyan-400/40">{translate(lang, 'updatedLabel')}: {new Date(selected.updatedAt).toLocaleTimeString()}</div>
                     </div>
                     <a href={`https://maps.google.com/?q=${selected.lat},${selected.lng}`}
                       target="_blank" rel="noreferrer"
-                      className="mt-2 block text-center text-[9px] font-mono text-cyan-400 hover:text-cyan-200 underline">
+                      className="mt-2 block text-center text-xs font-mono text-cyan-400 hover:text-cyan-200 underline">
                       {translate(lang, 'openInMaps')}
                     </a>
                   </div>

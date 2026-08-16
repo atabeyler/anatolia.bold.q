@@ -296,7 +296,7 @@ export default function UserManagementModal({ onClose }) {
               Admin yetkisi
             </label>
           </div>
-          <p className="text-[10px] text-gold/40 mt-2 leading-relaxed">
+          <p className="text-xs text-gold/40 mt-2 leading-relaxed">
             E-posta girilirse, bu kullanıcı çevrimdışıyken de acil durum bildirimleri, mesajlar ve
             görüntülü toplantı başlatma uyarıları e-posta ile iletilir.
           </p>
@@ -321,12 +321,12 @@ export default function UserManagementModal({ onClose }) {
                   <div className="text-sm text-cyan-100 flex items-center gap-2 flex-wrap">
                     <span className="font-mono">{u.user_code}</span>
                     {u.nickname && <span className="text-cyan-100/50">· {u.nickname}</span>}
-                    {u.is_admin && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">ADMIN</span>}
-                    {u.blocked && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-400/30">ENGELLİ</span>}
+                    {u.is_admin && <span className="text-xs px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">ADMIN</span>}
+                    {u.blocked && <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-400/30">ENGELLİ</span>}
                   </div>
                   {u.email
-                    ? <div className="text-[10px] text-cyan-100/40 font-mono mt-0.5">{u.email}</div>
-                    : <div className="text-[10px] text-amber-400/60 mt-0.5">E-posta yok — bildirimler iletilemez</div>}
+                    ? <div className="text-xs text-cyan-100/40 font-mono mt-0.5">{u.email}</div>
+                    : <div className="text-xs text-amber-400/60 mt-0.5">E-posta yok — bildirimler iletilemez</div>}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button onClick={() => setEditingCode(u.user_code)} disabled={busyCode === u.user_code}
