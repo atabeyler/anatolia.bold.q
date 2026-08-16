@@ -1,23 +1,8 @@
-/**
- * Pluggable transaction data-source layer for BDDK/BTK fraud analysis.
- *
- * The fraud-detection pipeline (fraudDetection.js -> quantum/fraud_detection.py)
- * only cares about receiving an array of
- *   { id, amount, hour, frequency, newCounterparty, crossBorder }
- * records — it has no opinion on where they came from. Today the only
- * implemented source is a user-uploaded CSV/XLSX file (parseTransactionFile
- * below). A future live source — a core-banking API, a BDDK RAAS export
- * feed, a BTK CDR (call-detail-record) export — only needs to produce the
- * same shape (return { transactions, warnings }) to plug into the exact
- * same downstream pipeline unchanged.
- */
+/** Pluggable transaction data-source layer for BDDK/BTK fraud analysis. */
 import { normalizeHeader, findColumn, toBool01, toNumber, extractHour, readSheetRows } from './tableParsing.js';
+import { enrichBehavioralFeatures } from './behavioralFeatures.js';
 
-// Mirrors MAX_TRANSACTIONS in fraudDetection.js -- upload cap has to be at
-// least as large or a bigger file just gets truncated a step earlier than
-// the fraud-detection layer's own cap.
 const MAX_ROWS = 3000;
-
 const COLUMN_ALIASES = {
   amount: ['tutar', 'amount', 'miktar', 'tutar (tl)', 'işlem tutarı', 'islem tutari'],
   hour: ['saat', 'hour', 'saat (0-23)'],
@@ -26,28 +11,16 @@ const COLUMN_ALIASES = {
   newCounterparty: ['yeni taraf', 'yeni taraf (0/1)', 'new counterparty', 'yeni_taraf'],
   crossBorder: ['sınır ötesi', 'sinir otesi', 'sınır ötesi (0/1)', 'cross border', 'yurtdışı', 'yurtdisi'],
   id: ['işlem id', 'islem id', 'id', 'txn', 'transaction id'],
+  account: ['hesap', 'account', 'account id', 'account_id', 'from account', 'gönderen hesap', 'gonderen hesap'],
+  counterparty: ['karşı hesap', 'karsi hesap', 'counterparty', 'counterparty id', 'to account', 'alıcı hesap', 'alici hesap'],
 };
+function findTxCol(headers, field) { return findColumn(headers, COLUMN_ALIASES[field]); }
 
-function findTxCol(headers, field) {
-  return findColumn(headers, COLUMN_ALIASES[field]);
-}
-
-/**
- * @param {Buffer} buffer
- * @param {string} filename
- * @returns {{ transactions: Array, warnings: string[] } | null}
- *          null when the file isn't a recognizable transaction table at all.
- */
 export function parseTransactionFile(buffer, filename) {
   const name = (filename || '').toLowerCase();
   if (!/\.(csv|xlsx|xls)$/.test(name)) return null;
-
   let rows;
-  try {
-    rows = readSheetRows(buffer);
-  } catch {
-    return null;
-  }
+  try { rows = readSheetRows(buffer); } catch { return null; }
   if (!rows.length) return null;
 
   const headers = rows[0].map(normalizeHeader);
@@ -62,15 +35,15 @@ export function parseTransactionFile(buffer, filename) {
   const freqCol = findTxCol(headers, 'frequency');
   const newCounterpartyCol = findTxCol(headers, 'newCounterparty');
   const crossBorderCol = findTxCol(headers, 'crossBorder');
-
-  // Require at least the amount column plus one of hour/timestamp to
-  // consider this a genuine transaction table rather than an unrelated CSV.
+  const accountCol = findTxCol(headers, 'account');
+  const counterpartyCol = findTxCol(headers, 'counterparty');
   if (amountCol === -1 || (hourCol === -1 && timestampCol === -1)) return null;
 
   const warnings = [];
   if (freqCol === -1) warnings.push('Sıklık sütunu bulunamadı — varsayılan 1 kullanıldı.');
-  if (newCounterpartyCol === -1) warnings.push('Yeni Taraf sütunu bulunamadı — varsayılan 0 kullanıldı.');
+  if (newCounterpartyCol === -1 && counterpartyCol === -1) warnings.push('Yeni Taraf/karşı hesap bilgisi bulunamadı — varsayılan 0 kullanıldı.');
   if (crossBorderCol === -1) warnings.push('Sınır Ötesi sütunu bulunamadı — varsayılan 0 kullanıldı.');
+  if (accountCol === -1 || timestampCol === -1) warnings.push('Hesap + zaman bilgisi eksik — davranışsal zaman-penceresi özellikleri hesaplanamadı; mevcut özelliklerle devam edildi.');
   if (allDataRows.length > MAX_ROWS) warnings.push(`Dosyada ${allDataRows.length} kayıt var, ilk ${MAX_ROWS} kayıt işlendi.`);
 
   const transactions = dataRows.map((row, i) => ({
@@ -80,7 +53,10 @@ export function parseTransactionFile(buffer, filename) {
     frequency: freqCol !== -1 ? toNumber(row[freqCol]) : 1,
     newCounterparty: newCounterpartyCol !== -1 ? toBool01(row[newCounterpartyCol]) : 0,
     crossBorder: crossBorderCol !== -1 ? toBool01(row[crossBorderCol]) : 0,
+    ...(timestampCol !== -1 && row[timestampCol] ? { timestamp: String(row[timestampCol]) } : {}),
+    ...(accountCol !== -1 && row[accountCol] ? { account: String(row[accountCol]) } : {}),
+    ...(counterpartyCol !== -1 && row[counterpartyCol] ? { counterparty: String(row[counterpartyCol]) } : {}),
   }));
 
-  return { transactions, warnings };
+  return { transactions: enrichBehavioralFeatures(transactions), warnings };
 }
