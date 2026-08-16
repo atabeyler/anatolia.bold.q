@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QuantumLogo from './QuantumLogo.jsx';
 
-const DISPLAY_MS = 1800;
+const DISPLAY_MS = 2500;
 
 // Shown briefly when the app is launched as an installed PWA (home screen /
 // desktop icon) -- the icon itself can't animate (OS-level icons are static
@@ -31,6 +31,9 @@ export default function SplashScreen() {
             style={{ fontFamily: "'Cinzel', 'Times New Roman', serif" }}
           >
             ANATOLIA-Q
+          </div>
+          <div className="text-gold text-[10px] tracking-[0.3em] uppercase">
+            BOLD TECHNOLOGIES
           </div>
         </motion.div>
       )}

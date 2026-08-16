@@ -7,16 +7,17 @@ afterEach(() => {
 });
 
 describe('SplashScreen', () => {
-  it('renders the ANATOLIA-Q brand text', () => {
+  it('renders the ANATOLIA-Q brand text and the Bold Technologies attribution', () => {
     render(<SplashScreen />);
     expect(screen.getByText('ANATOLIA-Q')).toBeInTheDocument();
+    expect(screen.getByText('BOLD TECHNOLOGIES')).toBeInTheDocument();
   });
 
   it('hides itself after the display duration elapses', async () => {
     vi.useFakeTimers();
     render(<SplashScreen />);
     expect(screen.getByText('ANATOLIA-Q')).toBeInTheDocument();
-    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => { vi.advanceTimersByTime(2500); });
     vi.useRealTimers();
     await waitFor(() => expect(screen.queryByText('ANATOLIA-Q')).not.toBeInTheDocument());
   });
