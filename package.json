@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.174",
+  "version": "2.1.175",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
@@ -26,93 +26,21 @@
     "release:linux": "npm run build && electron-builder --linux --publish always",
     "prepare": "husky"
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
+  "engines": { "node": ">=20.0.0" },
   "build": {
     "appId": "com.boldkimya.anatoliaq",
     "productName": "ANATOLIA-Q",
     "copyright": "Copyright © BOLD Kimya",
-    "directories": {
-      "output": "release",
-      "buildResources": "desktop/build"
-    },
-    "files": [
-      "desktop/**/*",
-      "client/dist/**/*",
-      "!desktop/**/*.test.js",
-      "!desktop/**/*.md"
-    ],
+    "directories": { "output": "release", "buildResources": "desktop/build" },
+    "files": ["desktop/**/*", "client/dist/**/*", "!desktop/**/*.test.js", "!desktop/**/*.md"],
     "extraResources": [],
-    "asarUnpack": [
-      "**/node_modules/better-sqlite3/**/*"
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "desktop/build/icon.ico",
-      "artifactName": "ANATOLIA-Q-Setup-${version}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "ANATOLIA-Q"
-    },
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "icon": "desktop/build/icon-mac.png",
-      "category": "public.app-category.business",
-      "artifactName": "ANATOLIA-Q-${version}-${arch}.${ext}",
-      "identity": null
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "desktop/build/icon-mac.png",
-      "category": "Office",
-      "artifactName": "ANATOLIA-Q-${version}.${ext}"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "atabeyler",
-      "repo": "anatolia.bold.q",
-      "releaseType": "release"
-    }
+    "asarUnpack": ["**/node_modules/better-sqlite3/**/*"],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "desktop/build/icon.ico", "artifactName": "ANATOLIA-Q-Setup-${version}.${ext}" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "ANATOLIA-Q" },
+    "mac": { "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }], "icon": "desktop/build/icon-mac.png", "category": "public.app-category.business", "artifactName": "ANATOLIA-Q-${version}-${arch}.${ext}", "identity": null },
+    "linux": { "target": [{ "target": "AppImage", "arch": ["x64"] }], "icon": "desktop/build/icon-mac.png", "category": "Office", "artifactName": "ANATOLIA-Q-${version}.${ext}" },
+    "publish": { "provider": "github", "owner": "atabeyler", "repo": "anatolia.bold.q", "releaseType": "release" }
   },
-  "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
-    "concurrently": "^9.2.0",
-    "cross-env": "^7.0.3",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
-    "husky": "^9.1.7",
-    "vitest": "^2.1.9",
-    "wait-on": "^8.0.4"
-  },
-  "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.10.0"
-  }
+  "devDependencies": { "@electron/rebuild": "^3.7.2", "concurrently": "^9.2.0", "cross-env": "^7.0.3", "electron": "^33.4.11", "electron-builder": "^25.1.8", "husky": "^9.1.7", "vitest": "^2.1.9", "wait-on": "^8.0.4" },
+  "dependencies": { "bcryptjs": "^2.4.3", "better-sqlite3": "^11.10.0" }
 }
