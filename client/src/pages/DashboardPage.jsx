@@ -439,7 +439,7 @@ export default function DashboardPage({ user, onLogout }) {
           <QuantumLogo size="sm" />
           <div className="min-w-0">
             <h1 className="font-display text-gold text-base sm:text-lg tracking-[0.24em] sm:tracking-[0.3em] whitespace-nowrap overflow-hidden text-ellipsis">{t('appName')}</h1>
-            <p className="text-xs sm:text-sm text-gold/60 tracking-[0.16em] sm:tracking-widest uppercase whitespace-nowrap overflow-hidden text-ellipsis">{t('appSubtitle')}</p>
+            <p className="text-[8px] sm:text-[10px] text-gold/60 tracking-[0.16em] sm:tracking-widest uppercase whitespace-nowrap overflow-hidden text-ellipsis">{t('appSubtitle')}</p>
           </div>
           <span className="text-xs sm:text-sm font-serif text-cyan-200 hidden sm:inline md:hidden max-w-[130px] lg:max-w-[170px] truncate">{user.isAdmin ? 'BOLD' : (user.nickname || user.userCode || 'BOLD')}</span>
         </div>
