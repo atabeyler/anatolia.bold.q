@@ -206,11 +206,11 @@ function BootSequence({ onDone, lang }) {
   }, []);
 
   return (
-    <div className="font-mono text-[10px] sm:text-xs text-left space-y-1 mb-6 px-2">
+    <div className="font-mono text-xs sm:text-sm text-left space-y-1 mb-6 px-2">
       {lines.map((line, i) => (
         <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-1 text-cyan-300/90">
-          <span className="text-gold/40">&gt;</span>
+          <span className="text-gold/70">&gt;</span>
           <span>{line.text}</span>
           <span className="text-emerald-400/80 tracking-widest">{line.result}</span>
         </motion.div>
@@ -231,22 +231,22 @@ function StatusBar() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
       className="border-t border-cyan-500/20 bg-[#010812]/80 backdrop-blur px-3 sm:px-6 py-1.5 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-3 sm:gap-5 text-[9px] sm:text-[10px] font-mono">
-        <span className="flex items-center gap-1 text-emerald-400/70">
+      <div className="flex items-center gap-3 sm:gap-5 text-xs sm:text-sm font-mono">
+        <span className="flex items-center gap-1 text-emerald-400/80">
           <motion.span className="w-1.5 h-1.5 rounded-full bg-emerald-400"
             animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
           {t('statusSystemActive')}
         </span>
-        <span className="hidden sm:flex items-center gap-1 text-cyan-300/80">
+        <span className="hidden sm:flex items-center gap-1 text-cyan-300/90">
           <Wifi className="w-3 h-3" /> {t('statusSecureChannel')}
         </span>
-        <span className="hidden sm:flex items-center gap-1 text-cyan-300/80">
+        <span className="hidden sm:flex items-center gap-1 text-cyan-300/90">
           <Cpu className="w-3 h-3" /> {t('statusQuantumUnitOk')}
         </span>
       </div>
-      <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-mono text-gold/30">
+      <div className="flex items-center gap-2 text-xs sm:text-sm font-mono text-gold/60">
         <span className="hidden sm:inline">ANATOLIA-Q v{__APP_VERSION__}</span>
-        <span className="text-cyan-300/70">{time.toLocaleTimeString(localeFor(lang))}</span>
+        <span className="text-cyan-300/80">{time.toLocaleTimeString(localeFor(lang))}</span>
       </div>
     </motion.div>
   );
@@ -435,11 +435,11 @@ export default function LoginPage({ onLogin }) {
           <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-gold/60" />
 
           {/* Top strip */}
-          <div className="flex items-center justify-between mb-5 text-[9px] font-mono tracking-widest">
-            <span className="text-cyan-300/70 uppercase">{t('projectCode')}: QTR-200120401018</span>
+          <div className="flex items-center justify-between mb-5 text-xs font-mono tracking-widest">
+            <span className="text-cyan-300/85 uppercase">{t('projectCode')}: QTR-200120401018</span>
             <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.8, repeat: Infinity }}
-              className="text-emerald-400/60 uppercase">● {t('secureLabel')}</motion.span>
-            <span className="text-cyan-300/70 uppercase">{t('classifiedShort')}</span>
+              className="text-emerald-400/80 uppercase">● {t('secureLabel')}</motion.span>
+            <span className="text-cyan-300/85 uppercase">{t('classifiedShort')}</span>
           </div>
 
           {/* Logo */}
@@ -452,7 +452,7 @@ export default function LoginPage({ onLogin }) {
               ANATOLIA-Q
             </h1>
             <div className="h-px w-24 bg-gradient-to-r from-transparent via-gold/50 to-transparent mx-auto my-2" />
-            <p className="text-[9px] sm:text-[10px] text-gold/40 tracking-[0.25em] uppercase">
+            <p className="text-xs sm:text-sm text-gold/70 tracking-[0.25em] uppercase">
               {t('appSubtitle')}
             </p>
           </motion.div>
@@ -469,12 +469,12 @@ export default function LoginPage({ onLogin }) {
                   transition={{ duration: 0.4, delay: 0.9 }}
                   className="space-y-4">
 
-                  <div className="text-[10px] font-mono text-cyan-300/70 tracking-widest uppercase mb-3">
+                  <div className="text-xs font-mono text-cyan-300/85 tracking-widest uppercase mb-3">
                     &gt; {t('identityVerificationRequired')}
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-[10px] text-gold/60 tracking-widest uppercase font-mono">{t('userCode')}</label>
+                    <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('userCode')}</label>
                     <div className="relative group">
                       <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
                       <input type="text" value={userCode} onChange={e => setUserCode(e.target.value)}
@@ -484,7 +484,7 @@ export default function LoginPage({ onLogin }) {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-[10px] text-gold/60 tracking-widest uppercase font-mono">{t('password')}</label>
+                    <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('password')}</label>
                     <div className="relative group">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
                       <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
@@ -495,7 +495,7 @@ export default function LoginPage({ onLogin }) {
                   <AnimatePresence>
                     {error && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                        className="text-crimson text-xs bg-crimson/10 border border-crimson/30 rounded-sm p-2.5 font-mono">
+                        className="text-crimson text-sm bg-crimson/10 border border-crimson/30 rounded-sm p-2.5 font-mono">
                         ⚠ {error}
                       </motion.div>
                     )}
@@ -534,10 +534,10 @@ export default function LoginPage({ onLogin }) {
                   </div>
                 </div>
                 <p className="font-display text-base text-gold tracking-widest uppercase mb-2">{t('awaitingApproval')}</p>
-                <p className="text-[10px] font-mono text-cyan-300/70 tracking-wider mb-5">
+                <p className="text-xs font-mono text-cyan-300/85 tracking-wider mb-5">
                   &gt; {t('awaitingApprovalStatus')}
                 </p>
-                <button onClick={reset} className="text-xs text-crimson/60 hover:text-crimson font-mono underline">{t('cancel')}</button>
+                <button onClick={reset} className="text-sm text-crimson/80 hover:text-crimson font-mono underline">{t('cancel')}</button>
               </motion.div>
             )}
 
@@ -559,7 +559,7 @@ export default function LoginPage({ onLogin }) {
                 <XCircle className="w-14 h-14 text-crimson mx-auto mb-4"
                   style={{ filter: 'drop-shadow(0 0 12px #c8102e)' }} />
                 <p className="font-display text-lg text-crimson tracking-widest mb-2">{t('expired')}</p>
-                <p className="text-xs text-gold/50 mb-5">{t('expiredNote')}</p>
+                <p className="text-sm text-gold/75 mb-5">{t('expiredNote')}</p>
                 <motion.button onClick={reset} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   className="px-6 py-2 rounded-sm text-sm font-display tracking-widest text-gold border border-gold/40 hover:bg-gold/10 transition">
                   {t('retry')}
@@ -569,9 +569,9 @@ export default function LoginPage({ onLogin }) {
           </AnimatePresence>
 
           {/* Bottom strip */}
-          <div className="mt-5 pt-4 border-t border-cyan-500/10 flex items-center justify-between text-[9px] font-mono text-gold/30 tracking-wider">
+          <div className="mt-5 pt-4 border-t border-cyan-500/10 flex items-center justify-between text-xs font-mono text-gold/60 tracking-wider">
             <span>ANATOLIA-Q v{__APP_VERSION__}</span>
-            <span className="text-cyan-300/60">{t('classifiedShort')}</span>
+            <span className="text-cyan-300/80">{t('classifiedShort')}</span>
           </div>
         </div>
 
