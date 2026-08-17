@@ -16,7 +16,7 @@ const scorers = {
   elliptic13DProxy: createElliptic13QScorer(split.train.samples),
   supervisedBalancedLinear: createBalancedLinearScorer(split.train),
 };
-const output = { dataDir, boundaries: split.boundaries, counts: {}, models: {}, ensembles: {}, cascades: {} };
+const output = { dataDir, boundaries: split.boundaries, counts: {}, models: {}, cascades: {} };
 const raw = { validation: {}, test: {} };
 const validationLabels = split.validation.samples.map((s) => split.validation.labels.get(s.id) || 'unknown');
 const testLabels = split.test.samples.map((s) => split.test.labels.get(s.id) || 'unknown');
@@ -34,45 +34,47 @@ for (const [name, scorer] of Object.entries(scorers)) {
   };
 }
 
-let bestEnsemble = null;
-for (let i = 0; i <= 20; i++) {
-  const supervisedWeight = i / 20;
-  const classicalWeight = 1 - supervisedWeight;
-  const scores = raw.validation.classical.map((s, idx) => classicalWeight * s + supervisedWeight * raw.validation.supervisedBalancedLinear[idx]);
-  const selected = selectConstrainedThreshold(validationLabels, scores, { minRecall: 1 });
-  if (!bestEnsemble || selected.metrics.precision > bestEnsemble.selected.metrics.precision) bestEnsemble = { classicalWeight, supervisedWeight, selected };
-}
-const ensembleTestRaw = raw.test.classical.map((s, idx) => bestEnsemble.classicalWeight * s + bestEnsemble.supervisedWeight * raw.test.supervisedBalancedLinear[idx]);
-output.ensembles.classicalSupervisedZeroFn = {
-  selectionBasis: 'validation-only', classicalWeight: bestEnsemble.classicalWeight, supervisedWeight: bestEnsemble.supervisedWeight,
-  orientation: bestEnsemble.selected.orientation, selectedThreshold: bestEnsemble.selected.threshold, validation: bestEnsemble.selected.metrics,
-  test: binaryMetrics(testLabels, applyOrientation(ensembleTestRaw, bestEnsemble.selected.orientation), bestEnsemble.selected.threshold),
-};
-
-// Cascade: stage 1 is the classical validation-selected zero-FN safety net.
-// Stage 2 may remove a stage-1 alert only when supervised evidence is below a
-// validation-selected gate. We choose the most aggressive gate that STILL has
-// zero validation FN. Test labels are not used for gate selection.
 const cSel = selectConstrainedThreshold(validationLabels, raw.validation.classical, { minRecall: 1 });
 const cVal = applyOrientation(raw.validation.classical, cSel.orientation);
 const sOrient = selectOrientationAndThreshold(validationLabels, raw.validation.supervisedBalancedLinear, { objective: 'f1' }).orientation;
 const sVal = applyOrientation(raw.validation.supervisedBalancedLinear, sOrient);
-const candidateGates = [...new Set([0, 1, ...sVal])].sort((a, b) => a - b);
-let bestGate = null;
+
+// Rolling temporal robustness: a gate is eligible only if it preserves zero FN
+// independently in EVERY validation time step (30..39), not merely in aggregate.
+// Among eligible gates, minimize aggregate validation FP. This explicitly guards
+// against temporal drift while keeping test labels completely blind.
+const validationTimes = split.validation.samples.map((s) => s.timeStep);
+const candidateGates = [...new Set([0, ...sVal])].sort((a, b) => a - b);
+let bestRollingGate = null;
 for (const gate of candidateGates) {
-  const cascadeScores = cVal.map((c, i) => (c >= cSel.threshold && sVal[i] >= gate) ? 1 : 0);
-  const m = binaryMetrics(validationLabels, cascadeScores, 0.5);
-  if (m.fn !== 0) continue;
-  if (!bestGate || m.fp < bestGate.metrics.fp || (m.fp === bestGate.metrics.fp && m.precision > bestGate.metrics.precision)) bestGate = { gate, metrics: m };
+  const scores = cVal.map((c, i) => (c >= cSel.threshold && sVal[i] >= gate) ? 1 : 0);
+  let robust = true;
+  const byTime = {};
+  for (let t = split.boundaries.trainEnd + 1; t <= split.boundaries.validationEnd; t++) {
+    const labels = [];
+    const timeScores = [];
+    for (let i = 0; i < validationTimes.length; i++) {
+      if (validationTimes[i] !== t) continue;
+      labels.push(validationLabels[i]);
+      timeScores.push(scores[i]);
+    }
+    const m = binaryMetrics(labels, timeScores, 0.5);
+    byTime[t] = m;
+    if (m.fn !== 0) { robust = false; break; }
+  }
+  if (!robust) continue;
+  const aggregate = binaryMetrics(validationLabels, scores, 0.5);
+  if (!bestRollingGate || aggregate.fp < bestRollingGate.aggregate.fp) bestRollingGate = { gate, aggregate, byTime };
 }
-if (bestGate) {
+
+if (bestRollingGate) {
   const cTest = applyOrientation(raw.test.classical, cSel.orientation);
   const sTest = applyOrientation(raw.test.supervisedBalancedLinear, sOrient);
-  const cascadeTestScores = cTest.map((c, i) => (c >= cSel.threshold && sTest[i] >= bestGate.gate) ? 1 : 0);
-  output.cascades.classicalSafetySupervisedGate = {
-    selectionBasis: 'validation-only', classicalThreshold: cSel.threshold, classicalOrientation: cSel.orientation,
-    supervisedOrientation: sOrient, supervisedGate: bestGate.gate, validation: bestGate.metrics,
-    test: binaryMetrics(testLabels, cascadeTestScores, 0.5),
+  const testScores = cTest.map((c, i) => (c >= cSel.threshold && sTest[i] >= bestRollingGate.gate) ? 1 : 0);
+  output.cascades.temporalRollingZeroFnGate = {
+    selectionBasis: 'validation-time-step-zero-FN', classicalThreshold: cSel.threshold, classicalOrientation: cSel.orientation,
+    supervisedOrientation: sOrient, supervisedGate: bestRollingGate.gate, validation: bestRollingGate.aggregate,
+    validationByTimeStep: bestRollingGate.byTime, test: binaryMetrics(testLabels, testScores, 0.5),
   };
 }
 
