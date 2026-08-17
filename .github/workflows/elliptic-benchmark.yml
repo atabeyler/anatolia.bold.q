@@ -34,7 +34,7 @@ jobs:
           done
           test -s data/elliptic/elliptic_txs_features.csv
           test -s data/elliptic/elliptic_txs_classes.csv
-      - name: Run blind temporal benchmark
+      - name: Run blind temporal benchmark (temporal rolling gate)
         working-directory: server
         run: |
           set -euo pipefail
