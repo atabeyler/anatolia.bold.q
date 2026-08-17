@@ -42,7 +42,68 @@ defaults:
     shell: bash
 
 jobs:
+  # electron-builder's GitHub publisher looks up the release for this tag
+  # and creates it if missing, but all three matrix jobs below start at
+  # once and each thinks the release doesn't exist yet -- whichever wins
+  # the create succeeds, the other two get a 422 "already_exists" and the
+  # whole platform build fails even though the artifact built fine. Doing
+  # the find-or-create once here, before the matrix, means every matrix
+  # job's own find-or-create is a pure lookup (the release already
+  # exists), so there's nothing left to race. draft MUST be false --
+  # electron-builder's lookup (and android-release.yml's, which shares
+  # this same tag) can't see a draft release by tag until it's published.
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find or create the shared GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TAG="v$(node -p "require('./package.json').version")"
+
+          find_release() {
+            HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/releases/tags/$TAG")
+            [ "$HTTP_CODE" = "200" ]
+          }
+
+          if find_release; then
+            echo "Release $TAG already exists -- nothing to do."
+            exit 0
+          fi
+
+          CREATE_HTTP_CODE=$(curl -s -o create.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases" \
+            -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":false,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")")
+
+          if [ "$CREATE_HTTP_CODE" = "201" ]; then
+            echo "Created release $TAG."
+            exit 0
+          fi
+
+          # A concurrent creator (android-release.yml, racing this same tag
+          # on the same push) may have won in between our lookup and our
+          # create. Poll for it instead of failing.
+          echo "Release creation returned $CREATE_HTTP_CODE (likely a concurrent create by android-release.yml) -- polling for the release instead."
+          for attempt in 1 2 3 4 5; do
+            sleep 3
+            find_release && exit 0
+          done
+
+          echo "::error::Could not find or create a release for tag $TAG"
+          cat create.json 2>/dev/null || true
+          exit 1
+
   build-and-publish:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
