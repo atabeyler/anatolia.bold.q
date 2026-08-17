@@ -45,7 +45,7 @@ export function mergeFraudResults(fraudResult) {
   const prefilterNote = fraudResult.prefiltered
     ? `\nKlasik ön-eleme ${totalBeforePrefilter} kayıt arasından en riskli görünen ${fraudResult.transactionCount} kaydı quantum kernel için seçti.\n`
     : '';
-  return `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n${fraudResult.transactionCount} işlem, **${fraudResult.qubits}-kübitlik** davranışsal feature-map ile değerlendirildi. K=${fraudResult.thresholdK ?? 1.07}.\n\n**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**${prefilterNote}\n| İşlem ID | Tutar | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk | Durum |\n|---|---:|---:|---:|---|---|---:|---|\n${rows}\n\n${fraudResult.circuitDiagram || ''}\n${buildFraudHardwareSection(fraudResult.hardwareVerification)}\n${buildFraudClassicalBenchmarkSection(fraudResult.classicalBenchmark)}`;
+  return `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n${fraudResult.transactionCount} işlem, **${fraudResult.qubits}-kübitlik** davranışsal feature-map ile değerlendirildi. K=${fraudResult.thresholdK ?? 0.79}.\n\n**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**${prefilterNote}\n| İşlem ID | Tutar | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk | Durum |\n|---|---:|---:|---:|---|---|---:|---|\n${rows}\n\n${fraudResult.circuitDiagram || ''}\n${buildFraudHardwareSection(fraudResult.hardwareVerification)}\n${buildFraudClassicalBenchmarkSection(fraudResult.classicalBenchmark)}`;
 }
 
 export function buildFraudClassicalBenchmarkSection(b) {

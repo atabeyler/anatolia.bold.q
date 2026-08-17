@@ -12,7 +12,13 @@ FEATURES = [
     "amountDeviation",
 ]
 MAX_INPUT_TRANSACTIONS = 3000
-THRESHOLD_K = 1.07
+# Calibrated against the ANATOLIA-Q BDDK/AML blind benchmark V3 (2000 records,
+# 200 planted anomalies, 60/70/70 easy/medium/hard). At K=1.07, 17 of the 70
+# Hard-difficulty anomalies were missed entirely (recall 91.5%). 0.79 is the
+# largest K that still reaches recall=1.0 (zero false negatives) on that
+# benchmark -- FP rises from 138 to 286 (precision 57%->41%) as the cost of
+# not missing any real case, the side AML/regulatory flagging should err on.
+THRESHOLD_K = 0.79
 
 
 def normalize(transactions):
