@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.197",
+  "version": "2.1.190",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
@@ -113,6 +113,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.10.0"
+    "better-sqlite3": "^11.10.0",
+    "sql.js": "^1.14.2"
   }
 }

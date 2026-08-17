@@ -1,25 +1,56 @@
 import { buildAdjacency, graphFeatureVector, knownLabelMap, propagateIllicitRisk } from './ellipticGraph.js';
+import { createTemporalGraphContext, lookupSampleTime } from './ellipticGraphLoader.js';
 
 function sigmoid(x) { return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, x)))); }
 
+function resolveGraphContext(trainPart, graphInput, opts = {}) {
+  if (graphInput && typeof graphInput === 'object' && !Array.isArray(graphInput) && graphInput.adjacency) {
+    return graphInput;
+  }
+  const edges = Array.isArray(graphInput) ? graphInput : [];
+  const samples = opts.allSamples || trainPart.samples;
+  const temporalContext = createTemporalGraphContext(samples, edges);
+  return {
+    adjacency: buildAdjacency(edges),
+    ...temporalContext,
+  };
+}
+
 /**
- * Supervised voter fit purely on Elliptic transaction-graph topology --
- * degree, 1-hop/2-hop train-neighbor illicit ratios, and a multi-hop
- * personalized-PageRank-style risk diffusion seeded from TRAIN labels -- not
- * on any of the 166 raw node feature columns the other scorers already use.
- * This is meant to be a genuinely decorrelated information source, not
- * another linear recombination of the same inputs.
- *
- * Neighbor-label ratios and the diffusion field are computed from TRAIN-known
- * labels only, regardless of which split the queried node belongs to, so
- * validation/development/holdout ground truth never leaks into a node's own
- * score.
+ * Supervised voter fit purely on Elliptic transaction-graph topology.
+ * Neighbor-label ratios and diffusion fields are computed from TRAIN-known
+ * labels only, regardless of which split the queried node belongs to.
  */
-export function createGraphAwareScorer(trainPart, edges, opts = {}) {
-  const adjacency = buildAdjacency(edges);
+export function createGraphAwareScorer(trainPart, graphInput, opts = {}) {
+  const context = resolveGraphContext(trainPart, graphInput, opts);
   const trainLabelMap = knownLabelMap(trainPart);
-  const { field: riskField, prior: riskPrior } = propagateIllicitRisk(adjacency, trainLabelMap, opts.propagation);
-  const featureVector = (id) => [...graphFeatureVector(id, adjacency, trainLabelMap), riskField.has(id) ? riskField.get(id) : riskPrior];
+  const propagationOpts = opts.propagation || {};
+  const riskFieldCache = new Map();
+
+  const getRiskField = (cutoffTime) => {
+    const key = Number.isFinite(cutoffTime) ? cutoffTime : 'all';
+    if (!riskFieldCache.has(key)) {
+      const { field, prior } = propagateIllicitRisk(context.adjacency, trainLabelMap, {
+        ...propagationOpts,
+        timeById: context.timeById,
+        cutoffTime,
+      });
+      riskFieldCache.set(key, { field, prior });
+    }
+    return riskFieldCache.get(key);
+  };
+
+  const featureVector = (id) => {
+    const cutoffTime = lookupSampleTime(context, id);
+    const { field: riskField, prior: riskPrior } = getRiskField(cutoffTime);
+    return [
+      ...graphFeatureVector(id, context.adjacency, trainLabelMap, {
+        timeById: context.timeById,
+        cutoffTime,
+      }),
+      riskField.has(id) ? riskField.get(id) : riskPrior,
+    ];
+  };
 
   const rows = [];
   for (const sample of trainPart.samples) {

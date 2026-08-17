@@ -17,6 +17,10 @@ import { binaryMetrics, confusionMatrix, precisionRecallAuc } from './benchmarkM
     expect(m.fn).toBe(0);
     expect(m.recall).toBe(1);
     expect(m.precision).toBeCloseTo(2 / 3);
+    expect(m.specificity).toBeCloseTo(0.5);
+    expect(m.balancedAccuracy).toBeCloseTo(0.75);
+    expect(m.mcc).toBeCloseTo(1 / Math.sqrt(3));
+    expect(m.rocAuc).toBeCloseTo(0.75);
   });
 
   it('returns perfect PR-AUC for perfect ranking', () => {
