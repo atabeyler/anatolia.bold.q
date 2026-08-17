@@ -1,6 +1,7 @@
-import fs from 'node:fs/promises';
+import fs from 'node:fs';
+import readline from 'node:readline';
 import path from 'node:path';
-import { adaptEllipticRows } from './ellipticAdapter.js';
+import { normalizeEllipticLabel } from './ellipticAdapter.js';
 
 function parseCsvLine(line) {
   const out = []; let cell = ''; let quoted = false;
@@ -15,42 +16,63 @@ function parseCsvLine(line) {
   return out;
 }
 
-async function readCsv(filePath) {
-  const text = await fs.readFile(filePath, 'utf8');
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  if (!lines.length) return [];
-  const header = parseCsvLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const values = parseCsvLine(line);
-    return Object.fromEntries(header.map((key, i) => [key, values[i]]));
+/** Streams a CSV line-by-line (never buffers the whole file) so multi-hundred-MB
+ * exports like the official Elliptic features CSV don't exceed Node's per-string
+ * length ceiling (~512MB, buffer.constants.MAX_STRING_LENGTH). */
+async function forEachCsvLine(filePath, onLine) {
+  const rl = readline.createInterface({ input: fs.createReadStream(filePath, { encoding: 'utf8' }), crlfDelay: Infinity });
+  let index = 0;
+  for await (const line of rl) {
+    if (line.length) onLine(parseCsvLine(line), index++);
+  }
+}
+
+/** Headered CSV (e.g. elliptic_txs_classes.csv: "txId,class"). */
+async function readHeaderedCsv(filePath) {
+  const rows = [];
+  let header = null;
+  await forEachCsvLine(filePath, (values, i) => {
+    if (i === 0) { header = values; return; }
+    rows.push(Object.fromEntries(header.map((key, j) => [key, values[j]])));
   });
+  return rows;
+}
+
+/** The official elliptic_txs_features.csv ships with NO header row: every line
+ * (including the first) is txId, time_step, then 165 numeric features. Parses
+ * straight into a Float32Array per sample -- boxed JS number arrays for
+ * ~203k x 165 values plus the raw string rows they were built from was enough
+ * to blow an 8GB heap; typed arrays skip that intermediate copy entirely. */
+async function readFeatureSamples(filePath) {
+  const samples = [];
+  await forEachCsvLine(filePath, (values) => {
+    const features = new Float32Array(values.length - 2);
+    for (let i = 2; i < values.length; i++) {
+      const n = Number(values[i]);
+      features[i - 2] = Number.isFinite(n) ? n : 0;
+    }
+    samples.push({ id: values[0], source: 'elliptic', timeStep: Number(values[1]), features });
+  });
+  return samples;
 }
 
 export async function loadEllipticDataset(dataDir) {
   const featuresPath = path.join(dataDir, 'elliptic_txs_features.csv');
   const classesPath = path.join(dataDir, 'elliptic_txs_classes.csv');
-  const [featureObjects, classObjects] = await Promise.all([readCsv(featuresPath), readCsv(classesPath)]);
+  const [samples, classObjects] = await Promise.all([
+    readFeatureSamples(featuresPath),
+    readHeaderedCsv(classesPath),
+  ]);
 
-  // Official features CSV: txId, time_step, 165 remaining numeric features.
-  const featureRows = featureObjects.map((row) => {
-    const txId = row.txId ?? row.txid ?? Object.values(row)[0];
-    const entries = Object.entries(row).filter(([key]) => !['txId', 'txid'].includes(key));
-    const timeStepEntry = entries.find(([key]) => /time.?step/i.test(key)) || entries[0];
-    return {
-      txId,
-      timeStep: Number(timeStepEntry?.[1]),
-      ...Object.fromEntries(entries),
-    };
-  });
-  const classRows = classObjects.map((row) => ({
-    txId: row.txId ?? row.txid ?? Object.values(row)[0],
-    class: row.class ?? row.label ?? Object.values(row)[1],
-  }));
+  const labels = new Map(
+    classObjects.map((row) => [String(row.txId ?? row.txid), normalizeEllipticLabel(row.class ?? row.label)])
+  );
 
-  const adapted = adaptEllipticRows(featureRows, classRows);
-  const timeById = new Map(featureRows.map((row) => [String(row.txId), Number(row.timeStep)]));
-  adapted.samples = adapted.samples.map((sample) => ({ ...sample, timeStep: timeById.get(sample.id) }));
-  return adapted;
+  return {
+    samples,
+    labels,
+    knownSampleCount: samples.reduce((n, s) => n + (labels.get(s.id) !== 'unknown' ? 1 : 0), 0),
+  };
 }
 
 /** Chronological split: no future time step may enter reference/validation. */
