@@ -162,13 +162,21 @@ jobs:
             exit 1
           fi
 
-      # Builds only -- no --publish. electron-builder's own GitHub
+      # Builds only -- no publishing. electron-builder's own GitHub
       # publisher is what hit the 422 race documented above, so this
       # workflow uploads the built installer(s) itself instead (next
       # step), against the release prepare-release already confirmed
-      # exists via "get by tag".
+      # exists via "get by tag". `--publish never` is required, not just
+      # the absence of `--publish always`: electron-builder detects CI
+      # and tries a publish-related GitHub lookup by default whenever it
+      # thinks it's running in CI, regardless of the CLI flag being
+      # omitted -- and since this step deliberately has no GH_TOKEN (the
+      # upload step below is the only place that needs one), that lookup
+      # fails immediately with "GitHub Personal Access Token is not set".
       - name: Build the installer for this platform
-        run: npm run dist:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }}
+        run: |
+          npm run build
+          npx electron-builder --${{ matrix.platform }} --publish never
         env:
           CSC_LINK: ${{ matrix.platform == 'win' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.platform == 'win' && secrets.CSC_KEY_PASSWORD || '' }}
