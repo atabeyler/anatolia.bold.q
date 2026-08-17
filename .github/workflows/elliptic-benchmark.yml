@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - experiment/constrained-adaptive-threshold
+      - experiment/elliptic-graph-features
     paths:
       - '.github/workflows/elliptic-benchmark.yml'
       - 'server/src/benchmarks/**'
@@ -28,12 +29,13 @@ jobs:
           set -euo pipefail
           mkdir -p data/elliptic
           base='https://data.pyg.org/datasets/elliptic'
-          for f in elliptic_txs_features.csv elliptic_txs_classes.csv; do
+          for f in elliptic_txs_features.csv elliptic_txs_classes.csv elliptic_txs_edgelist.csv; do
             curl --fail --location --retry 3 --retry-delay 5 "$base/$f.zip" -o "/tmp/$f.zip"
             unzip -o "/tmp/$f.zip" -d data/elliptic
           done
           test -s data/elliptic/elliptic_txs_features.csv
           test -s data/elliptic/elliptic_txs_classes.csv
+          test -s data/elliptic/elliptic_txs_edgelist.csv
       - name: Run blind temporal benchmark (temporal rolling gate)
         working-directory: server
         run: |
