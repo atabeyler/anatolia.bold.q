@@ -16,7 +16,7 @@ const scorers = {
   elliptic13DProxy: createElliptic13QScorer(split.train.samples),
   supervisedBalancedLinear: createBalancedLinearScorer(split.train),
 };
-const output = { dataDir, boundaries: split.boundaries, counts: {}, models: {}, cascades: {} };
+const output = { dataDir, boundaries: split.boundaries, counts: {}, models: {}, cascades: {}, diagnostics: {} };
 const raw = { validation: {}, test: {} };
 const validationLabels = split.validation.samples.map((s) => split.validation.labels.get(s.id) || 'unknown');
 const testLabels = split.test.samples.map((s) => split.test.labels.get(s.id) || 'unknown');
@@ -38,11 +38,6 @@ const cSel = selectConstrainedThreshold(validationLabels, raw.validation.classic
 const cVal = applyOrientation(raw.validation.classical, cSel.orientation);
 const sOrient = selectOrientationAndThreshold(validationLabels, raw.validation.supervisedBalancedLinear, { objective: 'f1' }).orientation;
 const sVal = applyOrientation(raw.validation.supervisedBalancedLinear, sOrient);
-
-// Rolling temporal robustness: a gate is eligible only if it preserves zero FN
-// independently in EVERY validation time step (30..39), not merely in aggregate.
-// Among eligible gates, minimize aggregate validation FP. This explicitly guards
-// against temporal drift while keeping test labels completely blind.
 const validationTimes = split.validation.samples.map((s) => s.timeStep);
 const candidateGates = [...new Set([0, ...sVal])].sort((a, b) => a - b);
 let bestRollingGate = null;
@@ -51,13 +46,8 @@ for (const gate of candidateGates) {
   let robust = true;
   const byTime = {};
   for (let t = split.boundaries.trainEnd + 1; t <= split.boundaries.validationEnd; t++) {
-    const labels = [];
-    const timeScores = [];
-    for (let i = 0; i < validationTimes.length; i++) {
-      if (validationTimes[i] !== t) continue;
-      labels.push(validationLabels[i]);
-      timeScores.push(scores[i]);
-    }
+    const labels = [], timeScores = [];
+    for (let i = 0; i < validationTimes.length; i++) if (validationTimes[i] === t) { labels.push(validationLabels[i]); timeScores.push(scores[i]); }
     const m = binaryMetrics(labels, timeScores, 0.5);
     byTime[t] = m;
     if (m.fn !== 0) { robust = false; break; }
@@ -70,11 +60,41 @@ for (const gate of candidateGates) {
 if (bestRollingGate) {
   const cTest = applyOrientation(raw.test.classical, cSel.orientation);
   const sTest = applyOrientation(raw.test.supervisedBalancedLinear, sOrient);
+  const q5Test = raw.test.elliptic5DProxy;
+  const q13Test = raw.test.elliptic13DProxy;
   const testScores = cTest.map((c, i) => (c >= cSel.threshold && sTest[i] >= bestRollingGate.gate) ? 1 : 0);
   output.cascades.temporalRollingZeroFnGate = {
     selectionBasis: 'validation-time-step-zero-FN', classicalThreshold: cSel.threshold, classicalOrientation: cSel.orientation,
     supervisedOrientation: sOrient, supervisedGate: bestRollingGate.gate, validation: bestRollingGate.aggregate,
     validationByTimeStep: bestRollingGate.byTime, test: binaryMetrics(testLabels, testScores, 0.5),
+  };
+
+  // Diagnostic only: expose the blind-test false negatives after evaluation.
+  // These values MUST NOT be consumed by threshold/gate selection above.
+  const misses = [];
+  for (let i = 0; i < testLabels.length; i++) {
+    if (testLabels[i] !== 'illicit' || testScores[i] >= 0.5) continue;
+    const sample = split.test.samples[i];
+    misses.push({
+      id: sample.id,
+      timeStep: sample.timeStep,
+      classicalScore: cTest[i],
+      classicalMargin: cTest[i] - cSel.threshold,
+      supervisedScore: sTest[i],
+      supervisedGateMargin: sTest[i] - bestRollingGate.gate,
+      elliptic5DProxyScore: q5Test[i],
+      elliptic13DProxyScore: q13Test[i],
+      featureHead: Array.isArray(sample.features) ? sample.features.slice(0, 12) : [],
+    });
+  }
+  const byTimeStep = {};
+  for (const miss of misses) byTimeStep[miss.timeStep] = (byTimeStep[miss.timeStep] || 0) + 1;
+  output.diagnostics.cascadeFalseNegatives = {
+    purpose: 'post-evaluation-error-analysis-only',
+    prohibitedUse: 'do-not-select-or-tune-model-thresholds-from-test-labels',
+    count: misses.length,
+    byTimeStep,
+    misses,
   };
 }
 
