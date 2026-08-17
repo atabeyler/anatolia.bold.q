@@ -378,6 +378,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             classicalBenchmark: fraudComputation.classicalBenchmark || null,
             prefiltered: !!fraudComputation.prefiltered,
             excludedByPrefilter: fraudComputation.excludedByPrefilter || 0,
+            secondaryReview: fraudComputation.secondaryReview || null,
             hardwarePending: hardwarePending && !!hardwareTransactions,
           }
         : null,

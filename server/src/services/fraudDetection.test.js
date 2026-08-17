@@ -37,6 +37,7 @@ describe('mergeFraudResults', () => {
     expect(note).toContain('| TXN-001 | 15000.5 | 3 | 4 | Evet | Hayır | 88.5 | 🚩 İŞARETLENDİ |');
     expect(note).toContain('| TXN-002 | 250 | 14 | 1 | Hayır | Evet | 12.1 | — |');
     expect(note).toContain('q_0: ┤ RY ├──■──');
+    expect(note).toContain('İkincil Onay Katmanı');
     expect(note).not.toContain('Gerçek Donanım Doğrulaması');
   });
 

@@ -303,7 +303,36 @@ export default function AnalysisView({ category, onCategoryChange }) {
           {result.quantumMode && result.scenarios && result.scenarios.length > 0 && <ScenarioPanel scenarios={result.scenarios} onDeepDive={deepDiveScenario} loadingScenario={loadingScenario} t={t} />}
 
           {result.quantumMode && result.scenarios?.some(s => s.quantumProbability !== undefined) && <ScenarioComparisonChart scenarios={result.scenarios} />}
-          {result.fraud?.transactions?.length > 0 && <FraudRiskChart transactions={result.fraud.transactions} />}
+
+          {result.fraud?.secondaryReview && (
+            <div className="bg-navy-light/70 border border-gold/30 rounded-lg p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h4 className="font-display text-gold tracking-widest text-xs uppercase">Ikincil Onay Katmani</h4>
+                  <p className="text-xs text-gold/40 mt-0.5">Birincil isaretlerin hangilerinin uygulama icinde dogrudan onaylandigini gosterir.</p>
+                </div>
+                <div className="text-xs font-mono text-cyan-300/80">
+                  {result.fraud.secondaryReview.confirmedCount}/{result.fraud.secondaryReview.total} onaylandı
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded border border-emerald-500/20 bg-emerald-950/20 px-3 py-2">
+                  <div className="text-emerald-300 font-mono">Onaylanan</div>
+                  <div className="text-gold/80 font-mono text-base">{result.fraud.secondaryReview.confirmedCount}</div>
+                </div>
+                <div className="rounded border border-amber-500/20 bg-amber-950/20 px-3 py-2">
+                  <div className="text-amber-300 font-mono">Manuel inceleme</div>
+                  <div className="text-gold/80 font-mono text-base">{result.fraud.secondaryReview.reviewCount}</div>
+                </div>
+                <div className="rounded border border-cyan-500/20 bg-cyan-950/20 px-3 py-2">
+                  <div className="text-cyan-300 font-mono">Kural sayısı</div>
+                  <div className="text-gold/80 font-mono text-base">{Object.keys(result.fraud.secondaryReview.rules || {}).length}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {result.fraud?.transactions?.length > 0 && <FraudRiskChart transactions={result.fraud.transactions} confirmedIds={result.fraud.secondaryReview?.confirmedIds || []} />}
           {result.optimizer?.items?.length > 0 && <OptimizerChart items={result.optimizer.items} />}
 
           <div className="bg-navy-light/70 border border-gold/30 rounded-lg p-8 report-content max-h-[70vh] overflow-auto"><ReactMarkdown remarkPlugins={[remarkGfm]}>{result.content}</ReactMarkdown></div>

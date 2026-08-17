@@ -9,6 +9,7 @@ const SERIES_QUANTUM = '#0891b2';   // cyan-600 — categorical slot 2 (quantum 
 const STATUS_GOOD = '#0ca30c';      // selected / included
 const STATUS_CRITICAL = '#d03b3b';  // flagged / anomalous
 const STATUS_MUTED = '#8a93ad';     // normal / not selected — not a status, just muted ink
+const STATUS_REVIEW = '#d9a441';    // review / secondary check
 const GRID = 'rgba(212,175,55,0.12)';
 const AXIS = 'rgba(212,175,55,0.28)';
 
@@ -181,11 +182,12 @@ function ScenarioTable({ data }) {
 // 2) Fraud/AML risk scores: one bar per transaction, status-colored by
 //    whether the quantum kernel flagged it as anomalous.
 // ---------------------------------------------------------------------------
-export function FraudRiskChart({ transactions }) {
+export function FraudRiskChart({ transactions, confirmedIds = [] }) {
   const { containerRef, tip, show, hide } = useTooltip();
   const [showTable, setShowTable] = useState(false);
   const data = transactions || [];
   if (data.length === 0) return null;
+  const confirmedSet = new Set(confirmedIds || []);
 
   const H = 200;
   const padTop = 16, padBottom = 34, padLeft = 4, padRight = 4;
@@ -199,8 +201,19 @@ export function FraudRiskChart({ transactions }) {
   return (
     <ChartCard
       title="Kuantum Anomali Tespiti: Islem Risk Skorlari"
-      subtitle="Her cubuk bir islem kaydinin kuantum cekirdek benzerlik matrisinden hesaplanan risk skorudur (0-100)."
-      legend={<Legend items={[{ label: 'Isaretlendi', color: STATUS_CRITICAL, icon: '⚠' }, { label: 'Normal', color: STATUS_MUTED }]} />}
+      subtitle={confirmedSet.size
+        ? 'Onaylanan islemler yesil, ikinci incelemeye kalan islemler turuncu, normal islemler gri gorunur.'
+        : 'Her cubuk bir islem kaydinin kuantum cekirdek benzerlik matrisinden hesaplanan risk skorudur (0-100).'}
+      legend={<Legend items={confirmedSet.size
+        ? [
+            { label: 'Onaylandi', color: STATUS_GOOD, icon: '✓' },
+            { label: 'Inceleme', color: STATUS_REVIEW, icon: '•' },
+            { label: 'Normal', color: STATUS_MUTED },
+          ]
+        : [
+            { label: 'Isaretlendi', color: STATUS_CRITICAL, icon: '⚠' },
+            { label: 'Normal', color: STATUS_MUTED },
+          ]} />}
       tableToggle
       showTable={showTable}
       onToggleTable={() => setShowTable((v) => !v)}
@@ -221,11 +234,16 @@ export function FraudRiskChart({ transactions }) {
             {data.map((t, i) => {
               const x = padLeft + i * slotW + (slotW - barW) / 2;
               const h = plotH - (yFor(t.riskScore) - padTop);
-              const color = t.flagged ? STATUS_CRITICAL : STATUS_MUTED;
+              const color = t.flagged
+                ? (confirmedSet.has(t.id) ? STATUS_GOOD : STATUS_REVIEW)
+                : STATUS_MUTED;
+              const statusLabel = t.flagged
+                ? (confirmedSet.has(t.id) ? '✓ Onaylandi' : '• Inceleme')
+                : 'Normal';
               return (
                 <g key={t.id}>
                   <path d={roundedTopBarPath(x, yFor(t.riskScore), barW, h, 4)} fill={color}
-                    onMouseMove={(e) => show(e, [`Risk: ${t.riskScore}`, t.id, t.flagged ? '⚠ Isaretlendi' : 'Normal', `${t.amount} TL`])}
+                    onMouseMove={(e) => show(e, [`Risk: ${t.riskScore}`, t.id, statusLabel, `${t.amount} TL`])}
                     onMouseLeave={hide} style={{ cursor: 'pointer' }} />
                   <text x={x + barW / 2} y={H - padBottom + 14} fontSize="7" textAnchor="middle" fill="rgba(212,175,55,0.5)">
                     {truncate(t.id, 6)}
