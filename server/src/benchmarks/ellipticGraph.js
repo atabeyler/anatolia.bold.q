@@ -104,3 +104,44 @@ export function graphFeatureVector(id, adjacency, trainLabelMap) {
     twoHop.known ? twoHop.illicit / twoHop.known : 0,
   ];
 }
+
+/**
+ * Personalized-PageRank-style label diffusion, seeded ONLY with TRAIN-known
+ * labels. Every non-seed node's risk value is repeatedly re-averaged over its
+ * current neighbor values, damped toward the train base rate each round, so
+ * influence reaches many hops away without enumerating explicit k-hop
+ * neighborhoods (which blows up combinatorially past 2 hops). Seed nodes stay
+ * pinned to their TRAIN label on every iteration -- the same discipline as
+ * the rest of this module: only TRAIN ground truth ever seeds a score, so
+ * validation/development/holdout labels never leak through the graph, even
+ * indirectly across iterations (a validation node's evolving field value is
+ * always a function of train seeds propagated through public structure,
+ * never of its own or another non-train node's true label).
+ */
+export function propagateIllicitRisk(adjacency, trainLabelMap, opts = {}) {
+  const iterations = opts.iterations ?? 8;
+  const restart = opts.restart ?? 0.15;
+  let seedSum = 0;
+  for (const y of trainLabelMap.values()) seedSum += y;
+  const prior = trainLabelMap.size ? seedSum / trainLabelMap.size : 0.5;
+
+  const nodes = new Set(adjacency.undirected.keys());
+  for (const id of trainLabelMap.keys()) nodes.add(id);
+
+  let field = new Map();
+  for (const id of nodes) field.set(id, trainLabelMap.has(id) ? trainLabelMap.get(id) : prior);
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const next = new Map();
+    for (const id of nodes) {
+      if (trainLabelMap.has(id)) { next.set(id, trainLabelMap.get(id)); continue; }
+      const neighbors = adjacency.undirected.get(id);
+      if (!neighbors || !neighbors.size) { next.set(id, field.get(id)); continue; }
+      let sum = 0;
+      for (const n of neighbors) sum += field.has(n) ? field.get(n) : prior;
+      next.set(id, restart * prior + (1 - restart) * (sum / neighbors.size));
+    }
+    field = next;
+  }
+  return { field, prior };
+}

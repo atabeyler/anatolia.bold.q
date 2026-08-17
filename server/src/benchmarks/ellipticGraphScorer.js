@@ -1,27 +1,31 @@
-import { buildAdjacency, graphFeatureVector, knownLabelMap } from './ellipticGraph.js';
+import { buildAdjacency, graphFeatureVector, knownLabelMap, propagateIllicitRisk } from './ellipticGraph.js';
 
 function sigmoid(x) { return 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, x)))); }
 
 /**
- * Supervised voter fit purely on Elliptic transaction-graph topology
- * (degree, 1-hop and 2-hop train-neighbor illicit ratios) -- not on any of
- * the 166 raw node feature columns the other scorers already use. This is
- * meant to be a genuinely decorrelated information source, not another
- * linear recombination of the same inputs.
+ * Supervised voter fit purely on Elliptic transaction-graph topology --
+ * degree, 1-hop/2-hop train-neighbor illicit ratios, and a multi-hop
+ * personalized-PageRank-style risk diffusion seeded from TRAIN labels -- not
+ * on any of the 166 raw node feature columns the other scorers already use.
+ * This is meant to be a genuinely decorrelated information source, not
+ * another linear recombination of the same inputs.
  *
- * Neighbor-label ratios are computed from TRAIN-known labels only,
- * regardless of which split the queried node belongs to, so validation/
- * development/holdout ground truth never leaks into a node's own score.
+ * Neighbor-label ratios and the diffusion field are computed from TRAIN-known
+ * labels only, regardless of which split the queried node belongs to, so
+ * validation/development/holdout ground truth never leaks into a node's own
+ * score.
  */
 export function createGraphAwareScorer(trainPart, edges, opts = {}) {
   const adjacency = buildAdjacency(edges);
   const trainLabelMap = knownLabelMap(trainPart);
+  const { field: riskField, prior: riskPrior } = propagateIllicitRisk(adjacency, trainLabelMap, opts.propagation);
+  const featureVector = (id) => [...graphFeatureVector(id, adjacency, trainLabelMap), riskField.has(id) ? riskField.get(id) : riskPrior];
 
   const rows = [];
   for (const sample of trainPart.samples) {
     const label = trainPart.labels.get(sample.id) || 'unknown';
     if (label === 'unknown') continue;
-    rows.push({ x: graphFeatureVector(sample.id, adjacency, trainLabelMap), y: label === 'illicit' ? 1 : 0 });
+    rows.push({ x: featureVector(sample.id), y: label === 'illicit' ? 1 : 0 });
   }
   if (!rows.length) throw new Error('no known labeled training rows');
 
@@ -62,7 +66,7 @@ export function createGraphAwareScorer(trainPart, edges, opts = {}) {
   }
 
   return async (sample) => {
-    const x = graphFeatureVector(sample.id, adjacency, trainLabelMap);
+    const x = featureVector(sample.id);
     let z = bias;
     for (let j = 0; j < width; j++) z += weights[j] * ((x[j] - mean[j]) / scale[j]);
     return sigmoid(z);

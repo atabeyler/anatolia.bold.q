@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAdjacency, graphFeatureVector, knownLabelMap } from './ellipticGraph.js';
+import { buildAdjacency, graphFeatureVector, knownLabelMap, propagateIllicitRisk } from './ellipticGraph.js';
 
 describe('ellipticGraph', () => {
   it('builds directed and undirected adjacency from edges', () => {
@@ -53,5 +53,50 @@ describe('ellipticGraph', () => {
     const adjacency = buildAdjacency([['a', 'b']]);
     const vector = graphFeatureVector('isolated', adjacency, new Map());
     expect(vector).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  describe('propagateIllicitRisk', () => {
+    it('pins TRAIN seeds to their own label on every iteration', () => {
+      const adjacency = buildAdjacency([['seed-illicit', 'x'], ['seed-licit', 'x']]);
+      const trainLabelMap = new Map([['seed-illicit', 1], ['seed-licit', 0]]);
+      const { field } = propagateIllicitRisk(adjacency, trainLabelMap, { iterations: 5 });
+      expect(field.get('seed-illicit')).toBe(1);
+      expect(field.get('seed-licit')).toBe(0);
+    });
+
+    it('gives a node next to an illicit seed a higher risk than one next to a licit seed', () => {
+      // near-illicit -- illicit-seed        near-licit -- licit-seed
+      const adjacency = buildAdjacency([['near-illicit', 'illicit-seed'], ['near-licit', 'licit-seed']]);
+      const trainLabelMap = new Map([['illicit-seed', 1], ['licit-seed', 0]]);
+      const { field } = propagateIllicitRisk(adjacency, trainLabelMap, { iterations: 6 });
+      expect(field.get('near-illicit')).toBeGreaterThan(field.get('near-licit'));
+    });
+
+    it('never lets a non-train label seed the diffusion, even indirectly', () => {
+      // f is illicit only in validation -- knownLabelMap(trainPart) must exclude it,
+      // so it can never anchor the field the way a real TRAIN seed does.
+      const adjacency = buildAdjacency([['e', 'f'], ['f', 'g']]);
+      const trainPart = { samples: [{ id: 'e' }], labels: new Map() };
+      const trainLabelMap = knownLabelMap(trainPart);
+      const { field, prior } = propagateIllicitRisk(adjacency, trainLabelMap, { iterations: 5 });
+      expect(trainLabelMap.has('f')).toBe(false);
+      expect(field.get('e')).toBeCloseTo(prior, 5);
+    });
+
+    it('decays a distant node toward the train base rate rather than a fixed seed value', () => {
+      // A long chain from an illicit seed: risk should be high near the seed and
+      // fade toward the prior as distance grows, never staying pinned at 1. A
+      // second, unconnected licit seed only shifts the prior (0.5) -- it never
+      // touches the chain through an edge, so any influence on chain nodes
+      // must come from the restart-toward-prior term, not from graph structure.
+      const chain = [];
+      for (let i = 0; i < 20; i++) chain.push([`n${i}`, `n${i + 1}`]);
+      const adjacency = buildAdjacency(chain);
+      const trainLabelMap = new Map([['n0', 1], ['unconnected-licit-seed', 0]]);
+      const { field, prior } = propagateIllicitRisk(adjacency, trainLabelMap, { iterations: 8 });
+      expect(prior).toBe(0.5);
+      expect(field.get('n1')).toBeGreaterThan(field.get('n10'));
+      expect(field.get('n19')).toBeCloseTo(prior, 1);
+    });
   });
 });
