@@ -4,6 +4,7 @@ import { createElliptic5QScorer, createElliptic13QScorer, createRobustClassicalS
 import { runBlindAmlBenchmark } from '../src/benchmarks/amlBenchmark.js';
 import { binaryMetrics } from '../src/benchmarks/benchmarkMetrics.js';
 import { selectOrientationAndThreshold, applyOrientation } from '../src/benchmarks/thresholdSelection.js';
+import { selectConstrainedThreshold } from '../src/benchmarks/constrainedThresholdSelection.js';
 
 const dataDir = path.resolve(process.argv[2] || process.env.ELLIPTIC_DATA_DIR || './data/elliptic');
 const dataset = await loadEllipticDataset(dataDir);
@@ -20,21 +21,35 @@ for (const [name, factory] of Object.entries(factories)) {
   const scorer = factory(split.train.samples);
   const validation = await runBlindAmlBenchmark(split.validation, { [name]: scorer }, { threshold: 0.5 });
   const validationLabels = split.validation.samples.map((s) => split.validation.labels.get(s.id) || 'unknown');
-  // Some scorers end up anti-correlated with "illicit" on a given dataset
-  // (see ellipticScorers.js) -- pick whichever orientation performs better on
-  // validation only, never on test.
-  const selected = selectOrientationAndThreshold(validationLabels, validation.results[name].scores, { objective: 'f1' });
+  const validationScores = validation.results[name].scores;
+
+  // Baseline: maximize F1 using validation only.
+  const f1Selected = selectOrientationAndThreshold(validationLabels, validationScores, { objective: 'f1' });
+
+  // Safety-constrained policy: require zero validation false negatives, then
+  // maximize precision (F1 breaks ties). Test labels never influence selection.
+  const constrainedSelected = selectConstrainedThreshold(validationLabels, validationScores, { minRecall: 1 });
 
   const test = await runBlindAmlBenchmark(split.test, { [name]: scorer }, { threshold: 0.5 });
   const testLabels = split.test.samples.map((s) => split.test.labels.get(s.id) || 'unknown');
-  const testScores = applyOrientation(test.results[name].scores, selected.orientation);
-  const testMetrics = binaryMetrics(testLabels, testScores, selected.threshold);
+
+  const f1TestScores = applyOrientation(test.results[name].scores, f1Selected.orientation);
+  const constrainedTestScores = applyOrientation(test.results[name].scores, constrainedSelected.orientation);
 
   output.models[name] = {
-    orientation: selected.orientation,
-    selectedThreshold: selected.threshold,
-    validation: selected.metrics,
-    test: testMetrics,
+    f1Optimal: {
+      orientation: f1Selected.orientation,
+      selectedThreshold: f1Selected.threshold,
+      validation: f1Selected.metrics,
+      test: binaryMetrics(testLabels, f1TestScores, f1Selected.threshold),
+    },
+    zeroFnConstrained: {
+      minValidationRecall: 1,
+      orientation: constrainedSelected.orientation,
+      selectedThreshold: constrainedSelected.threshold,
+      validation: constrainedSelected.metrics,
+      test: binaryMetrics(testLabels, constrainedTestScores, constrainedSelected.threshold),
+    },
   };
 }
 for (const [name, part] of Object.entries(split)) {
