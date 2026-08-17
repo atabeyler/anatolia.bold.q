@@ -12,13 +12,16 @@ function knownPairs(labels, scores) {
 
 /**
  * Select a threshold on validation data subject to a minimum illicit recall.
+ * Orientation uses the same numeric convention as applyOrientation():
+ *   +1 = normal score, -1 = inverted score.
+ *
  * The primary ANATOLIA-Q AML objective is no missed known-illicit samples
  * (minRecall=1). Among feasible thresholds, precision is maximized; F1 then
  * breaks ties. Test labels must never be passed to this function.
  */
 export function selectConstrainedThreshold(labels, scores, opts = {}) {
   const minRecall = opts.minRecall ?? 1;
-  const orientations = opts.orientations ?? ['normal', 'inverted'];
+  const orientations = opts.orientations ?? [1, -1];
   let best = null;
 
   for (const orientation of orientations) {
