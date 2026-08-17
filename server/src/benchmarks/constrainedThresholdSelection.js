@@ -5,19 +5,17 @@ function knownPairs(labels, scores) {
   const out = [];
   for (let i = 0; i < labels.length; i++) {
     if (labels[i] === 'unknown') continue;
-    out.push({ label: labels[i], score: Number(scores[i]) });
+    const score = Number(scores[i]);
+    if (Number.isFinite(score)) out.push({ label: labels[i], score });
   }
-  return out.filter((x) => Number.isFinite(x.score));
+  return out;
 }
 
 /**
  * Select a threshold on validation data subject to a minimum illicit recall.
- * Orientation uses the same numeric convention as applyOrientation():
- *   +1 = normal score, -1 = inverted score.
- *
- * The primary ANATOLIA-Q AML objective is no missed known-illicit samples
- * (minRecall=1). Among feasible thresholds, precision is maximized; F1 then
- * breaks ties. Test labels must never be passed to this function.
+ * Fast path for minRecall=1: the highest feasible threshold is exactly the
+ * minimum positive score, so there is no need to rescan every unique score.
+ * Test labels must never be passed here.
  */
 export function selectConstrainedThreshold(labels, scores, opts = {}) {
   const minRecall = opts.minRecall ?? 1;
@@ -27,7 +25,18 @@ export function selectConstrainedThreshold(labels, scores, opts = {}) {
   for (const orientation of orientations) {
     const oriented = applyOrientation(scores, orientation);
     const pairs = knownPairs(labels, oriented);
-    const thresholds = [...new Set([0, 1, ...pairs.map((x) => x.score)])].sort((a, b) => a - b);
+    let thresholds;
+
+    if (minRecall >= 1 - 1e-12) {
+      let minPositive = Infinity;
+      for (const pair of pairs) {
+        if (pair.label === 'illicit' && pair.score < minPositive) minPositive = pair.score;
+      }
+      if (!Number.isFinite(minPositive)) continue;
+      thresholds = [minPositive];
+    } else {
+      thresholds = [...new Set([0, 1, ...pairs.map((x) => x.score)])].sort((a, b) => a - b);
+    }
 
     for (const threshold of thresholds) {
       const metrics = binaryMetrics(labels, oriented, threshold);
