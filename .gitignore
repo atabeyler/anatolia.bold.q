@@ -17,3 +17,7 @@ desktop/node_modules/
 *.pfx
 *.p12
 *.pem
+
+# Elliptic AML benchmark dataset — fetched on demand via `npm run fetch:elliptic`,
+# licensed data, never committed (features CSV alone is ~650MB).
+server/data/elliptic/
