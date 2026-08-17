@@ -6,12 +6,6 @@ on:
   pull_request:
 
 jobs:
-  # Cheap, fast fail-fast check: package.json/client/package.json/
-  # server/package.json must always agree on version (scripts/bump-version.js
-  # keeps them in sync on every commit -- this is the guard against a
-  # hand-edit or merge conflict silently breaking that). desktop-release.yml
-  # and android-release.yml both run the same check again right before
-  # building, since a release can be triggered by a tag push that skips CI.
   versions:
     runs-on: ubuntu-latest
     steps:
@@ -33,11 +27,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: server/package-lock.json
-      - run: npm ci
-      # sync.e2e.test.js imports desktop/testHelpers.js (better-sqlite3),
-      # which is a root dependency, not a server one -- installing it here
-      # only affects this CI job, never the production Docker build (the
-      # Dockerfile only ever installs server/'s and client/'s own deps).
+      - name: Install server dependencies
+        run: npm ci
       - name: Install root dependencies (for desktop/testHelpers.js, used by sync.e2e.test.js)
         working-directory: .
         run: npm ci
@@ -64,10 +55,6 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  # Desktop's own tests don't need a display or Electron itself -- they're
-  # pure Node/vitest against better-sqlite3 built for the runner's own Node
-  # ABI (never electron-rebuild'd here, so no ABI mismatch), unlike an
-  # actual Electron launch which desktop-release.yml covers on Windows.
   desktop:
     runs-on: ubuntu-latest
     steps:
@@ -79,3 +66,33 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npx vitest run desktop
+
+  elliptic-benchmark:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/experiment/constrained-adaptive-threshold'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download official Elliptic transaction data
+        working-directory: server
+        run: |
+          set -euo pipefail
+          mkdir -p data/elliptic
+          base='https://data.pyg.org/datasets/elliptic'
+          for f in elliptic_txs_features.csv elliptic_txs_classes.csv; do
+            curl --fail --location --retry 3 --retry-delay 5 "$base/$f.zip" -o "/tmp/$f.zip"
+            unzip -o "/tmp/$f.zip" -d data/elliptic
+          done
+      - name: Run blind temporal benchmark
+        working-directory: server
+        run: node scripts/run-elliptic-benchmark.js data/elliptic | tee elliptic-benchmark-results.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: elliptic-aml-benchmark-results
+          path: server/elliptic-benchmark-results.json
+          if-no-files-found: error
+          retention-days: 30
