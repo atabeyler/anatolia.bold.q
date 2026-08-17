@@ -52,6 +52,19 @@ jobs:
   # exists), so there's nothing left to race. draft MUST be false --
   # electron-builder's lookup (and android-release.yml's, which shares
   # this same tag) can't see a draft release by tag until it's published.
+  #
+  # electron-builder's own lookup (packages/electron-publish's
+  # GitHubPublisher.getOrCreateRelease) does NOT use the "get release by
+  # tag" endpoint we use for find_release below -- it lists
+  # /repos/{owner}/{repo}/releases and scans for a matching tag_name. That
+  # list endpoint has been observed to lag the "get by tag" endpoint by
+  # up to ~1 minute right after a release is created (worse with
+  # generate_release_notes:true), so a release that find_release confirms
+  # immediately can still be invisible to electron-builder's list-based
+  # lookup a minute later, making it try to create the release again and
+  # fail with the same 422. Block on the list endpoint too, so this job
+  # doesn't finish (and unblock the matrix) until the release is visible
+  # the way electron-builder will actually look for it.
   prepare-release:
     runs-on: ubuntu-latest
     steps:
@@ -73,8 +86,26 @@ jobs:
             [ "$HTTP_CODE" = "200" ]
           }
 
+          # Same endpoint + lookup electron-builder itself uses.
+          visible_in_release_list() {
+            curl -s \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/releases?per_page=100" \
+              | jq -e --arg tag "$TAG" 'any(.[]; .tag_name == $tag)' > /dev/null
+          }
+
+          await_list_visibility() {
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              visible_in_release_list && return 0
+              sleep 6
+            done
+            return 1
+          }
+
           if find_release; then
-            echo "Release $TAG already exists -- nothing to do."
+            echo "Release $TAG already exists -- waiting for it to be visible via the releases list too."
+            await_list_visibility || echo "::warning::Release $TAG never showed up in the releases list; the matrix builds may still hit the 422 race."
             exit 0
           fi
 
@@ -85,7 +116,8 @@ jobs:
             -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":false,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")")
 
           if [ "$CREATE_HTTP_CODE" = "201" ]; then
-            echo "Created release $TAG."
+            echo "Created release $TAG -- waiting for it to be visible via the releases list."
+            await_list_visibility || echo "::warning::Release $TAG never showed up in the releases list; the matrix builds may still hit the 422 race."
             exit 0
           fi
 
@@ -95,7 +127,10 @@ jobs:
           echo "Release creation returned $CREATE_HTTP_CODE (likely a concurrent create by android-release.yml) -- polling for the release instead."
           for attempt in 1 2 3 4 5; do
             sleep 3
-            find_release && exit 0
+            if find_release; then
+              await_list_visibility || echo "::warning::Release $TAG never showed up in the releases list; the matrix builds may still hit the 422 race."
+              exit 0
+            fi
           done
 
           echo "::error::Could not find or create a release for tag $TAG"
@@ -152,8 +187,15 @@ jobs:
             exit 1
           fi
 
+      # A single retry as a safety net on top of prepare-release's list-
+      # visibility wait: if the releases list endpoint is still lagging
+      # past that wait, electron-builder fails with the same 422 seen
+      # when this didn't retry at all, and by the time a full rebuild
+      # finishes the list has long since caught up.
       - name: Build and publish the installer for this platform
-        run: npm run release:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }}
+        run: |
+          npm run release:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }} \
+            || { echo "First publish attempt failed -- retrying once."; sleep 15; npm run release:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }}; }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ matrix.platform == 'win' && secrets.CSC_LINK || '' }}
