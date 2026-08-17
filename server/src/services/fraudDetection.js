@@ -4,7 +4,6 @@ import { fileURLToPath } from 'url';
 import { withIbmTimeout } from '../lib/quantumTimeout.js';
 import { runQuantumWorker } from './quantumProcess.js';
 import { enrichBehavioralFeatures } from './behavioralFeatures.js';
-import { buildFraudSecondaryReviewSection, summarizeFraudConfirmation } from './fraudSecondaryFilter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/fraud_detection_13q.py');
@@ -19,10 +18,7 @@ export async function computeFraudRiskScores(transactions, opts = {}) {
   const enriched = enrichBehavioralFeatures(sliced);
   const payload = { transactions: enriched, skipHardware: !!opts.skipHardware };
   const result = await runQuantumWorker({ mode: 'fraud', scriptPath: SCRIPT_PATH, payload, timeoutMs: TIMEOUT_MS, label: 'FraudDetection13Q' });
-  if (result) {
-    result.secondaryReview = summarizeFraudConfirmation(result.transactions);
-    if (truncated) { result.truncated = true; result.originalCount = originalCount; }
-  }
+  if (result && truncated) { result.truncated = true; result.originalCount = originalCount; }
   return result;
 }
 
@@ -49,14 +45,10 @@ export function mergeFraudResults(fraudResult) {
   const prefilterNote = fraudResult.prefiltered
     ? `\nKlasik ön-eleme ${totalBeforePrefilter} kayıt arasından en riskli görünen ${fraudResult.transactionCount} kaydı quantum kernel için seçti.\n`
     : '';
-  return `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n${fraudResult.transactionCount} işlem, **${fraudResult.qubits}-kübitlik** davranışsal feature-map ile değerlendirildi. K=${fraudResult.thresholdK ?? 0.79}.\n\n**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**${prefilterNote}\n| İşlem ID | Tutar | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk | Durum |\n|---|---:|---:|---:|---|---|---:|---|\n${rows}\n\n${fraudResult.circuitDiagram || ''}\n${buildFraudHardwareSection(fraudResult.hardwareVerification)}\n${buildFraudClassicalBenchmarkSection(fraudResult.classicalBenchmark)}${buildFraudSecondaryReviewSection(fraudResult)}`;
+  return `\n## KUANTUM ANOMALİ TESPİTİ DOĞRULAMASI\n${fraudResult.transactionCount} işlem, **${fraudResult.qubits}-kübitlik** davranışsal feature-map ile değerlendirildi. K=${fraudResult.thresholdK ?? 0.79}.\n\n**${flagged.length} / ${fraudResult.transactionCount} kayıt işaretlendi.**${prefilterNote}\n| İşlem ID | Tutar | Saat | Sıklık | Yeni Taraf | Sınır Ötesi | Risk | Durum |\n|---|---:|---:|---:|---|---|---:|---|\n${rows}\n\n${fraudResult.circuitDiagram || ''}\n${buildFraudHardwareSection(fraudResult.hardwareVerification)}\n${buildFraudClassicalBenchmarkSection(fraudResult.classicalBenchmark)}`;
 }
 
 export function buildFraudClassicalBenchmarkSection(b) {
   if (!b) return '';
   return `### Klasik Anomali Tespiti Karşılaştırması\nKlasik işaretlenen: ${b.flaggedCount}. Uyum oranı: %${b.agreementPercent}.\n`;
-}
-
-export function buildFraudSecondaryReviewNote(fraudResult) {
-  return buildFraudSecondaryReviewSection(fraudResult);
 }

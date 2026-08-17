@@ -3,16 +3,12 @@ name: Real Elliptic AML Benchmark
 on:
   push:
     branches:
-      - main
-      - feature/elliptic-graph-aml-v1
+      - experiment/constrained-adaptive-threshold
+      - experiment/elliptic-graph-features
     paths:
       - '.github/workflows/elliptic-benchmark.yml'
       - 'server/src/benchmarks/**'
       - 'server/scripts/run-elliptic-benchmark.js'
-      - 'server/package.json'
-      - 'server/package-lock.json'
-      - 'package.json'
-      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
       - name: Download official Elliptic transaction data
         working-directory: server
         run: |

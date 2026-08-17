@@ -1,20 +1,19 @@
 {
   "name": "anatolia-q-server",
-  "version": "2.1.190",
+  "version": "2.1.198",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "tsx --import ./src/instrument.js src/index.js",
     "dev": "tsx watch --import ./src/instrument.js src/index.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src scripts --ext .js,.jsx,.ts,.tsx",
-    "lint:fix": "eslint src scripts --ext .js,.jsx,.ts,.tsx --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "loadtest": "node scripts/load-test.js",
     "fetch:elliptic": "node scripts/fetch-elliptic-data.js",
-    "benchmark:elliptic": "node scripts/run-elliptic-benchmark.js",
-    "benchmark:bddk": "node scripts/run-bddk-benchmark.js"
+    "benchmark:elliptic": "node scripts/run-elliptic-benchmark.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
@@ -59,7 +58,6 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
     "jszip": "^3.10.1",
-    "neostandard": "^0.13.0",
     "nodemon": "^3.1.7",
     "prettier": "^3.9.5",
     "supertest": "^7.1.1",

@@ -1,6 +1,12 @@
-import { createTestDb } from '../../../desktop/testHelpers.js';
+import Database from 'better-sqlite3';
 import { openDatabase } from './db/index.js';
 
+// A fake @capacitor-community/sqlite connection backed by a REAL in-memory
+// better-sqlite3 database, so mobile/**/*.test.js exercises actual SQL
+// execution end to end (not a hand-rolled query-pattern stand-in) while
+// production code only ever talks to the real Capacitor plugin's async
+// interface. Never imported by production client/ code -- better-sqlite3
+// is a native Node module and has no place in a browser/WebView bundle.
 function wrapSyncDb(raw) {
   return {
     async open() {},
@@ -36,7 +42,9 @@ export function createFakeSqliteConnection() {
       return { result: connections.has(name) };
     },
     async createConnection(name) {
-      const wrapped = wrapSyncDb(createTestDb());
+      const raw = new Database(':memory:');
+      raw.pragma('foreign_keys = ON');
+      const wrapped = wrapSyncDb(raw);
       connections.set(name, wrapped);
       return wrapped;
     },

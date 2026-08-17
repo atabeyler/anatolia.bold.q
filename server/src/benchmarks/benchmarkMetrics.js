@@ -2,11 +2,6 @@
 
 function div(a, b) { return b ? a / b : 0; }
 
-function safeMcc(tp, fp, tn, fn) {
-  const denom = Math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn));
-  return denom ? ((tp * tn) - (fp * fn)) / denom : 0;
-}
-
 export function confusionMatrix(labels, predictions) {
   if (labels.length !== predictions.length) throw new Error('labels/predictions length mismatch');
   let tp = 0; let fp = 0; let tn = 0; let fn = 0;
@@ -28,23 +23,9 @@ export function binaryMetrics(labels, scores, threshold = 0.5) {
   const cm = confusionMatrix(labels, predictions);
   const precision = div(cm.tp, cm.tp + cm.fp);
   const recall = div(cm.tp, cm.tp + cm.fn);
-  const specificity = div(cm.tn, cm.tn + cm.fp);
   const f1 = div(2 * precision * recall, precision + recall);
   const fpr = div(cm.fp, cm.fp + cm.tn);
-  const balancedAccuracy = (recall + specificity) / 2;
-  return {
-    threshold,
-    ...cm,
-    precision,
-    recall,
-    specificity,
-    f1,
-    fpr,
-    balancedAccuracy,
-    mcc: safeMcc(cm.tp, cm.fp, cm.tn, cm.fn),
-    prAuc: precisionRecallAuc(labels, scores),
-    rocAuc: rocAuc(labels, scores),
-  };
+  return { threshold, ...cm, precision, recall, f1, fpr, prAuc: precisionRecallAuc(labels, scores) };
 }
 
 export function precisionRecallAuc(labels, scores) {
@@ -63,27 +44,4 @@ export function precisionRecallAuc(labels, scores) {
     previousRecall = recall;
   }
   return area;
-}
-
-export function rocAuc(labels, scores) {
-  const rows = labels.map((label, i) => ({ label, score: Number(scores[i]) }))
-    .filter((r) => r.label !== 'unknown' && Number.isFinite(r.score))
-    .sort((a, b) => a.score - b.score);
-  const positives = rows.filter((r) => r.label === 'illicit').length;
-  const negatives = rows.length - positives;
-  if (!positives || !negatives) return 0;
-
-  let rank = 1;
-  let positiveRankSum = 0;
-  let index = 0;
-  while (index < rows.length) {
-    let groupEnd = index + 1;
-    while (groupEnd < rows.length && rows[groupEnd].score === rows[index].score) groupEnd++;
-    const avgRank = (rank + (rank + (groupEnd - index) - 1)) / 2;
-    for (let i = index; i < groupEnd; i++) if (rows[i].label === 'illicit') positiveRankSum += avgRank;
-    rank += groupEnd - index;
-    index = groupEnd;
-  }
-
-  return (positiveRankSum - positives * (positives + 1) / 2) / (positives * negatives);
 }

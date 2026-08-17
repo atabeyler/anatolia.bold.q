@@ -18,22 +18,23 @@ describe('ellipticGraph', () => {
     expect(map.has('c')).toBe(false);
   });
 
-  it('computes degree and train-only neighborhood aggregates', () => {
+  it('computes degree and train-only 1-hop/2-hop illicit ratios', () => {
     // a -- b(illicit,train) -- d(unlabeled)
     // a -- c(licit,train)
     const adjacency = buildAdjacency([['a', 'b'], ['a', 'c'], ['b', 'd']]);
     const trainLabelMap = new Map([['b', 1], ['c', 0]]);
-    const vector = graphFeatureVector('a', adjacency, trainLabelMap);
-    expect(vector).toHaveLength(14);
-    expect(vector.slice(0, 6)).toEqual([0, 2, 2, 0, 2, 2]);
-    expect(vector[6]).toBe(2);
-    expect(vector[7]).toBe(0.5);
-    expect(vector[8]).toBe(0.5);
-    expect(vector[9]).toBeCloseTo(1.5, 5);
-    expect(vector[10]).toBeCloseTo(0.5, 5);
-    expect(vector[11]).toBe(1);
-    expect(vector[12]).toBe(2);
-    expect(vector[13]).toBe(2);
+    const [inDeg, outDeg, degree, oneHopCount, oneHopKnown, oneHopIllicit, oneHopRatio, twoHopCount, twoHopKnown, twoHopRatio] =
+      graphFeatureVector('a', adjacency, trainLabelMap);
+    expect(inDeg).toBe(0);
+    expect(outDeg).toBe(2);
+    expect(degree).toBe(2);
+    expect(oneHopCount).toBe(2);
+    expect(oneHopKnown).toBe(2);
+    expect(oneHopIllicit).toBe(1);
+    expect(oneHopRatio).toBe(0.5);
+    expect(twoHopCount).toBe(1); // d, reached via b
+    expect(twoHopKnown).toBe(0); // d has no train label
+    expect(twoHopRatio).toBe(0);
   });
 
   it('never lets a non-train label leak into the neighbor ratio', () => {
@@ -42,10 +43,7 @@ describe('ellipticGraph', () => {
     const adjacency = buildAdjacency([['e', 'f']]);
     const trainPart = { samples: [{ id: 'e' }], labels: new Map() }; // f never appears in train
     const trainLabelMap = knownLabelMap(trainPart);
-    const vector = graphFeatureVector('e', adjacency, trainLabelMap);
-    const oneHopKnown = vector[6];
-    const oneHopIllicit = vector[7];
-    const oneHopRatio = vector[8];
+    const [, , , , oneHopKnown, oneHopIllicit, oneHopRatio] = graphFeatureVector('e', adjacency, trainLabelMap);
     expect(oneHopKnown).toBe(0);
     expect(oneHopIllicit).toBe(0);
     expect(oneHopRatio).toBe(0);
@@ -54,17 +52,7 @@ describe('ellipticGraph', () => {
   it('returns zeroed stats for a node absent from the edge list', () => {
     const adjacency = buildAdjacency([['a', 'b']]);
     const vector = graphFeatureVector('isolated', adjacency, new Map());
-    expect(vector).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-  });
-
-  it('ignores future neighbors when a time cutoff is supplied', () => {
-    const adjacency = buildAdjacency([['a', 'past'], ['a', 'future']]);
-    const timeById = new Map([['a', 2], ['past', 1], ['future', 4]]);
-    const vector = graphFeatureVector('a', adjacency, new Map(), { timeById, cutoffTime: 2 });
-    expect(vector[1]).toBe(1);
-    expect(vector[2]).toBe(1);
-    expect(vector[5]).toBe(1);
-    expect(vector[13]).toBe(1);
+    expect(vector).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   describe('propagateIllicitRisk', () => {
