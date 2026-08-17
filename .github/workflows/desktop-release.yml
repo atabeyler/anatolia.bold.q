@@ -1,0 +1,99 @@
+name: Desktop Release
+
+# Builds installers for all three desktop OSes, each on its native runner
+# (electron-builder's NSIS target needs wine on Linux even for an unsigned
+# Windows build, and a real dmg/AppImage can only be produced on macOS/Linux
+# respectively -- see desktop/README.md) and publishes them all to the same
+# GitHub Release via electron-updater's configured publish target
+# (package.json's build.publish). No custom secret is needed for that part:
+# GITHUB_TOKEN is provided automatically by Actions and is scoped to this
+# repository, which is all the GitHub-provider publisher needs.
+#
+# Only the Windows installer is code-signed (see the "Require code signing"
+# step below) -- macOS and Linux builds are published unsigned/ad-hoc
+# (build.mac.identity: null in package.json), same tradeoff as the
+# self-signed Windows certificate but without even that: macOS Gatekeeper
+# and most Linux desktops will still warn on first launch. See
+# desktop/README.md's "Releases & auto-update" section.
+#
+# Fires automatically on every push to main (unfiltered by path -- every
+# commit bumps the app version via scripts/bump-version.js, so every commit
+# is a distinct release and gets its own installers, whether or not it
+# touched desktop code), on a `desktop-v*` tag, or on a manual "Run
+# workflow" click.
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      allow_unsigned:
+        description: 'Publish an unsigned Windows installer anyway (only for a deliberate test build -- never for an official version)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Verify version consistency across package.json files
+        run: node scripts/check-version-consistency.js
+
+      # electron-builder signs automatically once CSC_LINK/CSC_KEY_PASSWORD
+      # are set as repo secrets and silently builds unsigned when they're
+      # not -- fine for a local `npm run dist:win` dev build, but this is
+      # the path that publishes an "official" GitHub Release, so an
+      # accidental unsigned publish here is exactly what installs
+      # SmartScreen-flagged onto every user's machine. Every automatic
+      # trigger (push) requires signing; only a deliberate manual
+      # workflow_dispatch with allow_unsigned=true can skip it. Only applies
+      # to the Windows build -- macOS/Linux are always unsigned (see the
+      # workflow-level comment above), so there's nothing to require there.
+      - name: Require code signing for automatic/official Windows releases
+        if: matrix.platform == 'win' && (github.event_name != 'workflow_dispatch' || github.event.inputs.allow_unsigned != 'true')
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ]; then
+            echo "::error::CSC_LINK/CSC_KEY_PASSWORD are not set -- refusing to publish an unsigned Windows installer as an official release."
+            echo "See desktop/README.md's 'Code signing' section to generate and register a certificate,"
+            echo "or re-run this workflow manually via workflow_dispatch with allow_unsigned=true for a deliberate unsigned test build."
+            exit 1
+          fi
+
+      - name: Build and publish the installer for this platform
+        run: npm run release:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ matrix.platform == 'win' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'win' && secrets.CSC_KEY_PASSWORD || '' }}
