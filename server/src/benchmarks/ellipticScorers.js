@@ -6,26 +6,56 @@
 
 function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
 
+function median(sortedValues) {
+  return sortedValues.length ? sortedValues[Math.floor(sortedValues.length / 2)] : 0;
+}
+
+/**
+ * Robust multivariate outlier score: median/MAD z-score per feature, then
+ * mean of squared z (capped per-dimension) across ALL dimensions -- not just
+ * the top-K.
+ *
+ * The original version averaged the top-8 |z| out of 165 dimensions. With
+ * that many dimensions, several exceed |z|>2 by chance alone (order
+ * statistics of 165 draws), so the "top-8" score saturated near its max for
+ * almost every real Elliptic sample regardless of label (measured: p50=0.997,
+ * p90=0.998 on validation) -- it was effectively flagging everyone.
+ * Averaging over every dimension instead of cherry-picking extremes removes
+ * that multiple-comparisons inflation.
+ *
+ * The sigmoid is also calibrated against the reference population's own raw
+ * score distribution (median/MAD of raw scores over the unlabeled reference
+ * set -- no ground truth used) instead of hardcoded constants that were
+ * never checked against real data.
+ */
 export function createRobustClassicalScorer(referenceSamples) {
   const matrix = referenceSamples.map((s) => s.features);
   const width = Math.max(0, ...matrix.map((r) => r.length));
   const stats = Array.from({ length: width }, (_, j) => {
     const xs = matrix.map((r) => Number(r[j])).filter(Number.isFinite).sort((a, b) => a - b);
-    if (!xs.length) return { median: 0, mad: 1 };
-    const median = xs[Math.floor(xs.length / 2)];
-    const dev = xs.map((x) => Math.abs(x - median)).sort((a, b) => a - b);
-    const mad = dev[Math.floor(dev.length / 2)] || 1;
-    return { median, mad };
+    if (!xs.length) return { med: 0, mad: 1 };
+    const med = median(xs);
+    const dev = xs.map((x) => Math.abs(x - med)).sort((a, b) => a - b);
+    const mad = median(dev) || 1;
+    return { med, mad };
   });
 
-  return async (sample) => {
-    const zs = sample.features.map((value, j) => Math.abs((Number(value) - stats[j].median) / (1.4826 * stats[j].mad || 1)));
-    if (!zs.length) return 0;
-    zs.sort((a, b) => b - a);
-    const top = zs.slice(0, Math.min(8, zs.length));
-    const robustOutlier = top.reduce((a, b) => a + Math.min(b, 12), 0) / top.length;
-    return sigmoid((robustOutlier - 2.5) / 1.5);
+  const rawScore = (sample) => {
+    if (!sample.features.length) return 0;
+    let sum = 0;
+    for (let j = 0; j < sample.features.length; j++) {
+      const z = (Number(sample.features[j]) - stats[j].med) / (1.4826 * stats[j].mad || 1);
+      sum += Math.min(z * z, 25);
+    }
+    return sum / sample.features.length;
   };
+
+  const rawScores = referenceSamples.map(rawScore).sort((a, b) => a - b);
+  const rawMedian = median(rawScores);
+  const rawDev = rawScores.map((x) => Math.abs(x - rawMedian)).sort((a, b) => a - b);
+  const rawMad = median(rawDev) || 1;
+
+  return async (sample) => sigmoid((rawScore(sample) - rawMedian) / (1.4826 * rawMad || 1));
 }
 
 /** Deterministic nonlinear 5D feature-map proxy for the existing 5Q kernel. */
