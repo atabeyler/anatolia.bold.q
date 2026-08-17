@@ -16,7 +16,7 @@ const scorers = {
   elliptic13DProxy: createElliptic13QScorer(split.train.samples),
   supervisedBalancedLinear: createBalancedLinearScorer(split.train),
 };
-const output = { dataDir, boundaries: split.boundaries, counts: {}, models: {}, cascades: {}, diagnostics: {} };
+const output = { dataDir, boundaries: split.boundaries, counts: {}, models: {}, cascades: {} };
 const raw = { validation: {}, test: {} };
 const validationLabels = split.validation.samples.map((s) => split.validation.labels.get(s.id) || 'unknown');
 const testLabels = split.test.samples.map((s) => split.test.labels.get(s.id) || 'unknown');
@@ -36,65 +36,71 @@ for (const [name, scorer] of Object.entries(scorers)) {
 
 const cSel = selectConstrainedThreshold(validationLabels, raw.validation.classical, { minRecall: 1 });
 const cVal = applyOrientation(raw.validation.classical, cSel.orientation);
-const sOrient = selectOrientationAndThreshold(validationLabels, raw.validation.supervisedBalancedLinear, { objective: 'f1' }).orientation;
-const sVal = applyOrientation(raw.validation.supervisedBalancedLinear, sOrient);
-const validationTimes = split.validation.samples.map((s) => s.timeStep);
-const candidateGates = [...new Set([0, ...sVal])].sort((a, b) => a - b);
-let bestRollingGate = null;
-for (const gate of candidateGates) {
-  const scores = cVal.map((c, i) => (c >= cSel.threshold && sVal[i] >= gate) ? 1 : 0);
-  let robust = true;
-  const byTime = {};
-  for (let t = split.boundaries.trainEnd + 1; t <= split.boundaries.validationEnd; t++) {
-    const labels = [], timeScores = [];
-    for (let i = 0; i < validationTimes.length; i++) if (validationTimes[i] === t) { labels.push(validationLabels[i]); timeScores.push(scores[i]); }
-    const m = binaryMetrics(labels, timeScores, 0.5);
-    byTime[t] = m;
-    if (m.fn !== 0) { robust = false; break; }
-  }
-  if (!robust) continue;
-  const aggregate = binaryMetrics(validationLabels, scores, 0.5);
-  if (!bestRollingGate || aggregate.fp < bestRollingGate.aggregate.fp) bestRollingGate = { gate, aggregate, byTime };
+const cTest = applyOrientation(raw.test.classical, cSel.orientation);
+const voters = ['supervisedBalancedLinear', 'elliptic5DProxy', 'elliptic13DProxy'];
+const oriented = { validation: {}, test: {} };
+const voterSelections = {};
+for (const name of voters) {
+  const sel = selectOrientationAndThreshold(validationLabels, raw.validation[name], { objective: 'f1' });
+  voterSelections[name] = sel;
+  oriented.validation[name] = applyOrientation(raw.validation[name], sel.orientation);
+  oriented.test[name] = applyOrientation(raw.test[name], sel.orientation);
 }
 
-if (bestRollingGate) {
-  const cTest = applyOrientation(raw.test.classical, cSel.orientation);
-  const sTest = applyOrientation(raw.test.supervisedBalancedLinear, sOrient);
-  const q5Test = raw.test.elliptic5DProxy;
-  const q13Test = raw.test.elliptic13DProxy;
-  const testScores = cTest.map((c, i) => (c >= cSel.threshold && sTest[i] >= bestRollingGate.gate) ? 1 : 0);
-  output.cascades.temporalRollingZeroFnGate = {
-    selectionBasis: 'validation-time-step-zero-FN', classicalThreshold: cSel.threshold, classicalOrientation: cSel.orientation,
-    supervisedOrientation: sOrient, supervisedGate: bestRollingGate.gate, validation: bestRollingGate.aggregate,
-    validationByTimeStep: bestRollingGate.byTime, test: binaryMetrics(testLabels, testScores, 0.5),
-  };
+// Consensus-veto policy: Classical zero-FN is the safety net. An alert can be
+// removed only if >=N independent voters ALL place it below their validation-
+// selected low-risk gates. Gates and N are selected using validation only.
+// Candidate low-risk gates are conservative quantiles of each voter's illicit
+// validation scores; no test labels participate in policy selection.
+const quantiles = [0, 0.01, 0.025, 0.05, 0.1];
+function quantile(values, q) {
+  const xs = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!xs.length) return -Infinity;
+  return xs[Math.floor(q * (xs.length - 1))];
+}
+const gatesByVoter = {};
+for (const name of voters) {
+  const illicitScores = oriented.validation[name].filter((_, i) => validationLabels[i] === 'illicit');
+  gatesByVoter[name] = [...new Set(quantiles.map((q) => quantile(illicitScores, q)))];
+}
 
-  // Diagnostic only: expose the blind-test false negatives after evaluation.
-  // These values MUST NOT be consumed by threshold/gate selection above.
-  const misses = [];
-  for (let i = 0; i < testLabels.length; i++) {
-    if (testLabels[i] !== 'illicit' || testScores[i] >= 0.5) continue;
-    const sample = split.test.samples[i];
-    misses.push({
-      id: sample.id,
-      timeStep: sample.timeStep,
-      classicalScore: cTest[i],
-      classicalMargin: cTest[i] - cSel.threshold,
-      supervisedScore: sTest[i],
-      supervisedGateMargin: sTest[i] - bestRollingGate.gate,
-      elliptic5DProxyScore: q5Test[i],
-      elliptic13DProxyScore: q13Test[i],
-      featureHead: Array.isArray(sample.features) ? sample.features.slice(0, 12) : [],
-    });
+let best = null;
+for (const minLowVotes of [3, 2]) {
+  for (const sg of gatesByVoter.supervisedBalancedLinear) {
+    for (const g5 of gatesByVoter.elliptic5DProxy) {
+      for (const g13 of gatesByVoter.elliptic13DProxy) {
+        const gates = { supervisedBalancedLinear: sg, elliptic5DProxy: g5, elliptic13DProxy: g13 };
+        const scores = cVal.map((c, i) => {
+          if (c < cSel.threshold) return 0;
+          let lowVotes = 0;
+          for (const name of voters) if (oriented.validation[name][i] < gates[name]) lowVotes++;
+          return lowVotes >= minLowVotes ? 0 : 1;
+        });
+        const metrics = binaryMetrics(validationLabels, scores, 0.5);
+        if (metrics.fn !== 0) continue;
+        const candidate = { minLowVotes, gates, metrics };
+        if (!best || metrics.fp < best.metrics.fp || (metrics.fp === best.metrics.fp && minLowVotes > best.minLowVotes)) best = candidate;
+      }
+    }
   }
-  const byTimeStep = {};
-  for (const miss of misses) byTimeStep[miss.timeStep] = (byTimeStep[miss.timeStep] || 0) + 1;
-  output.diagnostics.cascadeFalseNegatives = {
-    purpose: 'post-evaluation-error-analysis-only',
-    prohibitedUse: 'do-not-select-or-tune-model-thresholds-from-test-labels',
-    count: misses.length,
-    byTimeStep,
-    misses,
+}
+
+if (best) {
+  const scores = cTest.map((c, i) => {
+    if (c < cSel.threshold) return 0;
+    let lowVotes = 0;
+    for (const name of voters) if (oriented.test[name][i] < best.gates[name]) lowVotes++;
+    return lowVotes >= best.minLowVotes ? 0 : 1;
+  });
+  output.cascades.consensusVetoZeroFn = {
+    selectionBasis: 'validation-only-zero-FN',
+    classicalThreshold: cSel.threshold,
+    classicalOrientation: cSel.orientation,
+    minIndependentLowRiskVotesToVeto: best.minLowVotes,
+    gates: best.gates,
+    voterOrientations: Object.fromEntries(voters.map((n) => [n, voterSelections[n].orientation])),
+    validation: best.metrics,
+    test: binaryMetrics(testLabels, scores, 0.5),
   };
 }
 
