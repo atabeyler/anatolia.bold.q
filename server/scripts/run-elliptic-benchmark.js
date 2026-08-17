@@ -3,31 +3,27 @@ import { loadEllipticDataset, temporalHoldoutSplit } from '../src/benchmarks/ell
 import { createElliptic5QScorer, createElliptic13QScorer, createRobustClassicalScorer } from '../src/benchmarks/ellipticScorers.js';
 import { createBalancedLinearScorer } from '../src/benchmarks/supervisedLinearScorer.js';
 import { createTemporalRegimeScorer } from '../src/benchmarks/temporalFeatureScorer.js';
+import { createFpDiscriminator } from '../src/benchmarks/fpDiscriminator.js';
 import { runBlindAmlBenchmark } from '../src/benchmarks/amlBenchmark.js';
 import { binaryMetrics } from '../src/benchmarks/benchmarkMetrics.js';
 import { selectOrientationAndThreshold, applyOrientation } from '../src/benchmarks/thresholdSelection.js';
 import { selectConstrainedThreshold } from '../src/benchmarks/constrainedThresholdSelection.js';
-const dataDir=path.resolve(process.argv[2]||process.env.ELLIPTIC_DATA_DIR||'./data/elliptic');
-const dataset=await loadEllipticDataset(dataDir),split=temporalHoldoutSplit(dataset);
-const scorers={classical:createRobustClassicalScorer(split.train.samples),supervisedBalancedLinear:createBalancedLinearScorer(split.train),temporalRegime:createTemporalRegimeScorer(split.train),elliptic5DProxy:createElliptic5QScorer(split.train.samples),elliptic13DProxy:createElliptic13QScorer(split.train.samples)};
-const labels=p=>p.samples.map(s=>p.labels.get(s.id)||'unknown'),validationLabels=labels(split.validation),devLabels=labels(split.developmentTest),holdoutLabels=labels(split.holdout);
-const raw={validation:{},developmentTest:{},holdout:{}};
-for(const [name,scorer] of Object.entries(scorers))for(const p of ['validation','developmentTest','holdout']){const r=await runBlindAmlBenchmark(split[p],{[name]:scorer},{threshold:.5});raw[p][name]=r.results[name].scores;}
-const cSel=selectConstrainedThreshold(validationLabels,raw.validation.classical,{minRecall:1});
-const voters=['supervisedBalancedLinear','temporalRegime','elliptic5DProxy','elliptic13DProxy'],orient={};for(const n of voters)orient[n]=selectOrientationAndThreshold(validationLabels,raw.validation[n],{objective:'f1'}).orientation;
-const oriented={};for(const p of ['validation','developmentTest','holdout']){oriented[p]={classical:applyOrientation(raw[p].classical,cSel.orientation)};for(const n of voters)oriented[p][n]=applyOrientation(raw[p][n],orient[n]);}
-function quantile(v,q){const a=v.filter(Number.isFinite).sort((x,y)=>x-y);return a.length?a[Math.floor(q*(a.length-1))]:-Infinity;}
-const qs=[0,.01,.02,.03,.04,.05,.075,.10,.15],gates={};for(const n of voters){const il=oriented.validation[n].filter((_,i)=>validationLabels[i]==='illicit');gates[n]=[...new Set(qs.map(q=>quantile(il,q)))];}
-function metricsFor(part,partLabels,need,gs){const pred=oriented[part].classical.map((c,i)=>{if(c<cSel.threshold)return 0;let low=0;for(let k=0;k<voters.length;k++)if(oriented[part][voters[k]][i]<gs[k])low++;return low>=need?0:1;});return binaryMetrics(partLabels,pred,.5);}
-// Stage 1: policy candidates are created using validation only. Require zero FN there.
-const candidates=[];for(const g0 of gates[voters[0]])for(const g1 of gates[voters[1]])for(const g2 of gates[voters[2]])for(const g3 of gates[voters[3]])for(const need of [4,3,2]){const gs=[g0,g1,g2,g3],v=metricsFor('validation',validationLabels,need,gs);if(v.fn===0)candidates.push({need,gs,validation:v});}
-if(!candidates.length)throw new Error('No validation zero-FN candidate');
-candidates.sort((a,b)=>a.validation.fp-b.validation.fp);
-// Stage 2: development test is explicitly allowed only for model selection, never holdout.
-// Prefer candidates that preserve zero FN across BOTH validation and development.
-let stable=null;for(const c of candidates){const d=metricsFor('developmentTest',devLabels,c.need,c.gs);if(d.fn===0){stable={...c,developmentTest:d};break;}}
-if(!stable){const pool=candidates.slice(0,Math.min(250,candidates.length)).map(c=>({...c,developmentTest:metricsFor('developmentTest',devLabels,c.need,c.gs)}));pool.sort((a,b)=>a.developmentTest.fn-b.developmentTest.fn||a.validation.fp-b.validation.fp||a.developmentTest.fp-b.developmentTest.fp);stable=pool[0];}
-// Holdout is evaluated exactly once after the stable policy has been chosen.
-const finalHoldout=metricsFor('holdout',holdoutLabels,stable.need,stable.gs);
-const output={protocol:'TEMPORAL_FEATURE_STABILITY_SELECTION_FINAL_HOLDOUT',boundaries:split.boundaries,counts:Object.fromEntries(['train','validation','developmentTest','holdout'].map(n=>[n,{total:split[n].samples.length,known:split[n].knownSampleCount}])),selectedPolicy:{selectionData:'validation+development-stability; holdout excluded',classicalThreshold:cSel.threshold,classicalOrientation:cSel.orientation,minIndependentLowRiskVotesToVeto:stable.need,gates:Object.fromEntries(voters.map((n,i)=>[n,stable.gs[i]])),voterOrientations:orient,validation:stable.validation,developmentTest:stable.developmentTest,finalHoldout},candidateSummary:{validationZeroFnCandidates:candidates.length,selectedValidationRank:candidates.findIndex(c=>c.need===stable.need&&c.gs.every((g,i)=>g===stable.gs[i]))+1},integrity:{holdoutUsedForTraining:false,holdoutUsedForThresholdSelection:false,holdoutUsedForGateSelection:false,holdoutUsedForArchitectureSelection:false,developmentUsedForStabilitySelection:true}};
-console.log(JSON.stringify(output,null,2));
+const dataDir=path.resolve(process.argv[2]||process.env.ELLIPTIC_DATA_DIR||'./data/elliptic'),dataset=await loadEllipticDataset(dataDir),split=temporalHoldoutSplit(dataset);
+const classical=createRobustClassicalScorer(split.train.samples),linear=createBalancedLinearScorer(split.train),temporal=createTemporalRegimeScorer(split.train),q5=createElliptic5QScorer(split.train.samples),q13=createElliptic13QScorer(split.train.samples),fp=await createFpDiscriminator(split.train,[linear,temporal,q5,q13]);
+const scorers={classical,linear,temporal,q5,q13,fp},labels=p=>p.samples.map(s=>p.labels.get(s.id)||'unknown'),vl=labels(split.validation),dl=labels(split.developmentTest),hl=labels(split.holdout),raw={validation:{},developmentTest:{},holdout:{}};
+for(const [n,s] of Object.entries(scorers))for(const p of ['validation','developmentTest','holdout']){const r=await runBlindAmlBenchmark(split[p],{[n]:s},{threshold:.5});raw[p][n]=r.results[n].scores;}
+const cSel=selectConstrainedThreshold(vl,raw.validation.classical,{minRecall:1}),names=['linear','temporal','q5','q13'],ori={};for(const n of [...names,'fp'])ori[n]=selectOrientationAndThreshold(vl,raw.validation[n],{objective:'f1'}).orientation;
+const O={};for(const p of ['validation','developmentTest','holdout']){O[p]={classical:applyOrientation(raw[p].classical,cSel.orientation)};for(const n of [...names,'fp'])O[p][n]=applyOrientation(raw[p][n],ori[n]);}
+function q(v,x){const a=v.filter(Number.isFinite).sort((a,b)=>a-b);return a[Math.floor(x*(a.length-1))];}
+const qs=[0,.01,.02,.03,.05,.075,.10,.15],g={};for(const n of names){const il=O.validation[n].filter((_,i)=>vl[i]==='illicit');g[n]=[...new Set(qs.map(x=>q(il,x)))];}
+function basePred(p,need,gs){return O[p].classical.map((c,i)=>{if(c<cSel.threshold)return 0;let low=0;for(let k=0;k<4;k++)if(O[p][names[k]][i]<gs[k])low++;return low>=need?0:1;});}
+const candidates=[];for(const a of g.linear)for(const b of g.temporal)for(const c of g.q5)for(const d of g.q13)for(const need of [4,3,2]){const gs=[a,b,c,d],pv=basePred('validation',need,gs),m=binaryMetrics(vl,pv,.5);if(m.fn===0)candidates.push({need,gs,validation:m});}candidates.sort((a,b)=>a.validation.fp-b.validation.fp);
+let stable=null;for(const c of candidates){const pd=basePred('developmentTest',c.need,c.gs),m=binaryMetrics(dl,pd,.5);if(m.fn===0){stable={...c,developmentTest:m};break;}}if(!stable)throw new Error('no stable zero-FN base policy');
+// Stage-2 discriminator may clear only alarms produced by the stable base. Threshold candidates
+// come solely from illicit validation scores; then development must also remain zero-FN.
+const illicitFp=O.validation.fp.filter((_,i)=>vl[i]==='illicit'),thresholds=[0,.001,.0025,.005,.01,.02,.03,.05].map(x=>q(illicitFp,x));
+function second(p,l,t){const base=basePred(p,stable.need,stable.gs);const pred=base.map((v,i)=>v&&O[p].fp[i]>=t?1:0);return binaryMetrics(l,pred,.5);}
+const secondCandidates=[];for(const t of thresholds){const v=second('validation',vl,t);if(v.fn)continue;const d=second('developmentTest',dl,t);if(d.fn)continue;secondCandidates.push({threshold:t,validation:v,developmentTest:d});}
+secondCandidates.sort((a,b)=>(a.validation.fp+a.developmentTest.fp)-(b.validation.fp+b.developmentTest.fp));const chosen=secondCandidates[0]||{threshold:-Infinity,validation:stable.validation,developmentTest:stable.developmentTest};
+const finalHoldout=second('holdout',hl,chosen.threshold);
+console.log(JSON.stringify({protocol:'FINAL_TWO_STAGE_FP_DISCRIMINATOR',boundaries:split.boundaries,basePolicy:{validation:stable.validation,developmentTest:stable.developmentTest},fpDiscriminator:{threshold:chosen.threshold,validation:chosen.validation,developmentTest:chosen.developmentTest,finalHoldout},integrity:{holdoutUsedForTraining:false,holdoutUsedForSelection:false,selectionRequiresZeroFnOnValidationAndDevelopment:true}},null,2));
