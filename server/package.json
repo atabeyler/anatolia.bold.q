@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "loadtest": "node scripts/load-test.js",
+    "fetch:elliptic": "node scripts/fetch-elliptic-data.js",
     "benchmark:elliptic": "node scripts/run-elliptic-benchmark.js"
   },
   "dependencies": {
