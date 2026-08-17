@@ -37,4 +37,41 @@ function third(p,l,t){const base=basePred(p,stable.need,stable.gs);const stage2=
 const thirdCandidates=[];for(const t of graphThresholds){const v=third('validation',vl,t);if(v.fn)continue;const d=third('developmentTest',dl,t);if(d.fn)continue;thirdCandidates.push({threshold:t,validation:v,developmentTest:d});}
 thirdCandidates.sort((a,b)=>(a.validation.fp+a.developmentTest.fp)-(b.validation.fp+b.developmentTest.fp));const chosenGraph=thirdCandidates[0]||{threshold:-Infinity,validation:chosen.validation,developmentTest:chosen.developmentTest};
 const finalHoldoutGraph=third('holdout',hl,chosenGraph.threshold);
-console.log(JSON.stringify({protocol:'FINAL_THREE_STAGE_GRAPH_VETO',boundaries:split.boundaries,basePolicy:{validation:stable.validation,developmentTest:stable.developmentTest},fpDiscriminator:{threshold:chosen.threshold,validation:chosen.validation,developmentTest:chosen.developmentTest,finalHoldout},graphVeto:{threshold:chosenGraph.threshold,validation:chosenGraph.validation,developmentTest:chosenGraph.developmentTest,finalHoldout:finalHoldoutGraph},integrity:{holdoutUsedForTraining:false,holdoutUsedForSelection:false,selectionRequiresZeroFnOnValidationAndDevelopment:true,graphNeighborLabelsRestrictedToTrain:true}},null,2));
+// Standalone diagnostic: how separable is the graph score by itself, with no
+// cascade around it? This never feeds any selection decision -- it only tells
+// us whether the graph signal exists at all before blaming the cascade shape.
+const graphStandalone={validation:binaryMetrics(vl,O.validation.graph,.5),developmentTest:binaryMetrics(dl,O.developmentTest.graph,.5)};
+// Independent 5-voter joint search: graph sits INSIDE the consensus gate
+// alongside linear/temporal/q5/q13, instead of only filtering alarms the
+// 4-voter base already produced (stage-3 above). This lets the graph voter
+// veto alarms the other four would have kept. A precomputed-mask scan with
+// early abort on the first false negative keeps the 8^5-combination grid
+// tractable (same technique as this file's earlier validation-only Pareto
+// search). Entirely separate from `stable`/`chosen`/`chosenGraph` above --
+// the frozen 4-voter baseline is never touched by this block.
+const names5=[...names,'graph'];
+const g5={...g,graph:(()=>{const il=O.validation.graph.filter((_,i)=>vl[i]==='illicit');return[...new Set(qs.map(x=>q(il,x)))];})()};
+function fastZeroFnSearch(p,l,needs){
+  const known=[];for(let i=0;i<l.length;i++)if(l[i]!=='unknown')known.push(i);
+  const base=known.map(i=>O[p].classical[i]>=cSel.threshold?1:0);
+  const y=known.map(i=>l[i]==='illicit');
+  const masks=names5.map(n=>g5[n].map(gval=>known.map(i=>O[p][n][i]<gval?1:0)));
+  const results=[];
+  for(let a=0;a<g5[names5[0]].length;a++)for(let b=0;b<g5[names5[1]].length;b++)for(let c=0;c<g5[names5[2]].length;c++)for(let d=0;d<g5[names5[3]].length;d++)for(let e=0;e<g5[names5[4]].length;e++)for(const need of needs){
+    const idx=[a,b,c,d,e];let tp=0,fp=0,fn=0,tn=0,aborted=false;
+    for(let r=0;r<known.length;r++){
+      let pred=base[r];
+      if(pred){let low=0;for(let k=0;k<5;k++)if(masks[k][idx[k]][r])low++;if(low>=need)pred=0;}
+      if(y[r]){if(pred)tp++;else{fn++;aborted=true;break;}}
+      else if(pred)fp++;else tn++;
+    }
+    if(aborted)continue;
+    results.push({need,gs:names5.map((n,k)=>g5[n][idx[k]]),metrics:{tp,fp,tn,fn,precision:tp+fp?tp/(tp+fp):0,recall:1,f1:(2*tp+fp+fn)?2*tp/(2*tp+fp+fn):0,fpr:fp+tn?fp/(fp+tn):0}});
+  }
+  return results;
+}
+function basePred5(p,need,gs){return O[p].classical.map((c,i)=>{if(c<cSel.threshold)return 0;let low=0;for(let k=0;k<5;k++)if(O[p][names5[k]][i]<gs[k])low++;return low>=need?0:1;});}
+const validationResults5=fastZeroFnSearch('validation',vl,[5,4,3,2]);validationResults5.sort((a,b)=>a.metrics.fp-b.metrics.fp);
+let stable5=null;for(const c of validationResults5){const pd=basePred5('developmentTest',c.need,c.gs),m=binaryMetrics(dl,pd,.5);if(m.fn===0){stable5={...c,developmentTest:m};break;}}
+const jointGraphVoter=stable5?{need:stable5.need,gates:Object.fromEntries(names5.map((n,i)=>[n,stable5.gs[i]])),validation:stable5.metrics,developmentTest:stable5.developmentTest,finalHoldout:binaryMetrics(hl,basePred5('holdout',stable5.need,stable5.gs),.5),improvesOverBaseline:(stable5.metrics.fp+stable5.developmentTest.fp)<(stable.validation.fp+stable.developmentTest.fp)}:{found:false,note:'no 5-voter joint-gate combination kept validation AND development at FN=0 with lower combined FP than the frozen 4-voter baseline; baseline retained'};
+console.log(JSON.stringify({protocol:'FINAL_THREE_STAGE_GRAPH_VETO_PLUS_JOINT_SEARCH',boundaries:split.boundaries,basePolicy:{validation:stable.validation,developmentTest:stable.developmentTest},fpDiscriminator:{threshold:chosen.threshold,validation:chosen.validation,developmentTest:chosen.developmentTest,finalHoldout},graphVetoStage3:{threshold:chosenGraph.threshold,validation:chosenGraph.validation,developmentTest:chosenGraph.developmentTest,finalHoldout:finalHoldoutGraph},graphStandalone,jointGraphVoter,integrity:{holdoutUsedForTraining:false,holdoutUsedForSelection:false,selectionRequiresZeroFnOnValidationAndDevelopment:true,graphNeighborLabelsRestrictedToTrain:true,jointSearchIndependentOfFrozenBaseline:true}},null,2));
