@@ -4,10 +4,16 @@ name: Desktop Release
 # (electron-builder's NSIS target needs wine on Linux even for an unsigned
 # Windows build, and a real dmg/AppImage can only be produced on macOS/Linux
 # respectively -- see desktop/README.md) and publishes them all to the same
-# GitHub Release via electron-updater's configured publish target
-# (package.json's build.publish). No custom secret is needed for that part:
-# GITHUB_TOKEN is provided automatically by Actions and is scoped to this
-# repository, which is all the GitHub-provider publisher needs.
+# GitHub Release. Uploading is done with our own curl calls (see
+# prepare-release and the "Upload installer assets" step below), not
+# electron-builder's built-in --publish: its GitHub publisher looks up the
+# release via GET /repos/{owner}/{repo}/releases (list) rather than the
+# "get release by tag" endpoint, and that list endpoint has been observed to
+# never reflect a release that "get by tag" confirms exists moments after
+# creation -- see prepare-release's history for the failed attempts to wait
+# it out. No custom secret is needed for the upload: GITHUB_TOKEN is
+# provided automatically by Actions and is scoped to this repository, which
+# is all a release-asset upload needs.
 #
 # Only the Windows installer is code-signed (see the "Require code signing"
 # step below) -- macOS and Linux builds are published unsigned/ad-hoc
@@ -42,41 +48,32 @@ defaults:
     shell: bash
 
 jobs:
-  # electron-builder's GitHub publisher looks up the release for this tag
-  # and creates it if missing, but all three matrix jobs below start at
-  # once and each thinks the release doesn't exist yet -- whichever wins
-  # the create succeeds, the other two get a 422 "already_exists" and the
-  # whole platform build fails even though the artifact built fine. Doing
-  # the find-or-create once here, before the matrix, means every matrix
-  # job's own find-or-create is a pure lookup (the release already
-  # exists), so there's nothing left to race. draft MUST be false --
-  # electron-builder's lookup (and android-release.yml's, which shares
-  # this same tag) can't see a draft release by tag until it's published.
-  #
-  # electron-builder's own lookup (packages/electron-publish's
-  # GitHubPublisher.getOrCreateRelease) does NOT use the "get release by
-  # tag" endpoint we use for find_release below -- it lists
-  # /repos/{owner}/{repo}/releases and scans for a matching tag_name. That
-  # list endpoint has been observed to lag the "get by tag" endpoint by
-  # up to ~1 minute right after a release is created (worse with
-  # generate_release_notes:true), so a release that find_release confirms
-  # immediately can still be invisible to electron-builder's list-based
-  # lookup a minute later, making it try to create the release again and
-  # fail with the same 422. Block on the list endpoint too, so this job
-  # doesn't finish (and unblock the matrix) until the release is visible
-  # the way electron-builder will actually look for it.
+  # Finds or creates the shared GitHub Release for this version's tag,
+  # once, before the three platform builds below start -- otherwise all
+  # three would race to create it themselves and two would fail. Uses the
+  # "get release by tag" endpoint exclusively (not the "list releases"
+  # endpoint -- see the workflow-level comment above for why that one
+  # isn't trustworthy here). draft MUST be false -- this same tag is also
+  # looked up by android-release.yml, and a draft release isn't visible by
+  # tag until it's published.
   prepare-release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.info.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: info
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Find or create the shared GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          TAG: ${{ steps.info.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="v$(node -p "require('./package.json').version")"
 
           find_release() {
             HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
@@ -86,26 +83,8 @@ jobs:
             [ "$HTTP_CODE" = "200" ]
           }
 
-          # Same endpoint + lookup electron-builder itself uses.
-          visible_in_release_list() {
-            curl -s \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/$REPO/releases?per_page=100" \
-              | jq -e --arg tag "$TAG" 'any(.[]; .tag_name == $tag)' > /dev/null
-          }
-
-          await_list_visibility() {
-            for attempt in 1 2 3 4 5 6 7 8 9 10; do
-              visible_in_release_list && return 0
-              sleep 6
-            done
-            return 1
-          }
-
           if find_release; then
-            echo "Release $TAG already exists -- waiting for it to be visible via the releases list too."
-            await_list_visibility || echo "::warning::Release $TAG never showed up in the releases list; the matrix builds may still hit the 422 race."
+            echo "Release $TAG already exists."
             exit 0
           fi
 
@@ -116,8 +95,7 @@ jobs:
             -d "$(printf '{"tag_name":"%s","name":"%s","target_commitish":"%s","draft":false,"generate_release_notes":true}' "$TAG" "$TAG" "${{ github.sha }}")")
 
           if [ "$CREATE_HTTP_CODE" = "201" ]; then
-            echo "Created release $TAG -- waiting for it to be visible via the releases list."
-            await_list_visibility || echo "::warning::Release $TAG never showed up in the releases list; the matrix builds may still hit the 422 race."
+            echo "Created release $TAG."
             exit 0
           fi
 
@@ -127,10 +105,7 @@ jobs:
           echo "Release creation returned $CREATE_HTTP_CODE (likely a concurrent create by android-release.yml) -- polling for the release instead."
           for attempt in 1 2 3 4 5; do
             sleep 3
-            if find_release; then
-              await_list_visibility || echo "::warning::Release $TAG never showed up in the releases list; the matrix builds may still hit the 422 race."
-              exit 0
-            fi
+            find_release && exit 0
           done
 
           echo "::error::Could not find or create a release for tag $TAG"
@@ -187,16 +162,62 @@ jobs:
             exit 1
           fi
 
-      # A single retry as a safety net on top of prepare-release's list-
-      # visibility wait: if the releases list endpoint is still lagging
-      # past that wait, electron-builder fails with the same 422 seen
-      # when this didn't retry at all, and by the time a full rebuild
-      # finishes the list has long since caught up.
-      - name: Build and publish the installer for this platform
-        run: |
-          npm run release:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }} \
-            || { echo "First publish attempt failed -- retrying once."; sleep 15; npm run release:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }}; }
+      # Builds only -- no --publish. electron-builder's own GitHub
+      # publisher is what hit the 422 race documented above, so this
+      # workflow uploads the built installer(s) itself instead (next
+      # step), against the release prepare-release already confirmed
+      # exists via "get by tag".
+      - name: Build the installer for this platform
+        run: npm run dist:${{ matrix.platform == 'win' && 'win' || matrix.platform == 'mac' && 'mac' || 'linux' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ matrix.platform == 'win' && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.platform == 'win' && secrets.CSC_KEY_PASSWORD || '' }}
+
+      - name: Upload installer assets to the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+          GLOB: ${{ matrix.platform == 'win' && 'release/*.exe' || matrix.platform == 'mac' && 'release/*.dmg' || 'release/*.AppImage' }}
+        run: |
+          set -euo pipefail
+
+          HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases/tags/$TAG")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Release $TAG not found (HTTP $HTTP_CODE) -- prepare-release should have created it."
+            exit 1
+          fi
+          RELEASE_ID=$(jq -r .id release.json)
+
+          shopt -s nullglob
+          FILES=($GLOB)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::error::No files matched $GLOB in release/ -- build step may not have produced an installer."
+            exit 1
+          fi
+
+          for FILE in "${FILES[@]}"; do
+            NAME=$(basename "$FILE")
+
+            # Delete a same-named asset first (idempotent re-runs, e.g. a
+            # manual workflow_dispatch re-run of an already-published
+            # version) -- GitHub rejects a same-name upload otherwise.
+            EXISTING_ID=$(jq -r --arg name "$NAME" '.assets[]? | select(.name == $name) | .id' release.json)
+            if [ -n "$EXISTING_ID" ]; then
+              echo "Deleting existing asset $NAME (id $EXISTING_ID) before re-upload."
+              curl -s -X DELETE \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$REPO/releases/assets/$EXISTING_ID" > /dev/null
+            fi
+
+            echo "Uploading $NAME..."
+            curl -sf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$NAME" \
+              --data-binary "@$FILE"
+          done
