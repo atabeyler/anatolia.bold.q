@@ -18,12 +18,18 @@ const cSel=selectConstrainedThreshold(validationLabels,raw.validation.classical,
 const voters=['supervisedBalancedLinear','elliptic5DProxy','elliptic13DProxy'],orient={};
 for(const n of voters)orient[n]=selectOrientationAndThreshold(validationLabels,raw.validation[n],{objective:'f1'}).orientation;
 const oriented={};for(const p of ['validation','developmentTest','holdout']){oriented[p]={classical:applyOrientation(raw[p].classical,cSel.orientation)};for(const n of voters)oriented[p][n]=applyOrientation(raw[p][n],orient[n]);}
-function q(values,x){const a=values.filter(Number.isFinite).sort((a,b)=>a-b);return a[Math.floor(x*(a.length-1))];}
-// Reconstruct the frozen 3-voter policy strictly from validation, matching the
-// previously accepted search family. Development test and holdout never select it.
-const qs=[0,.01,.025,.05,.1],gates={};for(const n of voters){const illicit=oriented.validation[n].filter((_,i)=>validationLabels[i]==='illicit');gates[n]=[...new Set(qs.map(x=>q(illicit,x)))];}
-let best=null;
-for(const sg of gates[voters[0]])for(const g5 of gates[voters[1]])for(const g13 of gates[voters[2]])for(const need of [3,2]){const gs=[sg,g5,g13];const pred=oriented.validation.classical.map((c,i)=>{if(c<cSel.threshold)return 0;let low=0;for(let k=0;k<3;k++)if(oriented.validation[voters[k]][i]<gs[k])low++;return low>=need?0:1;});const m=binaryMetrics(validationLabels,pred,.5);if(m.fn===0&&(!best||m.fp<best.metrics.fp))best={need,gs,metrics:m};}
-function evaluate(partName,partLabels){const pred=oriented[partName].classical.map((c,i)=>{if(c<cSel.threshold)return 0;let low=0;for(let k=0;k<3;k++)if(oriented[partName][voters[k]][i]<best.gs[k])low++;return low>=best.need?0:1;});return binaryMetrics(partLabels,pred,.5);}
-const output={protocol:'FROZEN_POLICY_FINAL_HOLDOUT',boundaries:split.boundaries,counts:Object.fromEntries(['train','validation','developmentTest','holdout'].map(n=>[n,{total:split[n].samples.length,known:split[n].knownSampleCount}])),frozenPolicy:{selectionData:'validation-only',classicalThreshold:cSel.threshold,classicalOrientation:cSel.orientation,minIndependentLowRiskVotesToVeto:best.need,gates:Object.fromEntries(voters.map((n,i)=>[n,best.gs[i]])),voterOrientations:orient,validation:best.metrics,developmentTest:evaluate('developmentTest',devLabels),finalHoldout:evaluate('holdout',holdoutLabels)},integrity:{holdoutUsedForSelection:false,developmentTestUsedForSelection:false}};
+function quantile(values,x){const a=values.filter(Number.isFinite).sort((a,b)=>a-b);return a.length?a[Math.floor(x*(a.length-1))]:-Infinity;}
+function predict(partName,need,gs){return oriented[partName].classical.map((c,i)=>{if(c<cSel.threshold)return 0;let low=0;for(let k=0;k<3;k++)if(oriented[partName][voters[k]][i]<gs[k])low++;return low>=need?0:1;});}
+// Search ONLY validation. Dense enough to expose the FN/FP trade-off, but neither
+// development-test nor holdout can influence policy selection.
+const qs=Array.from({length:41},(_,i)=>i*.005); // 0..20% in 0.5% steps
+const gates={};for(const n of voters){const illicit=oriented.validation[n].filter((_,i)=>validationLabels[i]==='illicit');gates[n]=[...new Set(qs.map(x=>quantile(illicit,x)))];}
+const bestByFn=new Map();
+for(const sg of gates[voters[0]])for(const g5 of gates[voters[1]])for(const g13 of gates[voters[2]])for(const need of [3,2]){
+ const gs=[sg,g5,g13],m=binaryMetrics(validationLabels,predict('validation',need,gs),.5);
+ if(m.fn>10)continue; const prev=bestByFn.get(m.fn); if(!prev||m.fp<prev.metrics.fp)bestByFn.set(m.fn,{need,gs,metrics:m});
+}
+const frontier=[...bestByFn.entries()].sort((a,b)=>a[0]-b[0]).map(([fn,p])=>({validationFn:fn,minIndependentLowRiskVotesToVeto:p.need,gates:Object.fromEntries(voters.map((n,i)=>[n,p.gs[i]])),validation:p.metrics}));
+const frozen=bestByFn.get(0); if(!frozen)throw new Error('No validation zero-FN policy found');
+const output={protocol:'VALIDATION_ONLY_PARETO_WITH_LOCKED_HOLDOUT',boundaries:split.boundaries,counts:Object.fromEntries(['train','validation','developmentTest','holdout'].map(n=>[n,{total:split[n].samples.length,known:split[n].knownSampleCount}])),zeroFnPolicy:{selectionData:'validation-only',classicalThreshold:cSel.threshold,classicalOrientation:cSel.orientation,minIndependentLowRiskVotesToVeto:frozen.need,gates:Object.fromEntries(voters.map((n,i)=>[n,frozen.gs[i]])),voterOrientations:orient,validation:frozen.metrics,developmentTest:binaryMetrics(devLabels,predict('developmentTest',frozen.need,frozen.gs),.5),finalHoldout:binaryMetrics(holdoutLabels,predict('holdout',frozen.need,frozen.gs),.5)},validationParetoFrontier:frontier,integrity:{paretoSelectionUsesValidationOnly:true,holdoutUsedForSelection:false,developmentTestUsedForSelection:false,holdoutPolicyChangedFromPreviousRun:false}};
 console.log(JSON.stringify(output,null,2));
