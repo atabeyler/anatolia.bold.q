@@ -2,6 +2,15 @@
 
 All notable changes to ANATOLIA-Q are documented in this file, grouped by date. Format loosely follows [Keep a Changelog](https://keepachangelog.com/). The current release version is tracked in `package.json` / `server/package.json` / `client/package.json` and bumped automatically on every commit (`scripts/bump-version.js`, run via a pre-commit hook) — this file groups the *meaningful* changes behind those version bumps, not every patch increment.
 
+## 2026-08-19
+
+### Changed
+- Desktop now uses a native splash window that matches the branded login artwork more closely, and the Windows/Electron app icon was regenerated to follow the same orbital logo language.
+
+### Fixed
+- Desktop login no longer short-circuits directly into offline verification when connectivity state is still settling on startup; it now tries the normal online login path first and only falls back on a real network failure.
+- Android release re-runs now delete an existing same-named APK asset before uploading the new one, so the GitHub Release publish step is idempotent.
+
 ## 2026-08-15
 
 ### Changed
