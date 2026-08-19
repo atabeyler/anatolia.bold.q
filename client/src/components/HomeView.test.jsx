@@ -28,7 +28,7 @@ describe('HomeView command center', () => {
   it('renders the live map area and real system status panel', async () => {
     renderHome();
     expect(await screen.findByText('TurkeyMap stub')).toBeInTheDocument();
-    expect(screen.getByText(/^Sistem Durumu$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Platform \/ Sistem Durumu$/i)).toBeInTheDocument();
     expect(screen.getByText(/AI Sağlayıcıları/i)).toBeInTheDocument();
     expect(screen.queryByText(/^CPU$/i)).not.toBeInTheDocument();
   });
