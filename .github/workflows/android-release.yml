@@ -189,6 +189,17 @@ jobs:
             exit 1
           fi
 
+          # Re-runs should be idempotent: GitHub rejects a same-name upload,
+          # so delete any previous APK asset before re-uploading it.
+          EXISTING_ID=$(jq -r --arg name "$APK_NAME" '.assets[]? | select(.name == $name) | .id' release.json)
+          if [ -n "$EXISTING_ID" ]; then
+            echo "Deleting existing asset $APK_NAME (id $EXISTING_ID) before re-upload."
+            curl -s -X DELETE \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/releases/assets/$EXISTING_ID" > /dev/null
+          fi
+
           curl -sf -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Content-Type: application/vnd.android.package-archive" \
