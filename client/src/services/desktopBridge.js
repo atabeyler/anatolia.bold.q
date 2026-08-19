@@ -1,5 +1,5 @@
 // Bridges the renderer to the Electron desktop shell's preload API
-// (desktop/preload.js's contextBridge surface). On the web build
+// (desktop/preload.cjs's contextBridge surface). On the web build
 // `window.anatoliaDesktop` is simply undefined, so `isDesktop` is false and
 // every export here is inert — nothing about the web app's behavior
 // changes by importing this module.

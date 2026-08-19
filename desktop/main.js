@@ -341,7 +341,7 @@ async function createWindow() {
     show: false,
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

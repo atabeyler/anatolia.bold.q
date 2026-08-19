@@ -1,5 +1,13 @@
-import { contextBridge, ipcRenderer } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 
+// CommonJS (not ESM, despite the root package.json's "type": "module") and
+// a .cjs extension so Node's module-type resolution can't override that --
+// Electron's sandboxed preload loader (sandbox: true in main.js) runs
+// preload scripts through its own bundle that only understands CommonJS,
+// regardless of the nearest package.json's "type" field; an ESM preload.js
+// here fails at runtime with "Cannot use import statement outside a
+// module" and the renderer silently gets no contextBridge API at all.
+//
 // Same default/override as main.js's CLOUD_URL -- duplicated rather than
 // imported because the preload script runs in its own isolated context
 // (see contextIsolation below) and doesn't share module state with main.js.

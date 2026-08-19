@@ -6,7 +6,7 @@
 // fetches there would hit nothing. Both bridges make the real deployed API
 // origin discoverable; resolved on every call (not cached at module load)
 // since window.anatoliaDesktop is only guaranteed to exist by the time
-// preload.js has run, and Capacitor's platform check has no such ordering
+// preload.cjs has run, and Capacitor's platform check has no such ordering
 // concern but is equally cheap.
 function baseFor() {
   if (typeof window !== 'undefined' && window.anatoliaDesktop?.cloudUrl) {

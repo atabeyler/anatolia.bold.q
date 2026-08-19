@@ -14,7 +14,7 @@ Electron main process                    Backend (server/, unchanged for web)
 │ main.js — window, security, │  HTTPS     │ routes/sync.js                │
 │ single-instance, menu       │───────────▶│  POST /api/sync/push          │
 │                              │            │  GET  /api/sync/pull          │
-│ preload.js — contextBridge  │            │  GET  /api/sync/status        │
+│ preload.cjs — contextBridge  │            │  GET  /api/sync/status        │
 │  → window.anatoliaDesktop   │            │ routes/devices.js             │
 │                              │            │  POST /api/auth/devices/... (mounted at /api/devices) │
 │ db/ — better-sqlite3, WAL,  │            │ analyses table + sync         │
