@@ -11,16 +11,12 @@ const PLATFORM_ASSET_KEY = {
   linux: 'desktopLinux',
 };
 
-function baseUrl(req) {
-  return `${req.protocol}://${req.get('host')}`;
-}
-
-// Public (no auth) -- both the Android and desktop apps need to check this
-// before/without necessarily being logged in, same reasoning as
-// /api/health. The URLs returned here point back at this server's own
-// /download/:platform below, never at github.com directly -- see that
-// route's comment.
-router.get('/latest', async (req, res) => {
+// Public (no auth) -- Android/desktop clients need to check this before
+// necessarily being logged in. Metadata still comes from our API, but the
+// binary URL is the original GitHub Releases asset URL. This deliberately
+// avoids re-streaming NSIS/DMG/AppImage bytes through the application
+// server: the release asset is already the canonical, tested installer.
+router.get('/latest', async (_req, res) => {
   try {
     const info = await getLatestVersionInfo();
     res.json({
@@ -28,18 +24,10 @@ router.get('/latest', async (req, res) => {
       publishedAt: info.publishedAt,
       notes: info.notes,
       assets: {
-        androidApk: info.assets.androidApk
-          ? { url: `${baseUrl(req)}/api/version/download/android`, name: info.assets.androidApk.name, size: info.assets.androidApk.size }
-          : null,
-        desktopWin: info.assets.desktopWin
-          ? { url: `${baseUrl(req)}/api/version/download/windows`, name: info.assets.desktopWin.name, size: info.assets.desktopWin.size }
-          : null,
-        desktopMac: info.assets.desktopMac
-          ? { url: `${baseUrl(req)}/api/version/download/mac`, name: info.assets.desktopMac.name, size: info.assets.desktopMac.size }
-          : null,
-        desktopLinux: info.assets.desktopLinux
-          ? { url: `${baseUrl(req)}/api/version/download/linux`, name: info.assets.desktopLinux.name, size: info.assets.desktopLinux.size }
-          : null,
+        androidApk: info.assets.androidApk,
+        desktopWin: info.assets.desktopWin,
+        desktopMac: info.assets.desktopMac,
+        desktopLinux: info.assets.desktopLinux,
       },
     });
   } catch (err) {
@@ -48,14 +36,9 @@ router.get('/latest', async (req, res) => {
   }
 });
 
-// Streams the installer/APK from GitHub through this server -- the
-// institutional constraint is that a client device never talks to GitHub
-// at all, not even to download a file (a raw github.com/objects.
-// githubusercontent.com address showing up in a browser's download UI is
-// exactly what this avoids). Bandwidth cost is accepted as the tradeoff
-// for that; each platform's binary is tens of megabytes, not something to
-// buffer in memory, so the upstream response body is piped straight
-// through rather than read into a buffer first.
+// Kept for compatibility with older installed clients that were shipped
+// with /api/version/download/:platform URLs. New clients receive the direct
+// GitHub asset URL from /latest and no longer use this proxy route.
 router.get('/download/:platform', async (req, res) => {
   const assetKey = PLATFORM_ASSET_KEY[req.params.platform];
   if (!assetKey) return res.status(404).json({ error: 'Bilinmeyen platform' });
@@ -65,19 +48,12 @@ router.get('/download/:platform', async (req, res) => {
     const asset = info.assets[assetKey];
     if (!asset) return res.status(404).json({ error: 'İndirilecek dosya bulunamadı' });
 
-    const upstream = await fetch(asset.url);
-    if (!upstream.ok || !upstream.body) {
-      return res.status(502).json({ error: 'Dosya indirilemedi' });
-    }
-
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${asset.name}"`);
-    if (asset.size) res.setHeader('Content-Length', String(asset.size));
-
-    const { Readable } = await import('node:stream');
-    Readable.fromWeb(upstream.body).pipe(res);
+    // Redirect rather than piping the installer through Node/hosting. This
+    // preserves the exact GitHub Release binary and fixes NSIS integrity
+    // failures caused on the proxy path. 307 preserves request semantics.
+    return res.redirect(307, asset.url);
   } catch (err) {
-    logger.warn({ err }, '[Version] download proxy failed');
+    logger.warn({ err }, '[Version] download redirect failed');
     if (!res.headersSent) res.status(502).json({ error: 'Dosya indirilemedi' });
   }
 });
