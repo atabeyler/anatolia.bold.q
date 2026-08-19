@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
       ipcRenderer.on('update:progress', listener);
       return () => ipcRenderer.removeListener('update:progress', listener);
     },
+    getAvailable: () => ipcRenderer.invoke('update:getAvailable'),
     approve: () => ipcRenderer.invoke('update:approve'),
     install: () => ipcRenderer.invoke('update:install'),
   },

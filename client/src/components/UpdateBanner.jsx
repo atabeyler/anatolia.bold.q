@@ -18,7 +18,13 @@ export default function UpdateBanner() {
   const [progress, setProgress] = useState(null);
 
   useEffect(() => {
-    if (isDesktop) return desktopUpdate.onAvailable((result) => setInfo(result));
+    if (isDesktop) {
+      let cancelled = false;
+      desktopUpdate.getAvailable?.().then?.((result) => {
+        if (!cancelled && result?.version) setInfo(result);
+      }).catch(() => {});
+      return desktopUpdate.onAvailable((result) => setInfo(result));
+    }
     if (isMobileApp) {
       let cancelled = false;
       mobileUpdate.check().then((result) => {

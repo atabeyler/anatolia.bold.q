@@ -290,6 +290,7 @@ function registerIpcHandlers() {
       return { ok: false, error: err?.message || 'İndirme başarısız' };
     }
   });
+  ipcMain.handle('update:getAvailable', () => pendingUpdate);
   ipcMain.handle('update:install', () => {
     if (!downloadedInstallerPath) return { ok: false, error: 'İndirilen kurulum dosyası yok' };
     if (process.platform === 'linux') {
