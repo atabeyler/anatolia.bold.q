@@ -93,4 +93,27 @@ describe('downloadUpdate', () => {
     const fetchImpl = vi.fn(async () => ({ ok: false, status: 404, body: null }));
     await expect(downloadUpdate('https://x/y', 'y.exe', tmpDir(), undefined, fetchImpl)).rejects.toThrow('404');
   });
+
+  it('rejects downloads whose final byte count does not match the expected size', async () => {
+    const body = Buffer.from('a'.repeat(1000));
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      body: Readable.toWeb(Readable.from([body])),
+      headers: new Map([['content-length', String(body.length)]]),
+    }));
+    const dir = tmpDir();
+
+    await expect(
+      downloadUpdate(
+        'https://x/api/version/download/desktop',
+        'ANATOLIA-Q-Setup-2.1.140.exe',
+        dir,
+        undefined,
+        fetchImpl,
+        1200,
+      )
+    ).rejects.toThrow('beklenen boyutta değil');
+
+    expect(fs.existsSync(path.join(dir, 'ANATOLIA-Q-Setup-2.1.140.exe'))).toBe(false);
+  });
 });

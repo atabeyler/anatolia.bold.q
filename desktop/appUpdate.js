@@ -45,7 +45,7 @@ export async function checkForUpdate(apiBaseUrl, currentVersion, platform = proc
 // server/src/routes/version.js's /download/:platform), which itself
 // proxies the bytes from GitHub. The client process never opens a
 // connection to github.com at any point in the update flow.
-export async function downloadUpdate(url, fileName, destDir, onProgress, fetchImpl = fetch) {
+export async function downloadUpdate(url, fileName, destDir, onProgress, fetchImpl = fetch, expectedSize = null) {
   const res = await fetchImpl(url);
   if (!res.ok || !res.body) throw new Error(`İndirme başarısız (HTTP ${res.status})`);
   const total = Number(res.headers.get('content-length')) || 0;
@@ -59,6 +59,11 @@ export async function downloadUpdate(url, fileName, destDir, onProgress, fetchIm
     onProgress?.({ received, total });
   });
   await pipeline(nodeStream, fs.createWriteStream(destPath));
+  const expectedBytes = Number(expectedSize) || total;
+  if (expectedBytes > 0 && received !== expectedBytes) {
+    try { fs.unlinkSync(destPath); } catch { /* best-effort */ }
+    throw new Error(`İndirilen dosya beklenen boyutta değil (${received}/${expectedBytes} bayt)`);
+  }
   return destPath;
 }
 
