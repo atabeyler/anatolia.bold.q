@@ -44,7 +44,7 @@ export const desktopConnectivity = {
 export const desktopUpdate = {
   onAvailable: (callback) => bridge?.update.onAvailable(callback) || (() => {}),
   onProgress: (callback) => bridge?.update.onProgress(callback) || (() => {}),
-  getAvailable: () => bridge?.update.getAvailable(),
+  getAvailable: () => bridge?.update.getAvailable?.(),
   approve: () => bridge?.update.approve(),
   install: () => bridge?.update.install(),
 };

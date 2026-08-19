@@ -20,9 +20,16 @@ export default function UpdateBanner() {
   useEffect(() => {
     if (isDesktop) {
       let cancelled = false;
-      desktopUpdate.getAvailable?.().then?.((result) => {
-        if (!cancelled && result?.version) setInfo(result);
-      }).catch(() => {});
+      (async () => {
+        try {
+          const result = await desktopUpdate.getAvailable?.();
+          if (!cancelled && result?.version) setInfo(result);
+        } catch {
+          // The banner still works via the push event below; this is only a
+          // best-effort startup recheck so a missing bridge method must not
+          // crash the UI.
+        }
+      })();
       return desktopUpdate.onAvailable((result) => setInfo(result));
     }
     if (isMobileApp) {
