@@ -16,6 +16,14 @@ export default function UpdateBanner() {
   const [info, setInfo] = useState(null);
   const [stage, setStage] = useState('idle'); // idle | downloading | ready | error | dismissed
   const [progress, setProgress] = useState(null);
+  const [dismissedVersion, setDismissedVersion] = useState(null);
+
+  useEffect(() => {
+    if (info?.version && info.version !== dismissedVersion && stage === 'dismissed') {
+      setStage('idle');
+      setDismissedVersion(null);
+    }
+  }, [info?.version, dismissedVersion, stage]);
 
   useEffect(() => {
     if (isDesktop) {
@@ -89,7 +97,7 @@ export default function UpdateBanner() {
                 </p>
               )}
             </div>
-            <button onClick={() => setStage('dismissed')} className="shrink-0 text-cyan-100/75 hover:text-cyan-50" aria-label="Kapat">
+            <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="shrink-0 text-cyan-100/75 hover:text-cyan-50" aria-label="Kapat">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -139,9 +147,9 @@ export default function UpdateBanner() {
         </>
       )}
       {stage === 'error' && <span>İndirme başarısız oldu.</span>}
-      <button onClick={() => setStage('dismissed')} className="ml-2 shrink-0" aria-label="Kapat">
-        <X className="w-3.5 h-3.5" />
-      </button>
-    </div>
+        <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="ml-2 shrink-0" aria-label="Kapat">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
   );
 }

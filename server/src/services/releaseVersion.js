@@ -7,9 +7,6 @@
 // never sees a github.com address anywhere in the update flow.
 const REPO = 'atabeyler/anatolia.bold.q';
 const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes -- avoids hitting GitHub's API on every client check
-
-let cache = null; // { fetchedAt, data }
 
 function pickAsset(assets, suffix) {
   const asset = (assets || []).find((a) => a.name?.endsWith(suffix));
@@ -38,10 +35,7 @@ async function fetchLatestRelease() {
 }
 
 export async function getLatestVersionInfo() {
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache.data;
-  const data = await fetchLatestRelease();
-  cache = { fetchedAt: Date.now(), data };
-  return data;
+  return fetchLatestRelease();
 }
 
 export const _internal = { pickAsset };

@@ -41,7 +41,7 @@ describe('getLatestVersionInfo', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('caches the result and does not re-fetch within the TTL', async () => {
+  it('fetches fresh release data on every call', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => fakeRelease() }));
     vi.stubGlobal('fetch', fetchMock);
     const { getLatestVersionInfo } = await import('./releaseVersion.js');
@@ -49,7 +49,7 @@ describe('getLatestVersionInfo', () => {
     await getLatestVersionInfo();
     await getLatestVersionInfo();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('throws when the GitHub lookup itself fails', async () => {
