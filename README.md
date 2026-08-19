@@ -5,15 +5,75 @@
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
 
-ANATOLIA-Q generates structured decision-support reports across 10 domains, combining a multi-provider AI layer with deterministic quantum analysis and optional real IBM Quantum hardware verification. The platform is designed so users receive one clear decision-support result while provenance, auditability, verification, and institutional integration remain managed by the system.
+### From artificial intelligence to decision intelligence, from quantum computing to verifiable analysis.
+
+ANATOLIA-Q is a multi-domain national decision-support and analysis platform that brings artificial intelligence, deterministic computation, and quantum technologies together within a single decision architecture.
+
+The platform is designed not merely to generate AI-written reports, but to analyze structured or user-supplied information, evaluate alternative scenarios, support critical calculations through independent computational layers, and preserve a technical trail showing how a decision-support result was produced.
+
+ANATOLIA-Q combines three principal computational capabilities:
+
+- **Provider-independent AI orchestration** — a multi-provider, fallback-capable AI layer for analysis, consultation, and structured reporting. Individual model providers can be changed or extended without redefining the platform architecture.
+- **Deterministic and quantum analysis** — scenario probability analysis, QAOA-based resource optimization, and quantum-kernel anomaly analysis provide computational layers independent from generative narrative output.
+- **Real quantum hardware verification** — supported quantum workloads can, when configured, be executed through an independent verification lane on real IBM Quantum hardware.
+
+Real NISQ hardware output is not treated as the authoritative decision path. Deterministic local computation remains authoritative while real quantum hardware serves as an independent verification layer.
+
+---
+
+## The ANATOLIA-Q Approach
+
+A conventional generative-AI workflow is commonly reduced to:
+
+**Input → AI model → Text output**
+
+ANATOLIA-Q is designed around a broader decision-support chain:
+
+**Data / User Input → Source & Data Quality → AI Analysis → Deterministic / Quantum Computation → Independent Quantum Verification → Evidence & Decision Trace → Structured Decision-Support Report**
+
+Artificial intelligence is therefore a component of the decision-support architecture, not the decision itself.
+
+Where available, the system retains source provenance, data-quality information, model and prompt-version metadata, computational stages, quantum-backend metadata, evidence, and execution traces so that a later audit can establish how a result was produced.
+
+### Core Technology Layers
+
+| Layer | ANATOLIA-Q capability |
+|---|---|
+| Artificial Intelligence | Multi-provider, fallback-capable AI orchestration |
+| Decision Analysis | Deterministic computation and scenario analysis |
+| Quantum Computing | Qiskit-based quantum modules |
+| Optimization | QAOA-based resource/portfolio optimization |
+| Anomaly Analysis | Quantum-kernel fraud/AML analysis |
+| Real Quantum Hardware | IBM Quantum verification lane |
+| Decision Intelligence | Provenance, quality, evidence, and decision trace |
+| Institutional Integration | Pluggable framework for authorized data sources |
+| Reporting | Structured DOCX/PDF decision-support reports |
+| Platforms | Web, Windows, Android |
+
+### Current System Status
+
+| Component | Status |
+|---|---|
+| Web platform | Operational |
+| Windows / Electron client | Operational |
+| Android / Capacitor client | Operational |
+| Multi-provider AI layer | Implemented |
+| Deterministic analysis path | Implemented |
+| Quantum analysis modules | Implemented |
+| IBM Quantum hardware integration | Verified |
+| Decision trace / Analysis Audit | Implemented |
+| Institutional connector framework | Ready for authorized integrations |
+| Live authorized institutional connections | Dependent on institution/API authorization |
+
+> **Verification scope:** successful execution on IBM Quantum hardware establishes that the supported quantum circuit was executed on real hardware. It does not by itself prove the authority of the input data or the correctness of the overall decision-support conclusion.
 
 ---
 
 ## Research Context
 
-This project sits at the intersection of applied AI and near-term quantum computing.
+This project sits at the intersection of applied AI, decision intelligence, and near-term quantum computing.
 
-- **AI layer:** Claude (Anthropic) → Gemini → GPT-4o automatic fallback for report generation and consultation workflows.
+- **AI layer:** provider-independent orchestration with automatic fallback for report generation and consultation workflows.
 - **Quantum layer:** scenario probability analysis, QAOA-based resource allocation, and quantum-kernel fraud/AML anomaly detection.
 - **Deterministic decision path:** reported decisions come from the deterministic local computation path. Real IBM Quantum hardware, when configured, is used as an independent verification lane so NISQ hardware noise cannot alter the authoritative result.
 - **Live IBM Quantum validation:** authentication, Qiskit Runtime service connection, real-backend selection, transpilation, hardware job submission, and result retrieval have been exercised against a real IBM Quantum Platform account through the production integration path.
@@ -27,7 +87,7 @@ This project sits at the intersection of applied AI and near-term quantum comput
 ### AI & Reporting
 
 - **10 Analysis Categories** — Defense, Energy, Offensive, Economy, Social, Consultation, Health, Multi-Domain Synthesis, BDDK, BTK
-- **Triple AI Assurance** — Claude → Gemini → GPT-4o fallback
+- **Multi-Provider AI Assurance** — provider-independent orchestration with automatic fallback
 - **Fixed-Format Reports** — DOCX/PDF generation, report history, and central-mail delivery
 - **Voice Assistant** — transcription, TTS, and natural-language command handling
 - **Conversation Memory** — per-user consultation memory and archive
@@ -94,14 +154,14 @@ flowchart LR
     User[Client — React/Vite] -->|REST + Socket.IO| API[Express API]
     API --> Auth[Auth / JWT / Admin]
     API --> Orchestrator[Analysis / Decision Intelligence]
-    Orchestrator --> AI[AI Service<br/>Claude → Gemini → GPT-4o]
+    Orchestrator --> AI[Provider-Independent AI Layer]
     Orchestrator --> Quantum[Quantum Subprocess<br/>Python + Qiskit]
     Orchestrator --> Connectors[Authorized Data Connectors]
     Quantum -->|authoritative computation| Sim[Local Simulator<br/>deterministic]
     Quantum -.->|optional verification| IBM[Real IBM Quantum Hardware]
     API --> DB[(PostgreSQL)]
     API --> Storage[(S3 / R2 or local disk)]
-    API --> Mail[Resend]
+    API --> Mail[Mail Delivery Service]
 ```
 
 The user-facing analysis path remains simple: **input → analysis → decision-support report**. Internally, ANATOLIA-Q can retain provenance, quality, model, quantum, evidence, and execution-trace metadata so a later audit can establish how the result was produced.
@@ -135,18 +195,17 @@ Tests: `npm test --prefix server` and `npm test --prefix client`.
 
 ## Desktop (Electron — Windows, macOS, Linux)
 
-`desktop/` contains a production Electron shell around the same `client/` React app, adding an offline-first SQLite cache and a bidirectional sync engine against the existing Postgres backend — see **[desktop/README.md](./desktop/README.md)** for the full architecture, sync protocol, local AI design, and packaging instructions. Windows ships a code-signed NSIS installer; macOS (dmg) and Linux (AppImage) build and publish alongside it but are currently unsigned (see desktop/README.md's Code signing section).
+`desktop/` contains a production Electron shell around the same `client/` React app, adding an offline-first SQLite cache and a bidirectional sync engine against the existing Postgres backend — see **[desktop/README.md](./desktop/README.md)** for the full architecture, sync protocol, local AI design, and packaging instructions. Windows ships a code-signed NSIS installer; macOS (dmg) and Linux (AppImage) build and publish alongside it but are currently unsigned.
 
 ```bash
-npm install                 # root devDependencies: electron, better-sqlite3, electron-builder, ...
-npx electron-rebuild -f -w better-sqlite3   # rebuild the native SQLite addon against Electron's Node ABI
-npm run desktop:dev         # dev mode: Vite dev server + Electron window
-npm run dist:win            # production Windows installer (release/ANATOLIA-Q-Setup-*.exe)
-npm run dist:mac            # production macOS disk image (must run on macOS; release/ANATOLIA-Q-*.dmg)
-npm run dist:linux          # production Linux AppImage (release/ANATOLIA-Q-*.AppImage)
-
-npm rebuild better-sqlite3  # switch the native module back to the system Node ABI...
-npm run test:desktop        # ...before running desktop/**/*.test.js (see desktop/README.md)
+npm install
+npx electron-rebuild -f -w better-sqlite3
+npm run desktop:dev
+npm run dist:win
+npm run dist:mac
+npm run dist:linux
+npm rebuild better-sqlite3
+npm run test:desktop
 ```
 
 The web app is unaffected by any of this — `desktop/` only ever loads the already-built `client/dist`, and the sync API additions (`/api/sync/*`, `/api/devices/*`) are additive endpoints alongside the existing ones.
@@ -155,19 +214,16 @@ The web app is unaffected by any of this — `desktop/` only ever loads the alre
 
 ## Android (Capacitor)
 
-`mobile/` contains a Capacitor shell around the same `client/` React app, reusing the desktop app's offline-first sync architecture, device auth, and local AI — ported to Capacitor's async native APIs. Distributed as a sideloaded APK only (never Google Play), matching the desktop app's closed institutional distribution model — see **[mobile/README.md](./mobile/README.md)** for the full architecture, signing, and release process.
+`mobile/` contains a Capacitor shell around the same `client/` React app, reusing the desktop app's offline-first sync architecture, device auth, and local AI through Capacitor's asynchronous native APIs. It is distributed as a sideloaded APK, matching the desktop app's closed institutional distribution model.
 
 ```bash
-cd client && npm run build   # produces client/dist, which mobile/ wraps
+cd client && npm run build
 cd ../mobile && npm ci
-npm run sync                 # cap sync android — copies client/dist into the Android project
-npm run open                 # opens the project in Android Studio
-
-cd android && ./gradlew assembleDebug     # unsigned debug APK
-                ./gradlew assembleRelease  # release APK, signed if keystore.properties exists
+npm run sync
+npm run open
+cd android && ./gradlew assembleDebug
+./gradlew assembleRelease
 ```
-
-The web and desktop apps are unaffected — `mobile/` only ever consumes the already-built `client/dist`, and its SQLite/sync code lives under `client/src/mobile/` alongside (not instead of) the desktop equivalents.
 
 ---
 
@@ -179,7 +235,7 @@ The web and desktop apps are unaffected — `mobile/` only ever consumes the alr
 |---|---|
 | `JWT_SECRET` | JWT signing secret; production startup requires a valid configured secret |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` | At least one AI provider must be configured for AI analysis; multiple keys enable fallback |
+| AI provider credentials | At least one configured provider is required for AI analysis; multiple providers enable fallback |
 
 ### Application / Infrastructure
 
@@ -197,8 +253,8 @@ The web and desktop apps are unaffected — `mobile/` only ever consumes the alr
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional Web Push configuration |
 | `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |
 | `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
-| `ANATOLIA_CLOUD_URL` | Desktop-only: deployed API/web origin the Electron app syncs against (defaults to the production Northflank URL) |
-| `VITE_MOBILE_CLOUD_URL` | Mobile-only, build-time: deployed API/web origin the Capacitor Android app syncs against (defaults to the production Northflank URL) |
+| `ANATOLIA_CLOUD_URL` | Desktop-only deployed API/web origin |
+| `VITE_MOBILE_CLOUD_URL` | Mobile-only build-time deployed API/web origin |
 
 ### Quantum
 
@@ -209,31 +265,29 @@ The web and desktop apps are unaffected — `mobile/` only ever consumes the alr
 | `IBM_QUANTUM_WAIT_SECONDS` | Maximum wait for the optional hardware-verification lane; defaults to 60 seconds |
 | `PYTHON_BIN` | Optional Python executable override for Qiskit subprocesses |
 
-Platform-provided variables such as `NODE_ENV` and `PORT` are supplied by the deployment environment where applicable.
-
 ---
 
 ## How It Works
 
-**Login:** credentials are checked against `auth_users`. After successful password validation, admin accounts receive a JWT immediately with a 4-hour lifetime. Non-admin accounts enter the central-mail approval flow: the approval token expires after 10 minutes and, after approval, the client receives a 2-hour JWT. Approval links use a confirmation GET followed by a state-changing POST so automated mail-link scanners cannot approve a login merely by opening the link.
+**Login:** credentials are checked against `auth_users`. After successful password validation, admin accounts receive a JWT immediately with a 4-hour lifetime. Non-admin accounts enter the central-mail approval flow: the approval token expires after 10 minutes and, after approval, the client receives a 2-hour JWT.
 
-**Analysis:** the user selects a category and supplies the brief/data → the AI provider chain generates the structured report → supported quantum modules independently recompute relevant scenario, optimization, or anomaly structures → the authoritative local result is merged into the report → optional IBM hardware verification can run as a separate verification lane → the report is persisted and exported.
+**Analysis:** the user selects a category and supplies the brief/data → the provider-independent AI layer generates the structured report → supported quantum modules independently recompute relevant scenario, optimization, or anomaly structures → the authoritative local result is merged into the report → optional IBM hardware verification can run as a separate verification lane → the report is persisted and exported.
 
-**Audit:** analysis execution metadata can be recorded by the decision-intelligence layer. When an archived analysis has a matching trace, the History view displays an Analysis Audit panel containing the relevant model, prompt, provenance, quality, classification, duration, and quantum metadata without exposing unnecessary engine-selection controls to the user.
+**Audit:** analysis execution metadata can be recorded by the decision-intelligence layer. When an archived analysis has a matching trace, the History view displays an Analysis Audit panel containing the relevant model, prompt, provenance, quality, classification, duration, and quantum metadata.
 
-**Appearance:** Settings → Appearance provides Dark, Light and System modes. The selected mode is retained in local storage; System mode follows the operating system/browser preference and reacts to preference changes while the app is open.
+**Appearance:** Settings → Appearance provides Dark, Light and System modes. The selected mode is retained in local storage; System mode follows the operating system/browser preference.
 
 ---
 
 ## Deployment
 
-Production runs on [Northflank](https://northflank.com), which builds the repo's `Dockerfile` and deploys automatically on every push to `main` via its own GitHub integration (not a GitHub Actions workflow).
+Production runs on Northflank, which builds the repo's `Dockerfile` and deploys automatically on every push to `main` via its own GitHub integration.
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
-| `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases (see [mobile/README.md](./mobile/README.md)) |
-| `.github/workflows/desktop-release.yml` | Push to `main`, push of a `desktop-v*` tag / manual dispatch | Matrix build across `windows-latest`/`macos-latest`/`ubuntu-latest`; builds the Windows/macOS/Linux installers and publishes them all to the same GitHub Release (see [desktop/README.md](./desktop/README.md#releases--auto-update)) |
+| `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases |
+| `.github/workflows/desktop-release.yml` | Push to `main`, `desktop-v*` tag / manual dispatch | Builds Windows/macOS/Linux installers and publishes them to GitHub Releases |
 
 A deployment should be treated as live only after CI completes successfully and the Northflank build/deploy finishes.
 
@@ -247,13 +301,14 @@ A deployment should be treated as live only after CI completes successfully and 
 - Blocking a user disconnects the active socket session
 - Sensitive credentials belong in environment configuration, never connector source code
 - Institutional connectors must not be described as live until authorized endpoint specifications and credentials are configured
+- ANATOLIA-Q is a decision-support system; its outputs do not replace authorized institutional or human decision-making
 - Security issues should be reported according to **[SECURITY.md](./SECURITY.md)**
 
 ---
 
 ## Current Capability Summary
 
-ANATOLIA-Q currently combines multi-provider AI decision-support reporting, deterministic quantum analysis with optional real IBM hardware verification, decision provenance/quality/evidence/trace foundations, model and prompt audit metadata, an archived-report Analysis Audit UI, scenario replay/outcome APIs, an institutional connector framework, operational/readiness/connector/risk platform APIs, a versioned `/api/v1/platform` interface with OpenAPI specification, emergency communication/situational-awareness features, and persistent Dark/Light/System appearance modes.
+ANATOLIA-Q currently combines provider-independent multi-provider AI decision-support reporting, deterministic quantum analysis with optional real IBM hardware verification, decision provenance/quality/evidence/trace foundations, model and prompt audit metadata, an archived-report Analysis Audit UI, scenario replay/outcome APIs, an institutional connector framework, operational/readiness/connector/risk platform APIs, a versioned `/api/v1/platform` interface with OpenAPI specification, emergency communication/situational-awareness features, and persistent Dark/Light/System appearance modes.
 
 The next institution-specific connector should be implemented only when a real authorized API/data specification is available; the platform does not fabricate institution endpoints or claim integrations that have not been configured and tested.
 
@@ -267,7 +322,7 @@ The next institution-specific connector should be implemented only when a real a
   author       = {{Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.}},
   year         = {2026},
   url          = {https://github.com/atabeyler/anatolia.bold.q},
-  note         = {LLM-generated decision support cross-checked by deterministic quantum-circuit computation with optional real IBM Quantum hardware verification}
+  note         = {Provider-independent AI decision support cross-checked by deterministic quantum-circuit computation with optional real IBM Quantum hardware verification}
 }
 ```
 
