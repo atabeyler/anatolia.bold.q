@@ -46,13 +46,13 @@ describe('UpdateBanner (desktop)', () => {
     render(<UpdateBanner />);
 
     act(() => { pushAvailable({ available: true, version: '2.1.140', notes: '' }); });
-    await waitFor(() => expect(screen.getByText('Yeni sürüm mevcut: v2.1.140')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Güncelle'));
+    fireEvent.click(screen.getByText('Update'));
     expect(approve).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.getByText('Kur ve Yeniden Başlat')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Install and Restart')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Kur ve Yeniden Başlat'));
+    fireEvent.click(screen.getByText('Install and Restart'));
     expect(install).toHaveBeenCalledTimes(1);
   });
 
@@ -68,10 +68,10 @@ describe('UpdateBanner (desktop)', () => {
     render(<UpdateBanner />);
 
     act(() => { pushAvailable({ available: true, version: '2.1.140' }); });
-    await waitFor(() => expect(screen.getByText('Güncelle')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('Güncelle'));
+    await waitFor(() => expect(screen.getByText('Update')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Update'));
 
-    await waitFor(() => expect(screen.getByText('İndirme başarısız oldu.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Download failed.')).toBeInTheDocument());
   });
 
   it('dismissing the banner hides it', async () => {
@@ -85,9 +85,9 @@ describe('UpdateBanner (desktop)', () => {
     const { container } = render(<UpdateBanner />);
 
     act(() => { pushAvailable({ available: true, version: '2.1.140' }); });
-    await waitFor(() => expect(screen.getByText('Güncelle')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Update')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByLabelText('Kapat'));
+    fireEvent.click(screen.getByLabelText('Close'));
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -106,9 +106,9 @@ describe('UpdateBanner (Android)', () => {
     mobileBridge.mobileUpdate.approve = approve;
 
     render(<UpdateBanner />);
-    await waitFor(() => expect(screen.getByText('Yeni sürüm mevcut: v2.1.140')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('Güncelle'));
+    fireEvent.click(screen.getByText('Update'));
     expect(approve).toHaveBeenCalledWith('https://x/app.apk');
 
     vi.unstubAllGlobals();
@@ -125,10 +125,10 @@ describe('UpdateBanner (Android)', () => {
     mobileBridge.mobileUpdate.approve = vi.fn(async () => { throw new Error('boom'); });
 
     render(<UpdateBanner />);
-    await waitFor(() => expect(screen.getByText('Güncelle')).toBeInTheDocument());
-    fireEvent.click(screen.getByText('Güncelle'));
+    await waitFor(() => expect(screen.getByText('Update')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Update'));
 
-    await waitFor(() => expect(screen.getByText('İndirme başarısız oldu.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Download failed.')).toBeInTheDocument());
 
     vi.unstubAllGlobals();
   });

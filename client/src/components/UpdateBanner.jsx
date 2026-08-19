@@ -17,6 +17,14 @@ export default function UpdateBanner() {
   const [stage, setStage] = useState('idle'); // idle | downloading | ready | error | dismissed
   const [progress, setProgress] = useState(null);
   const [dismissedVersion, setDismissedVersion] = useState(null);
+  const notesText = info?.notes
+    ? info.notes
+        .replace(/https?:\/\/\S+/gi, '')
+        .replace(/\bgithub\.com\/\S+/gi, '')
+        .replace(/\bgithub\b/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+    : '';
 
   useEffect(() => {
     if (info?.version && info.version !== dismissedVersion && stage === 'dismissed') {
@@ -86,37 +94,37 @@ export default function UpdateBanner() {
             <div className="min-w-0 flex-1">
               <div className="text-xs uppercase tracking-[0.35em] text-cyan-200/80">Desktop Update</div>
               <div className="mt-1 text-base sm:text-lg text-cyan-50 font-medium">
-                {stage === 'idle' && `Yeni sürüm mevcut: v${info.version}`}
-                {stage === 'downloading' && `İndiriliyor${pct !== null ? ` (%${pct})` : '…'}`}
-                {stage === 'ready' && `v${info.version} indirildi.`}
-                {stage === 'error' && 'İndirme başarısız oldu.'}
+                {stage === 'idle' && `A new version is available: v${info.version}`}
+                {stage === 'downloading' && `Downloading${pct !== null ? ` (${pct}%)` : '...'}`}
+                {stage === 'ready' && `v${info.version} downloaded.`}
+                {stage === 'error' && 'Download failed.'}
               </div>
-              {stage === 'idle' && info.notes && (
+              {stage === 'idle' && notesText && (
                 <p className="mt-2 text-xs sm:text-sm text-cyan-100/70 whitespace-pre-wrap">
-                  {info.notes}
+                  {notesText}
                 </p>
               )}
             </div>
-            <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="shrink-0 text-cyan-100/75 hover:text-cyan-50" aria-label="Kapat">
+            <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="shrink-0 text-cyan-100/75 hover:text-cyan-50" aria-label="Close">
               <X className="w-4 h-4" />
             </button>
           </div>
           <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div className="text-xs text-cyan-100/70 leading-5">
-              {stage === 'idle' && 'Güncelleme arka planda indirilip kurulum için hazırlanabilir.'}
-              {stage === 'downloading' && 'Lütfen indirme tamamlanana kadar bekleyin.'}
-              {stage === 'ready' && 'Kurulumu başlatmak için yeniden başlatma gerekli.'}
-              {stage === 'error' && 'İndirme başarısız oldu, tekrar deneyebilirsiniz.'}
+              {stage === 'idle' && 'The update can be downloaded in the background and prepared for install.'}
+              {stage === 'downloading' && 'Please wait until the download completes.'}
+              {stage === 'ready' && 'Restart is required to start the installer.'}
+              {stage === 'error' && 'The download failed. You can try again.'}
             </div>
             <div className="flex items-center gap-2 justify-end">
               {stage === 'idle' && (
                 <button onClick={approve} className="border border-cyan-400/50 px-4 py-2 rounded-lg text-sm text-cyan-50 hover:bg-cyan-400/10 shrink-0">
-                  Güncelle
+                  Update
                 </button>
               )}
               {stage === 'ready' && (
                 <button onClick={install} className="border border-cyan-400/50 px-4 py-2 rounded-lg text-sm text-cyan-50 hover:bg-cyan-400/10 shrink-0">
-                  Kur ve Yeniden Başlat
+                  Install and Restart
                 </button>
               )}
             </div>
@@ -131,23 +139,23 @@ export default function UpdateBanner() {
       <Download className="w-4 h-4 shrink-0" />
       {stage === 'idle' && (
         <>
-          <span>Yeni sürüm mevcut: v{info.version}</span>
+          <span>A new version is available: v{info.version}</span>
           <button onClick={approve} className="border border-cyan-400/50 px-3 py-1 rounded hover:bg-cyan-400/10 shrink-0">
-            Güncelle
+            Update
           </button>
         </>
       )}
-      {stage === 'downloading' && <span>İndiriliyor{pct !== null ? ` (%${pct})` : '…'}</span>}
+      {stage === 'downloading' && <span>Downloading{pct !== null ? ` (${pct}%)` : '...'}</span>}
       {stage === 'ready' && (
         <>
-          <span>v{info.version} indirildi.</span>
+          <span>v{info.version} downloaded.</span>
           <button onClick={install} className="border border-cyan-400/50 px-3 py-1 rounded hover:bg-cyan-400/10 shrink-0">
-            Kur ve Yeniden Başlat
+            Install and Restart
           </button>
         </>
       )}
-      {stage === 'error' && <span>İndirme başarısız oldu.</span>}
-        <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="ml-2 shrink-0" aria-label="Kapat">
+      {stage === 'error' && <span>Download failed.</span>}
+        <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="ml-2 shrink-0" aria-label="Close">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
