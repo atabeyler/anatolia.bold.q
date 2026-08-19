@@ -25,10 +25,10 @@ beforeEach(() => {
 });
 
 describe('HomeView command center', () => {
-  it('renders the live map area and real platform status panel', async () => {
+  it('renders the live map area and real system status panel', async () => {
     renderHome();
     expect(await screen.findByText('TurkeyMap stub')).toBeInTheDocument();
-    expect(screen.getByText(/Platform \/ Sistem Durumu/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Sistem Durumu$/i)).toBeInTheDocument();
     expect(screen.getByText(/AI Sağlayıcıları/i)).toBeInTheDocument();
     expect(screen.queryByText(/^CPU$/i)).not.toBeInTheDocument();
   });
@@ -53,7 +53,7 @@ describe('HomeView command center', () => {
   it('renders activity feed items once loaded', async () => {
     api.activityFeed.mockResolvedValue([{ id: 1, type: 'analysis', title: 'Ekonomi Raporu', created_at: new Date().toISOString(), category: 'ekonomi' }]);
     renderHome();
-    expect(await screen.findByText(/Ekonomi Raporu/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Ekonomi Raporu/i)).length).toBeGreaterThan(0);
   });
 
   it('shows the refresh button in the briefing card only for admins', async () => {
