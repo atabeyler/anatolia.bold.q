@@ -6,7 +6,7 @@
 // which streams the browser_download_url this returns) -- the client
 // never sees a github.com address anywhere in the update flow.
 const REPO = 'atabeyler/anatolia.bold.q';
-const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
+const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases?per_page=20`;
 
 function pickAsset(assets, suffix) {
   const asset = (assets || []).find((a) => a.name?.endsWith(suffix));
@@ -19,7 +19,9 @@ async function fetchLatestRelease() {
     signal: AbortSignal.timeout(8000),
   });
   if (!r.ok) throw new Error(`GitHub releases lookup failed (HTTP ${r.status})`);
-  const release = await r.json();
+  const releases = await r.json();
+  const release = Array.isArray(releases) ? releases.find((item) => item && !item.draft) : releases;
+  if (!release) throw new Error('GitHub releases lookup returned no published release');
 
   return {
     version: (release.tag_name || '').replace(/^v/, ''),

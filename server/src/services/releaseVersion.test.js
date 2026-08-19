@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('getLatestVersionInfo', () => {
   it('strips the leading v and picks the .apk/.exe/.dmg/.AppImage assets, ignoring blockmap/yml', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => fakeRelease() }));
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [fakeRelease()] }));
     vi.stubGlobal('fetch', fetchMock);
     const { getLatestVersionInfo } = await import('./releaseVersion.js');
 
@@ -42,7 +42,7 @@ describe('getLatestVersionInfo', () => {
   });
 
   it('fetches fresh release data on every call', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => fakeRelease() }));
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [fakeRelease()] }));
     vi.stubGlobal('fetch', fetchMock);
     const { getLatestVersionInfo } = await import('./releaseVersion.js');
 
@@ -58,5 +58,22 @@ describe('getLatestVersionInfo', () => {
     const { getLatestVersionInfo } = await import('./releaseVersion.js');
 
     await expect(getLatestVersionInfo()).rejects.toThrow('HTTP 403');
+  });
+
+  it('skips drafts and uses the newest published release', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => [
+        fakeRelease({ tag_name: 'v2.1.999', draft: true }),
+        fakeRelease({ tag_name: 'v2.1.206', draft: false }),
+      ],
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatestVersionInfo } = await import('./releaseVersion.js');
+
+    const info = await getLatestVersionInfo();
+
+    expect(info.version).toBe('2.1.206');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
