@@ -43,6 +43,7 @@ let deviceId = null;
 let sessionManager = null;
 let connectivity = null;
 let syncTimer = null;
+let updateTimer = null;
 // Created before anything else in app.whenReady() so every subsequent
 // step (db open, sync, IPC handlers) can log through it; diagnostics.js
 // itself never throws, so this is safe to call unconditionally everywhere
@@ -54,6 +55,7 @@ let diagnostics = null;
 let pendingUpdate = null;
 let downloadedInstallerPath = null;
 let splashShownAt = 0;
+let updateCheckInFlight = false;
 
 function createSplashWindow() {
   const iconData = fs.readFileSync(path.join(__dirname, 'build', 'icon.png')).toString('base64');
@@ -206,6 +208,24 @@ async function performSync() {
   await connectivity.checkOnce();
   mainWindow?.webContents.send('connectivity:change', connectivity.getState());
   return result;
+}
+
+async function checkAndBroadcastUpdate() {
+  if (isDev || !app.isPackaged || updateCheckInFlight) return;
+  updateCheckInFlight = true;
+  try {
+    const result = await checkForUpdate(CLOUD_URL, app.getVersion(), process.platform);
+    if (!result.available) return;
+    if (pendingUpdate?.version === result.version) return;
+    pendingUpdate = result;
+    diagnostics?.info('update_available', { version: result.version });
+    mainWindow?.webContents.send('update:available', result);
+  } catch (err) {
+    console.warn('[AppUpdate] check failed:', err?.message || err);
+    diagnostics?.error('update_check_failed', { message: err?.message });
+  } finally {
+    updateCheckInFlight = false;
+  }
 }
 
 function registerIpcHandlers() {
@@ -465,17 +485,9 @@ app.whenReady().then(async () => {
     // via the update:approve IPC handler above. Failure here (no releases
     // published yet, machine offline, ...) is never fatal -- the app just
     // runs the version it already has.
-    checkForUpdate(CLOUD_URL, app.getVersion(), process.platform)
-      .then((result) => {
-        if (!result.available) return;
-        pendingUpdate = result;
-        diagnostics.info('update_available', { version: result.version });
-        mainWindow?.webContents.send('update:available', result);
-      })
-      .catch((err) => {
-        console.warn('[AppUpdate] check failed:', err?.message || err);
-        diagnostics.error('update_check_failed', { message: err?.message });
-      });
+    checkAndBroadcastUpdate().catch(() => {});
+    updateTimer = setInterval(() => checkAndBroadcastUpdate().catch(() => {}), 5 * 60 * 1000);
+    updateTimer.unref?.();
   }
 
   app.on('activate', () => {
@@ -485,6 +497,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (syncTimer) clearInterval(syncTimer);
+  if (updateTimer) clearInterval(updateTimer);
   connectivity?.stop();
   if (process.platform !== 'darwin') app.quit();
 });
