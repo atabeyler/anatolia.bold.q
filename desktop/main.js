@@ -151,7 +151,11 @@ function createSplashWindow() {
 }
 
 function hideSplashThenShowMain() {
-  const minSplashMs = 1600;
+  // Matches DISPLAY_MS in client/src/components/SplashScreen.jsx (the
+  // in-app splash Android/PWA show instead of this native window) so the
+  // pre-login launch screen lasts the same amount of time on every
+  // platform -- keep the two in sync if either changes.
+  const minSplashMs = 2500;
   const remaining = Math.max(0, minSplashMs - (Date.now() - splashShownAt));
   setTimeout(() => {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
