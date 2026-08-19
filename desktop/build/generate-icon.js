@@ -1,8 +1,9 @@
-// Generates desktop/build/icon.ico from scratch (navy square, gold "Q" ring)
-// with no external image tooling — this sandbox has neither ImageMagick nor
-// Pillow available. Re-run with `node desktop/build/generate-icon.js` if the
-// design ever needs to change; it's a build asset generator, not a one-off
-// throwaway script.
+// Generates desktop/build/icon.ico from scratch using the same orbital brand
+// language as the in-app logo / `client/public/icon-source.svg`, with no
+// external image tooling — this sandbox has neither ImageMagick nor Pillow
+// available. Re-run with `node desktop/build/generate-icon.js` if the design
+// ever needs to change; it's a build asset generator, not a one-off throwaway
+// script.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -17,33 +18,103 @@ const SIZE = 256;
 // that, hence a separate larger render.
 const MAC_ICON_SIZE = 1024;
 
-const NAVY = [15, 30, 61, 255];
+const BG_CORE = [10, 14, 26, 255];
+const BG_EDGE = [18, 28, 46, 255];
+const GUIDE = [91, 127, 166, 255];
 const GOLD = [212, 175, 55, 255];
+const RED = [194, 59, 94, 255];
+const BLUE = [63, 127, 209, 255];
+const CYAN = [79, 214, 232, 255];
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function mix(a, b, t) {
+  return [
+    Math.round(lerp(a[0], b[0], t)),
+    Math.round(lerp(a[1], b[1], t)),
+    Math.round(lerp(a[2], b[2], t)),
+    Math.round(lerp(a[3], b[3], t)),
+  ];
+}
+
+function setPixel(pixels, idx, color) {
+  pixels[idx] = color[0];
+  pixels[idx + 1] = color[1];
+  pixels[idx + 2] = color[2];
+  pixels[idx + 3] = color[3];
+}
+
+function ellipseBand(dx, dy, rx, ry, rot, thickness) {
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  const xr = dx * cos + dy * sin;
+  const yr = -dx * sin + dy * cos;
+  const norm = Math.sqrt((xr * xr) / (rx * rx) + (yr * yr) / (ry * ry));
+  return Math.abs(norm - 1) <= thickness / Math.min(rx, ry);
+}
+
+function ellipseDash(dx, dy, rx, ry, rot, totalDashes, onFraction) {
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  const xr = dx * cos + dy * sin;
+  const yr = -dx * sin + dy * cos;
+  const theta = Math.atan2(yr / ry, xr / rx);
+  const normalized = (theta + Math.PI) / (Math.PI * 2);
+  const slot = (normalized * totalDashes) % 1;
+  return slot <= onFraction;
+}
 
 function buildPixels(size) {
   const pixels = new Uint8Array(size * size * 4);
   const cx = size / 2;
   const cy = size / 2;
-  const outerR = size * 0.38;
-  const innerR = size * 0.26;
+  const scale = size / 512;
+  const guideOuter = 175 * scale;
+  const guideInner = 150 * scale;
+  const ringOuter = 96 * scale;
+  const ringInner = 72 * scale;
+  const ellipseRx = 222 * scale;
+  const ellipseRy = 96 * scale;
+  const dotX = cx - 6 * scale;
+  const dotY = cy + 52 * scale;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = x - cx;
       const dy = y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
+      const bgMix = clamp(dist / (size * 0.76), 0, 1);
+      let color = mix(BG_EDGE, BG_CORE, 1 - bgMix);
 
-      // The "Q" tail: a diagonal gold bar in the lower-right quadrant.
-      const tail = dx > 0 && dy > 0 && Math.abs(dx - dy) < size * 0.07 && dist < outerR * 1.15;
+      if (Math.abs(dist - guideOuter) <= 1.5 * scale) color = GUIDE;
+      if (Math.abs(dist - guideInner) <= 1.25 * scale) color = mix(GUIDE, BG_CORE, 0.12);
 
-      let color = NAVY;
-      if (tail || (dist <= outerR && dist >= innerR)) color = GOLD;
+      const ellipseDefs = [
+        { rot: Math.PI / 10, color: GOLD, dashes: 16, on: 0.58 },
+        { rot: -Math.PI / 180 * 58, color: RED, dashes: 16, on: 0.58 },
+        { rot: Math.PI / 180 * 72, color: BLUE, dashes: 16, on: 0.58 },
+      ];
+      for (const ellipse of ellipseDefs) {
+        if (ellipseBand(dx, dy, ellipseRx, ellipseRy, ellipse.rot, 1.7 * scale) && ellipseDash(dx, dy, ellipseRx, ellipseRy, ellipse.rot, ellipse.dashes, ellipse.on)) {
+          color = ellipse.color;
+        }
+      }
+
+      const ringBand = dist <= ringOuter && dist >= ringInner;
+      const tail = dx > 0 && dy > 0 && dist > ringOuter * 0.65 && dist < ringOuter * 1.5 && Math.abs(dy - (0.25 * dx + 20 * scale)) < 5.5 * scale;
+      if (ringBand || tail) color = GOLD;
+
+      const dotDist = Math.sqrt((dx - (dotX - cx)) ** 2 + (dy - (dotY - cy)) ** 2);
+      if (dotDist <= 13 * scale) color = CYAN;
 
       const i = (y * size + x) * 4;
-      pixels[i] = color[0];
-      pixels[i + 1] = color[1];
-      pixels[i + 2] = color[2];
-      pixels[i + 3] = color[3];
+      setPixel(pixels, i, color);
     }
   }
   return pixels;

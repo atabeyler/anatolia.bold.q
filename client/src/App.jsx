@@ -16,13 +16,12 @@ const ButtonShowcasePage = lazy(() => import('./pages/ButtonShowcasePage.jsx'));
 
 // The branded launch screen belongs to installed/native app shells, not a
 // normal browser tab. ANATOLIA-Q ships in three such forms:
-//   - Electron desktop: preload exposes window.anatoliaDesktop.
+//   - Electron desktop: uses a native splash window in desktop/main.js.
 //   - Capacitor Android: the native bridge exposes window.Capacitor.
 //   - Installed browser PWA: display-mode is standalone (plus iOS legacy).
 // Do not rely on display-mode alone: Capacitor and Electron are not PWAs and
 // therefore legitimately report it as false.
 const isInstalledApp = () => {
-  const isDesktop = window.anatoliaDesktop?.isDesktop === true;
   const isCapacitor = Boolean(
     window.Capacitor?.isNativePlatform?.() ||
     (window.Capacitor?.getPlatform?.() && window.Capacitor.getPlatform() !== 'web')
@@ -31,7 +30,7 @@ const isInstalledApp = () => {
     window.matchMedia?.('(display-mode: standalone)')?.matches ||
     window.navigator.standalone === true;
 
-  return isDesktop || isCapacitor || isStandalonePwa;
+  return isCapacitor || isStandalonePwa;
 };
 
 export default function App() {

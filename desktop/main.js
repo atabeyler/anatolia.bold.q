@@ -37,6 +37,7 @@ if (!gotLock) {
 }
 
 let mainWindow = null;
+let splashWindow = null;
 let db = null;
 let deviceId = null;
 let sessionManager = null;
@@ -52,6 +53,109 @@ let diagnostics = null;
 // update:approve/update:install IPC handlers below.
 let pendingUpdate = null;
 let downloadedInstallerPath = null;
+let splashShownAt = 0;
+
+function createSplashWindow() {
+  const iconData = fs.readFileSync(path.join(__dirname, 'build', 'icon.png')).toString('base64');
+  const splashHtml = `<!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline';" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>ANATOLIA-Q</title>
+      <style>
+        :root { color-scheme: dark; }
+        html, body { width: 100%; height: 100%; margin: 0; }
+        body {
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 50% 38%, rgba(0, 120, 180, 0.22), transparent 34%),
+            linear-gradient(180deg, #08111f 0%, #050a14 100%);
+          color: #d4af37;
+          display: grid;
+          place-items: center;
+          font-family: "Cinzel", "Times New Roman", serif;
+          letter-spacing: 0.28em;
+          text-transform: uppercase;
+        }
+        .frame {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 18px;
+          padding: 32px 28px;
+          border: 1px solid rgba(0, 212, 255, 0.16);
+          background: rgba(2, 8, 18, 0.42);
+          box-shadow:
+            0 0 50px rgba(0, 120, 180, 0.12),
+            inset 0 0 40px rgba(212, 175, 55, 0.05);
+          min-width: 360px;
+        }
+        img {
+          width: 164px;
+          height: 164px;
+          image-rendering: auto;
+          animation: pulse 2.8s ease-in-out infinite;
+          filter: drop-shadow(0 0 16px rgba(0, 200, 255, 0.25));
+        }
+        .title { font-size: 22px; }
+        .subtitle {
+          font-size: 11px;
+          color: rgba(212, 175, 55, 0.72);
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 0.96; }
+          50% { transform: scale(1.03); opacity: 1; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="frame">
+        <img src="data:image/png;base64,${iconData}" alt="ANATOLIA-Q" />
+        <div class="title">ANATOLIA-Q</div>
+        <div class="subtitle">BOLD TECHNOLOGIES</div>
+      </div>
+    </body>
+  </html>`;
+
+  splashShownAt = Date.now();
+  splashWindow = new BrowserWindow({
+    width: 520,
+    height: 560,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    show: true,
+    frame: false,
+    center: true,
+    transparent: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: '#050a14',
+    icon: path.join(__dirname, 'build', 'icon.png'),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  splashWindow.setMenuBarVisibility(false);
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHtml)}`);
+  splashWindow.on('closed', () => { splashWindow = null; });
+  return splashWindow;
+}
+
+function hideSplashThenShowMain() {
+  const minSplashMs = 1600;
+  const remaining = Math.max(0, minSplashMs - (Date.now() - splashShownAt));
+  setTimeout(() => {
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  }, remaining);
+}
 
 function currentUserCode() {
   return sessionManager?.getSession()?.userCode || null;
@@ -213,6 +317,7 @@ async function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
+    show: false,
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -249,6 +354,7 @@ async function createWindow() {
     await mainWindow.loadURL(url);
   }
 
+  mainWindow.once('ready-to-show', hideSplashThenShowMain);
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Renderer console output (including CSP violations and preload errors)
@@ -341,6 +447,7 @@ app.whenReady().then(async () => {
 
   registerIpcHandlers();
   buildAppMenu();
+  createSplashWindow();
   await createWindow();
   performSync().catch(() => {});
 

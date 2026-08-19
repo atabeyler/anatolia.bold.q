@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Shield, CheckCircle, XCircle, Wifi, Cpu, Activity, Menu as MenuIcon, Settings as SettingsIcon } from 'lucide-react';
 import { api, setJWT } from '../services/api.js';
-import { isNativeApp, nativeAuth, nativeConnectivity } from '../services/nativeBridge.js';
+import { isNativeApp, nativeAuth } from '../services/nativeBridge.js';
 import EmergencyButton from '../components/EmergencyButton.jsx';
 import { useLang } from '../services/langContext.jsx';
 import { localeFor } from '../services/i18n.js';
@@ -367,12 +367,6 @@ export default function LoginPage({ onLogin }) {
     // the password itself is never written to localStorage.
     localStorage.setItem('aq_saved_code', userCode.trim());
     try {
-      if (isNativeApp && (await nativeConnectivity.getState()) === 'local') {
-        // Already known to be offline -- skip straight to local verification
-        // instead of waiting out a network request that can't succeed.
-        await attemptOfflineLogin();
-        return;
-      }
       const r = await api.loginRequest(userCode.trim(), password);
       // Admin: gets JWT directly, no approval wait
       if (r.status === 'approved' && r.jwt) {
