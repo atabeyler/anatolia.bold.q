@@ -55,8 +55,11 @@ function speakReliable(text, langCode, onDone) {
 }
 
 const NAMES = {
-  general:{tr:'General',en:'General'},diplomat:{tr:'Diplomat',en:'Diplomat'},
-  hawk:{tr:'Şahin',en:'Hawk'},analyst:{tr:'Analist',en:'Analyst'},guardian:{tr:'Koruyucu',en:'Guardian'}
+  general:{tr:'General',en:'General',de:'General',fr:'Général',ar:'جنرال'},
+  diplomat:{tr:'Diplomat',en:'Diplomat',de:'Diplomat',fr:'Diplomate',ar:'دبلوماسي'},
+  hawk:{tr:'Şahin',en:'Hawk',de:'Falke',fr:'Faucon',ar:'الصقر'},
+  analyst:{tr:'Analist',en:'Analyst',de:'Analyst',fr:'Analyste',ar:'محلل'},
+  guardian:{tr:'Koruyucu',en:'Guardian',de:'Wächter',fr:'Gardien',ar:'الحارس'}
 };
 
 const TX = {
@@ -78,6 +81,33 @@ const TX = {
     voiceTab:'VOICE CONSULTATION',chatTab:'CHAT',active:'ACTIVE',
     voiceNote:'ANATOLIA-Q will listen to you and respond.',
     save:'Save',clear:'Clear',error:'Error'
+  },
+  de:{
+    mic:'Mikrofonzugriff verweigert. Verwenden Sie Chrome/Edge.',noSpeech:'Keine Sprache erkannt.',
+    thinking:'Denkt nach...',listening:'Hört zu...',speaking:'Spricht...',
+    tap:'Mikrofon antippen',paused:'Pausiert',auto:'AUTO-HÖREN',arch:'Archiv',char:'Charakter',
+    consultMode:'BERATUNGSMODUS',homeScreen:'STARTSEITE',
+    voiceTab:'SPRACHBERATUNG',chatTab:'CHAT',active:'AKTIV',
+    voiceNote:'ANATOLIA-Q hört Ihnen zu und antwortet per Sprache.',
+    save:'Speichern',clear:'Löschen',error:'Fehler'
+  },
+  fr:{
+    mic:'Accès au microphone refusé. Utilisez Chrome/Edge.',noSpeech:'Aucune parole détectée.',
+    thinking:'Réflexion...',listening:'Écoute...',speaking:'Parle...',
+    tap:'Appuyez sur le microphone',paused:'En pause',auto:'ÉCOUTE AUTO',arch:'Archive',char:'Personnage',
+    consultMode:'MODE CONSULTATION',homeScreen:'ACCUEIL',
+    voiceTab:'CONSULTATION VOCALE',chatTab:'DISCUSSION',active:'ACTIF',
+    voiceNote:'ANATOLIA-Q vous écoutera et répondra à voix haute.',
+    save:'Enregistrer',clear:'Effacer',error:'Erreur'
+  },
+  ar:{
+    mic:'تم رفض الوصول إلى الميكروفون. استخدم Chrome/Edge.',noSpeech:'لم يتم اكتشاف كلام.',
+    thinking:'يفكر...',listening:'يستمع...',speaking:'يتحدث...',
+    tap:'اضغط على الميكروفون',paused:'متوقف مؤقتاً',auto:'استماع تلقائي',arch:'الأرشيف',char:'الشخصية',
+    consultMode:'وضع الاستشارة',homeScreen:'الرئيسية',
+    voiceTab:'استشارة صوتية',chatTab:'محادثة',active:'نشط',
+    voiceNote:'سيستمع إليك ANATOLIA-Q ويرد صوتياً.',
+    save:'حفظ',clear:'مسح',error:'خطأ'
   }
 };
 
@@ -91,7 +121,7 @@ export default function VoiceChat({ onClose }) {
     onClose?.();
   }, [onClose]);
   const { lang } = useLang();
-  const t = useCallback((k) => TX[lang]?.[k] || TX.tr[k] || k, [lang]);
+  const t = useCallback((k) => TX[lang]?.[k] || TX.en[k] || TX.tr[k] || k, [lang]);
 
   const [phase, setPhase] = useState(ST.IDLE);
   const [transcript, setTranscript] = useState('');

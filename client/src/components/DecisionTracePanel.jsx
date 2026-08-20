@@ -1,16 +1,17 @@
 import { CheckCircle2, Circle, Clock3, Database, ShieldCheck, Sparkles, TriangleAlert } from 'lucide-react';
+import { useLang } from '../services/langContext.jsx';
 
-const LABELS = {
-  ingest: 'Veri Alımı', validate: 'Doğrulama', normalize: 'Normalizasyon',
-  'ai-analysis': 'AI Analizi', quantum: 'Quantum Analizi', fraud: 'Fraud İncelemesi',
-  optimizer: 'Optimizasyon', evidence: 'Kanıt Birleştirme', finalize: 'Karar Üretimi',
-};
-
-function stageLabel(name) {
-  return LABELS[name] || String(name || 'İşlem').replaceAll('-', ' ').toLocaleUpperCase('tr-TR');
+function stageLabel(name, t) {
+  const LABELS = {
+    ingest: t('dtStageIngest'), validate: t('dtStageValidate'), normalize: t('dtStageNormalize'),
+    'ai-analysis': t('dtStageAiAnalysis'), quantum: t('dtStageQuantum'), fraud: t('dtStageFraud'),
+    optimizer: t('dtStageOptimizer'), evidence: t('dtStageEvidence'), finalize: t('dtStageFinalize'),
+  };
+  return LABELS[name] || String(name || t('dtStageFallback')).replaceAll('-', ' ').toLocaleUpperCase('en-US');
 }
 
 export default function DecisionTracePanel({ record }) {
+  const { t } = useLang();
   if (!record) return null;
   const trace = record.decision_trace || record.decisionTrace || {};
   const stages = Array.isArray(trace.stages) ? trace.stages : [];
@@ -22,20 +23,20 @@ export default function DecisionTracePanel({ record }) {
       <header className="px-4 py-3 border-b border-cyan-400/10 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-cyan-300" />
         <div>
-          <div className="text-[10px] tracking-[0.18em] text-cyan-100 font-semibold">DECISION TRACE</div>
-          <div className="text-[9px] text-white/30 mt-0.5">Kararın hangi veri ve işlem aşamalarından üretildiğinin denetlenebilir izi</div>
+          <div className="text-[10px] tracking-[0.18em] text-cyan-100 font-semibold">{t('dtLabel')}</div>
+          <div className="text-[9px] text-white/30 mt-0.5">{t('dtDesc')}</div>
         </div>
         <span className={`ml-auto text-[9px] px-2 py-1 rounded border ${integrityOk === false ? 'border-red-400/30 text-red-300' : 'border-emerald-400/25 text-emerald-300'}`}>
-          {integrityOk === false ? 'BÜTÜNLÜK UYARISI' : integrityOk === true ? 'BÜTÜNLÜK DOĞRULANDI' : 'AUDIT RECORD'}
+          {integrityOk === false ? t('dtIntegrityWarning') : integrityOk === true ? t('dtIntegrityVerified') : t('dtAuditRecord')}
         </span>
       </header>
 
       <div className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-[9px]">
-          <Meta icon={Database} label="VERİ KAYNAĞI" value={record.provenance?.source || record.provenance?.type || '—'} />
-          <Meta icon={Sparkles} label="AI SAĞLAYICI" value={record.ai_provider || '—'} />
-          <Meta icon={Clock3} label="SÜRE" value={record.duration_ms ? `${record.duration_ms} ms` : '—'} />
-          <Meta icon={ShieldCheck} label="SINIFLANDIRMA" value={record.data_classification || '—'} />
+          <Meta icon={Database} label={t('dtDataSource')} value={record.provenance?.source || record.provenance?.type || '—'} />
+          <Meta icon={Sparkles} label={t('dtAiProvider')} value={record.ai_provider || '—'} />
+          <Meta icon={Clock3} label={t('dtDuration')} value={record.duration_ms ? `${record.duration_ms} ms` : '—'} />
+          <Meta icon={ShieldCheck} label={t('dtClassification')} value={record.data_classification || '—'} />
         </div>
 
         {stages.length ? (
@@ -50,7 +51,7 @@ export default function DecisionTracePanel({ record }) {
                   <div key={`${stage.stage}-${index}`} className="relative flex gap-3 rounded border border-white/5 bg-black/10 p-2.5">
                     <span className={`relative z-10 w-5 h-5 rounded-full bg-[#031326] flex items-center justify-center ${failed ? 'text-red-300' : completed ? 'text-emerald-300' : 'text-cyan-300'}`}><Icon className="w-4 h-4" /></span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2"><span className="text-[10px] text-white/75 font-medium">{stageLabel(stage.stage)}</span><span className="text-[8px] text-white/25">#{String(index + 1).padStart(2, '0')}</span><span className={`ml-auto text-[8px] ${failed ? 'text-red-300' : 'text-emerald-300/70'}`}>{String(stage.status || 'recorded').toUpperCase()}</span></div>
+                      <div className="flex items-center gap-2"><span className="text-[10px] text-white/75 font-medium">{stageLabel(stage.stage, t)}</span><span className="text-[8px] text-white/25">#{String(index + 1).padStart(2, '0')}</span><span className={`ml-auto text-[8px] ${failed ? 'text-red-300' : 'text-emerald-300/70'}`}>{String(stage.status || 'recorded').toUpperCase()}</span></div>
                       <div className="mt-1 text-[9px] text-white/30 flex flex-wrap gap-x-4 gap-y-1">
                         {stage.metadata?.durationMs != null && <span>{stage.metadata.durationMs} ms</span>}
                         {stage.metadata?.provider && <span>Provider: {stage.metadata.provider}</span>}
@@ -63,7 +64,7 @@ export default function DecisionTracePanel({ record }) {
               })}
             </div>
           </div>
-        ) : <div className="rounded border border-white/5 p-4 text-center text-[10px] text-white/30">Bu kayıt için ayrıntılı işlem aşaması bulunmuyor.</div>}
+        ) : <div className="rounded border border-white/5 p-4 text-center text-[10px] text-white/30">{t('dtNoStages')}</div>}
 
         {hashes.length > 0 && <div className="mt-4 pt-3 border-t border-cyan-400/10 text-[8px] text-white/25 font-mono break-all">RECORD HASH: {record.record_hash || hashes.at(-1)}</div>}
       </div>
