@@ -15,7 +15,7 @@ import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
 import FileAttach from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
-import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge } from './AnalysisWorkflow.jsx';
+import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
@@ -230,6 +230,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
           <aside className="space-y-3">
             <DecisionTraceLive hasPrompt={hasPrompt} quantumMode={quantumMode} loading={loading} result={result} sourceCount={sourceCount} category={category} />
             {result && <ResultProvenance result={result} />}
+            {result && <DecisionPipelinePanel result={result} />}
           </aside>
         </div>
       )}
@@ -593,7 +594,7 @@ function ScenarioPanel({ scenarios, onDeepDive, loadingScenario, t }) {
   return (
     <div className={`${PANEL} p-4`}>
       <div className="flex items-center gap-2 mb-1"><Atom className="w-4 h-4 text-cyan-300 animate-pulse" /><h3 className="font-display text-cyan-100 tracking-widest text-xs">{t('quantumMatrix')}</h3></div>
-      <p className="text-[9px] text-white/30 mb-3 leading-relaxed">YZ'nin ilk tahmini kuantum genliği olarak devreye yüklenir; burada gösterilen yüzde dünyadaki olayın bağımsız bir kuantum ölçümü değil, bu genliğin bir karışım (mixer) devresinden geçtikten sonraki ölçüm sonucudur.</p>
+      <p className="text-[9px] text-white/30 mb-3 leading-relaxed">YZ'nin ilk tahmini kuantum genliği olarak devreye yüklenir; burada gösterilen yüzde dünyadaki olayın bağımsız bir kuantum ölçümü <strong>değildir</strong> — bu genliğin belirlenmiş bir karışım (mixer) devresinden geçtikten sonraki ölçüm dağılımıdır. Devre, YZ'nin ön tahminini dönüştürür; onu doğrulayan bağımsız bir gerçek-dünya ölçümü üretmez.</p>
       <div className="space-y-2">
         {scenarios.map((s, i) => (
           <motion.div key={s.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className={`flex items-center gap-3 p-2.5 rounded border ${i === 0 ? 'border-cyan-300/50 bg-cyan-400/10' : 'border-cyan-400/15 bg-black/20 hover:border-cyan-400/35'}`}>

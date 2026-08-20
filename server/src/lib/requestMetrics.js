@@ -1,5 +1,12 @@
 const metrics = new Map();
 
+// Test-only: clears all recorded metrics so tests that depend on this
+// module's ordering (e.g. aiProviders.ts's pickProviderOrder) don't leak
+// state between `it()` blocks that share the same module instance.
+export function resetRequestMetrics() {
+  metrics.clear();
+}
+
 export function recordRequestMetric(name, durationMs, statusCode = 200) {
   const entry = metrics.get(name) || { count: 0, errors: 0, durations: [] };
   entry.count += 1;

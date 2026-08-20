@@ -1,5 +1,8 @@
 import express from 'express';
 import multer from 'multer';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { authMiddleware } from '../middleware/auth.js';
@@ -29,6 +32,8 @@ import { isWeatherQuery, getLiveWeatherReply } from '../services/weather.js';
 import { researchWeb, formatResearchContext } from '../services/webResearch.js';
 import { gatherResearchContext } from '../services/analysisResearch.js';
 import { resolveResultSource } from '../services/analysisOrchestrator.js';
+import { buildEvidenceItems } from '../services/evidence.js';
+import { fuseDecision } from '../services/decisionFusion.js';
 import { runQuantumEngines, isHardwareVerificationPending, scheduleHardwareVerification } from '../services/analysisQuantumEngines.js';
 import { isRealTransactionArray, isRealScenarioArray, isRealOptimizationProblem } from '../services/analysisParsers.js';
 import { classifyData } from '../services/decisionIntelligence.js';
@@ -38,7 +43,22 @@ import { uploadConcurrencyGate } from '../middleware/uploadConcurrency.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+// S-04 (technical audit): the incoming file used to be buffered entirely in
+// RAM as it streamed in (multer memoryStorage) -- uploadConcurrencyGate
+// bounds how many uploads are in flight at once, but each one still spent
+// its whole receive phase held in the Node heap. diskStorage instead
+// streams the request body straight to a temp file, so RAM only holds one
+// file at a time (read back below, once, for the parsers that need a
+// Buffer) instead of N concurrent uploads' worth of in-transit bytes.
+const UPLOAD_TMP_DIR = path.join(os.tmpdir(), 'anatolia-q-uploads');
+fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_TMP_DIR,
+    filename: (req, file, cb) => cb(null, `${randomUUID()}-${file.originalname}`),
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
 const require = createRequire(import.meta.url);
 
 router.get('/status', (req, res) => {
@@ -119,9 +139,14 @@ router.get('/fraud-trend', authMiddleware, async (req, res) => {
 
 // Document upload and text extraction
 router.post('/upload', authMiddleware, analysisLimiter, uploadConcurrencyGate, upload.single('file'), async (req, res) => {
+  const file = req.file;
   try {
-    const file = req.file;
     if (!file) return res.status(400).json({ error: 'Dosya bulunamadı' });
+    // diskStorage (see UPLOAD_TMP_DIR above) only wrote the file to disk --
+    // read it into memory once here so the rest of this handler (magic-byte
+    // check, image base64, sheetToText, pdf-parse, mammoth, etc.) can keep
+    // using file.buffer exactly as it did under memoryStorage.
+    file.buffer = await fs.promises.readFile(file.path);
 
     const name = (file.originalname || '').toLowerCase();
 
@@ -225,6 +250,8 @@ router.post('/upload', authMiddleware, analysisLimiter, uploadConcurrencyGate, u
     res.json({ type: 'text', text: trimmed, length: text.length, filename: file.originalname });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  } finally {
+    if (file?.path) fs.promises.unlink(file.path).catch(() => {});
   }
 });
 
@@ -355,11 +382,26 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
 
     const hardwarePending = isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions });
 
+    // A-02/A-03 (technical audit): normalize every claim this run produced
+    // into Evidence Objects, then fuse them into one agreement verdict --
+    // see evidence.js/decisionFusion.js. Computed from the same
+    // quantum/fraud/optimizer computations already gathered above, so this
+    // adds no extra engine calls.
+    const evidence = buildEvidenceItems({
+      provider: result.provider,
+      quantum: quantumComputation,
+      fraud: fraudComputation,
+      optimizer: optimizerComputation,
+    });
+    const decisionFusion = fuseDecision(evidence);
+
     res.json({
       success: true,
       analysisId,
       provider: result.provider,
       content: finalContent,
+      evidence,
+      decisionFusion,
       docxBase64: docxBuffer.toString('base64'),
       pdfBase64: pdfBuffer.toString('base64'),
       quantumMode,
@@ -374,6 +416,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             circuitDepth: quantumComputation.circuitDepth,
             phantomStateMass: quantumComputation.phantomStateMass ?? null,
             environmentFingerprint: quantumComputation.environmentFingerprint || null,
+            reproducibility: quantumComputation.reproducibility || null,
             classicalBenchmark: quantumComputation.classicalBenchmark || null,
             dataSource: quantumComputation.dataSource,
             resultSource: resolveResultSource(quantumComputation),
@@ -394,6 +437,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             resultSource: resolveResultSource(fraudComputation),
             hardwareVerification: fraudComputation.hardwareVerification || null,
             ibmDiagnostic: fraudComputation.ibmDiagnostic || null,
+            environmentFingerprint: fraudComputation.environmentFingerprint || null,
+            reproducibility: fraudComputation.reproducibility || null,
             classicalBenchmark: fraudComputation.classicalBenchmark || null,
             prefiltered: !!fraudComputation.prefiltered,
             excludedByPrefilter: fraudComputation.excludedByPrefilter || 0,
@@ -413,6 +458,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             items: optimizerComputation.items,
             dataSource: optimizerComputation.dataSource,
             resultSource: resolveResultSource(optimizerComputation),
+            environmentFingerprint: optimizerComputation.environmentFingerprint || null,
+            reproducibility: optimizerComputation.reproducibility || null,
             classicalBenchmark: optimizerComputation.classicalBenchmark || null,
             seed: optimizerComputation.seed ?? null,
             qaoaLayers: optimizerComputation.qaoaLayers ?? null,

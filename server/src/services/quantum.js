@@ -169,8 +169,8 @@ export function mergeQuantumResults(scenarios, quantumResult) {
     : '';
 
   const note = `\n## KUANTUM DEVRE DOĞRULAMASI\n` +
-    `Aşağıdaki olasılıklar, YZ'nin ilk tahminleri kuantum genliği olarak ${quantumResult.qubits}-kübitlik bir devreye yüklenip, ` +
-    `her kübit çiftini birbirine bağlayan ${layerCount} katmanlı bir karışım (mixer) katmanından geçirildikten sonra hesaplanmıştır. ` +
+    `**Önemli:** Aşağıdaki yüzdeler, bu olaylara ilişkin bağımsız bir kuantum ölçümü DEĞİLDİR — YZ'nin ilk tahminleri kuantum genliği olarak ${quantumResult.qubits}-kübitlik bir devreye yüklenip, ` +
+    `her kübit çiftini birbirine bağlayan ${layerCount} katmanlı belirlenmiş bir karışım (mixer) devresinden geçirildikten sonraki ölçüm dağılımıdır — devre YZ'nin ön tahminini dönüştürür, onu doğrulayan ayrı bir gerçek-dünya ölçümü üretmez. ` +
     `Tek bir ölçüm turu yerine devre ${quantumResult.batches} kez bağımsız olarak çalıştırılmış (toplam ${quantumResult.shots} ölçüm/shot); ` +
     `aşağıdaki aralık istatistiksel bir güven aralığı değil, bu ${quantumResult.batches} bağımsız turun ortalamasından ±1 standart sapma bandıdır.${phantomNote} ${sourceNote}\n` +
     `Backend: ${quantumResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${quantumResult.circuitDepth} — gerçek kuantum donanımı değildir).\n\n` +

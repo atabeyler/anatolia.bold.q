@@ -36,7 +36,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - name: Validate quantum script syntax
-        run: python3 -m py_compile quantum/scenario_quantum.py quantum/fraud_detection.py quantum/portfolio_optimizer.py quantum/_ibm_backend.py
+        run: python3 -m py_compile quantum/scenario_quantum.py quantum/fraud_detection.py quantum/portfolio_optimizer.py quantum/_ibm_backend.py quantum/_reproducibility.py
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

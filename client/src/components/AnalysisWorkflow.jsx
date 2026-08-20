@@ -1,4 +1,5 @@
-import { Atom, Check, Cpu, Database, FileSearch, Flag, GitMerge, ServerCog, Sparkles, Bot, Cpu as CpuIcon, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { Atom, Check, Cpu, Database, FileSearch, Flag, GitMerge, ServerCog, Sparkles, Bot, Cpu as CpuIcon, ShieldCheck, ChevronDown, Workflow } from 'lucide-react';
 
 // Mirrors server/src/services/analysisOrchestrator.js's RESULT_SOURCE_TYPES
 // -- every quantum/fraud/optimizer result carries a `resultSource` computed
@@ -94,6 +95,68 @@ export function ResultProvenance({ result }) {
         ))}
       </div>
       <div className="mt-2 text-[9px] text-white/30">Simülasyon, yapay zekâ tahmini ve gerçek kuantum donanımı sonuçları ayrı kaynaklar olarak gösterilir.</div>
+    </div>
+  );
+}
+
+const ENGINE_NODE_INFO = {
+  'scenario-quantum': { label: 'SENARYO MOTORU', detail: 'Qiskit Aer kuantum devresi' },
+  'fraud-quantum-kernel': { label: 'FRAUD ÇEKİRDEĞİ', detail: 'Kuantum kernel anomali tespiti' },
+  'portfolio-qaoa': { label: 'OPTİMİZASYON MOTORU', detail: 'QAOA kaynak tahsisi' },
+};
+
+// UI-02 (technical audit): item 21 asked for a "HOW THIS RESULT WAS
+// PRODUCED" panel with clickable pipeline nodes, built from the run's
+// Evidence Objects (server/src/services/evidence.js) and its Decision
+// Fusion verdict (decisionFusion.js) instead of the reader having to
+// cross-reference each engine's own panel to reconstruct what actually ran.
+export function DecisionPipelinePanel({ result }) {
+  const [openId, setOpenId] = useState(null);
+  if (!result?.evidence?.length) return null;
+
+  const aiItem = result.evidence.find((e) => e.engine === 'ai');
+  const engineItems = result.evidence.filter((e) => e.engine !== 'ai');
+  const anyHardwareVerified = engineItems.some((e) => e.verified);
+
+  const nodes = [
+    { id: 'input', label: 'GİRDİ', detail: 'Kullanıcı talebi ve yüklenen kaynak belgeler doğrulandı.' },
+    { id: 'ai', label: 'YZ ANALİZİ', detail: `Sağlayıcı: ${aiItem?.source || result.provider || 'bilinmiyor'}` },
+    ...engineItems.map((e) => ({
+      id: e.engine,
+      label: ENGINE_NODE_INFO[e.engine]?.label || e.engine.toUpperCase(),
+      detail: `${ENGINE_NODE_INFO[e.engine]?.detail || ''} — ${e.method}${e.confidence ? ` (${e.confidence})` : ''}`,
+    })),
+    ...(anyHardwareVerified ? [{ id: 'ibm', label: 'IBM DOĞRULAMASI', detail: 'En az bir sonuç gerçek IBM Quantum donanımında doğrulandı.' }] : []),
+    ...(result.decisionFusion ? [{ id: 'fusion', label: 'KARAR FÜZYONU', detail: result.decisionFusion.summary }] : []),
+    { id: 'report', label: 'RAPOR', detail: 'Yukarıdaki adımların birleşimi olarak nihai rapor üretildi.' },
+  ];
+
+  return (
+    <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/80 p-3" aria-label="Karar üretim izi">
+      <div className="flex items-center gap-2 mb-3">
+        <Workflow className="w-4 h-4 text-cyan-300" />
+        <h3 className="font-display text-cyan-100 tracking-widest text-xs">SONUÇ NASIL ÜRETİLDİ</h3>
+      </div>
+      <div className="flex flex-wrap items-stretch gap-1.5">
+        {nodes.map((node, i) => (
+          <div key={node.id} className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setOpenId(openId === node.id ? null : node.id)}
+              className={`px-2.5 py-1.5 rounded border text-[9px] tracking-wider flex items-center gap-1 transition-colors ${openId === node.id ? 'border-cyan-300/60 bg-cyan-400/15 text-cyan-100' : 'border-cyan-400/20 bg-black/20 text-cyan-200/80 hover:border-cyan-400/40'}`}
+            >
+              {node.label}
+              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${openId === node.id ? 'rotate-180' : ''}`} />
+            </button>
+            {i < nodes.length - 1 && <span className="text-cyan-400/30 text-[10px]">→</span>}
+          </div>
+        ))}
+      </div>
+      {openId && (
+        <div className="mt-3 p-2.5 rounded border border-cyan-400/15 bg-black/30 text-[10px] text-cyan-200/80 leading-relaxed">
+          {nodes.find((n) => n.id === openId)?.detail}
+        </div>
+      )}
     </div>
   );
 }

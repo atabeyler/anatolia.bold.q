@@ -51,6 +51,7 @@ from qiskit_aer import AerSimulator
 from scipy.optimize import minimize
 
 from _ibm_backend import run_on_ibm_hardware, is_ibm_configured
+from _reproducibility import environment_fingerprint, reproducibility_block
 
 QAOA_LAYERS = 2
 PENALTY = 3.0
@@ -300,6 +301,7 @@ def optimize(values, costs, budget, seed=None, try_hardware=True):
         'qubits': num_qubits,
         'circuitDepth': final_circuit.depth(),
         'circuitDiagram': diagram,
+        'circuit': final_circuit,
         'best': best,
         'seed': int(seed),
         'qaoaLayers': QAOA_LAYERS,
@@ -365,6 +367,7 @@ def hybrid_solve(items, values, costs, budget, seed=None):
         'qubits': primary_result['qubits'] if primary_result else 0,
         'circuitDepth': primary_result['circuitDepth'] if primary_result else 0,
         'circuitDiagram': primary_result['circuitDiagram'] if primary_result else '',
+        'circuit': primary_result['circuit'] if primary_result else None,
         'seed': primary_result['seed'] if primary_result else (seed if seed is not None else 0),
         'qaoaLayers': QAOA_LAYERS,
         'outItems': out_items,
@@ -388,6 +391,7 @@ def main():
             "circuitDiagram": "", "selected": [], "totalValue": 0, "totalCost": 0,
             "budgetPercent": budget, "items": [], "ibmHardwareAttempted": False,
             "hybrid": False, "partitionCount": 1,
+            "environmentFingerprint": environment_fingerprint(), "reproducibility": None,
         }))
         return
 
@@ -425,7 +429,7 @@ def main():
         round((classical_val - total_value) / classical_val * 100, 2) if classical_val > 0 else 0.0
     )
 
-    print(json.dumps({
+    output = {
         "backend": meta['backend'],
         "qubits": meta['qubits'],
         "circuitDepth": meta['circuitDepth'],
@@ -440,6 +444,7 @@ def main():
         "qaoaLayers": meta['qaoaLayers'],
         "hybrid": is_hybrid,
         "partitionCount": meta.get('partitionCount', 1),
+        "environmentFingerprint": environment_fingerprint(),
         "classicalBenchmark": {
             "totalValue": classical_val,
             "totalCost": classical_cost,
@@ -447,7 +452,12 @@ def main():
             "optimalityGapPercent": optimality_gap_percent,
             "matchesOptimal": total_value >= classical_val,
         },
-    }))
+    }
+    output["reproducibility"] = (
+        reproducibility_block({"items": items, "budgetPercent": budget, "seed": seed}, meta['circuit'], out_items)
+        if meta.get('circuit') is not None else None
+    )
+    print(json.dumps(output))
 
 
 if __name__ == "__main__":

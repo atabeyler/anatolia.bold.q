@@ -49,6 +49,7 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.quantum_info import Statevector
 
 from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
+from _reproducibility import environment_fingerprint, reproducibility_block
 
 FEATURES = ["amount", "hour", "frequency", "newCounterparty", "crossBorder"]
 
@@ -265,7 +266,7 @@ def detect(transactions, skip_hardware=False):
         else:
             ibm_diagnostic = f"configured but failed: {LAST_IBM_ERROR['message'] or 'unknown error'}"
 
-    return {
+    result = {
         "backend": "qiskit-statevector-kernel",
         "qubits": len(FEATURES),
         "featureNames": FEATURES,
@@ -279,7 +280,10 @@ def detect(transactions, skip_hardware=False):
         "classicalBenchmark": classical_benchmark,
         "prefiltered": prefiltered,
         "excludedByPrefilter": excluded_by_prefilter,
+        "environmentFingerprint": environment_fingerprint(),
     }
+    result["reproducibility"] = reproducibility_block({"transactions": transactions}, top_circuit, out)
+    return result
 
 
 def main():
@@ -294,6 +298,7 @@ def main():
         "flaggedCount": 0, "circuitDepth": 0, "circuitDiagram": "", "transactions": [],
         "hardwareVerification": None, "ibmDiagnostic": None, "classicalBenchmark": None,
         "prefiltered": False, "excludedByPrefilter": 0,
+        "environmentFingerprint": environment_fingerprint(), "reproducibility": None,
     }))
 
 

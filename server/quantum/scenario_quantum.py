@@ -22,15 +22,13 @@ Output: JSON via stdout -> {"backend", "qubits", "shots", "batches", "circuitDep
 import sys
 import json
 import math
-import platform
 import statistics
 
-import qiskit
-import qiskit_aer
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 from qiskit_aer import AerSimulator
 
 from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
+from _reproducibility import environment_fingerprint, reproducibility_block
 
 # Multi-layer, all-pairs entangling mixer: each layer connects every qubit
 # to every other qubit (not just neighbors) via CRX, followed by a per-qubit
@@ -61,20 +59,6 @@ MAX_SHOTS = 20000
 # scenario table would reach this script with no upper bound on qubit count
 # or crx-pair mixer work.
 MAX_SCENARIOS = 32
-
-
-# Recorded alongside every result so a report stays traceable to the exact
-# toolchain that produced it -- reproducing a run months later needs to know
-# more than "qiskit-aer-simulator"; a Qiskit/Aer minor version bump can
-# change transpilation and therefore the simulated distribution.
-def environment_fingerprint():
-    return {
-        "qiskitVersion": qiskit.__version__,
-        "qiskitAerVersion": qiskit_aer.__version__,
-        "pythonVersion": platform.python_version(),
-        "seed": None,  # runs are intentionally unseeded (see module docstring)
-    }
-
 
 def build_mixer(qc, num_qubits):
     """Applies the multi-layer entangling mixer in place; returns a
@@ -210,7 +194,7 @@ def build_distribution(scenarios, shots, skip_hardware=False):
         else:
             ibm_diagnostic = f"configured but failed: {LAST_IBM_ERROR['message'] or 'unknown error'}"
 
-    return {
+    result = {
         "backend": "qiskit-aer-simulator",
         "qubits": num_qubits,
         "shots": batch_shots * NUM_BATCHES,
@@ -224,6 +208,8 @@ def build_distribution(scenarios, shots, skip_hardware=False):
         "hardwareVerification": hardware_verification,
         "ibmDiagnostic": ibm_diagnostic,
     }
+    result["reproducibility"] = reproducibility_block({"scenarios": scenarios, "shots": shots}, qc, out)
+    return result
 
 
 def main():
@@ -238,7 +224,7 @@ def main():
         "backend": "qiskit-aer-simulator", "qubits": 0, "shots": 0,
         "batches": 0, "circuitDepth": 0, "mixerLayers": [], "circuitDiagram": "",
         "phantomStateMass": 0.0, "environmentFingerprint": environment_fingerprint(),
-        "scenarios": [],
+        "scenarios": [], "reproducibility": None,
     }))
 
 

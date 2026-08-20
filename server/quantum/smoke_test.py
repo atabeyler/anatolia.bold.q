@@ -45,6 +45,7 @@ def check_scenario_quantum():
     total = sum(s["quantumProbability"] for s in result["scenarios"])
     assert 95 <= total <= 105, f"scenario probabilities should sum to ~100%, got {total}"
     assert "environmentFingerprint" in result and result["environmentFingerprint"]["qiskitVersion"], result
+    assert result["reproducibility"]["inputHash"] and result["reproducibility"]["circuitHash"], result
     print("[smoke] scenario_quantum.py OK")
 
 
@@ -57,6 +58,8 @@ def check_fraud_detection():
     assert result["backend"] == "qiskit-statevector-kernel", result
     assert len(result["transactions"]) == len(transactions), result
     assert all("riskScore" in t and "flagged" in t for t in result["transactions"]), result
+    assert result["environmentFingerprint"]["qiskitVersion"], result
+    assert result["reproducibility"]["inputHash"] and result["reproducibility"]["circuitHash"], result
     print("[smoke] fraud_detection.py OK")
 
 
@@ -75,6 +78,8 @@ def check_portfolio_optimizer():
     assert result["classicalBenchmark"]["totalValue"] >= result["totalValue"], (
         "the classical exact optimum must never score lower than QAOA's result", result
     )
+    assert result["environmentFingerprint"]["qiskitVersion"], result
+    assert result["reproducibility"]["inputHash"] and result["reproducibility"]["circuitHash"], result
     print("[smoke] portfolio_optimizer.py OK")
 
 

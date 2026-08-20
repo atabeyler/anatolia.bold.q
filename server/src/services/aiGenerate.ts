@@ -10,7 +10,7 @@ import { z } from 'zod';
 import type { Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { recordRequestMetric } from '../lib/requestMetrics.js';
-import { anthropicProvider, googleProvider, openaiProvider, MODELS } from './aiProviders.js';
+import { anthropicProvider, googleProvider, openaiProvider, MODELS, pickProviderOrder } from './aiProviders.js';
 
 // Records latency + success/failure for one provider attempt, keyed
 // `ai.<provider>` -- see getMetricsSnapshot()/the /api/platform/metrics
@@ -71,58 +71,37 @@ export async function generateAnalysisWithVision(
   return generateAnalysis(systemPrompt, `[Görsel eklendi — görsel AI kullanılamıyor]\n\n${userPrompt}`);
 }
 
+// Per-provider call shape: Claude/OpenAI cap output and return real token
+// usage; Gemini's Vercel AI SDK binding here doesn't take maxOutputTokens
+// the same way and this call site doesn't surface its usage. Kept as a
+// lookup table (keyed the same as PROVIDER_INFO in aiProviders.ts) so
+// generateAnalysis below can loop over pickProviderOrder's policy-based
+// ordering instead of three near-identical hardcoded if-blocks.
+const PROVIDER_CALL: Record<string, { model: () => any; maxOutputTokens?: number }> = {
+  claude: { model: () => anthropicProvider!(MODELS.claudeText), maxOutputTokens: 8000 },
+  gemini: { model: () => googleProvider!(MODELS.gemini) },
+  openai: { model: () => openaiProvider!.chat(MODELS.openai), maxOutputTokens: 8000 },
+};
+
 export async function generateAnalysis(systemPrompt: string, userPrompt: string): Promise<GenerateResult> {
   const errors: Array<{ provider: string; error: string }> = [];
 
-  if (anthropicProvider) {
+  for (const { key, name } of pickProviderOrder(userPrompt.length)) {
     const startedAt = Date.now();
+    const call = PROVIDER_CALL[key];
     try {
       const { text, usage } = await generateText({
-        model: anthropicProvider(MODELS.claudeText),
+        model: call.model(),
         system: systemPrompt,
         prompt: userPrompt,
-        maxOutputTokens: 8000,
+        ...(call.maxOutputTokens ? { maxOutputTokens: call.maxOutputTokens } : {}),
       });
-      recordAiAttempt('claude', startedAt, true);
-      return { provider: 'Claude (Anthropic)', content: text, usage };
+      recordAiAttempt(key, startedAt, true);
+      return { provider: name, content: text, usage: usage ?? null };
     } catch (err) {
-      recordAiAttempt('claude', startedAt, false);
-      logger.warn({ err }, 'Claude failed -> Gemini');
-      errors.push({ provider: 'claude', error: (err as Error).message });
-    }
-  }
-
-  if (googleProvider) {
-    const startedAt = Date.now();
-    try {
-      const { text } = await generateText({
-        model: googleProvider(MODELS.gemini),
-        system: systemPrompt,
-        prompt: userPrompt,
-      });
-      recordAiAttempt('gemini', startedAt, true);
-      return { provider: 'Gemini (Google)', content: text, usage: null };
-    } catch (err) {
-      recordAiAttempt('gemini', startedAt, false);
-      logger.warn({ err }, 'Gemini failed -> OpenAI');
-      errors.push({ provider: 'gemini', error: (err as Error).message });
-    }
-  }
-
-  if (openaiProvider) {
-    const startedAt = Date.now();
-    try {
-      const { text, usage } = await generateText({
-        model: openaiProvider.chat(MODELS.openai),
-        system: systemPrompt,
-        prompt: userPrompt,
-        maxOutputTokens: 8000,
-      });
-      recordAiAttempt('openai', startedAt, true);
-      return { provider: 'GPT-4o (OpenAI)', content: text, usage };
-    } catch (err) {
-      recordAiAttempt('openai', startedAt, false);
-      errors.push({ provider: 'openai', error: (err as Error).message });
+      recordAiAttempt(key, startedAt, false);
+      logger.warn({ err, provider: name }, 'AI provider failed, trying next by policy order');
+      errors.push({ provider: key, error: (err as Error).message });
     }
   }
 

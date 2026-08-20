@@ -224,6 +224,13 @@ describe('Full pipeline E2E (login -> upload -> generate -> history -> export)',
     expect(genRes.body.content).toContain('evet'); // confirms documentContext reached the AI prompt
     expect(tables.analyses).toHaveLength(1);
 
+    // A-02/A-03: the AI narrative's Evidence Object and the fused
+    // no-quantum-engines-ran verdict are present even without quantum mode.
+    expect(genRes.body.evidence).toEqual([
+      expect.objectContaining({ claim: 'ai-narrative', engine: 'ai', source: 'Claude (Anthropic)' }),
+    ]);
+    expect(genRes.body.decisionFusion).toMatchObject({ engineCount: 0, agreementLevel: 'no-quantum-engines-ran' });
+
     // 4) History list -- the freshly generated analysis shows up for its owner.
     const listRes = await request(app).get('/api/history/list').set('Authorization', authHeader);
     expect(listRes.status).toBe(200);
