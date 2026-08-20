@@ -171,6 +171,15 @@ describe('POST /api/auth/login-request', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns the same generic error for an unknown user code and a wrong password (no user-enumeration via the message)', async () => {
+    await seedUser({ userCode: 'U1B', password: 'correct-horse', nickname: 'BOLD-001B' });
+    const app = buildApp();
+    const unknownRes = await request(app).post('/api/auth/login-request').send({ userCode: 'no-such-user', password: 'whatever' });
+    const wrongPasswordRes = await request(app).post('/api/auth/login-request').send({ userCode: 'U1B', password: 'wrong' });
+    expect(unknownRes.body.error).toBe(wrongPasswordRes.body.error);
+    expect(unknownRes.body.error).toBe('Kullanıcı kodu veya şifre hatalı');
+  });
+
   it('rejects a blocked user even with the correct password', async () => {
     await seedUser({ userCode: 'U2', password: 'correct-horse', nickname: 'BOLD-002', blocked: true });
     const app = buildApp();
@@ -360,9 +369,16 @@ describe('admin user-management routes', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects creating a user with a password that is long enough but lacks a required character class', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`).send({ userCode: 'NEW1B', password: 'alllowercase1' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/büyük harf/);
+  });
+
   it('creates a user and logs an audit event', async () => {
     const app = buildApp();
-    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken('ADMIN-1', 'BOLD')}`).send({ userCode: 'NEW2', password: 'longenough', nickname: 'BOLD-NEW' });
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken('ADMIN-1', 'BOLD')}`).send({ userCode: 'NEW2', password: 'Longenough1!', nickname: 'BOLD-NEW' });
     expect(res.status).toBe(201);
     expect(authUsers.has('NEW2')).toBe(true);
     expect(logAuditEventMock).toHaveBeenCalledWith(expect.objectContaining({ userCode: 'ADMIN-1' }), 'user_added', 'NEW2', expect.anything());
@@ -371,7 +387,7 @@ describe('admin user-management routes', () => {
   it('creates a user with an email and returns it in the list', async () => {
     const app = buildApp();
     const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken('ADMIN-1', 'BOLD')}`)
-      .send({ userCode: 'NEW3', password: 'longenough', nickname: 'BOLD-EMAIL', email: 'user@example.com' });
+      .send({ userCode: 'NEW3', password: 'Longenough1!', nickname: 'BOLD-EMAIL', email: 'user@example.com' });
     expect(res.status).toBe(201);
     expect(res.body.email).toBe('user@example.com');
 
@@ -382,7 +398,7 @@ describe('admin user-management routes', () => {
   it('rejects an invalid email format when creating a user', async () => {
     const app = buildApp();
     const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`)
-      .send({ userCode: 'NEW4', password: 'longenough', email: 'not-an-email' });
+      .send({ userCode: 'NEW4', password: 'Longenough1!', email: 'not-an-email' });
     expect(res.status).toBe(400);
     expect(authUsers.has('NEW4')).toBe(false);
   });
@@ -408,7 +424,7 @@ describe('admin user-management routes', () => {
   it('rejects creating a duplicate user code with 409', async () => {
     await seedUser({ userCode: 'DUP', password: 'x', nickname: 'BOLD-DUP' });
     const app = buildApp();
-    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`).send({ userCode: 'DUP', password: 'longenough' });
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`).send({ userCode: 'DUP', password: 'Longenough1!' });
     expect(res.status).toBe(409);
   });
 

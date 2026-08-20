@@ -12,6 +12,7 @@ import { escapeHtml } from '../lib/escapeHtml.js';
 import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '../lib/loginThrottle.js';
 import { ROLES } from '../lib/rbac.js';
 import { setAuthCookie, clearAuthCookie } from '../lib/cookies.js';
+import { validatePassword } from '../lib/passwordPolicy.js';
 
 const router = express.Router();
 
@@ -68,6 +69,16 @@ async function findUser(userCode) {
   return rows[0] || null;
 }
 
+// A precomputed bcrypt hash (same cost factor as real ones, see bcrypt.hash
+// calls below) with no corresponding real password -- compared against on
+// the "user not found" path in /login-request so that path takes about the
+// same time as a real wrong-password compare, instead of returning
+// immediately. Without this, response timing alone lets an attacker
+// distinguish a valid user code from an invalid one even though the error
+// message is now identical (see the unified "Kullanıcı kodu veya şifre
+// hatalı" message below).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-a-real-password-timing-decoy', 10);
+
 // Step 1: verify the password, generate a token for mail approval, and send the email
 router.post('/login-request', publicActionLimiter, async (req, res) => {
   try {
@@ -85,16 +96,15 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
       return res.status(429).json({ error: 'Çok fazla hatalı deneme. Lütfen birkaç dakika sonra tekrar deneyin.' });
     }
 
+    // Same generic error message and roughly the same response time whether
+    // the user code doesn't exist or the password is wrong -- distinguishing
+    // the two (as this used to) lets an attacker enumerate valid user codes
+    // by trying candidates and watching which error/timing comes back.
     const user = await findUser(userCode);
-    if (!user) {
+    const passwordOk = await bcrypt.compare(password, user ? user.password_hash : DUMMY_PASSWORD_HASH);
+    if (!user || !passwordOk) {
       await recordLoginFailure(userCode);
-      return res.status(401).json({ error: 'Geçersiz kullanıcı kodu' });
-    }
-
-    const passwordOk = await bcrypt.compare(password, user.password_hash);
-    if (!passwordOk) {
-      await recordLoginFailure(userCode);
-      return res.status(401).json({ error: 'Şifre hatalı' });
+      return res.status(401).json({ error: 'Kullanıcı kodu veya şifre hatalı' });
     }
 
     await clearLoginFailures(userCode);
@@ -267,8 +277,9 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
     if (!userCode || !password) {
       return res.status(400).json({ error: 'Kullanıcı kodu ve şifre zorunlu' });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı' });
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
     if (!validEmail(email)) {
       return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
@@ -317,7 +328,8 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
     const sets = [];
     const params = [];
     if (password) {
-      if (password.length < 8) return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı' });
+      const passwordError = validatePassword(password);
+      if (passwordError) return res.status(400).json({ error: passwordError });
       params.push(await bcrypt.hash(password, 10));
       sets.push(`password_hash = $${params.length}`);
     }
