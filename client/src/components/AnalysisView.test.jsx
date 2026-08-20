@@ -255,3 +255,71 @@ describe('AnalysisView', () => {
     expect(screen.queryByText(/başarısız/)).not.toBeInTheDocument();
   });
 });
+
+// Covers the voice-driven "start_analysis" flow: the wizard must actually
+// open pre-populated with the category/depth/quantum/prompt a voice command
+// resolved, not just at its defaults (see DashboardPage.jsx's
+// pendingAnalysis + dashboardVoiceActions.js's start_analysis handler).
+describe('AnalysisView: pendingAnalysis (voice-resolved start_analysis fields)', () => {
+  it('pre-selects depth/quantum/prompt/title from a pending voice command and clears it once applied', () => {
+    const onPendingAnalysisApplied = vi.fn();
+    renderView({
+      category: 'enerji',
+      pendingAnalysis: { depth: 'derin', quantum: true, prompt: 'kritik enerji hattı değerlendirmesi', title: 'Sesli Rapor' },
+      onPendingAnalysisApplied,
+    });
+
+    expect(onPendingAnalysisApplied).toHaveBeenCalled();
+
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    expect(textarea.value).toBe('kritik enerji hattı değerlendirmesi');
+    const titleInput = screen.getAllByRole('textbox').find((el) => el.tagName === 'INPUT');
+    expect(titleInput.value).toBe('Sesli Rapor');
+
+    // Step 3 (quantum) should already show quantum mode enabled.
+    clickNext(2);
+    expect(screen.getByText('KUANTUM OLASILIK MODU').closest('div[class*="cursor-pointer"]')).toHaveClass('bg-cyan-400/10');
+
+    // Step 4 (depth) should already show "derin" selected.
+    clickNext(1);
+    expect(screen.getByText('Derin').closest('button')).toHaveClass('border-cyan-300/60');
+  });
+
+  it('ignores an invalid depth value instead of crashing', () => {
+    renderView({ category: 'enerji', pendingAnalysis: { depth: 'not-a-real-depth' }, onPendingAnalysisApplied: vi.fn() });
+    expect(screen.getByText('Yeni Analiz Başlat')).toBeInTheDocument();
+  });
+});
+
+// Covers the previously dead dispatch('aq:analysis:*', ...) calls from
+// dashboardVoiceActions.js (set_analysis_title/prompt, generate_analysis,
+// toggle_quantum, download_analysis, reset_analysis) -- nothing listened
+// for these window events before, so the corresponding voice commands had
+// no effect on the actual wizard/analysis state.
+describe('AnalysisView: aq:analysis:* voice event wiring', () => {
+  it('applies aq:analysis:set (title/prompt) and aq:analysis:quantum events', () => {
+    renderView({ category: 'enerji' });
+
+    fireEvent(window, new CustomEvent('aq:analysis:set', { detail: { field: 'title', value: 'Voice Title' } }));
+    fireEvent(window, new CustomEvent('aq:analysis:set', { detail: { field: 'prompt', value: 'voice brief text' } }));
+    fireEvent(window, new CustomEvent('aq:analysis:quantum', { detail: { mode: 'on' } }));
+
+    const titleInput = screen.getAllByRole('textbox').find((el) => el.tagName === 'INPUT');
+    expect(titleInput.value).toBe('Voice Title');
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    expect(textarea.value).toBe('voice brief text');
+
+    clickNext(2);
+    expect(screen.getByText('KUANTUM OLASILIK MODU').closest('div[class*="cursor-pointer"]')).toHaveClass('bg-cyan-400/10');
+  });
+
+  it('triggers generate() through the aq:analysis:generate event', async () => {
+    renderView({ category: 'enerji' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'voice-triggered brief' } });
+
+    fireEvent(window, new CustomEvent('aq:analysis:generate'));
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled());
+  });
+});

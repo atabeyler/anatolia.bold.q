@@ -8,13 +8,16 @@ import i18next, { NAMESPACES, SUPPORTED_LANGS } from './i18next.js';
 
 export { SUPPORTED_LANGS };
 
-// Pure, synchronous t(lang, key): looks the key up across every namespace
-// for the given language, regardless of which namespace file it lives in,
-// so callers never need to know or pass a namespace. Falls back to EN (the
-// canonical language) and finally to the raw key if nothing matches, same
-// contract as the old flat-object lookup.
-export function t(lang, key) {
-  return i18next.t(key, { lng: SUPPORTED_LANGS.includes(lang) ? lang : 'en', ns: NAMESPACES, fallbackNS: NAMESPACES });
+// Pure, synchronous t(lang, key, vars?): looks the key up across every
+// namespace for the given language, regardless of which namespace file it
+// lives in, so callers never need to know or pass a namespace. Falls back
+// to EN (the canonical language) and finally to the raw key if nothing
+// matches, same contract as the old flat-object lookup. The optional third
+// argument supports {{var}} interpolation (e.g. spoken confirmations that
+// need to embed a category name) -- additive, existing 2-arg call sites
+// are unaffected.
+export function t(lang, key, vars) {
+  return i18next.t(key, { lng: SUPPORTED_LANGS.includes(lang) ? lang : 'en', ns: NAMESPACES, fallbackNS: NAMESPACES, ...(vars || {}) });
 }
 
 const LOCALE_MAP = { tr: 'tr-TR', en: 'en-GB', de: 'de-DE', fr: 'fr-FR', ar: 'ar-SA' };

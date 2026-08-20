@@ -11,10 +11,18 @@ export function buildDashboardVoiceActions({
   disconnectSocket,
   onLogout,
   dispatch,
+  setPendingAnalysis = () => {},
 }) {
   return [
     { name: 'navigate_home',      description: 'Go to the home / map monitoring view',        params: {},                                                   handler: () => setView('home') },
-    { name: 'navigate_analysis',  description: 'Open the analysis workspace',                  params: { category: 'optional: savunma|enerji|saldiri|ekonomi|toplumsal|danisma|saglik|cok-alanli' }, handler: (p) => { setActiveCategory(p?.category || null); setView('analysis'); } },
+    { name: 'navigate_analysis',  description: 'Open the analysis workspace',                  params: { category: 'optional: savunma|enerji|saldiri|ekonomi|toplumsal|danisma|saglik|cok-alanli|bddk|btk' }, handler: (p) => { setActiveCategory(p?.category || null); setView('analysis'); } },
+    { name: 'start_analysis',     description: 'Create/start a new analysis with a specific category, depth and quantum mode pre-selected in the wizard',
+      params: { category: 'required enum: savunma|enerji|saldiri|ekonomi|toplumsal|danisma|saglik|cok-alanli|bddk|btk', depth: 'optional enum: hizli|standart|derin (default standart)', quantum: 'optional boolean (default false)', prompt: 'optional analysis topic/brief extracted from the user speech', title: 'optional report title' },
+      handler: (p) => {
+        setActiveCategory(p?.category || null);
+        setView('analysis');
+        setPendingAnalysis({ depth: p?.depth, quantum: p?.quantum, prompt: p?.prompt, title: p?.title });
+      } },
     { name: 'navigate_history',   description: 'Open the history / past analyses view',        params: {},                                                   handler: () => setHistoryOpen(true) },
     { name: 'new_analysis',       description: 'Start a new analysis with no preset category', params: {},                                                   handler: () => { setActiveCategory(null); setView('analysis'); } },
     { name: 'open_voice_chat',    description: 'Open the voice consultation chat modal',       params: {},                                                   handler: () => setVoiceChatOpen(true) },

@@ -35,6 +35,11 @@ export default function DashboardPage({ user, onLogout }) {
   const { t, lang, setLang } = useLang();
   const [view, setView] = useState('home');
   const [activeCategory, setActiveCategory] = useState(null);
+  // Fields a voice command (start_analysis) resolved for the analysis
+  // wizard beyond the category itself -- depth/quantum/prompt/title.
+  // AnalysisView applies and clears them on mount/update rather than this
+  // owning any wizard-internal state directly.
+  const [pendingAnalysis, setPendingAnalysis] = useState(null);
   const [emergencyToast, setEmergencyToast] = useState(null);
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -375,6 +380,7 @@ export default function DashboardPage({ user, onLogout }) {
       disconnectSocket,
       onLogout,
       dispatch,
+      setPendingAnalysis,
     }));
 
     return () => unregisterActions('dashboard');
@@ -487,7 +493,7 @@ export default function DashboardPage({ user, onLogout }) {
 
             {view === 'analysis' && (
               <motion.div key="analysis" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="p-3 sm:p-6">
-                <AnalysisView category={activeCategory} onCategoryChange={setActiveCategory} />
+                <AnalysisView category={activeCategory} onCategoryChange={setActiveCategory} pendingAnalysis={pendingAnalysis} onPendingAnalysisApplied={() => setPendingAnalysis(null)} />
               </motion.div>
             )}
 

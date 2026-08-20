@@ -1,6 +1,7 @@
 // Global action registry — each component registers its own semantic actions here.
 // A small universal accessibility layer is also exposed so the assistant can
 // operate controls that do not yet need a bespoke component action.
+import { CRITICAL_ACTIONS } from './voiceIntentSchema.js';
 
 const registry = new Map(); // scope -> Action[]
 
@@ -185,4 +186,30 @@ export function executeAction(name, params = {}) {
   }
   console.warn('[VoiceRegistry] Action not found:', name);
   return false;
+}
+
+/**
+ * Runs a validated, ordered action plan (see voiceIntentSchema.validateActionPlan)
+ * step by step. If a step whose action is in CRITICAL_ACTIONS is not
+ * registered (or its handler reports failure by throwing before this call
+ * -- executeAction itself always returns true once a handler is found, see
+ * above), execution stops instead of continuing on to the next step, so a
+ * broken critical step in a multi-step command never silently lets later
+ * steps run against a state the earlier step never reached.
+ */
+export function executePlan(actions = []) {
+  const knownNames = new Set(getActionsForAI().map((a) => a.name));
+  const results = [];
+  for (const step of actions) {
+    const name = step?.action;
+    if (!name || !knownNames.has(name)) {
+      results.push({ action: name || null, ok: false, reason: 'unregistered_action' });
+      if (name && CRITICAL_ACTIONS.has(name)) break;
+      continue;
+    }
+    const ok = executeAction(name, step.params || {});
+    results.push({ action: name, ok });
+    if (!ok && CRITICAL_ACTIONS.has(name)) break;
+  }
+  return results;
 }

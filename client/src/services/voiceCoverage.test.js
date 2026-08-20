@@ -4,7 +4,7 @@ import { buildDashboardVoiceActions } from './dashboardVoiceActions.js';
 
 const REQUIRED_UNIVERSAL_ACTIONS = ['ui_activate', 'ui_set_value', 'ui_select', 'ui_scroll', 'ui_key', 'ui_focus'];
 const REQUIRED_SEMANTIC_ACTIONS = [
-  'navigate_home', 'navigate_analysis', 'navigate_history', 'new_analysis',
+  'navigate_home', 'navigate_analysis', 'start_analysis', 'navigate_history', 'new_analysis',
   'open_voice_chat', 'close_voice_chat', 'open_guide', 'close_guide',
   'logout', 'open_emergency', 'set_analysis_title', 'set_analysis_prompt',
   'generate_analysis', 'toggle_quantum', 'download_analysis', 'reset_analysis',
@@ -26,6 +26,7 @@ function registerRealDashboardActions() {
     disconnectSocket: vi.fn(),
     onLogout: vi.fn(),
     dispatch: vi.fn(),
+    setPendingAnalysis: vi.fn(),
   };
   const actions = buildDashboardVoiceActions(deps);
   registerActions(scope, actions);
@@ -48,6 +49,7 @@ describe('Voice Control Coverage Gate', () => {
     for (const action of buildDashboardVoiceActions({
       setView: vi.fn(), setActiveCategory: vi.fn(), setHistoryOpen: vi.fn(), setVoiceChatOpen: vi.fn(),
       setGuideOpen: vi.fn(), setJWT: vi.fn(), disconnectSocket: vi.fn(), onLogout: vi.fn(), dispatch: vi.fn(),
+      setPendingAnalysis: vi.fn(),
     })) {
       expect(REQUIRED_SEMANTIC_ACTIONS.includes(action.name), `Undocumented semantic voice action: ${action.name}`).toBe(true);
     }
@@ -62,6 +64,11 @@ describe('Voice Control Coverage Gate', () => {
     expect(executeAction('navigate_analysis', { category: 'enerji' })).toBe(true);
     expect(deps.setActiveCategory).toHaveBeenCalledWith('enerji');
     expect(deps.setView).toHaveBeenCalledWith('analysis');
+
+    expect(executeAction('start_analysis', { category: 'enerji', depth: 'derin', quantum: true })).toBe(true);
+    expect(deps.setActiveCategory).toHaveBeenCalledWith('enerji');
+    expect(deps.setView).toHaveBeenCalledWith('analysis');
+    expect(deps.setPendingAnalysis).toHaveBeenCalledWith({ depth: 'derin', quantum: true, prompt: undefined, title: undefined });
 
     expect(executeAction('navigate_history', {})).toBe(true);
     expect(deps.setHistoryOpen).toHaveBeenCalledWith(true);

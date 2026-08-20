@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,10 +17,11 @@ import FileAttach from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
 import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
 import AnalysisWizard from './AnalysisWizard.jsx';
+import { DEPTH_IDS } from '../services/voiceIntentSchema.js';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
-export default function AnalysisView({ category, onCategoryChange }) {
+export default function AnalysisView({ category, onCategoryChange, pendingAnalysis = null, onPendingAnalysisApplied = () => {} }) {
   const { t, lang } = useLang();
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -37,6 +38,53 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const [result, setResult] = useState(null);
   const [scenarioResult, setScenarioResult] = useState(null);
   const [error, setError] = useState('');
+
+  const generateRef = useRef(null);
+  const downloadDocxRef = useRef(null);
+  const resetRef = useRef(null);
+
+  // Applies category/depth/quantum/prompt/title a voice command (start_analysis)
+  // resolved for the wizard. Runs on mount and whenever a fresh voice
+  // command produces a new pending object -- this is the fix that actually
+  // makes voice-driven analysis start with the right fields pre-selected
+  // instead of just opening the wizard at its defaults.
+  useEffect(() => {
+    if (!pendingAnalysis) return;
+    if (pendingAnalysis.depth && DEPTH_IDS.includes(pendingAnalysis.depth)) setDepth(pendingAnalysis.depth);
+    if (typeof pendingAnalysis.quantum === 'boolean') setQuantumMode(pendingAnalysis.quantum);
+    if (pendingAnalysis.prompt) setPrompt(pendingAnalysis.prompt);
+    if (pendingAnalysis.title) setTitle(pendingAnalysis.title);
+    onPendingAnalysisApplied();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAnalysis]);
+
+  // Wires up the voice-action dispatches from dashboardVoiceActions.js
+  // (set_analysis_title/prompt, generate_analysis, toggle_quantum,
+  // download_analysis, reset_analysis) -- these events were previously
+  // dispatched with nothing listening for them.
+  useEffect(() => {
+    const onSet = (e) => {
+      const { field, value } = e?.detail || {};
+      if (field === 'title') setTitle(value ?? '');
+      if (field === 'prompt') setPrompt((prev) => (value ? (prev ? prev + ' ' + value : value) : prev));
+    };
+    const onQuantum = (e) => setQuantumMode((e?.detail?.mode || 'on') !== 'off');
+    const onGenerate = () => generateRef.current?.();
+    const onDownload = () => downloadDocxRef.current?.();
+    const onReset = () => resetRef.current?.();
+    window.addEventListener('aq:analysis:set', onSet);
+    window.addEventListener('aq:analysis:quantum', onQuantum);
+    window.addEventListener('aq:analysis:generate', onGenerate);
+    window.addEventListener('aq:analysis:download', onDownload);
+    window.addEventListener('aq:analysis:reset', onReset);
+    return () => {
+      window.removeEventListener('aq:analysis:set', onSet);
+      window.removeEventListener('aq:analysis:quantum', onQuantum);
+      window.removeEventListener('aq:analysis:generate', onGenerate);
+      window.removeEventListener('aq:analysis:download', onDownload);
+      window.removeEventListener('aq:analysis:reset', onReset);
+    };
+  }, []);
 
   const cat = CATEGORIES.find(c => c.id === category);
   const isConsult = category === 'danisma';
@@ -156,6 +204,10 @@ export default function AnalysisView({ category, onCategoryChange }) {
     setRealScenarios(null);
     setRealOptimization(null);
   };
+
+  generateRef.current = generate;
+  downloadDocxRef.current = downloadDocx;
+  resetRef.current = reset;
 
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;
   if (isConsult) return <div className="max-w-4xl mx-auto"><ConsultChat /></div>;

@@ -114,18 +114,36 @@ router.post('/intent', authMiddleware, publicActionLimiter, express.json({ limit
       ? 'Kullanıcı Türkçe konuşuyor. speak alanını Türkçe yaz.'
       : 'User is speaking English. Write the speak field in English.';
 
+    // Real, app-derived enums the model is allowed to pick from -- kept in
+    // sync with client/src/services/voiceIntentSchema.js (categories) and
+    // routes/analysis.js's VALID_DEPTHS. Grounding the system prompt in the
+    // actual option set (instead of letting the model invent one) is what
+    // start_analysis's category/depth/quantum params rely on downstream;
+    // the client re-validates against the same enums regardless (see
+    // voiceIntentSchema.validateActionPlan), so this is guidance, not the
+    // only line of defense.
+    const CATEGORY_ENUM = ['savunma', 'enerji', 'saldiri', 'ekonomi', 'toplumsal', 'danisma', 'saglik', 'cok-alanli', 'bddk', 'btk'];
+    const DEPTH_ENUM = ['hizli', 'standart', 'derin'];
+
     const systemPrompt = `Sen ANATOLIA-Q'nun sesli asistanısın — Türkiye'nin Kuantum Tabanlı Ulusal Karar Destek Sistemi.
 
 Görevin: Kullanıcının sesli komutunu anlayıp sistemi kontrol etmek.
 
 ${langInstr}
 
+## GERÇEK SİSTEM SEÇENEKLERİ (yalnızca bunlardan seç)
+- Analiz kategorileri (category): ${CATEGORY_ENUM.join(' | ')}
+- Analiz derinliği (depth): ${DEPTH_ENUM.join(' | ')} (belirtilmezse standart)
+- Kuantum modu (quantum): true | false (belirtilmezse false)
+- "actions" alanında yalnızca aşağıdaki "Mevcut aksiyonlar" listesindeki "name" değerlerinden birini kullan. Listede olmayan bir aksiyon adı UYDURMA.
+
 ## KURALLAR
 1. Kullanıcı NE DERSE DE anlamaya çalış. Kesin kelime eşleştirmesi değil — niyet analizi yap.
-2. Birden fazla aksiyon gerekiyorsa hepsini sırayla dizi içinde döndür.
-3. Komut yoksa (sohbet, soru, selam vb.) actions boş bırak, speak ile kısa cevap ver.
-4. Parametre değerlerini kullanıcının söylediklerinden çıkart (çeviri yapma, orijinal kullan).
-5. Emin olmadığında en makul yorumu yap; belirsizse speak ile sor.
+2. Bir analiz başlatma isteği (kategori + isteğe bağlı derinlik/kuantum) için "start_analysis" aksiyonunu category/depth/quantum parametreleriyle kullan — category yukarıdaki listeden BİRİ olmalı, kullanıcının söylediği kelimenin çevirisi/eşdeğeri değil.
+3. Birden fazla aksiyon gerekiyorsa hepsini mantıksal sırayla dizi içinde döndür.
+4. Komut yoksa (sohbet, soru, selam vb.) actions boş bırak, speak ile kısa cevap ver.
+5. Parametre değerlerini kullanıcının söylediklerinden çıkart (çeviri yapma, orijinal kullan) — category/depth/quantum hariç, onlar için yukarıdaki sabit değerleri kullan.
+6. Emin olmadığında (örn. kategori belirsizse) "actions" alanını BOŞ bırak ve speak ile hangi kategoriyi kastettiğini sor — asla "ui_activate" ile tahmini bir ekran kontrolüne tıklama, özellikle analiz/kuantum/navigasyon gibi kritik isteklerde. ui_activate SADECE hiçbir özel aksiyon uymadığında, kritik olmayan durumlarda kullanılabilir.
 
 ## YANIT FORMATI
 SADECE geçerli JSON döndür — markdown, açıklama, ek metin YOK:
@@ -142,7 +160,16 @@ ${JSON.stringify(actions)}
 Kullanıcı şunu söyledi: "${transcript}"`;
 
     const parsed = await parseVoiceIntent(systemPrompt, userMessage);
-    return res.json(parsed);
+
+    // Defense in depth: even though the client re-validates every action
+    // against its own schema before executing anything, never hand back an
+    // action name the client didn't advertise as available in this
+    // context -- the model occasionally invents a plausible-looking name.
+    const allowedNames = new Set(actions.map((a) => a?.name).filter(Boolean));
+    const filteredActions = Array.isArray(parsed.actions)
+      ? parsed.actions.filter((a) => a && typeof a.action === 'string' && allowedNames.has(a.action))
+      : [];
+    return res.json({ ...parsed, actions: filteredActions });
   } catch (err) {
     logger.error({ err }, '[VoiceIntent] Error');
     // All providers failed — safe fallback so the client speaks something

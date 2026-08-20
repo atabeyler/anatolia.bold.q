@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion'; // AnimatePresence is used for the status pill
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { processVoiceCommand } from '../services/voiceAssistantEngine.js';
-import { executeAction } from '../services/voiceActionRegistry.js';
+import { executePlan } from '../services/voiceActionRegistry.js';
 import { t as translate } from '../services/i18n.js';
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -130,10 +130,12 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
         });
 
         const actionList = Array.isArray(result.actions) ? result.actions : [];
-        for (const { action, params } of actionList) {
-          if (action) executeAction(action, params || {});
-          if (actionList.length > 1) await new Promise(r => setTimeout(r, 120));
-        }
+        // Ordered, schema-validated plan (see voiceAssistantEngine.js /
+        // voiceIntentSchema.js) -- executePlan stops a multi-step command
+        // as soon as a critical step (analysis, quantum, navigation, ...)
+        // fails, instead of continuing to run later steps against a state
+        // the failed step never reached.
+        executePlan(actionList);
 
         if (result.speak?.trim()) {
           setStatus(S.SPEAKING);

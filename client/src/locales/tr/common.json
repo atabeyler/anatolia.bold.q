@@ -246,5 +246,10 @@
       "16) Görünüm ve Sorun Giderme",
       "Ayarlar > Görünüm altında KOYU, AÇIK ve SİSTEM temaları bulunur; SİSTEM cihazın açık/koyu görünümünü otomatik takip eder ve seçim hatırlanır.|READY/ONLINE kullanılabilir; LIMITED/CHECK ilgili kabiliyetin sınırlı veya kontrol ediliyor; LOCAL/MEMORY yerel bir fallback aktif; OFF/N/A servis kapalı veya yapılandırılmamış anlamına gelir (bkz. Ana Ekran ve Sistem Durumu).|Analiz üretimi başarısızsa briefi koruyun, Sistem Durumunu kontrol edin ve bir kez tekrar deneyin.|Çevrimdışı modda oturum yeniden doğrulama istenirse Tekrar Giriş Yap ile devam edin; yerel verileriniz kaybolmaz."
     ]
-  ]
+  ],
+  "voiceClarifyCategory": "Hangi kategoride analiz istiyorsunuz: savunma, enerji, saldırı, ekonomi, toplumsal, danışma, sağlık, çok alanlı, BDDK veya BTK?",
+  "voiceAnalysisCreatedNeedTopic": "{{category}} analizi oluşturuldu. Lütfen analiz konusunu belirtin.",
+  "voiceAnalysisStarted": "{{category}} analizi başlatılıyor.",
+  "voiceClarifyAmbiguous": "Komutunuzu tam anlayamadım, tekrar eder misiniz?",
+  "voiceInvalidCommand": "Bu komutu güvenle çalıştıramıyorum, lütfen farklı ifade edin."
 }
