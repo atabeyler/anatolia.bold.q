@@ -94,8 +94,42 @@ export async function verifyScenarioHardwareAsync(scenarios, shots = 4096) {
  * markdown verification section (table + confidence interval + the real
  * circuit diagram) to append to the report.
  */
+/**
+ * Compares the quantum-mixed distribution against the classical (no-quantum)
+ * baseline every scenario already carries -- the LLM's raw estimate,
+ * llmEstimate, before it went through the mixer circuit -- the same way
+ * buildFraudClassicalBenchmarkSection/buildClassicalBenchmarkSection give
+ * the fraud kernel and QAOA optimizer a classical comparison point instead
+ * of just asserting the quantum result is meaningful.
+ */
+function computeScenarioClassicalBenchmark(merged) {
+  const withBoth = merged.filter((s) => s.llmEstimate !== undefined && s.quantumProbability !== undefined);
+  if (withBoth.length === 0) return null;
+
+  const topByLlm = withBoth.reduce((a, b) => (b.llmEstimate > a.llmEstimate ? b : a));
+  const topByQuantum = withBoth.reduce((a, b) => (b.quantumProbability > a.quantumProbability ? b : a));
+  const meanAbsoluteDeviation = withBoth.reduce((sum, s) => sum + Math.abs(s.llmEstimate - s.quantumProbability), 0) / withBoth.length;
+
+  return {
+    topScenarioAgrees: topByLlm.id === topByQuantum.id,
+    classicalTopId: topByLlm.id,
+    quantumTopId: topByQuantum.id,
+    meanAbsoluteDeviationPercent: Math.round(meanAbsoluteDeviation * 10) / 10,
+  };
+}
+
+export function buildScenarioClassicalBenchmarkSection(benchmark, merged) {
+  if (!benchmark) return '';
+  const labelFor = (id) => merged.find((s) => s.id === id)?.title || id;
+  const status = benchmark.topScenarioAgrees
+    ? `✅ En olası senaryo klasik (YZ) tahminiyle örtüşüyor: **${labelFor(benchmark.classicalTopId)}**.`
+    : `⚠️ Kuantum devresi en olası senaryoyu değiştirdi: YZ tahmini **${labelFor(benchmark.classicalTopId)}** iken kuantum ölçümü **${labelFor(benchmark.quantumTopId)}**'ı öne çıkardı.`;
+  return `\n### Klasik Tahmin Karşılaştırması\n` +
+    `Klasik (kuantum devresine hiç girmemiş) taban çizgisi, YZ'nin ham yüzde tahminidir. Ortalama mutlak sapma (YZ tahmini ↔ kuantum ölçümü): %${benchmark.meanAbsoluteDeviationPercent}.\n\n${status}\n`;
+}
+
 export function mergeQuantumResults(scenarios, quantumResult) {
-  if (!quantumResult?.scenarios?.length) return { scenarios, note: null };
+  if (!quantumResult?.scenarios?.length) return { scenarios, note: null, classicalBenchmark: null };
 
   const merged = scenarios.map((s) => {
     const q = quantumResult.scenarios.find((x) => x.id === s.id);
@@ -124,6 +158,8 @@ export function mergeQuantumResults(scenarios, quantumResult) {
     : 'Gerçek veri sağlanmadığından bu senaryolar YZ tarafından üretilen tahminlerdir.';
 
   const hardwareSection = buildScenarioHardwareSection(merged, quantumResult.hardwareVerification);
+  const classicalBenchmark = computeScenarioClassicalBenchmark(merged);
+  const classicalSection = buildScenarioClassicalBenchmarkSection(classicalBenchmark, merged);
 
   // Only when scenario count isn't a power of two does the circuit have
   // unused "phantom" basis states to renormalize away -- see the phantom
@@ -139,7 +175,7 @@ export function mergeQuantumResults(scenarios, quantumResult) {
     `aşağıdaki aralık istatistiksel bir güven aralığı değil, bu ${quantumResult.batches} bağımsız turun ortalamasından ±1 standart sapma bandıdır.${phantomNote} ${sourceNote}\n` +
     `Backend: ${quantumResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${quantumResult.circuitDepth} — gerçek kuantum donanımı değildir).\n\n` +
     `| Senaryo | ${estimateLabel} | Kuantum Sonucu (ortalama) | Batch Dağılım Aralığı (±1 SD) |\n|---|---|---|---|\n${rows}\n\n` +
-    `### Çalıştırılan Devre\n\`\`\`\n${quantumResult.circuitDiagram}\n\`\`\`\n${hardwareSection}`;
+    `### Çalıştırılan Devre\n\`\`\`\n${quantumResult.circuitDiagram}\n\`\`\`\n${classicalSection}${hardwareSection}`;
 
-  return { scenarios: merged, note };
+  return { scenarios: merged, note, classicalBenchmark };
 }

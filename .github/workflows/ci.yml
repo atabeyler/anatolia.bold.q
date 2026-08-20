@@ -37,6 +37,15 @@ jobs:
       - run: npm test
       - name: Validate quantum script syntax
         run: python3 -m py_compile quantum/scenario_quantum.py quantum/fraud_detection.py quantum/portfolio_optimizer.py quantum/_ibm_backend.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: server/quantum/requirements.txt
+      - name: Install quantum dependencies
+        run: pip install -r quantum/requirements.txt
+      - name: Quantum worker smoke test
+        run: python3 quantum/smoke_test.py
 
   client:
     runs-on: ubuntu-latest

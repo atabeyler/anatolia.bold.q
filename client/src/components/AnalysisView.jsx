@@ -15,7 +15,7 @@ import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
 import FileAttach from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
-import { AnalysisWorkflow, ResultProvenance } from './AnalysisWorkflow.jsx';
+import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge } from './AnalysisWorkflow.jsx';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
@@ -392,19 +392,28 @@ function ResultPanel({ t, result, downloadDocx, downloadPdf, shareReport, reset,
         <div className="text-xs text-cyan-300/70 flex items-center gap-2">
           {result.quantumMode && <Atom className="w-3 h-3 text-cyan-300" />}
           {result.quantum && (
-            <span className="font-mono text-xs text-cyan-300/80" title="Qiskit Aer yerel kuantum devre simülatörü">
-              {result.quantum.backend} · {result.quantum.qubits} kübit · {result.quantum.shots} ölçüm
-            </span>
+            <>
+              <span className="font-mono text-xs text-cyan-300/80" title="Qiskit Aer yerel kuantum devre simülatörü">
+                {result.quantum.backend} · {result.quantum.qubits} kübit · {result.quantum.shots} ölçüm
+              </span>
+              <ResultSourceBadge source={result.quantum.resultSource} />
+            </>
           )}
           {result.fraud && (
-            <span className="font-mono text-xs text-cyan-300/80" title="Kuantum çekirdek (kernel) anomali tespiti">
-              {result.fraud.backend} · {result.fraud.qubits} kübit · {result.fraud.flaggedCount}/{result.fraud.transactionCount} işaretlendi
-            </span>
+            <>
+              <span className="font-mono text-xs text-cyan-300/80" title="Kuantum çekirdek (kernel) anomali tespiti">
+                {result.fraud.backend} · {result.fraud.qubits} kübit · {result.fraud.flaggedCount}/{result.fraud.transactionCount} işaretlendi
+              </span>
+              <ResultSourceBadge source={result.fraud.resultSource} />
+            </>
           )}
           {result.optimizer && (
-            <span className="font-mono text-xs text-cyan-300/80" title="QAOA kaynak tahsisi optimizasyonu">
-              {result.optimizer.backend} · {result.optimizer.qubits} kübit · %{result.optimizer.totalCost}/%{result.optimizer.budgetPercent} bütçe kullanıldı
-            </span>
+            <>
+              <span className="font-mono text-xs text-cyan-300/80" title="QAOA kaynak tahsisi optimizasyonu">
+                {result.optimizer.backend} · {result.optimizer.qubits} kübit · %{result.optimizer.totalCost}/%{result.optimizer.budgetPercent} bütçe kullanıldı
+              </span>
+              <ResultSourceBadge source={result.optimizer.resultSource} />
+            </>
           )}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
@@ -471,8 +480,9 @@ function QuantumCircuitPanel({ quantum }) {
   const gateLabel = (r, c) => ['H', 'RY', 'RZ', 'CRX'][(r + c) % 4];
   return (
     <div className={PANEL}>
-      <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+      <div className="h-9 px-3 flex items-center gap-2 border-b border-cyan-400/10">
         <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Qiskit Devre Önizlemesi</span>
+        <ResultSourceBadge source={quantum.resultSource} />
         <span className="ml-auto text-[9px] text-white/30">{qubits} qubit · {depth} derinlik{quantum.shots ? ` · ${quantum.shots} shots` : ''}</span>
       </div>
       <div className="p-3 overflow-x-auto">
@@ -497,6 +507,14 @@ function QuantumCircuitPanel({ quantum }) {
           </div>
         ))}
       </div>
+      {quantum.classicalBenchmark && (
+        <div className="px-3 py-2 border-t border-cyan-400/10 text-[9px] text-white/40">
+          {quantum.classicalBenchmark.topScenarioAgrees
+            ? '✅ Klasik (YZ) taban çizgisiyle aynı senaryo en olası çıktı'
+            : '⚠️ Kuantum devresi en olası senaryoyu klasik tahminden farklı belirledi'}
+          {' · ortalama sapma %'}{quantum.classicalBenchmark.meanAbsoluteDeviationPercent}
+        </div>
+      )}
     </div>
   );
 }

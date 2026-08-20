@@ -374,6 +374,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             circuitDepth: quantumComputation.circuitDepth,
             phantomStateMass: quantumComputation.phantomStateMass ?? null,
             environmentFingerprint: quantumComputation.environmentFingerprint || null,
+            classicalBenchmark: quantumComputation.classicalBenchmark || null,
             dataSource: quantumComputation.dataSource,
             resultSource: resolveResultSource(quantumComputation),
             hardwareVerification: quantumComputation.hardwareVerification || null,

@@ -1,4 +1,25 @@
-import { Atom, Check, Cpu, Database, FileSearch, Flag, GitMerge, ServerCog, Sparkles } from 'lucide-react';
+import { Atom, Check, Cpu, Database, FileSearch, Flag, GitMerge, ServerCog, Sparkles, Bot, Cpu as CpuIcon, ShieldCheck } from 'lucide-react';
+
+// Mirrors server/src/services/analysisOrchestrator.js's RESULT_SOURCE_TYPES
+// -- every quantum/fraud/optimizer result carries a `resultSource` computed
+// by resolveResultSource() there; this is the one place that turns it into
+// a badge, so "where did this number come from" reads identically wherever
+// a result appears instead of each panel inventing its own label/color.
+const RESULT_SOURCE_INFO = {
+  ai_estimate: { label: 'AI ESTIMATE', Icon: Bot, className: 'border-amber-400/30 bg-amber-400/10 text-amber-200' },
+  qiskit_aer_simulation: { label: 'SIMULATOR', Icon: CpuIcon, className: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200' },
+  ibm_hardware_verified: { label: 'REAL HARDWARE', Icon: ShieldCheck, className: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' },
+};
+
+export function ResultSourceBadge({ source }) {
+  const info = RESULT_SOURCE_INFO[source] || RESULT_SOURCE_INFO.ai_estimate;
+  const { Icon } = info;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[8px] tracking-wider font-semibold ${info.className}`}>
+      <Icon className="w-2.5 h-2.5" /> {info.label}
+    </span>
+  );
+}
 
 const steps = [
   ['GÖREV OLUŞTURULDU', Flag],

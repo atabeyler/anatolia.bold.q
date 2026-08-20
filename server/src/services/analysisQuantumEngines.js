@@ -81,6 +81,7 @@ export async function runQuantumEngines({
         const merged = mergeQuantumResults(scenarios, quantumComputation);
         scenarios = merged.scenarios;
         hardwareScenarios = merged.scenarios;
+        quantumComputation.classicalBenchmark = merged.classicalBenchmark;
         if (merged.note) finalContent += merged.note;
       } else {
         logger.warn('[Quantum] Circuit result unavailable — proceeding with AI estimates');

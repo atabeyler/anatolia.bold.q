@@ -35,7 +35,7 @@ describe('mergeQuantumResults', () => {
       ],
     };
 
-    const { scenarios: merged, note } = mergeQuantumResults(scenarios, quantumResult);
+    const { scenarios: merged, note, classicalBenchmark } = mergeQuantumResults(scenarios, quantumResult);
 
     expect(merged[0].quantumProbability).toBe(45.5);
     expect(merged[0].quantumStdDev).toBe(1.2);
@@ -50,6 +50,32 @@ describe('mergeQuantumResults', () => {
     expect(note).toContain('5 kez bağımsız');
     expect(note).toContain('q_0: ┤0 Initialize ├──■──');
     expect(note).toMatch(/```\nq_0:.*\n```/s);
+
+    // Q-03: a classical (no-quantum) baseline comparison must always
+    // accompany the quantum result -- here it's the LLM's raw estimate
+    // ranking vs the post-mixer quantum ranking, same top scenario in
+    // both (SENARYO-A), so this counts as agreement.
+    expect(classicalBenchmark.topScenarioAgrees).toBe(true);
+    expect(classicalBenchmark.classicalTopId).toBe('SENARYO-A');
+    expect(classicalBenchmark.quantumTopId).toBe('SENARYO-A');
+    expect(classicalBenchmark.meanAbsoluteDeviationPercent).toBeCloseTo(3.2, 1);
+    expect(note).toContain('Klasik Tahmin Karşılaştırması');
+    expect(note).toContain('En olası senaryo klasik (YZ) tahminiyle örtüşüyor');
+  });
+
+  it('flags disagreement in the classical benchmark when the quantum circuit changes which scenario ranks first', () => {
+    const quantumResult = {
+      backend: 'qiskit-aer-simulator', qubits: 1, shots: 2048, batches: 5, circuitDepth: 14, mixerLayers: [], circuitDiagram: '',
+      scenarios: [
+        { id: 'SENARYO-A', llmEstimate: 42, quantumProbability: 30 },
+        { id: 'SENARYO-B', llmEstimate: 31, quantumProbability: 55 },
+      ],
+    };
+    const { note, classicalBenchmark } = mergeQuantumResults(scenarios, quantumResult);
+    expect(classicalBenchmark.topScenarioAgrees).toBe(false);
+    expect(classicalBenchmark.classicalTopId).toBe('SENARYO-A');
+    expect(classicalBenchmark.quantumTopId).toBe('SENARYO-B');
+    expect(note).toContain('Kuantum devresi en olası senaryoyu değiştirdi');
   });
 
   it('leaves unmatched scenarios untouched', () => {
