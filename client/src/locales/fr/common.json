@@ -251,5 +251,9 @@
   "voiceAnalysisCreatedNeedTopic": "Analyse {{category}} créée. Veuillez préciser le sujet de l'analyse.",
   "voiceAnalysisStarted": "Démarrage de l'analyse {{category}}.",
   "voiceClarifyAmbiguous": "Je n'ai pas bien compris cette commande, pouvez-vous répéter ?",
-  "voiceInvalidCommand": "Je ne peux pas exécuter cette commande en toute sécurité, veuillez la reformuler."
+  "voiceInvalidCommand": "Je ne peux pas exécuter cette commande en toute sécurité, veuillez la reformuler.",
+  "voiceContextAck": "D'accord.",
+  "voiceConfirmLogout": "Voulez-vous vraiment vous déconnecter ? Dites « oui » pour confirmer.",
+  "voiceConfirmed": "Confirmé, déconnexion en cours.",
+  "voiceCancelled": "Annulé."
 }

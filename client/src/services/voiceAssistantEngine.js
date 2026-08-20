@@ -1,17 +1,34 @@
 import { getActionsForAI } from './voiceActionRegistry.js';
-import { api } from './api.js';
 import { t as translate } from './i18n.js';
 import {
-  matchCategory, matchDepth, matchQuantum, mentionsAnalysis,
-  validateActionPlan,
+  matchCategory, matchDepth, matchQuantum, mentionsAnalysis, mentionsStartVerb,
+  mentionsNext, mentionsBack, mentionsReset, matchConfirm, matchCancel,
+  validateActionPlan, CONFIRM_REQUIRED_ACTIONS,
 } from './voiceIntentSchema.js';
+import { matchUiCatalogAction } from './voiceUiCatalog.js';
 
-// Spoken confirmations for the local fallback matcher below. Command
-// *recognition* stays Turkish/English-pattern-based (see the regexes in
-// localFallback) since that's the primary voice-command language pair this
-// app is used in and the network-backed path (api.voiceIntent) already
-// handles any spoken language via the LLM -- this is only the last-resort
-// offline fallback, so only the spoken response needs all 5 languages.
+// ─── Local, fully offline command interpretation ──────────────────────────
+// Everything in this module resolves a transcript to a validated action
+// plan synchronously against local synonym tables and catalogs (see
+// voiceIntentSchema.js / voiceUiCatalog.js) -- there is no network call and
+// no AI/LLM involved in understanding or routing a voice command. The
+// backend AI (server/src/routes/voice.js's /intent endpoint, backed by
+// parseVoiceIntent in aiGenerate.ts) is no longer called from here; it is
+// retained server-side, unused, as the lower-risk option over deleting a
+// route/service function nothing else has been found to depend on -- see
+// the comment on that route for details.
+//
+// Compositional design: action verbs, categories, analysis depth and the
+// quantum toggle are resolved as independent slot-fillers (matchCategory,
+// matchDepth, matchQuantum, mentionsNext/Back/Reset, matchUiCatalogAction,
+// ...), then combined into one action or a short ordered plan. Adding a new
+// synonym or a new navigable screen/button means adding a catalog entry in
+// voiceIntentSchema.js / voiceUiCatalog.js, not new branching logic here.
+
+// Spoken confirmations for the last-resort local fallback below (login page
+// flows, and the final "I didn't understand" message) -- these stay in all
+// 5 supported languages since they're reached regardless of which language
+// the user is speaking.
 const FALLBACK_TEXT = {
   tr: { loggingIn: 'Giriş yapılıyor.', formCleared: 'Form temizlendi.', passwordEntered: 'Şifre girildi.', userCodeEntered: (v) => `Kullanıcı kodu ${v} girildi.`, sayCodeOrPassword: 'Kullanıcı kodunuzu ya da şifrenizi söyleyin, ya da "giriş yap" deyin.', home: 'Ana ekrana dönüldü.', analysis: 'Analiz ekranına geçiliyor.', history: 'Geçmiş açılıyor.', voiceChat: 'Sesli danışma açılıyor.', loggingOut: 'Çıkış yapılıyor.', notUnderstood: 'Anlayamadım, tekrar söyler misiniz?' },
   en: { loggingIn: 'Logging in.', formCleared: 'Form cleared.', passwordEntered: 'Password entered.', userCodeEntered: (v) => `User code ${v} entered.`, sayCodeOrPassword: 'Say your user code, password, or say "login".', home: 'Returning home.', analysis: 'Opening analysis.', history: 'Opening history.', voiceChat: 'Opening voice chat.', loggingOut: 'Logging out.', notUnderstood: 'Could not understand, please repeat.' },
@@ -20,9 +37,29 @@ const FALLBACK_TEXT = {
   ar: { loggingIn: 'جارٍ تسجيل الدخول.', formCleared: 'تم مسح النموذج.', passwordEntered: 'تم إدخال كلمة المرور.', userCodeEntered: (v) => `تم إدخال رمز المستخدم ${v}.`, sayCodeOrPassword: 'قل رمز المستخدم أو كلمة المرور، أو قل "تسجيل الدخول".', home: 'العودة إلى الرئيسية.', analysis: 'جارٍ فتح التحليل.', history: 'جارٍ فتح السجل.', voiceChat: 'جارٍ فتح الاستشارة الصوتية.', loggingOut: 'جارٍ تسجيل الخروج.', notUnderstood: 'لم أفهم، هل يمكنك التكرار؟' },
 };
 
+// ─── Pending voice confirmation (logout, and any future destructive action
+// in CONFIRM_REQUIRED_ACTIONS) ──────────────────────────────────────────
+// A tiny piece of module-level state bridging two consecutive utterances:
+// "çıkış yap" asks "emin misiniz?" instead of executing immediately; only
+// an explicit CONFIRM_WORDS reply on the *next* command actually runs the
+// action. Any other utterance (including CANCEL_WORDS) drops the pending
+// action and falls through to normal resolution of that new utterance.
+let pendingConfirm = null; // { action, params, expiresAt }
+const CONFIRM_TTL_MS = 20000;
+
+/** Test-only: clears any pending confirmation between test cases. */
+export function _resetVoiceEngineState() {
+  pendingConfirm = null;
+}
+
+function speakFor(lang, key, vars) {
+  return translate(lang, key, vars);
+}
+
 // ─── Local fallback ──────────────────────────────────────────────────────
-// Kicks in when there's no authentication or the API call fails.
-// Good enough for simple scenarios like the login page.
+// Last resort: login-page field filling (no dashboard actions registered
+// there yet) and the final "I didn't understand" message. Dashboard
+// navigation is handled earlier, catalog-driven, by resolveLocalIntent.
 function localFallback(transcript, context) {
   const t = (transcript || '')
     .toLowerCase()
@@ -35,85 +72,80 @@ function localFallback(transcript, context) {
   if (context.page === 'login') {
     const raw = (transcript || '').trim();
 
-    // Login / submit
     if (t.match(/giris\s*yap|login|onayla|gonder|devam|tamam|evet|confirm|submit/))
       return { actions: [{ action: 'submit_login', params: {} }], speak: say('loggingIn') };
 
-    // Clear
     if (t.match(/temizle|sifirla|clear|sil|reset/))
       return { actions: [{ action: 'clear_login_form', params: {} }], speak: say('formCleared') };
 
-    // Fill password — "şifre X" or "password X"
     const pwdM = t.match(/(?:sifre|parola|password)\s+(.+)/);
     if (pwdM) {
       const val = raw.replace(/^(şifre|sifre|parola|password)\s+/i, '');
       return { actions: [{ action: 'fill_password', params: { value: val } }], speak: say('passwordEntered') };
     }
 
-    // User code — "kod X", "kullanıcı kodu X" or just a digit sequence (6 digits)
     const codeM = t.match(/(?:kullanici\s*(?:kod[u]?)?|kod[u]?|code|kimlik|id)\s*[:=]?\s*([a-z0-9]{2,20})/);
     if (codeM) {
       const val = codeM[1].toUpperCase();
       return { actions: [{ action: 'fill_username', params: { value: val } }], speak: say('userCodeEntered', val) };
     }
-    // Digits only → treat as the user code
     const onlyDigits = t.match(/^\s*(\d{4,10})\s*$/);
     if (onlyDigits) {
       const val = onlyDigits[1];
       return { actions: [{ action: 'fill_username', params: { value: val } }], speak: say('userCodeEntered', val) };
     }
-    // Unknown command — say what it might be
     return { actions: [], speak: say('sayCodeOrPassword') };
   }
 
-  if (t.match(/ana ekran|anasayfa|home|harita/))
-    return { actions: [{ action: 'navigate_home', params: {} }], speak: say('home') };
-  if (t.match(/gecmis|history|arsiv/))
-    return { actions: [{ action: 'navigate_history', params: {} }], speak: say('history') };
-  if (t.match(/sohbet|chat|danisma/))
-    return { actions: [{ action: 'open_voice_chat', params: {} }], speak: say('voiceChat') };
-  if (t.match(/cikis|logout|oturum kapat/))
-    return { actions: [{ action: 'logout', params: {} }], speak: say('loggingOut') };
-  // Plain "analiz"/"analysis" mentions are handled earlier by
-  // resolveDeterministicIntent (which asks for a category instead of
-  // guessing); this branch is only reached when that already ran and
-  // fell through to nothing recognizable, or on the login page where
-  // resolveDeterministicIntent is intentionally not consulted.
-  if (t.match(/analiz|analysis/))
-    return { actions: [{ action: 'navigate_analysis', params: {} }], speak: say('analysis') };
-
-  return {
-    actions: [],
-    speak: say('notUnderstood'),
-  };
+  return { actions: [], speak: say('notUnderstood') };
 }
 
-// ─── Deterministic local intent resolver (fast path) ────────────────────
-// Handles clear, schema-shaped commands entirely offline/without a network
-// round-trip: "savunma analizi başlat", "derin ekonomi analizi yap",
-// "kuantum destekli enerji analizi başlat", quantum on/off, simple
-// navigation. Ambiguous inputs (analysis intent with no recognizable
-// category) return an explicit clarification response instead of falling
-// through to nothing/ui_activate. Returns null when the command is not one
-// this fast path recognizes, so the caller can fall back to the AI-backed
-// resolver.
-function resolveDeterministicIntent(transcript, context, knownActionNames) {
+// ─── Compositional local intent resolver ──────────────────────────────────
+// Resolves category/depth/quantum/verb/navigation as independent slots and
+// composes them into one action or a short ordered plan. Returns null when
+// nothing here recognizes the utterance, so the caller falls through to
+// localFallback. context: { page, category, depth, quantum, wizardStep,
+// wizardOpen, lang, user } -- category/depth/quantum/wizard* come from the
+// live aq:context broadcast (DashboardPage.jsx/AnalysisView.jsx), merged by
+// GlobalVoiceAssistant.jsx, and represent "what's on screen right now".
+function resolveLocalIntent(transcript, context, knownActionNames) {
   const raw = transcript || '';
   if (!raw.trim()) return null;
-  if (!knownActionNames.has('start_analysis')) return null; // e.g. login page: dashboard actions not registered yet
   const lang = context.lang || 'tr';
 
+  // ── Pending confirmation gate (logout etc.) takes priority over
+  // everything else -- the previous turn is still waiting on a yes/no.
+  if (pendingConfirm) {
+    const pending = pendingConfirm;
+    const expired = Date.now() > pending.expiresAt;
+    pendingConfirm = null;
+    if (!expired) {
+      if (matchConfirm(raw)) {
+        return { actions: [{ action: pending.action, params: pending.params }], speak: speakFor(lang, 'voiceConfirmed') };
+      }
+      if (matchCancel(raw)) {
+        return { actions: [], speak: speakFor(lang, 'voiceCancelled') };
+      }
+      // Anything else: drop the pending confirmation and fall through to
+      // resolve this utterance as a normal new command below.
+    }
+  }
+
+  if (!knownActionNames.has('start_analysis')) {
+    // e.g. login page: dashboard actions aren't registered yet, so only
+    // the login-focused localFallback below applies.
+    return null;
+  }
+
   const category = matchCategory(raw);
+  const depth = matchDepth(raw);
+  const quantum = matchQuantum(raw);
+  const hasStartVerb = mentionsStartVerb(raw);
   const looksLikeAnalysisCommand = mentionsAnalysis(raw) || category;
 
-  if (looksLikeAnalysisCommand) {
-    if (!category) {
-      // Analysis intent detected but no recognizable category -- ask,
-      // never guess by clicking a random visible control.
-      return { actions: [], speak: translate(lang, 'voiceClarifyCategory') };
-    }
-    const depth = matchDepth(raw);
-    const quantum = matchQuantum(raw);
+  // ── A full "start a new analysis" command: category present (with or
+  // without depth/quantum/analysis-word in the same utterance).
+  if (category) {
     const params = { category };
     if (depth) params.depth = depth;
     if (quantum !== null) params.quantum = quantum;
@@ -124,23 +156,66 @@ function resolveDeterministicIntent(transcript, context, knownActionNames) {
     };
   }
 
+  // ── Analysis intent detected but no recognizable category -- ask,
+  // never guess by clicking a random visible control.
+  if (looksLikeAnalysisCommand) {
+    return { actions: [], speak: translate(lang, 'voiceClarifyCategory') };
+  }
+
+  // ── Context-aware follow-ups: the user is on the analysis screen with a
+  // wizard already open for a category -- "Derin yap", "Kuantumu aç",
+  // "Sonraki", "Sıfırla", bare "Başlat" resolve against that live wizard
+  // state without needing the category repeated.
+  if (context.page === 'dashboard-analysis' && context.wizardOpen && context.category) {
+    const steps = [];
+    if (depth) steps.push({ action: 'set_analysis_depth', params: { value: depth } });
+    if (quantum !== null) steps.push({ action: 'toggle_quantum', params: { mode: quantum ? 'on' : 'off' } });
+    if (mentionsNext(raw)) steps.push({ action: 'wizard_next', params: {} });
+    if (mentionsBack(raw)) steps.push({ action: 'wizard_back', params: {} });
+    if (mentionsReset(raw)) steps.push({ action: 'reset_analysis', params: {} });
+    // A bare start verb ("Başlat") with no other slot matched means "run
+    // the analysis with what's already configured" -- only when nothing
+    // more specific (depth/quantum/next/back/reset) already claimed it, so
+    // "kuantumu aç" (which also contains the generic verb "aç") doesn't
+    // also fire generate_analysis.
+    if (steps.length === 0 && hasStartVerb) steps.push({ action: 'generate_analysis', params: {} });
+
+    if (steps.length > 0) {
+      return { actions: steps, speak: translate(lang, 'voiceContextAck') };
+    }
+  }
+
+  // ── Navigation / panel catalog (works from any known dashboard screen).
+  const uiMatch = matchUiCatalogAction(raw, context.page);
+  if (uiMatch) {
+    if (uiMatch.requiresConfirmation && CONFIRM_REQUIRED_ACTIONS.has(uiMatch.action)) {
+      pendingConfirm = { action: uiMatch.action, params: {}, expiresAt: Date.now() + CONFIRM_TTL_MS };
+      return { actions: [], speak: translate(lang, 'voiceConfirmLogout') };
+    }
+    return { actions: [{ action: uiMatch.action, params: {} }], speak: speakForUiMatch(lang, uiMatch) };
+  }
+
   return null;
+}
+
+function speakForUiMatch(lang, entry) {
+  const key = {
+    nav_home: 'home', nav_analysis: 'analysis', nav_history: 'history', open_voice_chat: 'voiceChat',
+  }[entry.id];
+  if (key) return (FALLBACK_TEXT[lang] || FALLBACK_TEXT.tr)[key];
+  return translate(lang, 'voiceContextAck');
 }
 
 // ─── Main function ───────────────────────────────────────────────────────
 /**
  * Process the voice command; returns the actions to run and the speech
- * text. Hybrid resolution: a fast deterministic local resolver handles
- * clear commands (start_analysis with category/depth/quantum, simple
- * navigation) without a network round trip; anything it doesn't recognize
- * is routed to the AI-backed /api/voice/intent endpoint. Whichever path
- * produced the actions, they are validated against the same schema
- * (voiceIntentSchema.validateActionPlan) before being returned -- so a
- * malformed or hallucinated action from the AI never reaches
- * voiceActionRegistry.executeAction, and critical intents (analysis,
- * quantum, navigation) never resolve to the generic ui_activate DOM guess.
+ * text. Fully local and synchronous-feeling: transcript -> compositional
+ * slot resolution (category/depth/quantum/verb/navigation, see
+ * resolveLocalIntent) -> schema validation (voiceIntentSchema.js) ->
+ * returned actions. No network call, no AI/LLM in this path.
  *
- * context: { page: string, lang: 'tr'|'en'|'de'|'fr'|'ar', user: string|null }
+ * context: { page, category, depth, quantum, wizardStep, wizardOpen,
+ * lang: 'tr'|'en'|'de'|'fr'|'ar', user: string|null }
  * Returns: { actions: [{action, params}], speak: string }
  */
 export async function processVoiceCommand(transcript, context) {
@@ -148,7 +223,7 @@ export async function processVoiceCommand(transcript, context) {
   const knownActionNames = new Set(actions.map((a) => a.name));
   const lang = context.lang || 'tr';
 
-  const local = resolveDeterministicIntent(transcript, context, knownActionNames);
+  const local = resolveLocalIntent(transcript, context, knownActionNames);
   if (local) {
     const { valid, rejected } = validateActionPlan(local.actions, knownActionNames, transcript);
     if (valid.length || local.actions.length === 0) {
@@ -158,25 +233,6 @@ export async function processVoiceCommand(transcript, context) {
     // happen, it only ever builds schema-shaped actions) -- fail safely
     // into a clarification rather than executing a rejected action.
     return { actions: [], speak: rejected[0]?.reason ? translate(lang, 'voiceInvalidCommand') : local.speak };
-  }
-
-  try {
-    // Dedicated /api/voice/intent endpoint — gives Claude a "pure assistant" role
-    const result = await api.voiceIntent(transcript, context, actions);
-    if (Array.isArray(result?.actions) && typeof result?.speak === 'string') {
-      const { valid, rejected } = validateActionPlan(result.actions, knownActionNames, transcript);
-      if (result.actions.length === 0 || valid.length > 0) {
-        return { actions: valid, speak: result.speak };
-      }
-      // Every proposed action was rejected by schema validation (unknown
-      // action name, invalid enum value, or ui_activate for a critical
-      // intent) -- ask for clarification instead of silently doing
-      // nothing or running something unvalidated.
-      console.warn('[VoiceAssistant] AI plan rejected:', rejected);
-      return { actions: [], speak: translate(lang, 'voiceClarifyAmbiguous') };
-    }
-  } catch {
-    // 401 (not logged in) or network error — fall back to local matching
   }
 
   return localFallback(transcript, context);

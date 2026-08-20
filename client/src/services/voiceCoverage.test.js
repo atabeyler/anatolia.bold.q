@@ -8,6 +8,7 @@ const REQUIRED_SEMANTIC_ACTIONS = [
   'open_voice_chat', 'close_voice_chat', 'open_guide', 'close_guide',
   'logout', 'open_emergency', 'set_analysis_title', 'set_analysis_prompt',
   'generate_analysis', 'toggle_quantum', 'download_analysis', 'reset_analysis',
+  'set_analysis_depth', 'wizard_next', 'wizard_back', 'open_settings', 'close_settings',
 ];
 
 const scope = '__voice_coverage_gate__';
@@ -27,6 +28,7 @@ function registerRealDashboardActions() {
     onLogout: vi.fn(),
     dispatch: vi.fn(),
     setPendingAnalysis: vi.fn(),
+    setSettingsOpen: vi.fn(),
   };
   const actions = buildDashboardVoiceActions(deps);
   registerActions(scope, actions);
@@ -49,7 +51,7 @@ describe('Voice Control Coverage Gate', () => {
     for (const action of buildDashboardVoiceActions({
       setView: vi.fn(), setActiveCategory: vi.fn(), setHistoryOpen: vi.fn(), setVoiceChatOpen: vi.fn(),
       setGuideOpen: vi.fn(), setJWT: vi.fn(), disconnectSocket: vi.fn(), onLogout: vi.fn(), dispatch: vi.fn(),
-      setPendingAnalysis: vi.fn(),
+      setPendingAnalysis: vi.fn(), setSettingsOpen: vi.fn(),
     })) {
       expect(REQUIRED_SEMANTIC_ACTIONS.includes(action.name), `Undocumented semantic voice action: ${action.name}`).toBe(true);
     }
@@ -113,6 +115,21 @@ describe('Voice Control Coverage Gate', () => {
 
     expect(executeAction('reset_analysis', {})).toBe(true);
     expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:reset', {});
+
+    expect(executeAction('set_analysis_depth', { value: 'derin' })).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:set', { field: 'depth', value: 'derin' });
+
+    expect(executeAction('wizard_next', {})).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:wizard:next', {});
+
+    expect(executeAction('wizard_back', {})).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:wizard:back', {});
+
+    expect(executeAction('open_settings', {})).toBe(true);
+    expect(deps.setSettingsOpen).toHaveBeenCalledWith(true);
+
+    expect(executeAction('close_settings', {})).toBe(true);
+    expect(deps.setSettingsOpen).toHaveBeenCalledWith(false);
   });
 
   it('keeps the complete advertised action surface uniquely named and documented', () => {

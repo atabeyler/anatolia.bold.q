@@ -92,6 +92,18 @@ router.post('/speak', authMiddleware, publicActionLimiter, express.json({ limit:
  * Analyzes the voice command with AI and returns the actions to run.
  * Body: { transcript, context: { page, lang, user }, actions: [...] }
  * Returns: { actions: [{action, params}], speak }
+ *
+ * NOT CALLED BY THE CLIENT ANY MORE. Voice command interpretation/routing
+ * was converted to a fully local, deterministic engine (see
+ * client/src/services/voiceAssistantEngine.js and voiceUiCatalog.js) with
+ * zero AI/network calls in the interpretation path. This route (and
+ * parseVoiceIntent in services/aiGenerate.ts, which nothing else calls) is
+ * left in place rather than deleted: nothing else in the codebase was found
+ * to depend on it, deleting an Express route/service function carries more
+ * blast-radius risk than leaving it dormant, and it costs nothing to keep
+ * (it does not run unless explicitly POSTed to, and stays behind the same
+ * authMiddleware/rate limiter as every other route here). Safe to remove in
+ * a future cleanup once confirmed nothing else has started using it.
  */
 router.post('/intent', authMiddleware, publicActionLimiter, express.json({ limit: '512kb' }), async (req, res) => {
   let context = {};

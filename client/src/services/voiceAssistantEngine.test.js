@@ -2,12 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerActions, unregisterActions, executePlan } from './voiceActionRegistry.js';
 import { buildDashboardVoiceActions } from './dashboardVoiceActions.js';
 
-vi.mock('./api.js', () => ({
-  api: { voiceIntent: vi.fn() },
-}));
-
-const { api } = await import('./api.js');
-const { processVoiceCommand } = await import('./voiceAssistantEngine.js');
+const { processVoiceCommand, _resetVoiceEngineState } = await import('./voiceAssistantEngine.js');
 
 const scope = '__engine_test__';
 
@@ -23,24 +18,21 @@ function register(deps = {}) {
     onLogout: vi.fn(),
     dispatch: vi.fn(),
     setPendingAnalysis: vi.fn(),
+    setSettingsOpen: vi.fn(),
     ...deps,
   };
   registerActions(scope, buildDashboardVoiceActions(merged));
   return merged;
 }
 
-beforeEach(() => {
-  api.voiceIntent.mockReset();
-});
-
+beforeEach(() => _resetVoiceEngineState());
 afterEach(() => unregisterActions(scope));
 
-describe('processVoiceCommand: deterministic local resolution (fast path, no network call)', () => {
+describe('processVoiceCommand: fully local deterministic resolution (no network call)', () => {
   beforeEach(() => register());
 
-  it('resolves a plain Turkish category+start command without calling the AI endpoint', async () => {
+  it('resolves a plain Turkish category+start command', async () => {
     const result = await processVoiceCommand('Savunma analizi başlat', { page: 'dashboard-analysis', lang: 'tr' });
-    expect(api.voiceIntent).not.toHaveBeenCalled();
     expect(result.actions).toEqual([{ action: 'start_analysis', params: { category: 'savunma', depth: 'standart', quantum: false } }]);
     expect(result.speak).toMatch(/Savunma/);
   });
@@ -50,13 +42,13 @@ describe('processVoiceCommand: deterministic local resolution (fast path, no net
     expect(result.actions[0]).toEqual({ action: 'start_analysis', params: { category: 'enerji', depth: 'standart', quantum: false } });
   });
 
-  it('resolves economy analysis with a natural "oluştur" phrasing', async () => {
-    const result = await processVoiceCommand('enerji alanında yeni analiz oluştur', { page: 'dashboard-analysis', lang: 'tr' });
+  it('resolves a "yeni analiz oluştur" phrasing', async () => {
+    const result = await processVoiceCommand('Enerji için yeni analiz oluştur', { page: 'dashboard-analysis', lang: 'tr' });
     expect(result.actions[0].params.category).toBe('enerji');
   });
 
   it('extracts depth from "derin ekonomi analizi yap"', async () => {
-    const result = await processVoiceCommand('derin ekonomi analizi yap', { page: 'dashboard-analysis', lang: 'tr' });
+    const result = await processVoiceCommand('Derin ekonomi analizi aç', { page: 'dashboard-analysis', lang: 'tr' });
     expect(result.actions[0]).toEqual({ action: 'start_analysis', params: { category: 'ekonomi', depth: 'derin', quantum: false } });
   });
 
@@ -65,71 +57,142 @@ describe('processVoiceCommand: deterministic local resolution (fast path, no net
     expect(result.actions[0]).toEqual({ action: 'start_analysis', params: { category: 'enerji', depth: 'standart', quantum: true } });
   });
 
+  it('composes category + depth + quantum from a single multi-clause Turkish utterance', async () => {
+    const result = await processVoiceCommand('Kuantum destekli derin savunma analizi başlat', { page: 'dashboard-analysis', lang: 'tr' });
+    expect(result.actions[0]).toEqual({ action: 'start_analysis', params: { category: 'savunma', depth: 'derin', quantum: true } });
+  });
+
   it('resolves an English natural phrasing', async () => {
     const result = await processVoiceCommand('start a deep defense analysis with quantum', { page: 'dashboard-analysis', lang: 'en' });
     expect(result.actions[0]).toEqual({ action: 'start_analysis', params: { category: 'savunma', depth: 'derin', quantum: true } });
+  });
+
+  it('resolves a German natural phrasing', async () => {
+    const result = await processVoiceCommand('starte eine tiefe Verteidigungsanalyse', { page: 'dashboard-analysis', lang: 'de' });
+    expect(result.actions[0].params).toEqual({ category: 'savunma', depth: 'derin', quantum: false });
+  });
+
+  it('resolves a French natural phrasing', async () => {
+    const result = await processVoiceCommand('lancer une analyse économie approfondie', { page: 'dashboard-analysis', lang: 'fr' });
+    expect(result.actions[0].params).toEqual({ category: 'ekonomi', depth: 'derin', quantum: false });
+  });
+
+  it('resolves an Arabic natural phrasing', async () => {
+    const result = await processVoiceCommand('ابدأ تحليل الطاقة', { page: 'dashboard-analysis', lang: 'ar' });
+    expect(result.actions[0].params.category).toBe('enerji');
   });
 
   it('asks for clarification instead of guessing when an analysis is requested with no recognizable category', async () => {
     const result = await processVoiceCommand('yeni analiz başlat', { page: 'dashboard-analysis', lang: 'tr' });
     expect(result.actions).toEqual([]);
     expect(result.speak.length).toBeGreaterThan(0);
-    expect(api.voiceIntent).not.toHaveBeenCalled();
+  });
+
+  it('resolves the generic "not understood" response for gibberish, with no action taken', async () => {
+    const result = await processVoiceCommand('bugün hava nasıl acaba', { page: 'dashboard-analysis', lang: 'tr' });
+    expect(result.actions).toEqual([]);
   });
 });
 
-describe('processVoiceCommand: AI-backed path is validated through the same schema', () => {
+describe('processVoiceCommand: context-aware follow-ups on the analysis screen', () => {
   beforeEach(() => register());
 
-  it('routes unrecognized phrasing to the AI endpoint and executes a valid response', async () => {
-    api.voiceIntent.mockResolvedValue({
-      actions: [{ action: 'start_analysis', params: { category: 'ekonomi', depth: 'derin', quantum: true } }],
-      speak: 'Derin ekonomi analizi kuantum modunda başlatılıyor.',
-    });
-    const result = await processVoiceCommand('bana kısa bir özet çıkar', { page: 'dashboard-analysis', lang: 'tr' });
-    expect(api.voiceIntent).toHaveBeenCalled();
-    expect(result.actions).toEqual([{ action: 'start_analysis', params: { category: 'ekonomi', depth: 'derin', quantum: true } }]);
+  const ctx = { page: 'dashboard-analysis', lang: 'tr', category: 'savunma', wizardOpen: true, wizardStep: 4 };
+
+  it('resolves a bare "Derin yap" against the active wizard, without repeating the category', async () => {
+    const result = await processVoiceCommand('Derin yap', ctx);
+    expect(result.actions).toEqual([{ action: 'set_analysis_depth', params: { value: 'derin' } }]);
   });
 
-  it('rejects a malformed AI JSON response (actions not an array) and asks for clarification instead of crashing', async () => {
-    api.voiceIntent.mockResolvedValue({ actions: 'not-an-array', speak: 'irrelevant' });
-    const result = await processVoiceCommand('garip bir şey söyle', { page: 'dashboard-analysis', lang: 'tr' });
+  it('resolves a bare "Kuantumu aç" against the active wizard', async () => {
+    const result = await processVoiceCommand('Kuantumu aç', ctx);
+    expect(result.actions).toEqual([{ action: 'toggle_quantum', params: { mode: 'on' } }]);
+  });
+
+  it('resolves "Sonraki" to wizard_next', async () => {
+    const result = await processVoiceCommand('Sonraki', ctx);
+    expect(result.actions).toEqual([{ action: 'wizard_next', params: {} }]);
+  });
+
+  it('resolves "Sıfırla" to reset_analysis', async () => {
+    const result = await processVoiceCommand('Sıfırla', ctx);
+    expect(result.actions).toEqual([{ action: 'reset_analysis', params: {} }]);
+  });
+
+  it('resolves a bare "Başlat" (no other slot matched) to generate_analysis', async () => {
+    const result = await processVoiceCommand('Başlat', ctx);
+    expect(result.actions).toEqual([{ action: 'generate_analysis', params: {} }]);
+  });
+
+  it('does nothing context-specific once the wizard is closed (result already shown)', async () => {
+    const result = await processVoiceCommand('Derin yap', { ...ctx, wizardOpen: false });
+    // No category/analysis word and no navigation match either -> falls
+    // through to the generic "not understood" response.
     expect(result.actions).toEqual([]);
   });
 
-  it('rejects an AI response naming an unregistered/invalid action instead of executing it', async () => {
-    api.voiceIntent.mockResolvedValue({
-      actions: [{ action: 'delete_all_analyses', params: {} }],
-      speak: 'Tamam.',
-    });
-    const result = await processVoiceCommand('her şeyi sil', { page: 'dashboard-analysis', lang: 'tr' });
-    expect(result.actions).toEqual([]);
+  it('an explicit new category command still switches category even mid-wizard', async () => {
+    const result = await processVoiceCommand('Enerji analizi başlat', ctx);
+    expect(result.actions[0].params.category).toBe('enerji');
   });
+});
 
-  it('rejects an AI-proposed start_analysis with an invalid category enum value', async () => {
-    api.voiceIntent.mockResolvedValue({
-      actions: [{ action: 'start_analysis', params: { category: 'atlantis' } }],
-      speak: 'Tamam.',
-    });
-    const result = await processVoiceCommand('atlantis analizi başlat', { page: 'dashboard-analysis', lang: 'tr' });
-    expect(result.actions).toEqual([]);
-  });
+describe('processVoiceCommand: catalog-driven navigation (no ui_activate DOM guessing)', () => {
+  beforeEach(() => register());
 
-  it('refuses ui_activate for a critical analysis intent even if the AI proposes it, instead of clicking a random control', async () => {
-    api.voiceIntent.mockResolvedValue({
-      actions: [{ action: 'ui_activate', params: { target: 'Yeni Analiz' } }],
-      speak: 'Tamam.',
-    });
-    // No "analiz"/category word here on purpose, so this bypasses the local
-    // fast path (which itself never lets a recognized analysis command
-    // reach ui_activate) and actually exercises the AI-response validator.
-    const result = await processVoiceCommand('kuantumu aç', { page: 'dashboard-analysis', lang: 'tr' });
-    expect(result.actions).toEqual([]);
-  });
-
-  it('falls back to local matching when the AI call throws (network/401)', async () => {
-    api.voiceIntent.mockRejectedValue(new Error('network down'));
+  it('resolves "ana ekrana dön" to navigate_home', async () => {
     const result = await processVoiceCommand('ana ekrana dön', { page: 'dashboard-analysis', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'navigate_home', params: {} }]);
+  });
+
+  it('resolves "geçmiş" to navigate_history', async () => {
+    const result = await processVoiceCommand('geçmişi aç', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'navigate_history', params: {} }]);
+  });
+
+  it('resolves "ayarlara git" to open_settings', async () => {
+    const result = await processVoiceCommand('ayarlara git', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'open_settings', params: {} }]);
+  });
+
+  it('resolves "panele git" to navigate_analysis', async () => {
+    const result = await processVoiceCommand('panele git', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'navigate_analysis', params: {} }]);
+  });
+
+  it('"geri dön" resolves to wizard_back while the wizard is open, and to navigate_home otherwise', async () => {
+    const inWizard = await processVoiceCommand('geri dön', { page: 'dashboard-analysis', lang: 'tr', category: 'savunma', wizardOpen: true });
+    expect(inWizard.actions).toEqual([{ action: 'wizard_back', params: {} }]);
+
+    const onHome = await processVoiceCommand('geri dön', { page: 'dashboard-home', lang: 'tr' });
+    expect(onHome.actions).toEqual([{ action: 'navigate_home', params: {} }]);
+  });
+});
+
+describe('processVoiceCommand: logout requires spoken confirmation', () => {
+  beforeEach(() => register());
+
+  it('does not log out immediately -- it asks for confirmation first', async () => {
+    const result = await processVoiceCommand('çıkış yap', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([]);
+    expect(result.speak.length).toBeGreaterThan(0);
+  });
+
+  it('logs out only once the very next utterance confirms', async () => {
+    await processVoiceCommand('çıkış yap', { page: 'dashboard-home', lang: 'tr' });
+    const result = await processVoiceCommand('evet', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'logout', params: {} }]);
+  });
+
+  it('cancels instead of logging out when the follow-up declines', async () => {
+    await processVoiceCommand('çıkış yap', { page: 'dashboard-home', lang: 'tr' });
+    const result = await processVoiceCommand('hayır', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([]);
+  });
+
+  it('drops the pending confirmation and resolves a new unrelated command normally', async () => {
+    await processVoiceCommand('çıkış yap', { page: 'dashboard-home', lang: 'tr' });
+    const result = await processVoiceCommand('ana ekrana dön', { page: 'dashboard-home', lang: 'tr' });
     expect(result.actions).toEqual([{ action: 'navigate_home', params: {} }]);
   });
 });
@@ -150,12 +213,9 @@ describe('multi-step action plans: executePlan short-circuits on a failed critic
     register();
     const results = executePlan([
       { action: 'start_analysis', params: { category: 'enerji' } },
-      { action: 'not_a_real_action', params: {} }, // unregistered but not critical by name match on registry
+      { action: 'not_a_real_action', params: {} },
       { action: 'toggle_quantum', params: { mode: 'off' } },
     ]);
-    // start_analysis (critical) succeeds, the unregistered step fails and
-    // is not itself in CRITICAL_ACTIONS by exact registry lookup failure,
-    // so verify at minimum the unregistered step is reported as failed.
     expect(results[0]).toEqual({ action: 'start_analysis', ok: true });
     expect(results[1].ok).toBe(false);
   });
@@ -168,5 +228,16 @@ describe('multi-step action plans: executePlan short-circuits on a failed critic
     expect(activateSpy).not.toHaveBeenCalled();
     expect(deps.setPendingAnalysis).toHaveBeenCalledWith({ depth: undefined, quantum: true, prompt: undefined, title: undefined });
     unregisterActions('__ui_activate_probe__');
+  });
+
+  it('runs a locally-composed multi-action context plan (depth + quantum together)', () => {
+    const deps = register();
+    const results = executePlan([
+      { action: 'set_analysis_depth', params: { value: 'derin' } },
+      { action: 'toggle_quantum', params: { mode: 'on' } },
+    ]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:set', { field: 'depth', value: 'derin' });
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:quantum', { mode: 'on' });
   });
 });

@@ -12,6 +12,7 @@ export function buildDashboardVoiceActions({
   onLogout,
   dispatch,
   setPendingAnalysis = () => {},
+  setSettingsOpen = () => {},
 }) {
   return [
     { name: 'navigate_home',      description: 'Go to the home / map monitoring view',        params: {},                                                   handler: () => setView('home') },
@@ -37,5 +38,10 @@ export function buildDashboardVoiceActions({
     { name: 'toggle_quantum',      description: 'Enable or disable quantum probability mode',  params: { mode: 'on|off' },                                   handler: (p) => dispatch('aq:analysis:quantum', { mode: p?.mode || 'on' }) },
     { name: 'download_analysis',   description: 'Download the analysis as a DOCX file',       params: {},                                                   handler: () => dispatch('aq:analysis:download', {}) },
     { name: 'reset_analysis',      description: 'Reset / clear the current analysis',         params: {},                                                   handler: () => dispatch('aq:analysis:reset', {}) },
+    { name: 'set_analysis_depth',  description: 'Set the analysis depth (fast/standard/deep) on the in-progress wizard', params: { value: 'enum: hizli|standart|derin' }, handler: (p) => dispatch('aq:analysis:set', { field: 'depth', value: p?.value || '' }) },
+    { name: 'wizard_next',         description: 'Move the analysis wizard to the next step',  params: {},                                                   handler: () => dispatch('aq:wizard:next', {}) },
+    { name: 'wizard_back',         description: 'Move the analysis wizard to the previous step', params: {},                                                handler: () => dispatch('aq:wizard:back', {}) },
+    { name: 'open_settings',       description: 'Open the settings panel',                    params: {},                                                   handler: () => setSettingsOpen(true) },
+    { name: 'close_settings',      description: 'Close the settings panel',                   params: {},                                                   handler: () => setSettingsOpen(false) },
   ];
 }

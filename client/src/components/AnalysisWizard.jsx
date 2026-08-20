@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   X, Rocket, Check, ChevronRight, FileText, Image as ImageIcon, Atom, Sparkles,
@@ -28,8 +27,11 @@ export default function AnalysisWizard({
   removeImageAt, removeDocAt, setRealTransactions, setRealScenarios, setRealOptimization,
   handleAIFile,
   error, loading, hasPrompt, generate,
+  // Lifted into AnalysisView (rather than local useState here) so voice
+  // commands ("Sonraki"/"Sıfırla") can drive the wizard step from outside
+  // via the aq:wizard:next/back events -- see AnalysisView.jsx.
+  step, setStep,
 }) {
-  const [step, setStep] = useState(1);
   if (!open) return null;
 
   const STEPS = [

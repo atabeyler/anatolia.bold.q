@@ -236,8 +236,10 @@ export const api = {
   historyDownloadBlob: (id) => reqBlob(`/api/history/${id}/download`),
   historyDownloadPdfBlob: (id) => reqBlob(`/api/history/${id}/download-pdf`),
 
-  voiceIntent: (transcript, context, actions) =>
-    req('/api/voice/intent', { method: 'POST', body: JSON.stringify({ transcript, context, actions }) }),
+  // voiceIntent (POST /api/voice/intent) intentionally removed here: voice
+  // command interpretation is now a fully local, deterministic engine (see
+  // voiceAssistantEngine.js) with no AI/network call in that path. The
+  // server route itself is left in place, unused -- see the comment on it.
 };
 
 export const adminApi = {

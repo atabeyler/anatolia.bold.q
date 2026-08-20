@@ -251,5 +251,9 @@
   "voiceAnalysisCreatedNeedTopic": "{{category}} analizi oluşturuldu. Lütfen analiz konusunu belirtin.",
   "voiceAnalysisStarted": "{{category}} analizi başlatılıyor.",
   "voiceClarifyAmbiguous": "Komutunuzu tam anlayamadım, tekrar eder misiniz?",
-  "voiceInvalidCommand": "Bu komutu güvenle çalıştıramıyorum, lütfen farklı ifade edin."
+  "voiceInvalidCommand": "Bu komutu güvenle çalıştıramıyorum, lütfen farklı ifade edin.",
+  "voiceContextAck": "Tamam.",
+  "voiceConfirmLogout": "Çıkış yapmak istediğinizden emin misiniz? Onaylamak için \"evet\" deyin.",
+  "voiceConfirmed": "Onaylandı, çıkış yapılıyor.",
+  "voiceCancelled": "İptal edildi."
 }

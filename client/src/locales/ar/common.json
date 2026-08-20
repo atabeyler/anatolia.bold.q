@@ -251,5 +251,9 @@
   "voiceAnalysisCreatedNeedTopic": "تم إنشاء تحليل {{category}}. يرجى تحديد موضوع التحليل.",
   "voiceAnalysisStarted": "جارٍ بدء تحليل {{category}}.",
   "voiceClarifyAmbiguous": "لم أفهم هذا الأمر تمامًا، هل يمكنك التكرار؟",
-  "voiceInvalidCommand": "لا يمكنني تنفيذ هذا الأمر بأمان، يرجى إعادة الصياغة."
+  "voiceInvalidCommand": "لا يمكنني تنفيذ هذا الأمر بأمان، يرجى إعادة الصياغة.",
+  "voiceContextAck": "حسنًا.",
+  "voiceConfirmLogout": "هل أنت متأكد من رغبتك في تسجيل الخروج؟ قل \"نعم\" للتأكيد.",
+  "voiceConfirmed": "تم التأكيد، جارٍ تسجيل الخروج.",
+  "voiceCancelled": "تم الإلغاء."
 }

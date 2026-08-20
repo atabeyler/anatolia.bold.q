@@ -33,6 +33,9 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const [quantumMode, setQuantumMode] = useState(false);
   const [priority, setPriority] = useState('normal');
   const [depth, setDepth] = useState('standart');
+  // Lifted out of AnalysisWizard so voice commands can drive the wizard
+  // step from outside it (see the aq:wizard:next/back listener below).
+  const [wizardStep, setWizardStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [loadingScenario, setLoadingScenario] = useState(null);
   const [result, setResult] = useState(null);
@@ -67,24 +70,56 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
       const { field, value } = e?.detail || {};
       if (field === 'title') setTitle(value ?? '');
       if (field === 'prompt') setPrompt((prev) => (value ? (prev ? prev + ' ' + value : value) : prev));
+      if (field === 'depth' && DEPTH_IDS.includes(value)) setDepth(value);
     };
     const onQuantum = (e) => setQuantumMode((e?.detail?.mode || 'on') !== 'off');
     const onGenerate = () => generateRef.current?.();
     const onDownload = () => downloadDocxRef.current?.();
     const onReset = () => resetRef.current?.();
+    // wizard_next/wizard_back (see dashboardVoiceActions.js) -- lets voice
+    // commands ("Sonraki"/"Geri dön") drive the 5-step wizard from outside
+    // it, the same way set_analysis_title/prompt already drive its fields.
+    const onWizardNext = () => setWizardStep((s) => Math.min(5, s + 1));
+    const onWizardBack = () => setWizardStep((s) => Math.max(1, s - 1));
     window.addEventListener('aq:analysis:set', onSet);
     window.addEventListener('aq:analysis:quantum', onQuantum);
     window.addEventListener('aq:analysis:generate', onGenerate);
     window.addEventListener('aq:analysis:download', onDownload);
     window.addEventListener('aq:analysis:reset', onReset);
+    window.addEventListener('aq:wizard:next', onWizardNext);
+    window.addEventListener('aq:wizard:back', onWizardBack);
     return () => {
       window.removeEventListener('aq:analysis:set', onSet);
       window.removeEventListener('aq:analysis:quantum', onQuantum);
       window.removeEventListener('aq:analysis:generate', onGenerate);
       window.removeEventListener('aq:analysis:download', onDownload);
       window.removeEventListener('aq:analysis:reset', onReset);
+      window.removeEventListener('aq:wizard:next', onWizardNext);
+      window.removeEventListener('aq:wizard:back', onWizardBack);
     };
   }, []);
+
+  // Broadcasts the live wizard state (category/depth/quantum/step/open) on
+  // the same aq:context event DashboardPage uses for page/category -- the
+  // voice engine merges these into one context object (see
+  // GlobalVoiceAssistant.jsx) so context-dependent commands like "Derin
+  // yap" or "Sonraki" know what's currently on screen without needing the
+  // category repeated.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('aq:context', {
+      detail: {
+        page: 'dashboard-analysis',
+        category,
+        depth,
+        quantum: quantumMode,
+        wizardStep,
+        wizardOpen: !result && !scenarioResult,
+      },
+    }));
+  }, [category, depth, quantumMode, wizardStep, result, scenarioResult]);
+
+  // A freshly picked category starts its wizard back at step 1.
+  useEffect(() => { setWizardStep(1); }, [category]);
 
   const cat = CATEGORIES.find(c => c.id === category);
   const isConsult = category === 'danisma';
@@ -203,6 +238,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
     setRealTransactions(null);
     setRealScenarios(null);
     setRealOptimization(null);
+    setWizardStep(1);
   };
 
   generateRef.current = generate;
@@ -230,6 +266,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
           priority={priority} setPriority={setPriority}
           depth={depth} setDepth={setDepth}
           quantumMode={quantumMode} setQuantumMode={setQuantumMode}
+          step={wizardStep} setStep={setWizardStep}
           documentContexts={documentContexts} imageFiles={imageFiles}
           realTransactions={realTransactions} realScenarios={realScenarios} realOptimization={realOptimization}
           removeImageAt={removeImageAt} removeDocAt={removeDocAt}

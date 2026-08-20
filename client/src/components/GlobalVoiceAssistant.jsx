@@ -37,6 +37,12 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
   const recRef     = useRef(null);
   const restartRef = useRef(null);
   const startMicFn = useRef(null);
+  // Merged, always-current view of every aq:context payload received so
+  // far (page, category, depth, quantum, wizardStep, wizardOpen, ...) --
+  // this is what lets the local engine resolve context-dependent commands
+  // ("Derin yap", "Sonraki") without the caller repeating the category.
+  // A ref (not state) because it's read inside the async onresult handler.
+  const ctxRef = useRef({ page: 'unknown' });
 
   useEffect(() => { onRef.current = on; },       [on]);
   useEffect(() => { statusRef.current = status; }, [status]);
@@ -45,7 +51,11 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
   useEffect(() => { userRef.current = user; },   [user]);
 
   useEffect(() => {
-    const handler = (e) => { if (e.detail?.page) setPage(e.detail.page); };
+    const handler = (e) => {
+      if (!e.detail) return;
+      ctxRef.current = { ...ctxRef.current, ...e.detail };
+      if (e.detail.page) setPage(e.detail.page);
+    };
     window.addEventListener('aq:context', handler);
     return () => window.removeEventListener('aq:context', handler);
   }, []);
@@ -124,6 +134,7 @@ export default function GlobalVoiceAssistant({ lang = 'tr', user = null }) {
 
       try {
         const result = await processVoiceCommand(text, {
+          ...ctxRef.current,
           page: pageRef.current,
           lang: langRef.current,
           user: userRef.current?.userCode || null,

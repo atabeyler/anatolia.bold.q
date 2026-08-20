@@ -381,6 +381,7 @@ export default function DashboardPage({ user, onLogout }) {
       onLogout,
       dispatch,
       setPendingAnalysis,
+      setSettingsOpen,
     }));
 
     return () => unregisterActions('dashboard');

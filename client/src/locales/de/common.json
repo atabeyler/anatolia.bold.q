@@ -251,5 +251,9 @@
   "voiceAnalysisCreatedNeedTopic": "{{category}}-Analyse erstellt. Bitte geben Sie das Analysethema an.",
   "voiceAnalysisStarted": "{{category}}-Analyse wird gestartet.",
   "voiceClarifyAmbiguous": "Ich habe diesen Befehl nicht vollständig verstanden, können Sie ihn wiederholen?",
-  "voiceInvalidCommand": "Ich kann diesen Befehl nicht sicher ausführen, bitte formulieren Sie ihn anders."
+  "voiceInvalidCommand": "Ich kann diesen Befehl nicht sicher ausführen, bitte formulieren Sie ihn anders.",
+  "voiceContextAck": "Okay.",
+  "voiceConfirmLogout": "Möchten Sie sich wirklich abmelden? Sagen Sie „ja“, um zu bestätigen.",
+  "voiceConfirmed": "Bestätigt, Abmeldung läuft.",
+  "voiceCancelled": "Abgebrochen."
 }

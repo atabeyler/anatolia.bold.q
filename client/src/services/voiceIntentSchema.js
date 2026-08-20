@@ -27,8 +27,22 @@ export const CRITICAL_ACTIONS = new Set([
   'generate_analysis',
   'set_analysis_title',
   'set_analysis_prompt',
+  'set_analysis_depth',
+  'wizard_next',
+  'wizard_back',
+  'open_settings',
+  'close_settings',
   'logout',
 ]);
+
+// Actions that must never execute straight off a voice match -- the engine
+// asks a yes/no confirmation question first and only runs the action once
+// the following utterance matches CONFIRM_WORDS (see
+// voiceAssistantEngine.js's pending-confirmation gate). Kept as its own set
+// (distinct from CRITICAL_ACTIONS, which is about routing safety, not
+// destructiveness) so new destructive actions can opt in without changing
+// the routing rules above.
+export const CONFIRM_REQUIRED_ACTIONS = new Set(['logout']);
 
 // ─── Multilingual synonym tables (TR/EN/DE/FR/AR) ─────────────────────────
 // Used by the local deterministic resolver AND to repair/validate a
@@ -60,6 +74,19 @@ const NEGATION_WORD = ['kapat', 'kaldir', 'kaldır', 'olmadan', 'disable', 'off'
 
 const ANALYSIS_WORDS = ['analiz', 'analysis', 'analyse', 'تحليل'];
 const START_VERB_WORDS = ['baslat', 'başlat', 'olustur', 'oluştur', 'yap', 'ac', 'aç', 'start', 'create', 'run', 'begin', 'launch', 'starten', 'erstellen', 'démarrer', 'lancer', 'créer', 'ابدأ', 'أنشئ'];
+
+// ─── Context/navigation slot words (multilingual) ─────────────────────────
+// Independent slot-fillers for the compositional context-aware commands a
+// user issues while already on the analysis screen (e.g. "Derin yap",
+// "Sonraki", "Sıfırla") -- see voiceAssistantEngine.js's resolveLocalIntent,
+// which combines these with matchCategory/matchDepth/matchQuantum instead
+// of hardcoding whole sentences.
+const NEXT_WORDS = ['sonraki', 'ileri', 'devam', 'next', 'next step', 'forward', 'weiter', 'nächster schritt', 'suivant', 'étape suivante', 'التالي'];
+const BACK_WORDS = ['geri don', 'geri dön', 'geri', 'onceki adim', 'önceki adım', 'back', 'go back', 'previous step', 'zuruck', 'zurück', 'précédent', 'étape précédente', 'رجوع', 'السابق'];
+const RESET_WORDS = ['sifirla', 'sıfırla', 'temizle', 'reset', 'clear', 'zurucksetzen', 'zurücksetzen', 'reinitialiser', 'réinitialiser', 'اعادة تعيين', 'إعادة تعيين'];
+const NEW_WORDS = ['yeni', 'new', 'neu', 'nouvelle', 'nouveau', 'جديد'];
+export const CONFIRM_WORDS = ['evet', 'onayliyorum', 'onaylıyorum', 'tamam', 'devam et', 'onayla', 'yes', 'confirm', 'proceed', 'ok', 'okay', 'ja', 'bestatigen', 'bestätigen', 'oui', 'confirmer', 'نعم', 'أؤكد'];
+export const CANCEL_WORDS = ['hayir', 'hayır', 'iptal', 'vazgec', 'vazgeç', 'no', 'cancel', 'nein', 'abbrechen', 'non', 'annuler', 'لا', 'إلغاء'];
 
 // ─── Text folding ──────────────────────────────────────────────────────────
 // Lowercases and strips Turkish/French/German diacritics for loose matching
@@ -125,6 +152,13 @@ export function mentionsStartVerb(text) {
   return START_VERB_WORDS.some((w) => includesWord(t, w));
 }
 
+export function mentionsNext(text) { const t = foldText(text); return NEXT_WORDS.some((w) => includesWord(t, w)); }
+export function mentionsBack(text) { const t = foldText(text); return BACK_WORDS.some((w) => includesWord(t, w)); }
+export function mentionsReset(text) { const t = foldText(text); return RESET_WORDS.some((w) => includesWord(t, w)); }
+export function mentionsNew(text) { const t = foldText(text); return NEW_WORDS.some((w) => includesWord(t, w)); }
+export function matchConfirm(text) { const t = foldText(text); return CONFIRM_WORDS.some((w) => includesWord(t, w)); }
+export function matchCancel(text) { const t = foldText(text); return CANCEL_WORDS.some((w) => includesWord(t, w)); }
+
 // A critical-intent utterance is one whose meaning is unambiguous enough
 // (mentions analysis/quantum by name) that the assistant must resolve it
 // through a real semantic action -- never through ui_activate's fuzzy
@@ -155,6 +189,9 @@ export const ACTION_PARAM_SCHEMAS = {
   },
   set_analysis_prompt: {
     value: { type: 'string', required: false },
+  },
+  set_analysis_depth: {
+    value: { type: 'depth', required: true },
   },
 };
 

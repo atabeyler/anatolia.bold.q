@@ -1,9 +1,34 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CATEGORY_IDS, DEPTH_IDS, CRITICAL_ACTIONS,
+  CATEGORY_IDS, DEPTH_IDS, CRITICAL_ACTIONS, CONFIRM_REQUIRED_ACTIONS,
   matchCategory, matchDepth, matchQuantum, isCriticalIntentText,
+  mentionsNext, mentionsBack, mentionsReset, matchConfirm, matchCancel,
   coerceAndValidateParams, validateActionCandidate, validateActionPlan,
 } from './voiceIntentSchema.js';
+
+describe('voiceIntentSchema: context/navigation slot words', () => {
+  it('detects next/back/reset words across languages', () => {
+    expect(mentionsNext('sonraki adıma geç')).toBe(true);
+    expect(mentionsNext('next step please')).toBe(true);
+    expect(mentionsBack('geri dön')).toBe(true);
+    expect(mentionsBack('go back')).toBe(true);
+    expect(mentionsReset('sıfırla')).toBe(true);
+    expect(mentionsReset('reset it')).toBe(true);
+  });
+
+  it('detects confirm/cancel words across languages', () => {
+    expect(matchConfirm('evet')).toBe(true);
+    expect(matchConfirm('yes')).toBe(true);
+    expect(matchCancel('hayır')).toBe(true);
+    expect(matchCancel('cancel')).toBe(true);
+    expect(matchConfirm('bugün hava nasıl')).toBe(false);
+  });
+
+  it('scopes CONFIRM_REQUIRED_ACTIONS to genuinely destructive actions', () => {
+    expect(CONFIRM_REQUIRED_ACTIONS.has('logout')).toBe(true);
+    expect(CONFIRM_REQUIRED_ACTIONS.has('start_analysis')).toBe(false);
+  });
+});
 
 describe('voiceIntentSchema: category/depth synonym matching', () => {
   it('maps Turkish category words to the real internal ids', () => {
