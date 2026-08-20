@@ -6,6 +6,7 @@ import { connectSocket, getSocket } from '../services/socket.js';
 import VoiceButton from './VoiceButton.jsx';
 import FileAttach, { FileMessageContent } from './FileAttach.jsx';
 import { useLang } from '../services/langContext.jsx';
+import { repairLegacyText } from '../services/textRepair.js';
 
 const PANELS = { CENTER: 'center', USERS: 'users', CHAT: 'chat' };
 const DEFAULT_ICE_SERVERS = [
@@ -31,44 +32,7 @@ const buildMessageWithFiles = (text, files) => {
   return `${note}${attachments}`;
 };
 
-const fixMojibake = (text) => {
-  const s = String(text || '');
-  const fixed = s
-    .replaceAll('Ã§', 'ç')
-    .replaceAll('Ã‡', 'Ç')
-    .replaceAll('Ã¶', 'ö')
-    .replaceAll('Ã–', 'Ö')
-    .replaceAll('Ã¼', 'ü')
-    .replaceAll('Ãœ', 'Ü')
-    .replaceAll('Ä±', 'ı')
-    .replaceAll('Ä°', 'İ')
-    .replaceAll('ÅŸ', 'ş')
-    .replaceAll('Åž', 'Ş')
-    .replaceAll('ÄŸ', 'ğ')
-    .replaceAll('Äž', 'Ğ')
-    .replaceAll('ý', 'ı')
-    .replaceAll('Ý', 'İ')
-    .replaceAll('þ', 'ş')
-    .replaceAll('Þ', 'Ş')
-    .replaceAll('ð', 'ğ')
-    .replaceAll('Ð', 'Ğ');
-
-  // Fallback for replacement-char mojibake (�) seen in legacy logs.
-  return fixed
-    .replaceAll('g�r�nt�l�', 'görüntülü')
-    .replaceAll('toplant�y�', 'toplantıyı')
-    .replaceAll('toplant�ya', 'toplantıya')
-    .replaceAll('toplant�dan', 'toplantıdan')
-    .replaceAll('toplant�', 'toplantı')
-    .replaceAll('ba�latt�', 'başlattı')
-    .replaceAll('ba�lat�ld�', 'başlatıldı')
-    .replaceAll('kat�ld�', 'katıldı')
-    .replaceAll('kat�l', 'katıl')
-    .replaceAll('ayr�ld�', 'ayrıldı')
-    .replaceAll('ayr�l', 'ayrıl')
-    .replaceAll('Mesajla�ma', 'Mesajlaşma')
-    .replaceAll('kat�l�mc�', 'katılımcı');
-};
+const fixMojibake = repairLegacyText;
 
 export default function EmergencyButton({ authenticated }) {
   const { t } = useLang();

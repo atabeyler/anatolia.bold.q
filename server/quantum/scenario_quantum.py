@@ -5,7 +5,8 @@ Loads the scenario weights produced by the LLM into a quantum circuit as
 amplitudes, applies quantum interference through a multi-layer, fully
 entangling mixer, and computes the final probability distribution by
 running the circuit several independent times (batches) so the result
-carries a genuine shot-noise-derived confidence interval, not a single
+carries a genuine shot-noise-derived spread across those batches (mean ±1
+standard deviation -- NOT a statistical confidence interval), not a single
 point estimate.
 
 This runs a REAL quantum circuit -- but on a local SIMULATOR (Qiskit Aer).
@@ -15,13 +16,17 @@ calls it, via the "qiskit-aer-simulator" backend name.
 
 Input:  JSON via stdin -> {"shots": 4096, "scenarios": [{"id": "...", "weight": 0.42}, ...]}
 Output: JSON via stdout -> {"backend", "qubits", "shots", "batches", "circuitDepth",
-                            "circuitDiagram", "scenarios": [...]}
+                            "circuitDiagram", "phantomStateMass", "environmentFingerprint",
+                            "scenarios": [...]}
 """
 import sys
 import json
 import math
+import platform
 import statistics
 
+import qiskit
+import qiskit_aer
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 from qiskit_aer import AerSimulator
 
@@ -56,6 +61,19 @@ MAX_SHOTS = 20000
 # scenario table would reach this script with no upper bound on qubit count
 # or crx-pair mixer work.
 MAX_SCENARIOS = 32
+
+
+# Recorded alongside every result so a report stays traceable to the exact
+# toolchain that produced it -- reproducing a run months later needs to know
+# more than "qiskit-aer-simulator"; a Qiskit/Aer minor version bump can
+# change transpilation and therefore the simulated distribution.
+def environment_fingerprint():
+    return {
+        "qiskitVersion": qiskit.__version__,
+        "qiskitAerVersion": qiskit_aer.__version__,
+        "pythonVersion": platform.python_version(),
+        "seed": None,  # runs are intentionally unseeded (see module docstring)
+    }
 
 
 def build_mixer(qc, num_qubits):
@@ -149,6 +167,14 @@ def build_distribution(scenarios, shots, skip_hardware=False):
 
     diagram = str(qc.draw(output="text", fold=80))
 
+    # Fraction of all measured shots that landed in a basis state beyond the
+    # real scenarios (indices n..dim-1) -- only possible when n isn't a
+    # power of two (see the phantom-state note above). Reported so callers
+    # can see how much of the circuit's raw output was renormalized away,
+    # instead of that being invisible inside the per-scenario percentages.
+    total_all = sum(total_measured) or 1
+    phantom_state_mass = round(sum(total_measured[n:]) / total_all, 4) if dim > n else 0.0
+
     # Optional: run the same circuit once more on real IBM Quantum hardware
     # as a separate verification data point. Kept out of the confidence
     # interval above -- hardware noise (readout error, decoherence) isn't
@@ -192,6 +218,8 @@ def build_distribution(scenarios, shots, skip_hardware=False):
         "circuitDepth": qc.depth(),
         "mixerLayers": mixer_layers,
         "circuitDiagram": diagram,
+        "phantomStateMass": phantom_state_mass,
+        "environmentFingerprint": environment_fingerprint(),
         "scenarios": out,
         "hardwareVerification": hardware_verification,
         "ibmDiagnostic": ibm_diagnostic,
@@ -209,6 +237,7 @@ def main():
     print(json.dumps(result if result is not None else {
         "backend": "qiskit-aer-simulator", "qubits": 0, "shots": 0,
         "batches": 0, "circuitDepth": 0, "mixerLayers": [], "circuitDiagram": "",
+        "phantomStateMass": 0.0, "environmentFingerprint": environment_fingerprint(),
         "scenarios": [],
     }))
 

@@ -125,11 +125,18 @@ export function mergeQuantumResults(scenarios, quantumResult) {
 
   const hardwareSection = buildScenarioHardwareSection(merged, quantumResult.hardwareVerification);
 
+  // Only when scenario count isn't a power of two does the circuit have
+  // unused "phantom" basis states to renormalize away -- see the phantom
+  // basis state note in scenario_quantum.py's build_distribution().
+  const phantomNote = quantumResult.phantomStateMass
+    ? ` Ölçülen shot'ların %${(quantumResult.phantomStateMass * 100).toFixed(2)}'i senaryolara karşılık gelmeyen "hayalet" temel durumlara düştü ve aşağıdaki yüzdelere dahil edilmeden yeniden normalize edildi.`
+    : '';
+
   const note = `\n## KUANTUM DEVRE DOĞRULAMASI\n` +
     `Aşağıdaki olasılıklar, YZ'nin ilk tahminleri kuantum genliği olarak ${quantumResult.qubits}-kübitlik bir devreye yüklenip, ` +
     `her kübit çiftini birbirine bağlayan ${layerCount} katmanlı bir karışım (mixer) katmanından geçirildikten sonra hesaplanmıştır. ` +
     `Tek bir ölçüm turu yerine devre ${quantumResult.batches} kez bağımsız olarak çalıştırılmış (toplam ${quantumResult.shots} ölçüm/shot); ` +
-    `aşağıdaki aralık istatistiksel bir güven aralığı değil, bu ${quantumResult.batches} bağımsız turun ortalamasından ±1 standart sapma bandıdır. ${sourceNote}\n` +
+    `aşağıdaki aralık istatistiksel bir güven aralığı değil, bu ${quantumResult.batches} bağımsız turun ortalamasından ±1 standart sapma bandıdır.${phantomNote} ${sourceNote}\n` +
     `Backend: ${quantumResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${quantumResult.circuitDepth} — gerçek kuantum donanımı değildir).\n\n` +
     `| Senaryo | ${estimateLabel} | Kuantum Sonucu (ortalama) | Batch Dağılım Aralığı (±1 SD) |\n|---|---|---|---|\n${rows}\n\n` +
     `### Çalıştırılan Devre\n\`\`\`\n${quantumResult.circuitDiagram}\n\`\`\`\n${hardwareSection}`;

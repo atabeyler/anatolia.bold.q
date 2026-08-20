@@ -8,6 +8,7 @@ import AnalysisView from '../components/AnalysisView.jsx';
 import HistoryView from '../components/HistoryView.jsx';
 import VoiceChat from '../components/VoiceChat.jsx';
 import { localeFor } from '../services/i18n.js';
+import { repairLegacyText } from '../services/textRepair.js';
 import QuantumLogo from '../components/QuantumLogo.jsx';
 import { RadarModal } from '../components/PersonnelRadar.jsx';
 import UserManagementModal from '../components/UserManagement.jsx';
@@ -60,54 +61,7 @@ export default function DashboardPage({ user, onLogout }) {
   const [tempLoading, setTempLoading] = useState(false);
   const calendarRef = useRef(null);
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const normalizeText = (text) => String(text || '')
-    .replaceAll('Ã§', 'ç')
-    .replaceAll('Ã‡', 'Ç')
-    .replaceAll('Ã¶', 'ö')
-    .replaceAll('Ã–', 'Ö')
-    .replaceAll('Ã¼', 'ü')
-    .replaceAll('Ãœ', 'Ü')
-    .replaceAll('Ä±', 'ı')
-    .replaceAll('Ä°', 'İ')
-    .replaceAll('ÅŸ', 'ş')
-    .replaceAll('Åž', 'Ş')
-    .replaceAll('ÄŸ', 'ğ')
-    .replaceAll('Äž', 'Ğ')
-    .replaceAll('ý', 'ı')
-    .replaceAll('Ý', 'İ')
-    .replaceAll('þ', 'ş')
-    .replaceAll('Þ', 'Ş')
-    .replaceAll('ð', 'ğ')
-    .replaceAll('Ð', 'Ğ')
-    .replaceAll('g�r�nt�l�', 'görüntülü')
-    .replaceAll('G�r�nt�l�', 'Görüntülü')
-    .replaceAll('goruntulu', 'görüntülü')
-    .replaceAll('toplant�', 'toplantı')
-    .replaceAll('toplanti', 'toplantı')
-    .replaceAll('toplantiyi', 'toplantıyı')
-    .replaceAll('toplantiyi', 'toplantıyı')
-    .replaceAll('toplantiya', 'toplantıya')
-    .replaceAll('toplantidan', 'toplantıdan')
-    .replaceAll('ba�lat', 'başlat')
-    .replaceAll('ba�lat�ld�', 'başlatıldı')
-    .replaceAll('başlat�ld�', 'başlatıldı')
-    .replaceAll('ba�latıldı', 'başlatıldı')
-    .replaceAll('baslat', 'başlat')
-    .replaceAll('kat�l', 'katıl')
-    .replaceAll('katil', 'katıl')
-    .replaceAll('katilabilirsiniz', 'katılabilirsiniz')
-    .replaceAll('ayr�l', 'ayrıl')
-    .replaceAll('ayril', 'ayrıl')
-    .replaceAll('Mesajla�ma', 'Mesajlaşma')
-    .replaceAll('Mesajlasma', 'Mesajlaşma')
-    .replaceAll('kat�l�mc�', 'katılımcı')
-    .replaceAll('Goruntulu', 'Görüntülü')
-    .replaceAll('goruntulu', 'görüntülü')
-    .replaceAll('görüntulü', 'görüntülü')
-    .replaceAll('Baslatildi', 'Başlatıldı')
-    .replaceAll('baslatildi', 'başlatıldı')
-    .replaceAll('bașlatıldı', 'başlatıldı')
-    .replaceAll('bașlatildi', 'başlatıldı');
+  const normalizeText = repairLegacyText;
   const notifyDevice = (title, body) => {
     try {
       if (typeof window === 'undefined' || !('Notification' in window)) return;

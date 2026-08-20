@@ -33,6 +33,8 @@ import { runQuantumEngines, isHardwareVerificationPending, scheduleHardwareVerif
 import { isRealTransactionArray, isRealScenarioArray, isRealOptimizationProblem } from '../services/analysisParsers.js';
 import { classifyData } from '../services/decisionIntelligence.js';
 import { canAccessClassification } from '../lib/rbac.js';
+import { matchesDeclaredFileType } from '../lib/fileSignature.js';
+import { uploadConcurrencyGate } from '../middleware/uploadConcurrency.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -116,10 +118,26 @@ router.get('/fraud-trend', authMiddleware, async (req, res) => {
 });
 
 // Document upload and text extraction
-router.post('/upload', authMiddleware, analysisLimiter, upload.single('file'), async (req, res) => {
+router.post('/upload', authMiddleware, analysisLimiter, uploadConcurrencyGate, upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'Dosya bulunamadı' });
+
+    const name = (file.originalname || '').toLowerCase();
+
+    // The client-supplied mimetype/extension are attacker-controlled -- an
+    // executable renamed "report.txt" would otherwise sail through as plain
+    // text. Check the actual bytes match what the name/mimetype claims.
+    const declaredKind = file.mimetype.startsWith('image/') ? 'image'
+      : name.endsWith('.xlsx') ? 'office'
+      : name.endsWith('.xls') ? 'legacyOffice'
+      : name.endsWith('.csv') || name.endsWith('.txt') ? 'text'
+      : name.endsWith('.pdf') ? 'pdf'
+      : name.endsWith('.docx') ? 'office'
+      : null;
+    if (declaredKind && !matchesDeclaredFileType(file.buffer, declaredKind)) {
+      return res.status(400).json({ error: 'Dosya içeriği uzantısıyla/tipiyle uyuşmuyor' });
+    }
 
     // Image: return as base64 (for Claude Vision)
     if (file.mimetype.startsWith('image/')) {
@@ -130,8 +148,6 @@ router.post('/upload', authMiddleware, analysisLimiter, upload.single('file'), a
         filename: file.originalname,
       });
     }
-
-    const name = (file.originalname || '').toLowerCase();
 
     // Real-data upload paths: a CSV/XLSX recognized as a genuine transaction,
     // scenario, or optimization table skips the AI's invented-sample-data
@@ -356,6 +372,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             shots: quantumComputation.shots,
             batches: quantumComputation.batches,
             circuitDepth: quantumComputation.circuitDepth,
+            phantomStateMass: quantumComputation.phantomStateMass ?? null,
+            environmentFingerprint: quantumComputation.environmentFingerprint || null,
             dataSource: quantumComputation.dataSource,
             resultSource: resolveResultSource(quantumComputation),
             hardwareVerification: quantumComputation.hardwareVerification || null,
