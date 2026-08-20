@@ -1,8 +1,28 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from './AppMenus.jsx';
 
 const t = (key) => key;
+
+const listCredentialsMock = vi.fn();
+const renameCredentialMock = vi.fn();
+const removeCredentialMock = vi.fn();
+vi.mock('../services/api.js', () => ({
+  api: {
+    webauthn: {
+      listCredentials: (...args) => listCredentialsMock(...args),
+      renameCredential: (...args) => renameCredentialMock(...args),
+      removeCredential: (...args) => removeCredentialMock(...args),
+    },
+  },
+}));
+
+const isPasskeySupportedMock = vi.fn(() => true);
+const registerPasskeyMock = vi.fn();
+vi.mock('../services/webauthn.js', () => ({
+  isPasskeySupported: (...args) => isPasskeySupportedMock(...args),
+  registerPasskey: (...args) => registerPasskeyMock(...args),
+}));
 
 describe('MenuPanel', () => {
   it('renders each menu item and triggers its handler', () => {
@@ -97,6 +117,65 @@ describe('SettingsPanel', () => {
     fireEvent.click(screen.getByText('settingsAbout'));
     fireEvent.click(screen.getByText('settingsOpenGuide'));
     expect(props.onOpenGuide).toHaveBeenCalled();
+  });
+
+  it('hides the security tab when not authenticated', () => {
+    renderSettings({ authenticated: false });
+    expect(screen.queryByText('settingsSecurity')).not.toBeInTheDocument();
+  });
+
+  describe('security tab (authenticated)', () => {
+    beforeEach(() => {
+      listCredentialsMock.mockReset().mockResolvedValue([]);
+      renameCredentialMock.mockReset();
+      removeCredentialMock.mockReset();
+      registerPasskeyMock.mockReset();
+      isPasskeySupportedMock.mockReset().mockReturnValue(true);
+    });
+
+    it('lists registered passkeys and lets the owner remove one', async () => {
+      listCredentialsMock.mockResolvedValue([
+        { id: 1, deviceName: 'iPhone 15', backedUp: true, lastUsedAt: null },
+      ]);
+      removeCredentialMock.mockResolvedValue({ success: true });
+      renderSettings({ authenticated: true });
+
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('iPhone 15')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('securityPasskeyRemove'));
+      await waitFor(() => expect(removeCredentialMock).toHaveBeenCalledWith(1));
+      await waitFor(() => expect(screen.queryByText('iPhone 15')).not.toBeInTheDocument());
+    });
+
+    it('shows the empty state when no passkeys are registered', async () => {
+      renderSettings({ authenticated: true });
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
+    });
+
+    it('registers a new passkey and refreshes the list', async () => {
+      registerPasskeyMock.mockResolvedValue({ success: true });
+      listCredentialsMock
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 2, deviceName: 'Passkey', backedUp: false, lastUsedAt: null }]);
+      renderSettings({ authenticated: true });
+
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText('securityPasskeyAdd'));
+      await waitFor(() => expect(registerPasskeyMock).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByText('Passkey')).toBeInTheDocument());
+    });
+
+    it('disables the add button when the browser does not support passkeys', async () => {
+      isPasskeySupportedMock.mockReturnValue(false);
+      renderSettings({ authenticated: true });
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('securityPasskeyUnsupported')).toBeInTheDocument());
+      expect(screen.getByText('securityPasskeyAdd').closest('button')).toBeDisabled();
+    });
   });
 });
 

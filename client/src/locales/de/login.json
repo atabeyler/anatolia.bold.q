@@ -25,5 +25,10 @@
   "classifiedShort": "GEHEIM",
   "identityVerificationRequired": "IDENTITÄTSPRÜFUNG ERFORDERLICH",
   "awaitingApprovalStatus": "WARTE AUF GENEHMIGUNG...",
-  "connectingToSystem": "VERBINDUNG WIRD HERGESTELLT..."
+  "connectingToSystem": "VERBINDUNG WIRD HERGESTELLT...",
+  "passkeyLoginToggle": "Mit Passkey anmelden",
+  "passwordLoginToggle": "Benutzercode + Passwort",
+  "passkeyVerificationRequired": "PASSKEY-VERIFIZIERUNG",
+  "passkeyLoginBtn": "MIT PASSKEY ANMELDEN",
+  "passkeyLoginFailed": "Anmeldung mit Passkey fehlgeschlagen."
 }

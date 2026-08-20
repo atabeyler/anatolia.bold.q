@@ -535,6 +535,7 @@ export default function DashboardPage({ user, onLogout }) {
             sidebarCollapsed={sidebarCollapsed}
             setSidebarCollapsed={setSidebarCollapsed}
             onOpenGuide={() => { setGuideOpen(true); setSettingsOpen(false); }}
+            authenticated
           />
         )}
       </AnimatePresence>

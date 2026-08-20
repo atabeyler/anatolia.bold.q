@@ -80,6 +80,23 @@ export const api = {
 
   logout: () => req('/api/auth/logout', { method: 'POST' }),
 
+  // Passkey/WebAuthn -- see server/src/routes/webauthn.js. Registration
+  // requires an existing authenticated session (added from the Security
+  // settings tab); login is the unauthenticated alternative to
+  // loginRequest()/checkApproval() above.
+  webauthn: {
+    registerOptions: () => req('/api/webauthn/register/options', { method: 'POST', body: JSON.stringify({}) }),
+    registerVerify: (response, deviceName) =>
+      req('/api/webauthn/register/verify', { method: 'POST', body: JSON.stringify({ response, deviceName }) }),
+    listCredentials: () => req('/api/webauthn/credentials'),
+    renameCredential: (id, deviceName) =>
+      req(`/api/webauthn/credentials/${id}`, { method: 'PATCH', body: JSON.stringify({ deviceName }) }),
+    removeCredential: (id) => req(`/api/webauthn/credentials/${id}`, { method: 'DELETE' }),
+    loginOptions: (userCode) => req('/api/webauthn/login/options', { method: 'POST', body: JSON.stringify({ userCode }) }),
+    loginVerify: (userCode, response) =>
+      req('/api/webauthn/login/verify', { method: 'POST', body: JSON.stringify({ userCode, response }) }),
+  },
+
   generateAnalysis: (category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr', priority = 'normal', depth = 'standart') =>
     req('/api/analysis/generate', { method: 'POST', body: JSON.stringify({ category, title, prompt, quantumMode, documentContext, imageData, realTransactions, realScenarios, realOptimization, lang, priority, depth }) }),
 
