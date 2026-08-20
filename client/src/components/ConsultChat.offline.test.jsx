@@ -53,10 +53,13 @@ describe('ConsultChat offline/local AI routing', () => {
     fireEvent.change(textarea, { target: { value: 'ekonomi raporlarım' } });
     fireEvent.click(screen.getByLabelText('Gönder'));
 
-    await waitFor(() => expect(nativeAI.query).toHaveBeenCalledWith({ text: 'ekonomi raporlarım' }));
+    await waitFor(() => expect(nativeAI.query).toHaveBeenCalledWith({ mode: 'chat', text: 'ekonomi raporlarım' }));
     expect(api.chatConsult).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText(/Ekonomi Raporu/)).toBeTruthy());
-    expect(screen.getByText('Yerel AI (Offline)')).toBeTruthy();
+    // Q LOCAL DATA, not a generic "local AI" label -- the offline-extractive
+    // engine (no `capability` on the mocked response defaults to it) must
+    // be visually distinguishable from Q LOCAL LLM and Q CLOUD (spec point 8).
+    expect(screen.getByText('Q LOCAL DATA (Offline)')).toBeTruthy();
   });
 
   it('shows a no-results message when the local search finds nothing', async () => {
@@ -69,6 +72,37 @@ describe('ConsultChat offline/local AI routing', () => {
     fireEvent.click(screen.getByLabelText('Gönder'));
 
     await waitFor(() => expect(screen.getByText(/Eşleşen rapor bulunamadı/)).toBeTruthy());
+  });
+
+  it('shows the Q LOCAL LLM badge when the offline response is generative (capability: local-llm)', async () => {
+    nativeAI.query.mockResolvedValue({
+      ok: true,
+      capability: 'local-llm',
+      type: 'generated',
+      text: 'Ekim ayı giderleriniz büyük ölçüde personel kalemine ait.',
+      sources: [{ id: 1, title: 'Ekim Ayı Bütçe Raporu' }],
+    });
+
+    renderConsult();
+    await waitFor(() => expect(screen.getByText(/Çevrimdışısınız|offline/i)).toBeTruthy());
+    const textarea = document.querySelector('textarea');
+    fireEvent.change(textarea, { target: { value: 'ekim ayı giderlerimi özetle' } });
+    fireEvent.click(screen.getByLabelText('Gönder'));
+
+    await waitFor(() => expect(screen.getByText(/personel kalemine ait/)).toBeTruthy());
+    expect(screen.getByText('Q LOCAL LLM (Offline)')).toBeTruthy();
+  });
+
+  it('shows an honest error when every local engine reports unavailable', async () => {
+    nativeAI.query.mockResolvedValue({ ok: false, error: 'Yerel AI kullanılamıyor', detail: 'no_provider_available' });
+
+    renderConsult();
+    await waitFor(() => expect(screen.getByText(/Çevrimdışısınız|offline/i)).toBeTruthy());
+    const textarea = document.querySelector('textarea');
+    fireEvent.change(textarea, { target: { value: 'herhangi bir soru' } });
+    fireEvent.click(screen.getByLabelText('Gönder'));
+
+    await waitFor(() => expect(screen.getByText(/Şu anda hiçbir AI motoru/)).toBeTruthy());
   });
 
   it('falls back to the cloud API once connectivity is back online', async () => {

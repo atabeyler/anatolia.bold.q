@@ -34,6 +34,14 @@ export const desktopSync = {
 
 export const desktopAI = {
   query: (request) => bridge?.ai.query(request),
+  // Model Manager surface (task: Local Model Manager) -- not yet wired
+  // into a Settings UI panel (documented as a follow-up in the final
+  // report), but the full install/remove/status/progress plumbing is real
+  // and ready for one.
+  modelStatus: () => bridge?.ai.modelStatus(),
+  modelDownload: () => bridge?.ai.modelDownload(),
+  modelRemove: () => bridge?.ai.modelRemove(),
+  onModelDownloadProgress: (callback) => bridge?.ai.onModelDownloadProgress(callback) || (() => {}),
 };
 
 export const desktopConnectivity = {

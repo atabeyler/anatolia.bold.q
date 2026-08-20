@@ -17,7 +17,11 @@ import FileAttach from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
 import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
 import AnalysisWizard from './AnalysisWizard.jsx';
+import EngineBadge from './EngineBadge.jsx';
 import { DEPTH_IDS } from '../services/voiceIntentSchema.js';
+import { isNativeApp, nativeAI, nativeConnectivity } from '../services/nativeBridge.js';
+import { routeAnalysisGeneration, AllEnginesUnavailableError } from '../services/analysisRouter.js';
+import { ENGINE } from '../services/aiContract.js';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
@@ -41,6 +45,19 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const [result, setResult] = useState(null);
   const [scenarioResult, setScenarioResult] = useState(null);
   const [error, setError] = useState('');
+  const [connectivity, setConnectivity] = useState('cloud');
+  const isOffline = isNativeApp && connectivity === 'local';
+
+  // Mirrors ConsultChat.jsx's connectivity subscription exactly -- both
+  // components need the same "are we actually offline right now" signal
+  // to route through the Analysis Router the same way.
+  useEffect(() => {
+    if (!isNativeApp) return;
+    let cancelled = false;
+    nativeConnectivity.getState().then((state) => { if (!cancelled) setConnectivity(state); }).catch(() => {});
+    const unsubscribe = nativeConnectivity.onChange((state) => setConnectivity(state));
+    return () => { cancelled = true; unsubscribe(); };
+  }, []);
 
   const generateRef = useRef(null);
   const downloadDocxRef = useRef(null);
@@ -185,8 +202,17 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   // i18n) except for a few with a machine-readable `code`, which map to a
   // properly localized message here instead of leaking raw Turkish into a
   // UI the user may have set to another language.
-  const localizedError = (e) => (e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message);
+  const localizedError = (e) => (
+    e instanceof AllEnginesUnavailableError || e.code === 'ALL_ENGINES_UNAVAILABLE' ? t('errAllEnginesUnavailable') :
+    e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message
+  );
 
+  // Routes through the Analysis Router (client/src/services/
+  // analysisRouter.js) instead of calling api.generateAnalysis directly:
+  // cloud when reachable (unchanged behavior/shape), the new local LLM
+  // when offline and a model is loadable, the existing extractive
+  // archive-synthesis as the last local fallback, and an honest error if
+  // nothing answers (task spec point 4).
   const generate = async () => {
     if (!prompt.trim() || !category) return;
     setLoading(true);
@@ -198,8 +224,22 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
       const aiImageData = imageFiles[0] ? { base64: imageFiles[0].base64, mimetype: imageFiles[0].mimetype } : null;
       const mergedContext = documentContexts.length ? documentContexts.map((d) => d.text).join('\n\n') : null;
       const realOptimizationPayload = realOptimization ? { items: realOptimization.items, budgetPercent: realOptimization.budgetPercent } : null;
-      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang, priority, depth);
-      setResult(r);
+      const resolvedTitle = title || prompt.slice(0, 80);
+
+      const normalized = await routeAnalysisGeneration({
+        isOffline,
+        cloudCall: () => api.generateAnalysis(category, resolvedTitle, prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang, priority, depth),
+        nativeAIQuery: nativeAI.query,
+        generateRequest: { category, title: resolvedTitle, prompt, lang },
+      });
+
+      // Cloud responses keep their full original shape (quantum/fraud/
+      // optimizer sections, docx/pdf, ...) via `raw` spread first so
+      // nothing downstream (downloadDocx, ResultSourceBadge, ...)
+      // regresses; `engine`/`providerLabel` are added on top for the new
+      // indicator, and local engines simply don't have the cloud-only
+      // extras (docx/pdf buttons already guard on `res?.docxBase64`).
+      setResult({ ...(normalized.engine === ENGINE.CLOUD ? normalized.raw : {}), title: normalized.title, content: normalized.content, engine: normalized.engine, providerLabel: normalized.providerLabel, sources: normalized.sources });
     } catch (e) {
       setError(localizedError(e));
     } finally {
@@ -521,6 +561,12 @@ function EngineRow({ label, on, always = false, pending = false }) {
 function ResultPanel({ t, result, downloadDocx, downloadPdf, shareReport, reset, deepDiveScenario, loadingScenario }) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {result.engine === ENGINE.LOCAL_LLM && (
+        <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-3 text-xs text-emerald-300">{t('qLocalLlmGenerated')}</div>
+      )}
+      {result.engine === ENGINE.LOCAL_DATA && (
+        <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg p-3 text-xs text-amber-300">{t('qLocalDataGenerated')}</div>
+      )}
       {result.quantumWarning && (
         <div className="bg-amber-500/10 border border-amber-400/40 rounded-lg p-3 text-xs text-amber-300 flex items-start gap-2">
           <span>⚠️</span><span>{result.quantumWarning}</span>
@@ -528,6 +574,7 @@ function ResultPanel({ t, result, downloadDocx, downloadPdf, shareReport, reset,
       )}
       <div className={`${PANEL} flex items-center justify-between p-3 flex-wrap gap-2`}>
         <div className="text-xs text-cyan-300/70 flex items-center gap-2">
+          <EngineBadge engine={result.engine} providerLabel={result.providerLabel} size="md" />
           {result.quantumMode && <Atom className="w-3 h-3 text-cyan-300" />}
           {result.quantum && (
             <>

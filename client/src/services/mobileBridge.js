@@ -12,6 +12,7 @@ import { createSessionManager } from '../mobile/auth/session.js';
 import { runSync } from '../mobile/sync/engine.js';
 import { listUnresolvedConflicts, resolveConflict } from '../mobile/sync/conflict.js';
 import { createLocalAIProvider } from '../mobile/localAI/provider.js';
+import { getModelManager, refreshInstalledState } from '../mobile/localAI/registry.js';
 import { createDiagnostics } from '../mobile/diagnostics.js';
 
 // Android (Capacitor) equivalent of desktopBridge.js -- same exported API
@@ -224,6 +225,31 @@ export const mobileAI = {
     if (!userId) return { ok: false, error: 'Oturum açılmamış' };
     return createLocalAIProvider({ db: await getDb(), userId, diagnostics: await getDiagnostics() }).query(request);
   }),
+  // Model Manager surface -- mirrors desktopAI's, same follow-up note:
+  // real logic, not yet wired into a Settings UI panel. On Android,
+  // isAvailable() also depends on the native LocalLLM plugin (see
+  // mobile/localAI/llmRuntime.js) which does not exist yet -- see the
+  // final report's Android follow-up.
+  modelStatus: guard(async () => {
+    const mm = getModelManager();
+    const installed = await refreshInstalledState();
+    return { installed, capability: mm.checkCapability(), spec: mm.spec };
+  }),
+  modelDownload: guard(async (onProgress) => {
+    const mm = getModelManager();
+    try {
+      const result = await mm.downloadModel({ onProgress });
+      await refreshInstalledState();
+      return { ok: true, ...result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }),
+  modelRemove: guard(async () => {
+    const result = await getModelManager().removeModel();
+    await refreshInstalledState();
+    return result;
+  }),
 };
 
 // Numeric dotted-version compare (2.1.9 < 2.1.10) -- lexical comparison
@@ -313,6 +339,11 @@ if (isMobileApp) {
   })).catch(() => {});
   checkConnectivity();
   setInterval(checkConnectivity, 30000);
+  // Populates the local-llm provider's cached "is a model installed" flag
+  // (registry.js's isModelInstalled() is async, but selectProvider()'s
+  // isAvailable() must stay synchronous -- see registry.js's comment).
+  // Filesystem-only, no network call.
+  refreshInstalledState().catch(() => {});
   // A reconnect (local -> cloud) triggers an immediate sync instead of
   // waiting for the periodic timer below (spec point 3).
   connectivityListeners.add((state) => { if (state === 'cloud') performSync().catch(() => {}); });

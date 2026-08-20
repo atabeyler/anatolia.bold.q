@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestMobileDb } from '../testHelpers.js';
 import { dbRun } from '../db/index.js';
 import { createLocalAIProvider } from './provider.js';
+import { _internal } from './registry.js';
 
 describe('createLocalAIProvider', () => {
   it('never throws even if the underlying query blows up (spec J: no model/crash safety)', async () => {
@@ -25,5 +26,47 @@ describe('createLocalAIProvider', () => {
     const result = await provider.query({ text: 'rapor' });
     expect(result.ok).toBe(true);
     expect(result.type).toBe('find');
+  });
+});
+
+// Mirrors desktop/localAI/provider.test.js's fallback-chain tests -- see
+// that file's comment for the full rationale.
+describe('createLocalAIProvider local-llm -> offline-extractive fallback', () => {
+  const { PROVIDERS } = _internal;
+  let originalLocalLLM;
+
+  beforeEach(() => { originalLocalLLM = { ...PROVIDERS[0] }; });
+  afterEach(() => { Object.assign(PROVIDERS[0], originalLocalLLM); });
+
+  it('falls through to offline-extractive when local-llm is selected but the per-request check fails', async () => {
+    Object.assign(PROVIDERS[0], {
+      isAvailable: () => true,
+      createQuery: () => async () => { throw new Error('local_llm_unavailable'); },
+    });
+
+    const db = await createTestMobileDb();
+    await dbRun(db, `
+      INSERT INTO analyses (id, user_id, device_id, version, created_at, updated_at, sync_status, category, title, content)
+      VALUES ('a', 'BOLD-001', 'AQ-AND-TEST', 1, datetime('now'), datetime('now'), 'synced', 'x', 'Rapor', 'içerik')
+    `);
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ text: 'rapor' });
+    expect(result.ok).toBe(true);
+    expect(result.capability).toBe('offline-extractive');
+  });
+
+  it('does NOT fall through for a non-recoverable local-llm error', async () => {
+    Object.assign(PROVIDERS[0], {
+      isAvailable: () => true,
+      createQuery: () => async () => { throw new Error('unexpected_crash'); },
+    });
+
+    const db = await createTestMobileDb();
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ text: 'rapor' });
+    expect(result.ok).toBe(false);
+    expect(result.capability).toBe('local-llm');
   });
 });

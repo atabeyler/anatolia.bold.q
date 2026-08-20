@@ -174,4 +174,28 @@ export function queryOffline(db, userId, { text = '', entityIds = [] } = {}) {
   return { type: 'find', result: findReports(db, userId, text) };
 }
 
+// Fallback for a "generate a new analysis" request (Analysis Router step 3)
+// when neither the cloud nor the local LLM is available. This does NOT
+// fabricate a new AI-written report -- that would violate "never silently
+// pretend success" (task spec point 9/never-fake-success). Instead it is
+// honest about what an extractive, model-free engine can actually do: find
+// and summarize the closest matching reports already in the user's local
+// archive, clearly labeled so the UI never shows this as a generated
+// analysis.
+export function synthesizeFromArchive(db, userId, { category = '', prompt = '' } = {}) {
+  const queryText = `${category} ${prompt}`.trim();
+  const matches = findReports(db, userId, queryText, { limit: 5 });
+  const summaries = matches.map((m) => ({
+    ...m,
+    summary: summarizeReport(db, userId, m.id, { maxSentences: 2 })?.summary || m.preview,
+  }));
+  return {
+    generated: false,
+    matches: summaries,
+    note: summaries.length
+      ? 'Yerel arşivdeki en yakın eşleşen raporlar (yeni bir analiz üretilmedi).'
+      : 'Yerel arşivde eşleşen rapor bulunamadı; yeni analiz üretimi için çevrimiçi bağlantı veya yerel LLM gerekir.',
+  };
+}
+
 export const _internal = { tokenize, parseDateRange, scoreDoc };

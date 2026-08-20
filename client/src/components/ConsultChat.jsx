@@ -2,22 +2,27 @@
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, Trash2, Loader2, User, Bot, MessageSquare, WifiOff, Cloud, HardDrive } from 'lucide-react';
+import { Send, Trash2, Loader2, User, Bot, MessageSquare, WifiOff } from 'lucide-react';
 import { api } from '../services/api.js';
 import VoiceButton from './VoiceButton.jsx';
 import FileAttach, { describeStructuredUpload } from './FileAttach.jsx';
+import EngineBadge from './EngineBadge.jsx';
 import { useLang } from '../services/langContext.jsx';
 import { isNativeApp, nativeAI, nativeConnectivity } from '../services/nativeBridge.js';
+import { routeConsultChat, AllEnginesUnavailableError } from '../services/analysisRouter.js';
+import { ENGINE } from '../services/aiContract.js';
 
 const STORAGE_KEY = 'aq_consult_history';
 
 // Formats the offline extractive-search engine's structured result
 // (see mobile/localAI + desktop/localAI's offlineExtractive.js) as
 // markdown, since it answers with report matches/summaries/comparisons,
-// not free-text prose the way the cloud assistant does.
-function formatLocalAIResult(t, response) {
-  if (!response?.ok) return `⚠ ${response?.error || t('localAiUnavailable')}`;
-  const { type, result } = response;
+// not free-text prose the way the cloud assistant or the local LLM do.
+// `structured` is analysisRouter's normalizeLocalChat() output's
+// `.structured` field ({ type, result }).
+function formatLocalAIResult(t, structured) {
+  if (!structured) return `_${t('localAiNoResults')}_`;
+  const { type, result } = structured;
   if (type === 'find') {
     if (!result?.length) return `_${t('localAiNoResults')}_`;
     return result.map((r) =>
@@ -98,10 +103,16 @@ export default function ConsultChat() {
 
     if (isOffline) {
       try {
-        const response = await nativeAI.query({ text });
-        setMessages(prev => [...prev, { role: 'assistant', content: formatLocalAIResult(t, response), source: 'local' }]);
+        const normalized = await routeConsultChat({
+          isOffline: true,
+          nativeAIQuery: nativeAI.query,
+          chatText: text,
+        });
+        const content = normalized.structured ? formatLocalAIResult(t, normalized.structured) : normalized.content;
+        setMessages(prev => [...prev, { role: 'assistant', content, engine: normalized.engine }]);
       } catch (e) {
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${e.message}`, error: true, source: 'local' }]);
+        const msg = e instanceof AllEnginesUnavailableError ? t('errAllEnginesUnavailable') : e.message;
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}`, error: true, engine: ENGINE.LOCAL_DATA }]);
       } finally {
         setLoading(false);
       }
@@ -128,7 +139,7 @@ export default function ConsultChat() {
           setMessages((prev) => {
             if (!streamingStarted) {
               streamingStarted = true;
-              return [...prev, { role: 'assistant', content: full, streaming: true, source: 'cloud' }];
+              return [...prev, { role: 'assistant', content: full, streaming: true, engine: ENGINE.CLOUD }];
             }
             const next = [...prev];
             next[next.length - 1] = { ...next[next.length - 1], content: full };
@@ -138,17 +149,17 @@ export default function ConsultChat() {
       );
 
       if (!streamingStarted) {
-        setMessages(prev => [...prev, { role: 'assistant', content: r.content, source: 'cloud', provider: r.provider }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: r.content, engine: ENGINE.CLOUD, provider: r.provider }]);
       } else {
         setMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: 'assistant', content: r.content, source: 'cloud', provider: r.provider };
+          next[next.length - 1] = { role: 'assistant', content: r.content, engine: ENGINE.CLOUD, provider: r.provider };
           return next;
         });
       }
     } catch (e) {
       const msg = e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message;
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}`, error: true, source: 'cloud' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}`, error: true, engine: ENGINE.CLOUD }]);
     } finally {
       setLoading(false);
     }
@@ -176,7 +187,7 @@ export default function ConsultChat() {
 
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
       {messages.map((m, i) => <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col gap-1 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-        {m.role === 'assistant' && <span className="flex items-center gap-1 text-xs font-mono uppercase tracking-wide text-gold/40 px-1">{m.source === 'local' ? <><HardDrive className="w-2.5 h-2.5" />{t('localAiBadge')}</> : <><Cloud className="w-2.5 h-2.5" />{m.provider || t('cloudAiBadge')}</>}</span>}
+        {m.role === 'assistant' && <span className="px-1"><EngineBadge engine={m.engine} providerLabel={m.provider} /></span>}
         <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed break-words ${m.role === 'user' ? 'bg-gold/20 text-gold border border-gold/30 rounded-tr-none' : m.error ? 'bg-red-950/40 text-red-400 border border-red-800/30 rounded-tl-none' : 'bg-navy/70 text-gold/90 border border-gold/15 rounded-tl-none report-content'}`}>{m.role === 'assistant' ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown> : <p className="whitespace-pre-wrap">{m.content}</p>}</div>
       </motion.div>)}
       {loading && <div className="text-gold/60 text-sm">{t('analyzing')}</div>}

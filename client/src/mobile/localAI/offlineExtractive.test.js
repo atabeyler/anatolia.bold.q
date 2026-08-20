@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestMobileDb } from '../testHelpers.js';
 import { dbRun } from '../db/index.js';
-import { findReports, summarizeReport, compareReports, queryOffline } from './offlineExtractive.js';
+import { findReports, summarizeReport, compareReports, queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
 
 let db;
 const USER = 'BOLD-001';
@@ -89,5 +89,27 @@ describe('queryOffline dispatch', () => {
     await insertAnalysis('a', { title: 'Rapor', content: 'x' });
     const res = await queryOffline(db, USER, { text: 'raporlarımı bul' });
     expect(res.type).toBe('find');
+  });
+});
+
+// Mirrors desktop/localAI/offlineExtractive.test.js's synthesizeFromArchive
+// tests -- see that module's comment for why this never fabricates a new
+// report.
+describe('synthesizeFromArchive', () => {
+  it('returns the closest matching archived reports, clearly marked as not generated', async () => {
+    await insertAnalysis('a', { title: 'Kasım Bütçe Raporu', content: 'Toplam gider 90000 TL oldu.', category: 'finans' });
+    await insertAnalysis('b', { title: 'Portföy raporu', content: 'yatırım dağılımı', category: 'yatirim' });
+
+    const result = await synthesizeFromArchive(db, USER, { category: 'finans', prompt: 'bütçe' });
+
+    expect(result.generated).toBe(false);
+    expect(result.matches.length).toBeGreaterThan(0);
+    expect(result.matches[0].title).toBe('Kasım Bütçe Raporu');
+  });
+
+  it('is honest when nothing matches, instead of claiming success', async () => {
+    const result = await synthesizeFromArchive(db, USER, { category: 'bilinmeyen', prompt: 'hiçbir şey eşleşmeyecek zzz' });
+    expect(result.generated).toBe(false);
+    expect(result.matches).toEqual([]);
   });
 });

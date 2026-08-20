@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb } from '../testHelpers.js';
-import { findReports, summarizeReport, compareReports, queryOffline } from './offlineExtractive.js';
+import { findReports, summarizeReport, compareReports, queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
 
 let db;
 const USER = 'BOLD-001';
@@ -88,5 +88,30 @@ describe('queryOffline dispatch', () => {
     insertAnalysis('a', { title: 'Rapor', content: 'x' });
     const res = queryOffline(db, USER, { text: 'raporlarımı bul' });
     expect(res.type).toBe('find');
+  });
+});
+
+// The Analysis Router's step-3 fallback for a "generate a new analysis"
+// request when neither cloud nor the local LLM is available -- must never
+// fabricate a new report (see the function's own comment in
+// offlineExtractive.js), only surface the closest existing local matches.
+describe('synthesizeFromArchive', () => {
+  it('returns the closest matching archived reports, clearly marked as not generated', () => {
+    insertAnalysis('a', { title: 'Kasım Bütçe Raporu', content: 'Toplam gider 90000 TL oldu.', category: 'finans' });
+    insertAnalysis('b', { title: 'Portföy raporu', content: 'yatırım dağılımı', category: 'yatirim' });
+
+    const result = synthesizeFromArchive(db, USER, { category: 'finans', prompt: 'bütçe' });
+
+    expect(result.generated).toBe(false);
+    expect(result.matches.length).toBeGreaterThan(0);
+    expect(result.matches[0].title).toBe('Kasım Bütçe Raporu');
+    expect(result.note).toMatch(/en yakın eşleşen/);
+  });
+
+  it('is honest when nothing matches, instead of claiming success', () => {
+    const result = synthesizeFromArchive(db, USER, { category: 'bilinmeyen', prompt: 'hiçbir şey eşleşmeyecek zzz' });
+    expect(result.generated).toBe(false);
+    expect(result.matches).toEqual([]);
+    expect(result.note).toMatch(/çevrimiçi bağlantı veya yerel LLM/);
   });
 });

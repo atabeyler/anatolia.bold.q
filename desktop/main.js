@@ -12,6 +12,7 @@ import { createSessionManager } from './auth/session.js';
 import { runSync } from './sync/engine.js';
 import { listUnresolvedConflicts, resolveConflict } from './sync/conflict.js';
 import { createLocalAIProvider } from './localAI/provider.js';
+import { configureLocalLLM, getModelManager } from './localAI/registry.js';
 import { createConnectivityMonitor } from './connectivity.js';
 import { serveStaticDir } from './staticServer.js';
 import { checkForUpdate, downloadUpdate } from './appUpdate.js';
@@ -293,6 +294,30 @@ function registerIpcHandlers() {
     return createLocalAIProvider({ db, userId, diagnostics }).query(request);
   });
 
+  // Model Manager IPC surface -- lets a future Settings panel drive
+  // install/remove/status for the local LLM without any of this module's
+  // logic living in the renderer. Every handler here only touches the
+  // local filesystem/device info or, for downloadModel, the one Hugging
+  // Face URL pinned in modelSpec.js -- never anything else (spec point 9).
+  ipcMain.handle('ai:modelStatus', () => {
+    const mm = getModelManager();
+    return { installed: mm.isModelInstalled(), available: mm.isAvailable(), capability: mm.checkCapability(), spec: mm.spec };
+  });
+  ipcMain.handle('ai:modelDownload', async (event) => {
+    const mm = getModelManager();
+    try {
+      const result = await mm.downloadModel({
+        onProgress: (progress) => event.sender.send('ai:modelDownloadProgress', progress),
+      });
+      diagnostics.info('local_llm_model_installed', { sha256: result.sha256 });
+      return { ok: true, ...result };
+    } catch (err) {
+      diagnostics.error('local_llm_model_download_failed', { message: err.message });
+      return { ok: false, error: err.message };
+    }
+  });
+  ipcMain.handle('ai:modelRemove', async () => getModelManager().removeModel());
+
   ipcMain.handle('connectivity:getState', () => connectivity.getState());
 
   // The renderer's update banner (see ReauthBanner-style UI) calls these
@@ -452,6 +477,12 @@ app.whenReady().then(async () => {
   db = openDatabase(path.join(app.getPath('userData'), 'anatolia-q.db'), {
     onMigrations: (applied) => diagnostics.info('db_migrated', { applied: applied.length, files: applied }),
   });
+  // Points the local-llm provider's Model Manager at this install's real
+  // userData dir instead of registry.js's ~/.anatolia-q fallback (which
+  // only exists so that module stays importable/testable without
+  // Electron). No network access happens here -- this only resolves a
+  // path and checks for an already-downloaded file (spec point 9).
+  configureLocalLLM({ modelsDir: path.join(app.getPath('userData'), 'models') });
   deviceId = getOrCreateDeviceId(app.getPath('userData'));
   const secureStore = createSecureStore(app.getPath('userData'), safeStorage);
   sessionManager = createSessionManager({
