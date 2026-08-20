@@ -1,11 +1,13 @@
 ﻿import React, { useRef, useState } from 'react';
 import { Paperclip, X, Loader2 } from 'lucide-react';
 import { api } from '../services/api.js';
+import { useLang } from '../services/langContext.jsx';
 
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i;
 const DOC_EXTS = /\.(pdf|docx|txt|csv|xlsx|xls)$/i;
 
 export function FileMessageContent({ text, className = '' }) {
+  const { t } = useLang();
   const idx = text ? text.indexOf('\n\n[📎 EKLİ DOSYA:') : -1;
   if (idx === -1) return <span className={`whitespace-pre-wrap text-sm ${className}`}>{text}</span>;
 
@@ -29,7 +31,7 @@ export function FileMessageContent({ text, className = '' }) {
         <a href={url} target="_blank" rel="noreferrer" download={filename} className="flex items-center gap-2 bg-black/20 border border-current/15 rounded px-3 py-2 hover:bg-black/30 transition">
           <Paperclip className="w-3.5 h-3.5 shrink-0 opacity-60" />
           <span className="text-xs font-mono truncate flex-1 opacity-80">{filename}</span>
-          <span className="text-xs opacity-40 shrink-0">↓ İndir</span>
+          <span className="text-xs opacity-40 shrink-0">↓ {t('faDownload')}</span>
         </a>
       )}
     </div>
@@ -68,6 +70,7 @@ function readBase64(file) {
 }
 
 export default function FileAttach({ onText, onFile, onAIFile, compact = false }) {
+  const { t } = useLang();
   const [filename, setFilename] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -109,7 +112,7 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         onText?.(text);
       }
     } catch (err) {
-      setError(err.message || 'Dosya yükleme hatası');
+      setError(err.message || t('faUploadError'));
     } finally {
       setLoading(false);
       e.target.value = '';
@@ -135,18 +138,18 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         <span className="flex items-center gap-1 text-xs bg-cyan-900/40 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1 font-mono max-w-[180px]">
           <Paperclip className="w-3 h-3 shrink-0" />
           <span className="truncate">{filename}</span>
-          <button onClick={remove} className="ml-0.5 hover:text-red-400 shrink-0" aria-label="Dosyayı kaldır"><X className="w-3 h-3" /></button>
+          <button onClick={remove} className="ml-0.5 hover:text-red-400 shrink-0" aria-label={t('faRemoveAria')}><X className="w-3 h-3" /></button>
         </span>
       )}
 
       <button
         onClick={() => inputRef.current?.click()}
         disabled={loading}
-        title={onAIFile ? 'Dosya ekle - resim, PDF, her tür (AI görebilir)' : onFile ? 'Dosya ekle - her tür dosya gönderilebilir' : 'PDF, DOCX veya TXT yükle - AI kaynak olarak kullanır'}
+        title={onAIFile ? t('faTooltipAI') : onFile ? t('faTooltipFile') : t('faTooltipDoc')}
         className={`flex items-center gap-1 border border-gold/25 text-gold/50 hover:text-gold hover:border-gold/50 rounded transition disabled:opacity-40 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-1.5 text-xs'} font-mono tracking-wider`}
       >
         {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
-        {!compact && (loading ? 'Yükleniyor...' : (filename ? 'İlave Dosya Ekle' : 'Dosya İliştir'))}
+        {!compact && (loading ? t('faUploading') : (filename ? t('faAddMore') : t('faAttach')))}
       </button>
 
       {error && <span className="text-xs text-red-400 font-mono">{error}</span>}

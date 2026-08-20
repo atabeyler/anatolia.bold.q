@@ -92,6 +92,20 @@ describe('HomeView command center', () => {
     expect(screen.getByText('Detay metni')).toBeInTheDocument();
   });
 
+  it('renders in English when the language is switched, with no leftover Turkish labels', async () => {
+    localStorage.setItem('anatolia_lang', 'en');
+    renderHome({ isAdmin: true });
+    expect(await screen.findByText('TurkeyMap stub')).toBeInTheDocument();
+    expect(screen.getByText(/^Platform \/ System Status$/i)).toBeInTheDocument();
+    expect(screen.getByText(/AI Providers/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Personnel Radar/i })).toBeInTheDocument();
+    expect(screen.getByText('No records yet')).toBeInTheDocument();
+    expect(screen.getByText('Global Operations View')).toBeInTheDocument();
+    expect(screen.getByText("Ask Anatolia")).toBeInTheDocument();
+    expect(screen.queryByText(/Sistem Durumu/i)).not.toBeInTheDocument();
+    localStorage.removeItem('anatolia_lang');
+  });
+
   it('filters briefing items by search query', async () => {
     api.morningBriefToday.mockResolvedValue({ exists: true, date: '2026-01-05', items: [{ title: 'Ekonomi Haberi' }, { title: 'Savunma Haberi' }] });
     renderHome();
