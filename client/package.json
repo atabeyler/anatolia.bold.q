@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-client",
-  "version": "2.1.222",
+  "version": "2.1.223",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
-    "@vitejs/plugin-react": "^4.3.2",
+    "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^2.4.3",
     "framer-motion": "^11.11.0",
@@ -33,7 +33,7 @@
     "socket.io-client": "^4.8.0",
     "tailwindcss": "^3.4.13",
     "three": "^0.169.0",
-    "vite": "^5.4.8"
+    "vite": "^7.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -44,6 +44,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "jsdom": "^29.1.1",
-    "vitest": "^1.6.1"
+    "vitest": "^4.1.10"
   }
 }

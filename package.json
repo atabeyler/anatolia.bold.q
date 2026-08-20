@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "2.1.222",
+  "version": "2.1.223",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
@@ -108,7 +108,7 @@
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "husky": "^9.1.7",
-    "vitest": "^2.1.9",
+    "vitest": "^4.1.10",
     "wait-on": "^8.0.4"
   },
   "dependencies": {
