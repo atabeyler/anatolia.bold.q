@@ -128,10 +128,10 @@ export function mergeQuantumResults(scenarios, quantumResult) {
   const note = `\n## KUANTUM DEVRE DOĞRULAMASI\n` +
     `Aşağıdaki olasılıklar, YZ'nin ilk tahminleri kuantum genliği olarak ${quantumResult.qubits}-kübitlik bir devreye yüklenip, ` +
     `her kübit çiftini birbirine bağlayan ${layerCount} katmanlı bir karışım (mixer) katmanından geçirildikten sonra hesaplanmıştır. ` +
-    `Tek bir ölçüm turu yerine devre ${quantumResult.batches} kez bağımsız olarak çalıştırılmış (toplam ${quantumResult.shots} ölçüm/shot), ` +
-    `sonuçtaki güven aralığı bu bağımsız turlar arasındaki gerçek örnekleme sapmasından hesaplanmıştır. ${sourceNote}\n` +
+    `Tek bir ölçüm turu yerine devre ${quantumResult.batches} kez bağımsız olarak çalıştırılmış (toplam ${quantumResult.shots} ölçüm/shot); ` +
+    `aşağıdaki aralık istatistiksel bir güven aralığı değil, bu ${quantumResult.batches} bağımsız turun ortalamasından ±1 standart sapma bandıdır. ${sourceNote}\n` +
     `Backend: ${quantumResult.backend} (yerel kuantum devre simülatörü, devre derinliği ${quantumResult.circuitDepth} — gerçek kuantum donanımı değildir).\n\n` +
-    `| Senaryo | ${estimateLabel} | Kuantum Sonucu (ortalama) | Güven Aralığı |\n|---|---|---|---|\n${rows}\n\n` +
+    `| Senaryo | ${estimateLabel} | Kuantum Sonucu (ortalama) | Batch Dağılım Aralığı (±1 SD) |\n|---|---|---|---|\n${rows}\n\n` +
     `### Çalıştırılan Devre\n\`\`\`\n${quantumResult.circuitDiagram}\n\`\`\`\n${hardwareSection}`;
 
   return { scenarios: merged, note };

@@ -14,9 +14,9 @@ describe('resolveRole', () => {
     expect(resolveRole({ userCode: 'X' })).toBe(ROLES.ANALYST);
   });
 
-  it('ignores an unrecognized role string and falls back safely', () => {
-    expect(resolveRole({ role: 'superuser', isAdmin: true })).toBe(ROLES.ADMIN);
-    expect(resolveRole({ role: 'superuser' })).toBe(ROLES.ANALYST);
+  it('treats an unrecognized role claim as untrusted and drops to the least-privilege role, even with isAdmin set', () => {
+    expect(resolveRole({ role: 'superuser', isAdmin: true })).toBe(ROLES.VIEWER);
+    expect(resolveRole({ role: 'superuser' })).toBe(ROLES.VIEWER);
   });
 });
 

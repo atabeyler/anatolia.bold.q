@@ -122,7 +122,19 @@ function computeAuthority({ provenance }) {
  * (completeness, freshness, consistency, source authority) instead of one
  * opaque blended score, while still returning the same overall
  * score/level/warningCount shape existing callers rely on.
+ *
+ * IMPORTANT: `score` is a heuristic indicator, not a statistically
+ * validated confidence measure -- the sub-metric weights (0.3/0.15/0.25/0.3
+ * above) and computeAuthority()'s per-source-type points are fixed values
+ * chosen by hand, not fitted or calibrated against outcomes. Any UI or
+ * report surfacing this MUST label it as an internal indicator (e.g. "Data
+ * Quality Indicator"), never as a validated "confidence score" -- and
+ * should include `qualityModelVersion` alongside it, so a report stays
+ * traceable to the weighting scheme that produced it if these weights
+ * change later.
  */
+export const DATA_QUALITY_MODEL_VERSION = 'DQ-1.0';
+
 export function assessDataQuality({ provenance, recordCount = 0, warnings = [], asOfDate = null } = {}) {
   const completeness = computeCompleteness({ provenance, recordCount });
   const freshness = computeFreshness({ provenance, asOfDate });
@@ -140,6 +152,7 @@ export function assessDataQuality({ provenance, recordCount = 0, warnings = [], 
     level: score >= 85 ? 'high' : score >= 65 ? 'medium' : 'limited',
     warningCount: warnings?.length || 0,
     metrics: { completeness, freshness, consistency, authority },
+    qualityModelVersion: DATA_QUALITY_MODEL_VERSION,
   };
 }
 

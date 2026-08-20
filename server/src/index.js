@@ -3,7 +3,6 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import path from 'path';
 import pinoHttp from 'pino-http';
 import { fileURLToPath } from 'url';
@@ -29,7 +28,12 @@ import deviceRoutes from './routes/devices.js';
 import versionRoutes from './routes/version.js';
 import { startMorningBriefScheduler } from './services/morningBrief.js';
 
-dotenv.config();
+// .env is loaded by instrument.js, preloaded via node/tsx's --import flag
+// (see package.json's start/dev scripts) -- that happens before this file's
+// own imports run, whereas dotenv.config() called here would run after them
+// (ES module imports, including this file's route imports that read
+// process.env.*_API_KEY at their own top level, are fully evaluated before
+// any of this file's top-level statements execute).
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

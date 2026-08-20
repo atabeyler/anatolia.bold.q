@@ -32,14 +32,17 @@ const ROLE_MAX_CLASSIFICATION = {
 };
 
 /**
- * Resolves a user's role from JWT claims, falling back to the legacy
- * isAdmin boolean (every token predating the `role` claim only ever had
- * that) and defaulting an unrecognized/missing role to 'analyst' -- the
- * same access level ordinary non-admin accounts already had.
+ * Resolves a user's role from JWT claims. A `role` claim that's present but
+ * unrecognized (typo'd, tampered, from a future/rolled-back token version)
+ * is treated as untrusted input and gets the least-privilege role, not a
+ * silent analyst-level pass. Only a token with NO `role` claim at all --
+ * i.e. one issued before the claim existed -- falls back to the legacy
+ * isAdmin boolean, which is the same access level ordinary non-admin
+ * accounts already had pre-RBAC.
  */
 export function resolveRole(user) {
-  if (user?.role && Object.prototype.hasOwnProperty.call(ROLE_MAX_CLASSIFICATION, user.role)) {
-    return user.role;
+  if (user?.role) {
+    return Object.prototype.hasOwnProperty.call(ROLE_MAX_CLASSIFICATION, user.role) ? user.role : ROLES.VIEWER;
   }
   return user?.isAdmin ? ROLES.ADMIN : ROLES.ANALYST;
 }
