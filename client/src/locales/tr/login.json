@@ -25,5 +25,10 @@
   "classifiedShort": "GİZLİ",
   "identityVerificationRequired": "KİMLİK DOĞRULAMA GEREKLİ",
   "awaitingApprovalStatus": "ONAY BEKLENİYOR...",
-  "connectingToSystem": "SİSTEME BAĞLANILIYOR..."
+  "connectingToSystem": "SİSTEME BAĞLANILIYOR...",
+  "passkeyLoginToggle": "Passkey ile Giriş",
+  "passwordLoginToggle": "Kullanıcı Kodu + Şifre",
+  "passkeyVerificationRequired": "PASSKEY DOĞRULAMASI",
+  "passkeyLoginBtn": "PASSKEY İLE GİRİŞ",
+  "passkeyLoginFailed": "Passkey ile giriş başarısız oldu."
 }

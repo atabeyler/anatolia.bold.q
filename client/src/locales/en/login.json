@@ -25,5 +25,10 @@
   "classifiedShort": "CLASSIFIED",
   "identityVerificationRequired": "IDENTITY VERIFICATION REQUIRED",
   "awaitingApprovalStatus": "AWAITING APPROVAL...",
-  "connectingToSystem": "CONNECTING TO SYSTEM..."
+  "connectingToSystem": "CONNECTING TO SYSTEM...",
+  "passkeyLoginToggle": "Sign in with Passkey",
+  "passwordLoginToggle": "User Code + Password",
+  "passkeyVerificationRequired": "PASSKEY VERIFICATION",
+  "passkeyLoginBtn": "SIGN IN WITH PASSKEY",
+  "passkeyLoginFailed": "Passkey sign-in failed."
 }

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Shield, CheckCircle, XCircle, Menu as MenuIcon, Settings as SettingsIcon } from 'lucide-react';
 import { api, setJWT } from '../services/api.js';
 import { isNativeApp, nativeAuth } from '../services/nativeBridge.js';
+import { isPasskeySupported, loginWithPasskey } from '../services/webauthn.js';
 import EmergencyButton from '../components/EmergencyButton.jsx';
 import { useLang } from '../services/langContext.jsx';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
@@ -91,7 +92,15 @@ export default function LoginPage({ onLogin }) {
   const [guideOpen, setGuideOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.09);
+  // 'password' is the default and only mode a device that never supported
+  // (or never registered) a passkey ever sees -- passkey is strictly an
+  // additional option, never a replacement, per spec point 1.
+  const [loginMode, setLoginMode] = useState('password');
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
   const pollRef = useRef(null);
+
+  useEffect(() => { setPasskeySupported(isPasskeySupported()); }, []);
 
   useEffect(() => { return () => clearInterval(pollRef.current); }, []);
 
@@ -217,6 +226,33 @@ export default function LoginPage({ onLogin }) {
     }
   };
 
+  // Passkey login is a full alternative to handleLogin above, not a second
+  // factor on top of it: the server only issues a session after verifying
+  // the WebAuthn signature itself (see routes/webauthn.js's /login/verify),
+  // so a successful ceremony here goes straight to onLogin(), same as the
+  // admin fast-path in handleLogin. Never trusts anything from the browser
+  // beyond the signed response -- the platform authenticator's biometric
+  // check result itself never reaches this code or the server.
+  const handlePasskeyLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setPasskeyLoading(true);
+    localStorage.setItem('aq_saved_code', userCode.trim());
+    try {
+      const r = await loginWithPasskey(userCode.trim());
+      setJWT(r.jwt);
+      onLogin({ userCode: r.userCode, nickname: r.nickname, role: r.role, isAdmin: r.isAdmin });
+    } catch (err) {
+      // A user cancelling the OS biometric prompt (or having no matching
+      // authenticator on this device) surfaces as a WebAuthnError from
+      // @simplewebauthn/browser, not a server error -- show its message
+      // rather than a raw "[object Object]"/undefined.
+      setError(err?.message || t('passkeyLoginFailed'));
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
   const reset = () => { setStage(STAGES.IDLE); setToken(null); setError(''); setUserCode(''); setPassword(''); };
 
   return (
@@ -286,56 +322,112 @@ export default function LoginPage({ onLogin }) {
                 {!bootDone && (
                   <BootSequence onDone={() => setBootDone(true)} lang={lang} />
                 )}
-                <motion.form onSubmit={handleLogin}
-                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.9 }}
-                  className="space-y-4">
 
-                  <div className="text-xs font-mono text-cyan-300/85 tracking-widest uppercase mb-3">
-                    &gt; {t('identityVerificationRequired')}
-                  </div>
+                {loginMode === 'password' ? (
+                  <motion.form onSubmit={handleLogin}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.9 }}
+                    className="space-y-4">
 
-                  <div className="space-y-1.5">
-                    <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('userCode')}</label>
-                    <div className="relative group">
-                      <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
-                      <input type="text" value={userCode} onChange={e => setUserCode(e.target.value)}
-                        placeholder="·  ·  ·  ·  ·  ·  ·" required autoFocus
-                        className="w-full pl-10 pr-4 py-2.5 bg-[#020c18] border border-cyan-500/20 rounded-sm text-gold font-mono tracking-[0.2em] text-sm focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/20 transition placeholder-cyan-900/50" />
+                    <div className="text-xs font-mono text-cyan-300/85 tracking-widest uppercase mb-3">
+                      &gt; {t('identityVerificationRequired')}
                     </div>
-                  </div>
 
-                  <div className="space-y-1.5">
-                    <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('password')}</label>
-                    <div className="relative group">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
-                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                        className="w-full pl-10 pr-4 py-2.5 bg-[#020c18] border border-cyan-500/20 rounded-sm text-gold font-mono tracking-[0.2em] text-sm focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/20 transition" />
+                    <div className="space-y-1.5">
+                      <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('userCode')}</label>
+                      <div className="relative group">
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
+                        <input type="text" value={userCode} onChange={e => setUserCode(e.target.value)}
+                          placeholder="·  ·  ·  ·  ·  ·  ·" required autoFocus
+                          className="w-full pl-10 pr-4 py-2.5 bg-[#020c18] border border-cyan-500/20 rounded-sm text-gold font-mono tracking-[0.2em] text-sm focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/20 transition placeholder-cyan-900/50" />
+                      </div>
                     </div>
-                  </div>
 
-                  <AnimatePresence>
-                    {error && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                        className="text-crimson text-sm bg-crimson/10 border border-crimson/30 rounded-sm p-2.5 font-mono">
-                        ⚠ {error}
-                      </motion.div>
+                    <div className="space-y-1.5">
+                      <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('password')}</label>
+                      <div className="relative group">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+                          className="w-full pl-10 pr-4 py-2.5 bg-[#020c18] border border-cyan-500/20 rounded-sm text-gold font-mono tracking-[0.2em] text-sm focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/20 transition" />
+                      </div>
+                    </div>
+
+                    <AnimatePresence>
+                      {error && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                          className="text-crimson text-sm bg-crimson/10 border border-crimson/30 rounded-sm p-2.5 font-mono">
+                          ⚠ {error}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <motion.button type="submit" disabled={loading}
+                      whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+                      className="w-full py-3 sm:py-3.5 rounded-sm font-display tracking-[0.35em] uppercase text-sm relative overflow-hidden transition disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.25) 100%)', border: '1px solid rgba(212,175,55,0.5)', color: '#d4af37', boxShadow: loading ? 'none' : '0 0 20px rgba(212,175,55,0.15)' }}>
+                      {loading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                            className="inline-block w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full" />
+                          {t('processing')}
+                        </span>
+                      ) : t('loginBtn')}
+                    </motion.button>
+
+                    {passkeySupported && (
+                      <button type="button" onClick={() => { setError(''); setLoginMode('passkey'); }}
+                        className="w-full text-center text-xs font-mono text-cyan-300/70 hover:text-cyan-200 tracking-wider uppercase underline underline-offset-4">
+                        {t('passkeyLoginToggle')}
+                      </button>
                     )}
-                  </AnimatePresence>
+                  </motion.form>
+                ) : (
+                  <motion.form onSubmit={handlePasskeyLogin}
+                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4">
 
-                  <motion.button type="submit" disabled={loading}
-                    whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
-                    className="w-full py-3 sm:py-3.5 rounded-sm font-display tracking-[0.35em] uppercase text-sm relative overflow-hidden transition disabled:opacity-50"
-                    style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.25) 100%)', border: '1px solid rgba(212,175,55,0.5)', color: '#d4af37', boxShadow: loading ? 'none' : '0 0 20px rgba(212,175,55,0.15)' }}>
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                          className="inline-block w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full" />
-                        {t('processing')}
-                      </span>
-                    ) : t('loginBtn')}
-                  </motion.button>
-                </motion.form>
+                    <div className="text-xs font-mono text-cyan-300/85 tracking-widest uppercase mb-3">
+                      &gt; {t('passkeyVerificationRequired')}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-xs text-gold/80 tracking-widest uppercase font-mono">{t('userCode')}</label>
+                      <div className="relative group">
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400/40 group-focus-within:text-cyan-400 transition" />
+                        <input type="text" value={userCode} onChange={e => setUserCode(e.target.value)}
+                          placeholder="·  ·  ·  ·  ·  ·  ·" required autoFocus
+                          className="w-full pl-10 pr-4 py-2.5 bg-[#020c18] border border-cyan-500/20 rounded-sm text-gold font-mono tracking-[0.2em] text-sm focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/20 transition placeholder-cyan-900/50" />
+                      </div>
+                    </div>
+
+                    <AnimatePresence>
+                      {error && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                          className="text-crimson text-sm bg-crimson/10 border border-crimson/30 rounded-sm p-2.5 font-mono">
+                          ⚠ {error}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <motion.button type="submit" disabled={passkeyLoading}
+                      whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+                      className="w-full py-3 sm:py-3.5 rounded-sm font-display tracking-[0.35em] uppercase text-sm relative overflow-hidden transition disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.25) 100%)', border: '1px solid rgba(212,175,55,0.5)', color: '#d4af37', boxShadow: passkeyLoading ? 'none' : '0 0 20px rgba(212,175,55,0.15)' }}>
+                      {passkeyLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                            className="inline-block w-4 h-4 border-2 border-gold/30 border-t-gold rounded-full" />
+                          {t('processing')}
+                        </span>
+                      ) : t('passkeyLoginBtn')}
+                    </motion.button>
+
+                    <button type="button" onClick={() => { setError(''); setLoginMode('password'); }}
+                      className="w-full text-center text-xs font-mono text-cyan-300/70 hover:text-cyan-200 tracking-wider uppercase underline underline-offset-4">
+                      {t('passwordLoginToggle')}
+                    </button>
+                  </motion.form>
+                )}
               </motion.div>
             )}
 

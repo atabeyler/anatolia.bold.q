@@ -184,6 +184,30 @@ export async function initDatabase() {
   // accounts default to 'analyst' (the same access level they already had).
   await p.query(`ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'analyst';`);
 
+  // Registered WebAuthn/passkey authenticators (see routes/webauthn.js).
+  // Only public data ever lands here: credential_id + public_key are what
+  // the authenticator itself hands back during registration, counter is a
+  // signature-replay guard, transports is a UI hint. No private key and no
+  // biometric data ever exists server-side -- the platform authenticator
+  // (Face ID/Touch ID/Windows Hello/Android biometrics) verifies the user
+  // locally and never sends that result to this API; only the signed
+  // challenge response does, which is verified purely cryptographically.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id SERIAL PRIMARY KEY,
+      user_code VARCHAR(50) NOT NULL,
+      credential_id TEXT UNIQUE NOT NULL,
+      public_key TEXT NOT NULL,
+      counter BIGINT NOT NULL DEFAULT 0,
+      device_name VARCHAR(200),
+      device_type VARCHAR(20),
+      backed_up BOOLEAN DEFAULT FALSE,
+      transports VARCHAR(200),
+      created_at TIMESTAMP DEFAULT NOW(),
+      last_used_at TIMESTAMP
+    );
+  `);
+
   await p.query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id SERIAL PRIMARY KEY,
@@ -216,6 +240,7 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON admin_audit_log(actor_user_code);
     CREATE INDEX IF NOT EXISTS idx_audit_log_target ON admin_audit_log(target_user_code);
     CREATE INDEX IF NOT EXISTS idx_auth_users_code ON auth_users(user_code);
+    CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON webauthn_credentials(user_code);
   `);
 
   logger.info('Database tables ready');

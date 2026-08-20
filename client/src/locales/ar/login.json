@@ -25,5 +25,10 @@
   "classifiedShort": "سري",
   "identityVerificationRequired": "التحقق من الهوية مطلوب",
   "awaitingApprovalStatus": "في انتظار الموافقة...",
-  "connectingToSystem": "جارٍ الاتصال بالنظام..."
+  "connectingToSystem": "جارٍ الاتصال بالنظام...",
+  "passkeyLoginToggle": "الدخول باستخدام مفتاح المرور",
+  "passwordLoginToggle": "رمز المستخدم + كلمة المرور",
+  "passkeyVerificationRequired": "التحقق بمفتاح المرور",
+  "passkeyLoginBtn": "الدخول بمفتاح المرور",
+  "passkeyLoginFailed": "فشل تسجيل الدخول باستخدام مفتاح المرور."
 }
