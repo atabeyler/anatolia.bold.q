@@ -22,7 +22,21 @@ export function getSocketBaseUrl() {
   return baseFor() || '/';
 }
 
-function getJWT() { return localStorage.getItem('anatolia_jwt'); }
+// Desktop (Electron) and mobile (Capacitor) call the deployed API from a
+// different origin than the one serving the app shell (see baseFor() above)
+// -- an httpOnly cookie set by that API origin would never reach them, so
+// they keep authenticating with an explicit Authorization header, sourced
+// from a JWT they store in localStorage themselves (unchanged from before).
+// The web build, served from the SAME origin as the API, no longer stores
+// or reads a JWT at all: the server sets it as an httpOnly session cookie
+// on login (routes/auth.js), the browser attaches it to same-origin
+// requests automatically, and JS on the page can never read it -- closing
+// off the XSS token-theft vector localStorage left open.
+function isNativeShell() {
+  return typeof window !== 'undefined' && !!(window.anatoliaDesktop || window.anatoliaMobile);
+}
+
+function getJWT() { return isNativeShell() ? localStorage.getItem('anatolia_jwt') : null; }
 
 export function getToken() { return getJWT(); }
 
@@ -31,7 +45,7 @@ async function req(path, options = {}) {
   const jwt = getJWT();
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
 
-  const res = await fetch(baseFor(path) + path, { ...options, headers });
+  const res = await fetch(baseFor(path) + path, { ...options, headers, credentials: 'include' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     const e = new Error(err.error || 'API hatası');
@@ -47,7 +61,7 @@ async function req(path, options = {}) {
 async function reqBlob(path) {
   const jwt = getJWT();
   const headers = jwt ? { Authorization: `Bearer ${jwt}` } : {};
-  const res = await fetch(baseFor(path) + path, { headers });
+  const res = await fetch(baseFor(path) + path, { headers, credentials: 'include' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'API hatası');
@@ -61,6 +75,10 @@ export const api = {
     req('/api/auth/login-request', { method: 'POST', body: JSON.stringify({ userCode, password }) }),
 
   checkApproval: (token) => req(`/api/auth/check/${token}`),
+
+  me: () => req('/api/auth/me'),
+
+  logout: () => req('/api/auth/logout', { method: 'POST' }),
 
   generateAnalysis: (category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr') =>
     req('/api/analysis/generate', { method: 'POST', body: JSON.stringify({ category, title, prompt, quantumMode, documentContext, imageData, realTransactions, realScenarios, realOptimization, lang }) }),
@@ -78,6 +96,7 @@ export const api = {
     const res = await fetch(baseFor() + '/api/analysis/chat', {
       method: 'POST',
       headers,
+      credentials: 'include',
       body: JSON.stringify({ message, history, documentContext, imageData }),
     });
     if (!res.ok) {
@@ -122,6 +141,7 @@ export const api = {
     const res = await fetch(baseFor() + '/api/analysis/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+      credentials: 'include',
       body: formData,
     });
     if (!res.ok) {
@@ -138,6 +158,7 @@ export const api = {
     const res = await fetch(baseFor() + '/api/files/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+      credentials: 'include',
       body: formData,
     });
     if (!res.ok) {
@@ -154,6 +175,7 @@ export const api = {
     const res = await fetch(baseFor() + '/api/analysis/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+      credentials: 'include',
       body: formData,
     });
     if (!res.ok) {
@@ -220,11 +242,24 @@ export const adminApi = {
 export const AUTH_CHANGED_EVENT = 'anatoliaq:auth-changed';
 
 export function setJWT(jwt) {
-  if (jwt) localStorage.setItem('anatolia_jwt', jwt);
-  else localStorage.removeItem('anatolia_jwt');
+  if (isNativeShell()) {
+    if (jwt) localStorage.setItem('anatolia_jwt', jwt);
+    else localStorage.removeItem('anatolia_jwt');
+  }
+  // Web has nothing to store here -- routes/auth.js already set/cleared the
+  // httpOnly cookie as part of the login/logout request itself.
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
 }
 
+// Clears the session server-side (the cookie for web; harmless no-op call
+// for native, which clears its own localStorage JWT via setJWT(null)).
+export async function logoutRequest() {
+  try { await api.logout(); } catch { /* best-effort -- setJWT(null)/disconnect still run */ }
+}
+
+// Synchronous, native-shell only: decodes the JWT desktop/mobile store
+// themselves. Returns null on web -- there's no JWT there to decode (see
+// getJWT()); use resolveCurrentUser() for the web path.
 export function getCurrentUser() {
   const jwt = getJWT();
   if (!jwt) return null;
@@ -236,6 +271,21 @@ export function getCurrentUser() {
     }
     return payload;
   } catch { return null; }
+}
+
+// Async, works on every platform: native resolves immediately from the
+// already-decoded local JWT (no network round trip needed there), web asks
+// the server who the httpOnly cookie belongs to. Used for the app's initial
+// bootstrap, where synchronous getCurrentUser() alone can't tell a logged-
+// out web visitor apart from one whose session the server hasn't confirmed
+// yet.
+export async function resolveCurrentUser() {
+  if (isNativeShell()) return getCurrentUser();
+  try {
+    return await api.me();
+  } catch {
+    return null;
+  }
 }
 
 export const memoryApi = {

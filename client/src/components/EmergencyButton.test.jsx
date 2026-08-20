@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import EmergencyButton from './EmergencyButton.jsx';
 import { LangProvider } from '../services/langContext.jsx';
-import { api, getCurrentUser, getToken } from '../services/api.js';
+import { api, getToken } from '../services/api.js';
 
 // EmergencyButton's ChatPanel also drives a full WebRTC video-meeting flow
 // (RTCPeerConnection/getUserMedia/MediaRecorder/screen share). That's
@@ -20,17 +20,17 @@ vi.mock('../services/api.js', () => ({
     emergencyCenter: vi.fn(async () => ({ success: true })),
     emergencyUsers: vi.fn(async () => ({ success: true })),
   },
-  getCurrentUser: vi.fn(() => ({ userCode: 'BOLD-001', nickname: 'BOLD-001', isAdmin: false })),
   getToken: vi.fn(() => 'fake-jwt'),
 }));
 
+const defaultUser = { userCode: 'BOLD-001', nickname: 'BOLD-001', isAdmin: false };
+
 function renderButton(props = {}) {
-  return render(<LangProvider><EmergencyButton authenticated {...props} /></LangProvider>);
+  return render(<LangProvider><EmergencyButton authenticated user={defaultUser} {...props} /></LangProvider>);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getCurrentUser.mockReturnValue({ userCode: 'BOLD-001', nickname: 'BOLD-001', isAdmin: false });
   getToken.mockReturnValue('fake-jwt');
   // jsdom doesn't implement Element.scrollTo -- ChatPanel autoscrolls the message list.
   Element.prototype.scrollTo = vi.fn();
@@ -114,8 +114,7 @@ describe('EmergencyButton', () => {
   });
 
   it('shows the "start video meeting" control only for admins', () => {
-    getCurrentUser.mockReturnValue({ userCode: 'ADMIN-1', nickname: 'BOLD', isAdmin: true });
-    renderButton();
+    renderButton({ user: { userCode: 'ADMIN-1', nickname: 'BOLD', isAdmin: true } });
     fireEvent.click(screen.getByLabelText('ACİL MERKEZ'));
     fireEvent.click(screen.getByText('Mesajlaşma'));
     expect(screen.getByText('Görüntülü Toplantı Başlat')).toBeInTheDocument();

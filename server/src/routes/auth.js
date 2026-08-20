@@ -11,6 +11,7 @@ import { JWT_SECRET } from '../lib/jwtSecret.js';
 import { escapeHtml } from '../lib/escapeHtml.js';
 import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '../lib/loginThrottle.js';
 import { ROLES } from '../lib/rbac.js';
+import { setAuthCookie, clearAuthCookie } from '../lib/cookies.js';
 
 const router = express.Router();
 
@@ -109,6 +110,7 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
         JWT_SECRET,
         { expiresIn: '4h' }
       );
+      setAuthCookie(res, jwtToken, 4 * 60 * 60 * 1000);
       return res.json({ status: 'approved', jwt: jwtToken, userCode: user.user_code, nickname: user.nickname, isAdmin: true, role: ROLES.ADMIN });
     }
 
@@ -214,10 +216,24 @@ router.get('/check/:token', async (req, res) => {
     const nickname = user?.nickname || t.user_code;
     const role = user?.role || ROLES.ANALYST;
     const jwtToken = jwt.sign({ userCode: t.user_code, nickname, role }, JWT_SECRET, { expiresIn: '2h' });
+    setAuthCookie(res, jwtToken, 2 * 60 * 60 * 1000);
     res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname, role });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Lets the web client (which never has JS access to the httpOnly session
+// cookie, unlike desktop/mobile decoding their own stored JWT) learn who's
+// logged in without needing to decode a token it doesn't have.
+router.get('/me', authMiddleware, (req, res) => {
+  const { userCode, nickname, isAdmin, role, exp } = req.user;
+  res.json({ userCode, nickname, isAdmin: !!isAdmin, role, exp });
+});
+
+router.post('/logout', (req, res) => {
+  clearAuthCookie(res);
+  res.json({ success: true });
 });
 
 // ── Admin: user management ────────────────────────────────────────────────

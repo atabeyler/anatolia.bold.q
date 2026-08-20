@@ -189,6 +189,18 @@ describe('POST /api/auth/login-request', () => {
     expect(decoded.isAdmin).toBe(true);
   });
 
+  it('also sets the JWT as an httpOnly session cookie, for the web client', async () => {
+    await seedUser({ userCode: 'ADMIN-2', password: 'correct-horse', nickname: 'BOLD', isAdmin: true });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/login-request').send({ userCode: 'ADMIN-2', password: 'correct-horse' });
+    const setCookie = res.headers['set-cookie']?.[0];
+    expect(setCookie).toMatch(/^anatolia_jwt=/);
+    expect(setCookie).toMatch(/HttpOnly/i);
+    expect(setCookie).toMatch(/SameSite=Lax/i);
+    const cookieToken = decodeURIComponent(setCookie.split(';')[0].split('=')[1]);
+    expect(cookieToken).toBe(res.body.jwt);
+  });
+
   it('creates a pending approval token for a non-admin user instead of an immediate JWT', async () => {
     await seedUser({ userCode: 'U3', password: 'correct-horse', nickname: 'BOLD-003' });
     const app = buildApp();
@@ -276,6 +288,47 @@ describe('GET /api/auth/check/:token', () => {
     const app = buildApp();
     const res = await request(app).get('/api/auth/check/tok-7');
     expect(res.status).toBe(403);
+  });
+
+  it('also sets the session cookie once approved', async () => {
+    await seedUser({ userCode: 'U8', password: 'x', nickname: 'BOLD-008' });
+    approvalTokens.set('tok-8', { token: 'tok-8', user_code: 'U8', approved: true, expires_at: new Date(Date.now() + 60000) });
+    const app = buildApp();
+    const res = await request(app).get('/api/auth/check/tok-8');
+    expect(res.headers['set-cookie']?.[0]).toMatch(/^anatolia_jwt=/);
+  });
+});
+
+describe('GET /api/auth/me', () => {
+  it('401s with no cookie and no Authorization header', async () => {
+    const app = buildApp();
+    const res = await request(app).get('/api/auth/me');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns the decoded user for a valid Authorization header (desktop/mobile path)', async () => {
+    const app = buildApp();
+    const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${userToken('U9', 'BOLD-009')}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ userCode: 'U9', nickname: 'BOLD-009', isAdmin: false });
+  });
+
+  it('returns the decoded user for a valid session cookie (web path)', async () => {
+    const app = buildApp();
+    const token = adminToken('ADMIN-3', 'BOLD');
+    const res = await request(app).get('/api/auth/me').set('Cookie', `anatolia_jwt=${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ userCode: 'ADMIN-3', nickname: 'BOLD', isAdmin: true });
+  });
+});
+
+describe('POST /api/auth/logout', () => {
+  it('clears the session cookie', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/logout');
+    expect(res.status).toBe(200);
+    const setCookie = res.headers['set-cookie']?.[0];
+    expect(setCookie).toMatch(/^anatolia_jwt=;/);
   });
 });
 

@@ -4,7 +4,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import GlobalVoiceAssistant from './components/GlobalVoiceAssistant.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
-import { getCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
+import { resolveCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
 import { useLang } from './services/langContext.jsx';
 
 // The dashboard (and everything it pulls in -- analysis views, chat, voice,
@@ -34,16 +34,28 @@ const isInstalledApp = () => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(getCurrentUser());
+  // undefined = still resolving who's logged in (web asks the server, since
+  // the session lives in an httpOnly cookie no client JS can read; native
+  // resolves this synchronously from its own stored JWT -- see
+  // resolveCurrentUser()); null = confirmed logged out.
+  const [user, setUser] = useState(undefined);
   const [showSplash] = useState(isInstalledApp);
   const { lang } = useLang();
 
-  // Event-driven instead of polling: setJWT() fires AUTH_CHANGED_EVENT on
-  // login/logout in this tab, the browser fires 'storage' for other tabs,
-  // and a one-shot timeout re-checks exactly at token expiry -- no need to
-  // re-parse/base64-decode the JWT every second just to detect a change.
   useEffect(() => {
-    const sync = () => setUser(getCurrentUser());
+    let alive = true;
+    resolveCurrentUser().then((u) => { if (alive) setUser(u); });
+    return () => { alive = false; };
+  }, []);
+
+  // Event-driven instead of polling: setJWT() fires AUTH_CHANGED_EVENT on
+  // login/logout in this tab, the browser fires 'storage' for other tabs
+  // (native only -- web no longer writes anatolia_jwt to localStorage), and
+  // a one-shot timeout re-checks exactly at token expiry.
+  useEffect(() => {
+    if (user === undefined) return; // initial resolution above still in flight
+    let alive = true;
+    const sync = () => resolveCurrentUser().then((u) => { if (alive) setUser(u); });
     const onStorage = (e) => { if (!e.key || e.key === 'anatolia_jwt') sync(); };
 
     window.addEventListener(AUTH_CHANGED_EVENT, sync);
@@ -60,11 +72,23 @@ export default function App() {
     }
 
     return () => {
+      alive = false;
       window.removeEventListener(AUTH_CHANGED_EVENT, sync);
       window.removeEventListener('storage', onStorage);
       if (expiryTimer) clearTimeout(expiryTimer);
     };
   }, [user]);
+
+  // Still resolving on first load -- render nothing routable yet rather
+  // than flashing /login for an already-logged-in web session.
+  if (user === undefined) {
+    return (
+      <>
+        {showSplash && <SplashScreen />}
+        <div className="fixed inset-0 bg-[#0a0e1a]" />
+      </>
+    );
+  }
 
   return (
     <>

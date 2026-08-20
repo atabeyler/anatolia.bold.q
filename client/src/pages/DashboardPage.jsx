@@ -17,7 +17,7 @@ import AppFooter from '../components/AppFooter.jsx';
 import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
 import DesktopConflictModal from '../components/DesktopConflictModal.jsx';
 import ReauthBanner from '../components/ReauthBanner.jsx';
-import { api, setJWT, getToken } from '../services/api.js';
+import { api, setJWT, getToken, logoutRequest } from '../services/api.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -223,6 +223,7 @@ export default function DashboardPage({ user, onLogout }) {
       notifyDevice(t('systemNoticeTitle'), data.body || t('newSystemEvent'));
     };
     const onBlocked = () => {
+      logoutRequest();
       setJWT(null);
       disconnectSocket();
       onLogout();
@@ -353,7 +354,7 @@ export default function DashboardPage({ user, onLogout }) {
 
   const startAnalysis = (cat) => { setActiveCategory(cat); setView('analysis'); };
 
-  const logout = () => { setJWT(null); disconnectSocket(); onLogout(); };
+  const logout = () => { logoutRequest(); setJWT(null); disconnectSocket(); onLogout(); };
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('aq:context', {
@@ -496,7 +497,7 @@ export default function DashboardPage({ user, onLogout }) {
 
       <AppFooter />
 
-      <EmergencyButton authenticated={true} />
+      <EmergencyButton authenticated={true} user={user} />
 
       <DesktopConflictModal lang={lang} />
       <ReauthBanner onLogout={logout} lang={lang} />

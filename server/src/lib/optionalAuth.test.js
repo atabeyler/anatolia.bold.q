@@ -21,4 +21,15 @@ describe('getOptionalUserCode', () => {
     const token = jwt.sign({ userCode: 'BOLD-001' }, JWT_SECRET);
     expect(getOptionalUserCode({ headers: { authorization: `Bearer ${token}` } })).toBe('BOLD-001');
   });
+
+  it('returns the userCode from a session cookie when there is no Authorization header (web path)', () => {
+    const token = jwt.sign({ userCode: 'BOLD-002' }, JWT_SECRET);
+    expect(getOptionalUserCode({ headers: { cookie: `anatolia_jwt=${token}` } })).toBe('BOLD-002');
+  });
+
+  it('prefers the cookie over a stale/mismatched Authorization header', () => {
+    const cookieToken = jwt.sign({ userCode: 'FROM-COOKIE' }, JWT_SECRET);
+    const headerToken = jwt.sign({ userCode: 'FROM-HEADER' }, JWT_SECRET);
+    expect(getOptionalUserCode({ headers: { cookie: `anatolia_jwt=${cookieToken}`, authorization: `Bearer ${headerToken}` } })).toBe('FROM-COOKIE');
+  });
 });

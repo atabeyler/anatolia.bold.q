@@ -329,7 +329,7 @@ export default function LoginPage({ onLogin }) {
           setJWT(r.jwt);
           registerNativeSession(r.jwt, password);
           setStage(STAGES.APPROVED);
-          setTimeout(() => onLogin({ userCode: r.userCode }), 1500);
+          setTimeout(() => onLogin({ userCode: r.userCode, nickname: r.nickname, role: r.role, isAdmin: false }), 1500);
         } else if (r.status === 'expired' || r.status === 'not_found') {
           clearInterval(pollRef.current);
           setStage(STAGES.EXPIRED);
@@ -372,7 +372,7 @@ export default function LoginPage({ onLogin }) {
       if (r.status === 'approved' && r.jwt) {
         setJWT(r.jwt);
         registerNativeSession(r.jwt, password);
-        onLogin({ userCode: r.userCode, isAdmin: r.isAdmin });
+        onLogin({ userCode: r.userCode, nickname: r.nickname, role: r.role, isAdmin: r.isAdmin });
         return;
       }
       setToken(r.token);

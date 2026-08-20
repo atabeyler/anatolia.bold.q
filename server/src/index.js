@@ -66,12 +66,17 @@ const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
+  cors: { origin: allowedOrigins, methods: ['GET', 'POST'], credentials: true },
   pingTimeout: 60000,
   pingInterval: 25000
 });
 
-app.use(cors({ origin: allowedOrigins }));
+// credentials: true is required for the browser to attach the httpOnly
+// session cookie (see lib/cookies.js) to cross-origin requests -- and,
+// combined with `origin` never being the literal wildcard '*' above, is
+// what makes that cookie flow at all (browsers refuse Access-Control-Allow-
+// Credentials with a wildcard origin).
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 // Audited against the actual Vite production build (client/dist/index.html)
 // and every external-origin reference in client/src before enabling:
 // - No inline <script> tags and no eval()/new Function() anywhere in the

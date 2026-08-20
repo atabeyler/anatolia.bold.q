@@ -11,6 +11,10 @@ export function connectSocket(nickname, token = null) {
     reconnectionAttempts: 5,
     reconnectionDelay: 2000,
     auth: { token },
+    // Web has no token to pass in `auth` above (see api.js's getToken()) --
+    // it authenticates the socket the same way as any other request, via
+    // the httpOnly session cookie, which this makes the handshake include.
+    withCredentials: true,
   });
 
   socket.on('connect', () => {

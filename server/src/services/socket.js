@@ -7,6 +7,7 @@ import { getUserEmailByNickname, getUserEmailRecipients } from './database.js';
 import * as onlineState from '../lib/onlineState.js';
 import { logger } from '../lib/logger.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
+import { readAuthCookie } from '../lib/cookies.js';
 import { sendPushToUsers } from '../lib/webPush.js';
 import { recordRequestMetric } from '../lib/requestMetrics.js';
 
@@ -63,7 +64,13 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('register', async (payload) => {
-      const token = typeof payload === 'string' ? socket.handshake.auth?.token : (payload?.token || socket.handshake.auth?.token);
+      const explicitToken = typeof payload === 'string' ? socket.handshake.auth?.token : (payload?.token || socket.handshake.auth?.token);
+      // The web client no longer has a token string to send explicitly
+      // (see client/src/services/api.js) -- it authenticates the socket the
+      // same way it authenticates any other request, via the httpOnly
+      // cookie, which IS present on the handshake's HTTP request even
+      // though client-side JS can never read it.
+      const token = explicitToken || readAuthCookie(socket.handshake.headers?.cookie);
       const decoded = verifyToken(token);
       if (!decoded?.nickname) return;
 

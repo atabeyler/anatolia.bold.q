@@ -101,6 +101,30 @@ describe('socket connection lifecycle', () => {
     expect(after.errors).toBeGreaterThan(before.errors);
   });
 
+  it('authenticates from the httpOnly session cookie when no explicit token is sent (web path)', async () => {
+    const { io, connect } = createFakeIo();
+    initSocketHandlers(io);
+    const { socket, handlers } = createFakeSocket();
+    socket.handshake.headers = { cookie: `anatolia_jwt=${nicknameToken('BOLD-COOKIE')}` };
+    connect(socket);
+
+    await handlers.register({});
+    await flush();
+    expect(setOnlineMock).toHaveBeenCalledWith('BOLD-COOKIE', socket.id);
+  });
+
+  it('prefers an explicit token over the cookie when both are present', async () => {
+    const { io, connect } = createFakeIo();
+    initSocketHandlers(io);
+    const { socket, handlers } = createFakeSocket();
+    socket.handshake.headers = { cookie: `anatolia_jwt=${nicknameToken('FROM-COOKIE')}` };
+    connect(socket);
+
+    await handlers.register({ token: nicknameToken('FROM-TOKEN') });
+    await flush();
+    expect(setOnlineMock).toHaveBeenCalledWith('FROM-TOKEN', socket.id);
+  });
+
   it('cleans up presence state on disconnect', async () => {
     const { io, connect } = createFakeIo();
     initSocketHandlers(io);

@@ -173,7 +173,10 @@ router.post('/decisions/:analysisId/replay', asyncRoute(async (req, res) => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: req.headers.authorization,
+        // req.token (set by authMiddleware) rather than the raw incoming
+        // header -- a web caller authenticates via httpOnly cookie, which
+        // this server-side loopback fetch wouldn't otherwise carry.
+        authorization: `Bearer ${req.token}`,
         'x-anatolia-replay-of': String(record.id),
       },
       body: JSON.stringify({ ...record.request_payload, ...req.body }),
