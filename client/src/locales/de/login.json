@@ -26,9 +26,9 @@
   "identityVerificationRequired": "IDENTITÄTSPRÜFUNG ERFORDERLICH",
   "awaitingApprovalStatus": "WARTE AUF GENEHMIGUNG...",
   "connectingToSystem": "VERBINDUNG WIRD HERGESTELLT...",
-  "passkeyLoginToggle": "Mit Passkey anmelden",
+  "passkeyLoginToggle": "Mit Face ID / Fingerabdruck / Passkey anmelden",
   "passwordLoginToggle": "Benutzercode + Passwort",
   "passkeyVerificationRequired": "PASSKEY-VERIFIZIERUNG",
-  "passkeyLoginBtn": "MIT PASSKEY ANMELDEN",
+  "passkeyLoginBtn": "Mit Face ID / Fingerabdruck / Passkey anmelden",
   "passkeyLoginFailed": "Anmeldung mit Passkey fehlgeschlagen."
 }

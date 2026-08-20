@@ -26,9 +26,9 @@
   "identityVerificationRequired": "IDENTITY VERIFICATION REQUIRED",
   "awaitingApprovalStatus": "AWAITING APPROVAL...",
   "connectingToSystem": "CONNECTING TO SYSTEM...",
-  "passkeyLoginToggle": "Sign in with Passkey",
+  "passkeyLoginToggle": "Sign in with Face ID / Fingerprint / Passkey",
   "passwordLoginToggle": "User Code + Password",
   "passkeyVerificationRequired": "PASSKEY VERIFICATION",
-  "passkeyLoginBtn": "SIGN IN WITH PASSKEY",
+  "passkeyLoginBtn": "Sign in with Face ID / Fingerprint / Passkey",
   "passkeyLoginFailed": "Passkey sign-in failed."
 }

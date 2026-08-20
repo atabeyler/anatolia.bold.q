@@ -26,9 +26,9 @@
   "identityVerificationRequired": "التحقق من الهوية مطلوب",
   "awaitingApprovalStatus": "في انتظار الموافقة...",
   "connectingToSystem": "جارٍ الاتصال بالنظام...",
-  "passkeyLoginToggle": "الدخول باستخدام مفتاح المرور",
+  "passkeyLoginToggle": "الدخول باستخدام Face ID / بصمة الإصبع / مفتاح المرور",
   "passwordLoginToggle": "رمز المستخدم + كلمة المرور",
   "passkeyVerificationRequired": "التحقق بمفتاح المرور",
-  "passkeyLoginBtn": "الدخول بمفتاح المرور",
+  "passkeyLoginBtn": "الدخول باستخدام Face ID / بصمة الإصبع / مفتاح المرور",
   "passkeyLoginFailed": "فشل تسجيل الدخول باستخدام مفتاح المرور."
 }

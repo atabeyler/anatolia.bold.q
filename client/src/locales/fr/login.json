@@ -26,9 +26,9 @@
   "identityVerificationRequired": "VÉRIFICATION D'IDENTITÉ REQUISE",
   "awaitingApprovalStatus": "EN ATTENTE D'APPROBATION...",
   "connectingToSystem": "CONNEXION AU SYSTÈME...",
-  "passkeyLoginToggle": "Se connecter avec un Passkey",
+  "passkeyLoginToggle": "Se connecter avec Face ID / Empreinte digitale / Passkey",
   "passwordLoginToggle": "Code utilisateur + Mot de passe",
   "passkeyVerificationRequired": "VÉRIFICATION PAR PASSKEY",
-  "passkeyLoginBtn": "SE CONNECTER AVEC UN PASSKEY",
+  "passkeyLoginBtn": "Se connecter avec Face ID / Empreinte digitale / Passkey",
   "passkeyLoginFailed": "La connexion par Passkey a échoué."
 }

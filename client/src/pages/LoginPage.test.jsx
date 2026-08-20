@@ -57,13 +57,13 @@ describe('LoginPage passkey mode', () => {
     isPasskeySupportedMock.mockReturnValue(false);
     renderLogin();
     expect(await screen.findByText('Password')).toBeInTheDocument();
-    expect(screen.queryByText('Sign in with Passkey')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sign in with Face ID / Fingerprint / Passkey')).not.toBeInTheDocument();
   });
 
   it('switches to the passkey form and back via the toggle links', async () => {
     renderLogin();
-    fireEvent.click(await screen.findByText('Sign in with Passkey'));
-    expect(screen.getByText('SIGN IN WITH PASSKEY')).toBeInTheDocument();
+    fireEvent.click(await screen.findByText('Sign in with Face ID / Fingerprint / Passkey'));
+    expect(screen.getByRole('button', { name: 'Sign in with Face ID / Fingerprint / Passkey' })).toBeInTheDocument();
     expect(screen.queryByText('Password')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('User Code + Password'));
@@ -74,9 +74,9 @@ describe('LoginPage passkey mode', () => {
     loginWithPasskeyMock.mockResolvedValue({ status: 'approved', jwt: 'jwt-1', userCode: 'U1', nickname: 'BOLD-001', role: 'analyst', isAdmin: false });
     const onLogin = renderLogin();
 
-    fireEvent.click(await screen.findByText('Sign in with Passkey'));
+    fireEvent.click(await screen.findByText('Sign in with Face ID / Fingerprint / Passkey'));
     fireEvent.change(screen.getByPlaceholderText('· · · · · · ·'), { target: { value: 'U1' } });
-    fireEvent.click(screen.getByText('SIGN IN WITH PASSKEY'));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with Face ID / Fingerprint / Passkey' }));
 
     await waitFor(() => expect(loginWithPasskeyMock).toHaveBeenCalledWith('U1'));
     await waitFor(() => expect(setJWTMock).toHaveBeenCalledWith('jwt-1'));
@@ -87,9 +87,9 @@ describe('LoginPage passkey mode', () => {
     loginWithPasskeyMock.mockRejectedValue(new Error('User cancelled the operation'));
     const onLogin = renderLogin();
 
-    fireEvent.click(await screen.findByText('Sign in with Passkey'));
+    fireEvent.click(await screen.findByText('Sign in with Face ID / Fingerprint / Passkey'));
     fireEvent.change(screen.getByPlaceholderText('· · · · · · ·'), { target: { value: 'U1' } });
-    fireEvent.click(screen.getByText('SIGN IN WITH PASSKEY'));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with Face ID / Fingerprint / Passkey' }));
 
     await waitFor(() => expect(screen.getByText(/User cancelled the operation/)).toBeInTheDocument());
     expect(onLogin).not.toHaveBeenCalled();

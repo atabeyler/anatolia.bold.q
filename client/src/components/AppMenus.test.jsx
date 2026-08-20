@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from './AppMenus.jsx';
 
 const t = (key) => key;
@@ -133,19 +133,56 @@ describe('SettingsPanel', () => {
       isPasskeySupportedMock.mockReset().mockReturnValue(true);
     });
 
-    it('lists registered passkeys and lets the owner remove one', async () => {
+    it('lists registered passkeys with their created/last-used timestamps', async () => {
       listCredentialsMock.mockResolvedValue([
-        { id: 1, deviceName: 'iPhone 15', backedUp: true, lastUsedAt: null },
+        { id: 1, deviceName: 'iPhone 15', backedUp: true, createdAt: '2026-01-05T10:00:00Z', lastUsedAt: null },
       ]);
-      removeCredentialMock.mockResolvedValue({ success: true });
       renderSettings({ authenticated: true });
 
       fireEvent.click(screen.getByText('settingsSecurity'));
       await waitFor(() => expect(screen.getByText('iPhone 15')).toBeInTheDocument());
+      expect(screen.getByText(/securityPasskeyCreated/)).toBeInTheDocument();
+      expect(screen.getByText('securityPasskeyNeverUsed')).toBeInTheDocument();
+    });
+
+    it('asks for confirmation before removing a passkey, and does not remove it on cancel', async () => {
+      listCredentialsMock.mockResolvedValue([
+        { id: 1, deviceName: 'iPhone 15', backedUp: true, createdAt: '2026-01-05T10:00:00Z', lastUsedAt: null },
+      ]);
+      renderSettings({ authenticated: true });
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('iPhone 15')).toBeInTheDocument());
 
       fireEvent.click(screen.getByLabelText('securityPasskeyRemove'));
+      expect(await screen.findByText('securityPasskeyRemoveConfirmTitle')).toBeInTheDocument();
+      expect(removeCredentialMock).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByText('cancel'));
+      await waitFor(() => expect(screen.queryByText('securityPasskeyRemoveConfirmTitle')).not.toBeInTheDocument());
+      expect(removeCredentialMock).not.toHaveBeenCalled();
+      expect(screen.getByText('iPhone 15')).toBeInTheDocument();
+    });
+
+    it('removes the passkey only after the confirmation modal is confirmed', async () => {
+      listCredentialsMock.mockResolvedValue([
+        { id: 1, deviceName: 'iPhone 15', backedUp: true, createdAt: '2026-01-05T10:00:00Z', lastUsedAt: null },
+      ]);
+      removeCredentialMock.mockResolvedValue({ success: true });
+      renderSettings({ authenticated: true });
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('iPhone 15')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('securityPasskeyRemove'));
+      const modalTitle = await screen.findByText('securityPasskeyRemoveConfirmTitle');
+      const modal = modalTitle.closest('[class*="hud-panel"]');
+
+      fireEvent.click(within(modal).getByRole('button', { name: 'securityPasskeyRemove' }));
       await waitFor(() => expect(removeCredentialMock).toHaveBeenCalledWith(1));
       await waitFor(() => expect(screen.queryByText('iPhone 15')).not.toBeInTheDocument());
+      // The modal's exit animation (AnimatePresence) can keep it mounted for
+      // a tick after removeTarget clears, so this needs to tolerate that
+      // instead of asserting synchronously.
+      await waitFor(() => expect(screen.queryAllByText('securityPasskeyRemoveConfirmTitle')).toHaveLength(0));
     });
 
     it('shows the empty state when no passkeys are registered', async () => {
@@ -154,18 +191,34 @@ describe('SettingsPanel', () => {
       await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
     });
 
-    it('registers a new passkey and refreshes the list', async () => {
+    it('lets the user name a passkey during registration', async () => {
       registerPasskeyMock.mockResolvedValue({ success: true });
       listCredentialsMock
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ id: 2, deviceName: 'Passkey', backedUp: false, lastUsedAt: null }]);
+        .mockResolvedValueOnce([{ id: 2, deviceName: 'Work Laptop', backedUp: false, createdAt: '2026-01-05T10:00:00Z', lastUsedAt: null }]);
+      renderSettings({ authenticated: true });
+
+      fireEvent.click(screen.getByText('settingsSecurity'));
+      await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByPlaceholderText('securityPasskeyNamePh'), { target: { value: 'Work Laptop' } });
+      fireEvent.click(screen.getByText('securityPasskeyAdd'));
+      await waitFor(() => expect(registerPasskeyMock).toHaveBeenCalledWith('Work Laptop'));
+      await waitFor(() => expect(screen.getByText('Work Laptop')).toBeInTheDocument());
+    });
+
+    it('registers with an undefined name (server picks a safe default) when the name field is left blank', async () => {
+      registerPasskeyMock.mockResolvedValue({ success: true });
+      listCredentialsMock
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 2, deviceName: 'Passkey', backedUp: false, createdAt: '2026-01-05T10:00:00Z', lastUsedAt: null }]);
       renderSettings({ authenticated: true });
 
       fireEvent.click(screen.getByText('settingsSecurity'));
       await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
 
       fireEvent.click(screen.getByText('securityPasskeyAdd'));
-      await waitFor(() => expect(registerPasskeyMock).toHaveBeenCalled());
+      await waitFor(() => expect(registerPasskeyMock).toHaveBeenCalledWith(undefined));
       await waitFor(() => expect(screen.getByText('Passkey')).toBeInTheDocument());
     });
 

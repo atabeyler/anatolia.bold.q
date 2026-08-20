@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { X, Check, Moon, Sun, Monitor, Search as SearchIcon, KeyRound, Trash2, Pencil, Fingerprint } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Check, Moon, Sun, Monitor, Search as SearchIcon, KeyRound, Trash2, Pencil, Fingerprint, TriangleAlert } from 'lucide-react';
 import QuantumLogo from './QuantumLogo.jsx';
 import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../services/push.js';
 import { isPasskeySupported, registerPasskey } from '../services/webauthn.js';
 import { api } from '../services/api.js';
-import { guideModules } from '../services/i18n.js';
+import { guideModules, localeFor } from '../services/i18n.js';
 import { isRtl } from '../services/langContext.jsx';
 import '../theme.css';
 
@@ -71,18 +71,64 @@ const THEME_COPY = {
   ar: { title: 'السمة', dark: 'داكن', light: 'فاتح', system: 'النظام', hint: 'يتبع خيار النظام إعداد مظهر جهازك تلقائياً.' },
 };
 
+// ANATOLIA-Q's shared destructive-action confirmation, styled to match
+// InfoModal/GuideModal's hud-panel treatment elsewhere in this file --
+// used here so removing a passkey (which can lock a user out of their
+// fastest login method) is never a single misclick.
+function ConfirmModal({ title, body, confirmLabel, cancelLabel, onConfirm, onCancel, busy }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 theme-overlay"
+      onClick={onCancel}>
+      <motion.div initial={{ y: 24, scale: 0.98 }} animate={{ y: 0, scale: 1 }} exit={{ y: 24, scale: 0.98 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm hud-panel rounded-t-2xl sm:rounded-xl p-4 sm:p-5">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-8 h-8 rounded-full bg-red-500/15 border border-red-400/30 flex items-center justify-center shrink-0">
+            <TriangleAlert className="w-4 h-4 text-red-300" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-cyan-100 font-display tracking-wide text-sm">{title}</h3>
+            <p className="text-xs text-cyan-100/70 leading-relaxed mt-1">{body}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          <button onClick={onCancel} disabled={busy} className="px-3 py-1.5 rounded text-xs text-cyan-100/80 border border-cyan-300/25 hover:bg-white/5 disabled:opacity-40">
+            {cancelLabel}
+          </button>
+          <button onClick={onConfirm} disabled={busy} className="px-3 py-1.5 rounded text-xs text-red-100 bg-red-500/20 border border-red-400/40 hover:bg-red-500/30 disabled:opacity-40">
+            {confirmLabel}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function formatDateTime(iso, lang) {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat(localeFor(lang), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  } catch {
+    return new Date(iso).toLocaleString();
+  }
+}
+
 // ─── Security tab: passkey/device management ──────────────────────────────
 // Only ever rendered when SettingsPanel is opened from an authenticated
 // screen (DashboardPage.jsx passes authenticated) -- registering, renaming
 // or removing a passkey all require the caller's own session, enforced
 // server-side regardless (see server/src/routes/webauthn.js's
 // authMiddleware), this just keeps the tab from appearing pre-login.
-function SecurityPanel({ t }) {
+function SecurityPanel({ t, lang }) {
   const [credentials, setCredentials] = useState(null); // null = loading
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [removeTarget, setRemoveTarget] = useState(null); // credential pending delete confirmation
+  const [removing, setRemoving] = useState(false);
   const passkeySupported = isPasskeySupported();
 
   const load = () => {
@@ -95,8 +141,13 @@ function SecurityPanel({ t }) {
     setError('');
     setBusy(true);
     try {
-      const label = typeof window !== 'undefined' ? window.navigator.platform || '' : '';
-      await registerPasskey(label ? `${label}` : undefined);
+      // An empty name is sent as undefined -- the server then falls back to
+      // its own generic, non-identifying default ("Passkey", see
+      // toCredentialJson in routes/webauthn.js) rather than this client
+      // guessing at a label from the UA string.
+      const name = newDeviceName.trim();
+      await registerPasskey(name || undefined);
+      setNewDeviceName('');
       load();
     } catch (e) {
       setError(e?.message || t('securityPasskeyAddFailed'));
@@ -105,13 +156,18 @@ function SecurityPanel({ t }) {
     }
   };
 
-  const handleRemove = async (id) => {
+  const confirmRemove = async () => {
+    if (!removeTarget) return;
     setError('');
+    setRemoving(true);
     try {
-      await api.webauthn.removeCredential(id);
-      setCredentials((prev) => (prev || []).filter((c) => c.id !== id));
+      await api.webauthn.removeCredential(removeTarget.id);
+      setCredentials((prev) => (prev || []).filter((c) => c.id !== removeTarget.id));
+      setRemoveTarget(null);
     } catch (e) {
       setError(e?.message || t('securityPasskeyRemoveFailed'));
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -166,8 +222,9 @@ function SecurityPanel({ t }) {
                   ) : (
                     <div className="text-xs text-cyan-100 truncate">{cred.deviceName}</div>
                   )}
-                  <div className="text-[10px] text-cyan-300/40">
-                    {cred.lastUsedAt ? `${t('securityPasskeyLastUsed')}: ${new Date(cred.lastUsedAt).toLocaleDateString()}` : t('securityPasskeyNeverUsed')}
+                  <div className="text-[10px] text-cyan-300/40 leading-relaxed">
+                    <div>{t('securityPasskeyCreated')}: {formatDateTime(cred.createdAt, lang) || '—'}</div>
+                    <div>{cred.lastUsedAt ? `${t('securityPasskeyLastUsed')}: ${formatDateTime(cred.lastUsedAt, lang)}` : t('securityPasskeyNeverUsed')}</div>
                   </div>
                 </div>
               </div>
@@ -175,7 +232,7 @@ function SecurityPanel({ t }) {
                 <button onClick={() => startRename(cred)} className="text-cyan-300/60 hover:text-cyan-100 p-1" aria-label={t('securityPasskeyRename')} title={t('securityPasskeyRename')}>
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => handleRemove(cred.id)} className="text-red-300/70 hover:text-red-300 p-1" aria-label={t('securityPasskeyRemove')} title={t('securityPasskeyRemove')}>
+                <button onClick={() => setRemoveTarget(cred)} className="text-red-300/70 hover:text-red-300 p-1" aria-label={t('securityPasskeyRemove')} title={t('securityPasskeyRemove')}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -184,14 +241,39 @@ function SecurityPanel({ t }) {
         </div>
       )}
 
-      <button
-        onClick={handleRegister}
-        disabled={busy || !passkeySupported}
-        className="w-full flex items-center justify-center gap-2 text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
-      >
-        <KeyRound className="w-4 h-4" />
-        {busy ? t('securityPasskeyAdding') : t('securityPasskeyAdd')}
-      </button>
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={newDeviceName}
+          onChange={(e) => setNewDeviceName(e.target.value)}
+          placeholder={t('securityPasskeyNamePh')}
+          disabled={busy || !passkeySupported}
+          maxLength={200}
+          className="w-full bg-[#020c18] border border-cyan-500/25 rounded px-2.5 py-2 text-xs text-cyan-100 placeholder-cyan-300/30 focus:border-cyan-400/60 focus:outline-none disabled:opacity-40"
+        />
+        <button
+          onClick={handleRegister}
+          disabled={busy || !passkeySupported}
+          className="w-full flex items-center justify-center gap-2 text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
+        >
+          <KeyRound className="w-4 h-4" />
+          {busy ? t('securityPasskeyAdding') : t('securityPasskeyAdd')}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {removeTarget && (
+          <ConfirmModal
+            title={t('securityPasskeyRemoveConfirmTitle')}
+            body={t('securityPasskeyRemoveConfirmBody').replace('{name}', removeTarget.deviceName)}
+            confirmLabel={removing ? t('securityPasskeyAdding') : t('securityPasskeyRemove')}
+            cancelLabel={t('cancel')}
+            busy={removing}
+            onConfirm={confirmRemove}
+            onCancel={() => setRemoveTarget(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -256,7 +338,7 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
         </div>
         {typeof setSidebarCollapsed === 'function' && <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>}
       </div>}
-      {tab === 'security' && authenticated && <SecurityPanel t={t} />}
+      {tab === 'security' && authenticated && <SecurityPanel t={t} lang={lang} />}
       {tab === 'about' && <div><p className="text-[12px] text-cyan-100/80 mb-3">{t('appName')} · {t('settingsVersion')} {__APP_VERSION__}</p><button onClick={onOpenGuide} className="text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2">{t('settingsOpenGuide')}</button></div>}
     </div>
   </motion.div></>;
