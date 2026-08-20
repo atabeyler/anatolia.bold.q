@@ -24,7 +24,6 @@ const pagesDir = path.join(__dirname, '..', 'client', 'src', 'pages');
 // chrome, admin-only tooling not yet worth internationalizing) or wired via
 // a `t` prop passed down from a parent rather than importing useLang here.
 const ALLOWLIST = new Set([
-  'AnalysisWizard.jsx', // deliberate: wizard step copy is intentionally hardcoded Turkish
   'AppMenus.jsx', // receives `t`/`lang` as props from DashboardPage
   'DesktopSyncBadge.jsx', // native-app-only status chip, renders nothing on web
   'UserManagement.jsx', // known gap: admin-only panel, tracked separately

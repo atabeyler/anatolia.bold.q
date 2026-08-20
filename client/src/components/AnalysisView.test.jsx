@@ -36,6 +36,7 @@ function clickNext(times) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() });
+  localStorage.removeItem('anatolia_lang');
 });
 
 describe('AnalysisView', () => {
@@ -56,6 +57,27 @@ describe('AnalysisView', () => {
     expect(screen.getByText('Yeni Analiz Başlat')).toBeInTheDocument();
     clickNext(4);
     expect(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i })).toBeDisabled();
+  });
+
+  const WIZARD_TRANSLATIONS = {
+    en: { title: 'Start New Analysis', step1: 'Analysis Info', category: 'Category', priority: 'Priority Level', cancel: 'CANCEL', next: 'NEXT' },
+    de: { title: 'Neue Analyse starten', step1: 'Analyseinformationen', category: 'Kategorie', priority: 'Prioritätsstufe', cancel: 'ABBRECHEN', next: 'WEITER' },
+    fr: { title: 'Démarrer une nouvelle analyse', step1: "Informations d'analyse", category: 'Catégorie', priority: 'Niveau de priorité', cancel: 'ANNULER', next: 'SUIVANT' },
+    ar: { title: 'بدء تحليل جديد', step1: 'معلومات التحليل', category: 'الفئة', priority: 'مستوى الأولوية', cancel: 'إلغاء', next: 'التالي' },
+  };
+
+  it.each(Object.entries(WIZARD_TRANSLATIONS))('renders the wizard fully in %s when the language is switched, with no leftover Turkish labels', (lang, tx) => {
+    localStorage.setItem('anatolia_lang', lang);
+    renderView({ category: 'ekonomi' });
+    expect(screen.getByText(tx.title)).toBeInTheDocument();
+    expect(screen.getAllByText(tx.step1).length).toBeGreaterThan(0);
+    expect(screen.getByText(tx.category)).toBeInTheDocument();
+    expect(screen.getByText(tx.priority)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: tx.cancel })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: new RegExp(tx.next, 'i') })).toBeInTheDocument();
+    expect(screen.queryByText('Analiz Bilgileri')).not.toBeInTheDocument();
+    expect(screen.queryByText('Kategori')).not.toBeInTheDocument();
+    localStorage.removeItem('anatolia_lang');
   });
 
   it('enables the generate button once a prompt is entered', () => {

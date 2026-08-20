@@ -169,6 +169,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
       {!result && !scenarioResult && (
         <AnalysisWizard
           t={t}
+          lang={lang}
           open
           onClose={() => onCategoryChange(null)}
           category={category} setCategory={onCategoryChange} categoryLabel={categoryLabel} isFraudCategory={isFraudCategory}

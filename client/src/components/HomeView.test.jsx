@@ -92,16 +92,23 @@ describe('HomeView command center', () => {
     expect(screen.getByText('Detay metni')).toBeInTheDocument();
   });
 
-  it('renders in English when the language is switched, with no leftover Turkish labels', async () => {
-    localStorage.setItem('anatolia_lang', 'en');
+  const HOME_TRANSLATIONS = {
+    en: { platformStatus: 'Platform / System Status', aiProviders: 'AI Providers', personnelRadar: 'Personnel Radar', noRecords: 'No records yet', globalOps: 'Global Operations View', askAnatolia: 'Ask Anatolia' },
+    de: { platformStatus: 'Plattform / Systemstatus', aiProviders: 'KI-Anbieter', personnelRadar: 'Personalradar', noRecords: 'Noch keine Einträge', globalOps: 'Globale Operationsübersicht', askAnatolia: 'Anatolia fragen' },
+    fr: { platformStatus: 'Plateforme / État du système', aiProviders: 'Fournisseurs IA', personnelRadar: 'Radar du Personnel', noRecords: "Aucun enregistrement pour l'instant", globalOps: 'Vue des opérations mondiales', askAnatolia: 'Demander à Anatolia' },
+    ar: { platformStatus: 'المنصة / حالة النظام', aiProviders: 'مزوّدو الذكاء الاصطناعي', personnelRadar: 'رادار الأفراد', noRecords: 'لا توجد سجلات بعد', globalOps: 'عرض العمليات العالمية', askAnatolia: 'اسأل أناضوليا' },
+  };
+
+  it.each(Object.entries(HOME_TRANSLATIONS))('renders in %s when the language is switched, with no leftover Turkish labels', async (lang, tx) => {
+    localStorage.setItem('anatolia_lang', lang);
     renderHome({ isAdmin: true });
     expect(await screen.findByText('TurkeyMap stub')).toBeInTheDocument();
-    expect(screen.getByText(/^Platform \/ System Status$/i)).toBeInTheDocument();
-    expect(screen.getByText(/AI Providers/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Personnel Radar/i })).toBeInTheDocument();
-    expect(screen.getByText('No records yet')).toBeInTheDocument();
-    expect(screen.getByText('Global Operations View')).toBeInTheDocument();
-    expect(screen.getByText("Ask Anatolia")).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`^${tx.platformStatus.replace(/[/]/g, '\\/')}$`, 'i'))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(tx.aiProviders, 'i'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: new RegExp(tx.personnelRadar, 'i') })).toBeInTheDocument();
+    expect(screen.getByText(tx.noRecords)).toBeInTheDocument();
+    expect(screen.getByText(tx.globalOps)).toBeInTheDocument();
+    expect(screen.getByText(tx.askAnatolia)).toBeInTheDocument();
     expect(screen.queryByText(/Sistem Durumu/i)).not.toBeInTheDocument();
     localStorage.removeItem('anatolia_lang');
   });
