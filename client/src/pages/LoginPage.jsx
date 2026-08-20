@@ -9,6 +9,7 @@ import { registerActions, unregisterActions } from '../services/voiceActionRegis
 import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from '../components/AppMenus.jsx';
 import AppFooter from '../components/AppFooter.jsx';
 import { Corner, GridBackground, OrbitalLogo, BootSequence, StatusBar } from './LoginPageDecor.jsx';
+import HologramSphere from '../components/HologramSphere.jsx';
 
 const STAGES = { IDLE: 'idle', AWAITING_APPROVAL: 'awaiting', APPROVED: 'approved', EXPIRED: 'expired' };
 
@@ -38,6 +39,40 @@ function registerNativeSession(jwt, password) {
   }).catch((err) => {
     console.warn('[ANATOLIA-Q] Device authorization failed:', err?.message || err);
   });
+}
+
+// ─── Holographic branding panel (left column on wide screens) ────────────
+// "Holografik & Siber" login theme: a big rotating radar-globe hologram
+// (the same HologramSphere used in AnalysisWizard.jsx's status column,
+// not a page-specific duplicate) plus the wordmark and two status chips.
+// Hidden on narrow viewports -- the login card alone is still the complete,
+// fully functional flow there, this panel is purely additive branding.
+function HoloBrandPanel() {
+  const { t } = useLang();
+  return (
+    <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: 'easeOut' }}
+      className="hidden lg:flex flex-col items-start max-w-md">
+      <div className="flex items-center gap-2 mb-8">
+        <div className="w-9 h-9 rounded-lg bg-cyan-400/10 border border-cyan-400/30 flex items-center justify-center">
+          <span className="font-display text-gold text-sm">Q</span>
+        </div>
+        <div>
+          <div className="font-display text-cyan-100 tracking-[0.2em] text-sm">ANATOLIA-Q</div>
+          <div className="text-[9px] text-cyan-300/50 tracking-[0.2em] uppercase">{t('appSubtitle')}</div>
+        </div>
+      </div>
+
+      <HologramSphere className="w-full max-w-[280px]" />
+
+      <div className="flex items-center gap-5 mt-8 text-[10px] font-mono tracking-wider">
+        <span className="flex items-center gap-1.5 text-emerald-400/80">
+          <motion.span className="w-1.5 h-1.5 rounded-full bg-emerald-400" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
+          {t('statusSystemActive')}
+        </span>
+        <span className="text-cyan-300/70 uppercase">{t('secureLabel')}</span>
+      </div>
+    </motion.div>
+  );
 }
 
 // ─── Main component ──────────────────────────────────────────────────────
@@ -201,10 +236,13 @@ export default function LoginPage({ onLogin }) {
         </button>
       </div>
 
-      {/* Main card */}
-      <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="relative z-10 w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-md">
+      <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1fr_auto] items-center gap-8 lg:gap-12">
+        <HoloBrandPanel />
+
+        {/* Main card */}
+        <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="relative w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-md mx-auto">
 
         {/* Card frame */}
         <div className="relative rounded-sm border border-cyan-500/25 bg-[#010e1e]/90 backdrop-blur-xl p-6 sm:p-8"
@@ -361,7 +399,8 @@ export default function LoginPage({ onLogin }) {
 
         {/* Glow line under the card */}
         <div className="h-px w-full mt-0.5" style={{ background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.3), transparent)' }} />
-      </motion.div>
+        </motion.div>
+      </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-20">
         <StatusBar />
