@@ -1,10 +1,16 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { t as translate } from './i18n.js';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import i18next, { NAMESPACES, SUPPORTED_LANGS } from './i18next.js';
 
 const LangContext = createContext();
 
-export const SUPPORTED_LANGS = ['tr', 'en', 'de', 'fr', 'ar'];
+export { SUPPORTED_LANGS };
 const RTL_LANGS = new Set(['ar']);
+
+// Single source of truth for which supported languages render right-to-left,
+// so no component hardcodes its own `lang === 'ar'` check.
+export function isRtl(langCode) {
+  return RTL_LANGS.has(langCode);
+}
 
 export function LangProvider({ children }) {
   const [lang, setLangState] = useState(() => {
@@ -22,12 +28,17 @@ export function LangProvider({ children }) {
   // between Turkish and English.
   const switchLang = () => setLang(lang === 'tr' ? 'en' : 'tr');
 
-  const t = (key) => translate(lang, key);
-  const dir = RTL_LANGS.has(lang) ? 'rtl' : 'ltr';
+  // getFixedT returns a t() bound to the exact language passed in, resolved
+  // against every namespace - independent of i18next's own "active language"
+  // (set asynchronously below via changeLanguage), so switching languages
+  // updates displayed text on the very next render with no lag.
+  const t = useMemo(() => i18next.getFixedT(lang, NAMESPACES), [lang]);
+  const dir = isRtl(lang) ? 'rtl' : 'ltr';
 
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = dir;
+    i18next.changeLanguage(lang);
   }, [lang, dir]);
 
   useEffect(() => {

@@ -15,6 +15,7 @@ jobs:
           node-version: 22
       - run: node scripts/check-version-consistency.js
       - run: node scripts/check-i18n.js
+      - run: node scripts/check-locales.js
 
   server:
     runs-on: ubuntu-latest
