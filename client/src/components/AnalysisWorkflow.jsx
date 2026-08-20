@@ -1,40 +1,44 @@
-import { Atom, Check, Cpu, Database, FileSearch, Flag, Play, Sparkles } from 'lucide-react';
+import { Atom, Check, Cpu, Database, FileSearch, Flag, GitMerge, ServerCog, Sparkles } from 'lucide-react';
 
 const steps = [
-  ['GÖREV', Flag],
-  ['VERİ', Database],
-  ['MOTORLAR', Cpu],
-  ['ÇALIŞTIR', Play],
-  ['SONUÇ', FileSearch],
-  ['DECISION TRACE', Check],
+  ['GÖREV OLUŞTURULDU', Flag],
+  ['VERİ DOĞRULAMA', Database],
+  ['AI ANALİZİ', Sparkles],
+  ['DEVRE ÜRETİMİ', Atom],
+  ['KLASİK BENCHMARK', Cpu],
+  ['IBM DOĞRULAMA', ServerCog],
+  ['KARAR BİRLEŞTİRME', GitMerge],
+  ['RAPOR OLUŞTURMA', FileSearch],
 ];
 
 export function AnalysisWorkflow({ hasPrompt, hasData, quantumMode, hasResult, loading = false }) {
-  const active = hasResult ? 4 : loading ? 3 : hasPrompt ? (hasData ? 2 : 1) : 0;
+  // hasResult -> pipeline fully settled; loading -> mid-run (AI/circuit
+  // phase); otherwise reflect how far the operator has filled in the form.
+  const active = hasResult ? steps.length - 1 : loading ? (quantumMode ? 3 : 2) : hasPrompt ? (hasData ? 1 : 0) : -1;
   return (
-    <div className="mb-4 rounded-lg border border-cyan-400/15 bg-[#031326]/80 overflow-x-auto" aria-label="ANATOLIA-Q analiz işlem hattı">
-      <div className="flex min-w-[720px]">
+    <div className="mb-3 rounded-lg border border-cyan-400/15 bg-[#031326]/80 overflow-x-auto" aria-label="ANATOLIA-Q analiz işlem hattı">
+      <div className="flex min-w-[820px]">
         {steps.map(([label, Icon], index) => {
-          const done = index < active || (hasResult && index === 4);
-          const current = index === active;
+          const done = index < active || (hasResult && index === steps.length - 1);
+          const current = index === active && !hasResult;
           return (
-            <div key={label} className={`relative flex-1 px-3 py-3 border-r border-white/5 last:border-r-0 ${current ? 'bg-cyan-400/10' : ''}`} aria-current={current ? 'step' : undefined}>
+            <div key={label} className={`relative flex-1 px-2.5 py-2.5 border-r border-white/5 last:border-r-0 ${current ? 'bg-cyan-400/10' : ''}`} aria-current={current ? 'step' : undefined}>
               <div className="flex items-center gap-2">
-                <span className={`w-7 h-7 rounded-full border flex items-center justify-center ${done ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : current ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-200' : 'border-white/10 text-white/25'}`}>
-                  {done ? <Check className="w-3.5 h-3.5" /> : <Icon className={`w-3.5 h-3.5 ${loading && index === 3 ? 'animate-pulse' : ''}`} />}
+                <span className={`w-6 h-6 rounded-full border flex items-center justify-center flex-shrink-0 ${done || (hasResult && index === steps.length - 1) ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : current ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-200' : 'border-white/10 text-white/25'}`}>
+                  {done || (hasResult && index === steps.length - 1) ? <Check className="w-3 h-3" /> : <Icon className={`w-3 h-3 ${current ? 'animate-pulse' : ''}`} />}
                 </span>
-                <div>
-                  <div className="text-[8px] text-white/25">0{index + 1}</div>
-                  <div className={`text-[9px] tracking-[0.14em] font-semibold ${current ? 'text-cyan-200' : done ? 'text-emerald-300/80' : 'text-white/35'}`}>{label}</div>
+                <div className="min-w-0">
+                  <div className="text-[7px] text-white/25">0{index + 1}</div>
+                  <div className={`text-[8px] tracking-[0.1em] font-semibold truncate ${current ? 'text-cyan-200' : done ? 'text-emerald-300/80' : 'text-white/35'}`}>{label}</div>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
-      <div className="px-3 py-2 border-t border-cyan-400/10 flex items-center gap-4 text-[9px] text-white/35">
+      <div className="px-3 py-1.5 border-t border-cyan-400/10 flex items-center gap-4 text-[9px] text-white/35">
         <span className="flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-cyan-300" /> AI reasoning</span>
-        <span className="flex items-center gap-1.5"><Atom className={`w-3 h-3 ${quantumMode ? 'text-emerald-300' : 'text-white/20'}`} /> Quantum {quantumMode ? 'enabled' : 'optional'}</span>
+        <span className="flex items-center gap-1.5"><Atom className={`w-3 h-3 ${quantumMode ? 'text-emerald-300' : 'text-white/20'}`} /> Kuantum {quantumMode ? 'etkin' : 'opsiyonel'}</span>
         <span className="ml-auto">ANATOLIA-Q ANALYSIS PIPELINE</span>
       </div>
     </div>

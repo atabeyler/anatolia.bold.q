@@ -1,10 +1,10 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  Sparkles, Download, Loader2, Atom,
-  BarChart3, ArrowLeft, Share2, FileDown
+  Sparkles, Download, Loader2, Atom, BrainCircuit, Database, Gauge, ShieldCheck,
+  BarChart3, ArrowLeft, Share2, FileDown, Check, Clock, FileText, Image as ImageIcon
 } from 'lucide-react';
 import { CATEGORIES } from './CategorySidebar.jsx';
 import { api } from '../services/api.js';
@@ -15,6 +15,9 @@ import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
 import FileAttach from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
+import { AnalysisWorkflow, ResultProvenance } from './AnalysisWorkflow.jsx';
+
+const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
 export default function AnalysisView({ category, onCategoryChange }) {
   const { t, lang } = useLang();
@@ -154,218 +157,431 @@ export default function AnalysisView({ category, onCategoryChange }) {
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;
   if (isConsult) return <div className="max-w-4xl mx-auto"><ConsultChat /></div>;
 
+  const sourceCount = documentContexts.length + imageFiles.length + (realTransactions ? 1 : 0) + (realScenarios ? 1 : 0) + (realOptimization ? 1 : 0);
+  const hasData = sourceCount > 0;
+  const hasPrompt = prompt.trim().length > 0;
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="w-12 h-12 rounded-full bg-gold/20 border border-gold flex items-center justify-center">
-          {cat && <cat.icon className="w-6 h-6 text-gold" />}
+    <div className="max-w-[1500px] mx-auto">
+      <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mb-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-cyan-400/10 border border-cyan-400/30 flex items-center justify-center">
+            {cat && <cat.icon className="w-5 h-5 text-cyan-300" />}
+          </div>
+          <div>
+            <div className="text-[9px] tracking-[0.24em] text-cyan-300/60">ANATOLIA-Q / ANALİZ MERKEZİ</div>
+            <h2 className="text-sm sm:text-lg font-display tracking-[0.14em] text-cyan-100 uppercase">{categoryLabel}</h2>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg sm:text-2xl font-display text-gold tracking-widest uppercase">{categoryLabel}</h2>
-        </div>
+        <EngineBadges quantumMode={quantumMode} hasData={hasData} />
       </motion.div>
 
-      {!result && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-navy-light/70 border border-gold/30 rounded-lg p-3 sm:p-6 space-y-4">
-          <div>
-            <label className="block text-xs text-gold/70 tracking-widest uppercase mb-2">{t('reportTitle')} ({categoryLabel})</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={titlePlaceholder} className="w-full bg-navy/80 border border-gold/30 rounded px-3 py-2 text-gold/90 font-serif focus:border-gold focus:outline-none" />
-          </div>
+      <AnalysisWorkflow hasPrompt={hasPrompt} hasData={hasData} quantumMode={quantumMode} hasResult={!!result} loading={loading} />
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs text-gold/40 tracking-widest uppercase">Kaynak Dosya</span>
-            <FileAttach onAIFile={handleAIFile} />
-            {(documentContexts.length > 0 || imageFiles.length > 0) && <span className="text-xs text-emerald-400 font-mono">✓ {documentContexts.length + imageFiles.length} kaynak dosya eklendi</span>}
-          </div>
+      {!scenarioResult && (
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_280px] gap-3 items-start">
+          <TaskDefinitionPanel
+            t={t}
+            title={title} setTitle={setTitle}
+            categoryLabel={categoryLabel}
+            titlePlaceholder={titlePlaceholder}
+            prompt={prompt} setPrompt={setPrompt}
+            documentContexts={documentContexts} imageFiles={imageFiles}
+            realTransactions={realTransactions} realScenarios={realScenarios} realOptimization={realOptimization}
+            removeImageAt={removeImageAt} removeDocAt={removeDocAt}
+            setRealTransactions={setRealTransactions} setRealScenarios={setRealScenarios} setRealOptimization={setRealOptimization}
+            handleAIFile={handleAIFile}
+            quantumMode={quantumMode} setQuantumMode={setQuantumMode}
+            isFraudCategory={isFraudCategory}
+            error={error}
+            loading={loading}
+            hasPrompt={hasPrompt}
+            generate={generate}
+            locked={!!result}
+          />
 
-          {quantumMode && (
-            <p className="text-xs text-gold/40 leading-relaxed">
-              {isFraudCategory
-                ? 'Gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz; yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.'
-                : 'Gerçek senaryo verisi ("Senaryo"/"Olasılık" sütunları) veya kaynak tahsisi tablosu ("Kalem"/"Değer"/"Maliyet" sütunları) yükleyebilirsiniz; yüklenirse kuantum motoru YZ tahmini yerine bu gerçek verileri kullanır.'}
-            </p>
-          )}
-
-          {realTransactions && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
-                ✓ {realTransactions.transactions.length} gerçek işlem kaydı yüklendi ({realTransactions.filename})
-              </span>
-              <button type="button" onClick={() => setRealTransactions(null)} className="text-xs text-red-300">×</button>
-              {realTransactions.warnings.map((w, i) => (
-                <span key={i} className="text-xs text-amber-400/80">{w}</span>
-              ))}
-            </div>
-          )}
-
-          {realScenarios && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
-                ✓ {realScenarios.scenarios.length} gerçek senaryo yüklendi ({realScenarios.filename})
-              </span>
-              <button type="button" onClick={() => setRealScenarios(null)} className="text-xs text-red-300">×</button>
-              {realScenarios.warnings.map((w, i) => (
-                <span key={i} className="text-xs text-amber-400/80">{w}</span>
-              ))}
-            </div>
-          )}
-
-          {realOptimization && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs bg-emerald-900/30 border border-emerald-500/30 text-emerald-300 rounded px-2 py-1 font-mono">
-                ✓ {realOptimization.items.length} gerçek kalem yüklendi, bütçe %{realOptimization.budgetPercent} ({realOptimization.filename})
-              </span>
-              <button type="button" onClick={() => setRealOptimization(null)} className="text-xs text-red-300">×</button>
-              {realOptimization.warnings.map((w, i) => (
-                <span key={i} className="text-xs text-amber-400/80">{w}</span>
-              ))}
-            </div>
-          )}
-
-          {imageFiles.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {imageFiles.map((img, i) => (
-                <div key={`${img.filename}-${i}`} className="flex items-center gap-1 border border-gold/20 rounded px-1.5 py-1">
-                  <img src={img.blobUrl} alt={img.filename} className="h-8 w-8 object-cover rounded" />
-                  <button type="button" onClick={() => removeImageAt(i)} className="text-xs text-red-300">×</button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {documentContexts.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {documentContexts.map((doc, i) => (
-                <button key={`doc-${i}`} type="button" onClick={() => removeDocAt(i)} className="text-xs bg-cyan-900/30 border border-cyan-500/30 text-cyan-300 rounded px-2 py-1">{doc.filename} ×</button>
-              ))}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs text-gold/70 tracking-widest uppercase mb-2">{t('analysisTopic')} ({categoryLabel})</label>
-            <div className="relative">
-              <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={documentContexts.length > 0 ? 'Yuklenen belgelere dayanarak analiz uret...' : t('topicPh')} rows={10} className="w-full bg-navy/80 border border-gold/30 rounded p-3 pr-14 text-gold/90 font-serif focus:border-gold focus:outline-none" />
-              <div className="absolute bottom-3 right-3"><VoiceButton mode="input" onTranscript={text => setPrompt(prev => prev ? prev + ' ' + text : text)} size="sm" /></div>
-            </div>
-          </div>
-
-          <div onClick={() => setQuantumMode(!quantumMode)} className={`flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition select-none ${quantumMode ? 'bg-gold/10 border-gold/60' : 'bg-navy/40 border-gold/20 hover:border-gold/40'}`}>
-            <div className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition ${quantumMode ? 'bg-gold border-gold' : 'border-gold/40'}`}>{quantumMode && <span className="text-navy text-xs font-bold">✓</span>}</div>
-            <div>
-              <div className="flex items-center gap-2 mb-1"><Atom className="w-4 h-4 text-gold" /><span className="text-gold font-display tracking-widest text-sm">{t('quantumMode')}</span></div>
-              <p className="text-xs text-gold/60 leading-relaxed">{t(isFraudCategory ? 'quantumDescFraud' : 'quantumDesc')}</p>
-            </div>
-          </div>
-
-          {error && <div className="text-crimson text-sm bg-crimson/10 border border-crimson/40 rounded p-3">⚠ {error}</div>}
-
-          <button onClick={generate} disabled={loading || !prompt.trim()} className="w-full btn-gold py-3 rounded font-display tracking-widest text-sm disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading ? <><Loader2 className="w-4 h-4 animate-spin" />{quantumMode ? t('analyzingQuantum') : t('analyzing')}</> : <>{quantumMode ? <Atom className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}{quantumMode ? t('generateQuantum') : t('generateAnalysis')}</>}
-          </button>
-        </motion.div>
-      )}
-
-      {result && !scenarioResult && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          {result.quantumWarning && (
-            <div className="bg-amber-500/10 border border-amber-400/40 rounded-lg p-3 text-xs text-amber-300 flex items-start gap-2">
-              <span>⚠️</span><span>{result.quantumWarning}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between bg-navy-light/70 border border-gold/30 rounded-lg p-3 flex-wrap gap-2">
-            <div className="text-xs text-gold/60 flex items-center gap-2">
-              {result.quantumMode && <Atom className="w-3 h-3 text-gold" />}
-              {result.quantum && (
-                <span className="font-mono text-xs text-cyan-300/80" title="Qiskit Aer yerel kuantum devre simülatörü">
-                  {result.quantum.backend} · {result.quantum.qubits} kübit · {result.quantum.shots} ölçüm
-                </span>
-              )}
-              {result.fraud && (
-                <span className="font-mono text-xs text-cyan-300/80" title="Kuantum çekirdek (kernel) anomali tespiti">
-                  {result.fraud.backend} · {result.fraud.qubits} kübit · {result.fraud.flaggedCount}/{result.fraud.transactionCount} işaretlendi
-                </span>
-              )}
-              {result.optimizer && (
-                <span className="font-mono text-xs text-cyan-300/80" title="QAOA kaynak tahsisi optimizasyonu">
-                  {result.optimizer.backend} · {result.optimizer.qubits} kübit · %{result.optimizer.totalCost}/%{result.optimizer.budgetPercent} bütçe kullanıldı
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2 flex-wrap items-center">
-              <VoiceButton mode="output" text={result.content} size="sm" />
-              <button onClick={() => downloadDocx(result)} className="btn-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2"><Download className="w-4 h-4" /> {t('downloadDocx')}</button>
-              <button onClick={() => downloadPdf(result)} className="btn-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2"><FileDown className="w-4 h-4" /> {t('downloadPdf')}</button>
-              <button onClick={() => shareReport(result)} className="border border-gold/40 text-gold px-4 py-2 rounded text-xs tracking-widest hover:bg-gold/10 flex items-center gap-2"><Share2 className="w-4 h-4" /> {t('share')}</button>
-              <button onClick={reset} className="border border-gold/40 text-gold px-4 py-2 rounded text-xs tracking-widest hover:bg-gold/10">{t('newAnalysisBtn')}</button>
-            </div>
-          </div>
-
-          {result.quantumMode && result.scenarios && result.scenarios.length > 0 && <ScenarioPanel scenarios={result.scenarios} onDeepDive={deepDiveScenario} loadingScenario={loadingScenario} t={t} />}
-
-          {result.quantumMode && result.scenarios?.some(s => s.quantumProbability !== undefined) && <ScenarioComparisonChart scenarios={result.scenarios} />}
-
-          {result.fraud?.secondaryReview && (
-            <div className="bg-navy-light/70 border border-gold/30 rounded-lg p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <h4 className="font-display text-gold tracking-widest text-xs uppercase">Ikincil Onay Katmani</h4>
-                  <p className="text-xs text-gold/40 mt-0.5">Birincil isaretlerin hangilerinin uygulama icinde dogrudan onaylandigini gosterir.</p>
-                </div>
-                <div className="text-xs font-mono text-cyan-300/80">
-                  {result.fraud.secondaryReview.confirmedCount}/{result.fraud.secondaryReview.total} onaylandı
-                </div>
+          <section className="min-w-0 space-y-3">
+            {!result && !loading && (
+              <div className={`${PANEL} p-8 flex flex-col items-center justify-center text-center min-h-[260px]`}>
+                <Sparkles className="w-8 h-8 text-cyan-400/40 mb-3" />
+                <div className="text-[11px] tracking-[0.14em] text-white/40">ANALİZ AKIŞI BEKLEMEDE</div>
+                <p className="text-[10px] text-white/25 mt-1 max-w-sm">Görevi tanımlayıp raporu üret dediğinizde AI analizi, kuantum devresi ve karar izi burada canlı olarak akacak.</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                <div className="rounded border border-emerald-500/20 bg-emerald-950/20 px-3 py-2">
-                  <div className="text-emerald-300 font-mono">Onaylanan</div>
-                  <div className="text-gold/80 font-mono text-base">{result.fraud.secondaryReview.confirmedCount}</div>
-                </div>
-                <div className="rounded border border-amber-500/20 bg-amber-950/20 px-3 py-2">
-                  <div className="text-amber-300 font-mono">Manuel inceleme</div>
-                  <div className="text-gold/80 font-mono text-base">{result.fraud.secondaryReview.reviewCount}</div>
-                </div>
-                <div className="rounded border border-cyan-500/20 bg-cyan-950/20 px-3 py-2">
-                  <div className="text-cyan-300 font-mono">Kural sayısı</div>
-                  <div className="text-gold/80 font-mono text-base">{Object.keys(result.fraud.secondaryReview.rules || {}).length}</div>
-                </div>
+            )}
+            {loading && (
+              <div className={`${PANEL} p-8 flex flex-col items-center justify-center text-center min-h-[260px]`}>
+                <Loader2 className="w-8 h-8 text-cyan-300 animate-spin mb-3" />
+                <div className="text-[11px] tracking-[0.14em] text-cyan-200">{quantumMode ? t('analyzingQuantum') : t('analyzing')}</div>
+                <p className="text-[10px] text-white/25 mt-1">AI çıkarımı ve {quantumMode ? 'kuantum devresi ' : ''}çalıştırılıyor…</p>
               </div>
-            </div>
-          )}
+            )}
 
-          {result.fraud?.transactions?.length > 0 && <FraudRiskChart transactions={result.fraud.transactions} confirmedIds={result.fraud.secondaryReview?.confirmedIds || []} />}
-          {result.optimizer?.items?.length > 0 && <OptimizerChart items={result.optimizer.items} />}
+            {result && !result.quantumMode && result.quantumWarning === undefined && null}
 
-          <div className="bg-navy-light/70 border border-gold/30 rounded-lg p-8 report-content max-h-[70vh] overflow-auto"><ReactMarkdown remarkPlugins={[remarkGfm]}>{result.content}</ReactMarkdown></div>
-        </motion.div>
+            {result && (
+              <ResultPanel
+                t={t} result={result}
+                downloadDocx={downloadDocx} downloadPdf={downloadPdf} shareReport={shareReport} reset={reset}
+                deepDiveScenario={deepDiveScenario} loadingScenario={loadingScenario}
+              />
+            )}
+          </section>
+
+          <aside className="space-y-3">
+            <DecisionTraceLive hasPrompt={hasPrompt} quantumMode={quantumMode} loading={loading} result={result} sourceCount={sourceCount} category={category} />
+            {result && <ResultProvenance result={result} />}
+          </aside>
+        </div>
       )}
 
       {scenarioResult && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <div className="flex items-center gap-3 bg-navy-light/70 border border-gold/30 rounded-lg p-3">
-            <button onClick={() => setScenarioResult(null)} className="text-gold/60 hover:text-gold flex items-center gap-1 text-xs"><ArrowLeft className="w-4 h-4" /> {t('backToMain')}</button>
-            <div className="flex-1 text-center"><span className="text-gold font-display text-sm tracking-widest">{t('altScenario')}: {scenarioResult.scenarioLabel}</span></div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+          <div className="flex items-center gap-3 bg-[#031326]/80 border border-cyan-400/20 rounded-lg p-3">
+            <button onClick={() => setScenarioResult(null)} className="text-cyan-300/70 hover:text-cyan-200 flex items-center gap-1 text-xs"><ArrowLeft className="w-4 h-4" /> {t('backToMain')}</button>
+            <div className="flex-1 text-center"><span className="text-cyan-100 font-display text-sm tracking-widest">{t('altScenario')}: {scenarioResult.scenarioLabel}</span></div>
             <button onClick={() => downloadDocx(scenarioResult)} className="btn-gold px-3 py-1.5 rounded text-xs tracking-widest flex items-center gap-2"><Download className="w-3 h-3" /> .DOCX</button>
             <button onClick={() => downloadPdf(scenarioResult)} className="btn-gold px-3 py-1.5 rounded text-xs tracking-widest flex items-center gap-2"><FileDown className="w-3 h-3" /> .PDF</button>
-            <button onClick={() => shareReport(scenarioResult)} className="border border-gold/40 text-gold px-3 py-1.5 rounded text-xs tracking-widest hover:bg-gold/10 flex items-center gap-2"><Share2 className="w-3 h-3" /> {t('share')}</button>
+            <button onClick={() => shareReport(scenarioResult)} className="border border-cyan-400/30 text-cyan-200 px-3 py-1.5 rounded text-xs tracking-widest hover:bg-cyan-400/10 flex items-center gap-2"><Share2 className="w-3 h-3" /> {t('share')}</button>
           </div>
-          <div className="bg-navy-light/70 border border-gold/50 rounded-lg p-8 report-content max-h-[70vh] overflow-auto"><ReactMarkdown remarkPlugins={[remarkGfm]}>{scenarioResult.content}</ReactMarkdown></div>
+          <div className="bg-[#031326]/80 border border-cyan-400/25 rounded-lg p-8 report-content max-h-[70vh] overflow-auto text-white/80"><ReactMarkdown remarkPlugins={[remarkGfm]}>{scenarioResult.content}</ReactMarkdown></div>
         </motion.div>
       )}
     </div>
   );
 }
 
+function EngineBadges({ quantumMode, hasData }) {
+  const badges = [
+    ['AI REASONING', BrainCircuit, true, 'READY'],
+    ['REAL DATA', Database, hasData, hasData ? 'READY' : 'AUTO'],
+    ['CLASSICAL', Gauge, true, 'READY'],
+    ['QISKIT AER', Atom, quantumMode, quantumMode ? 'ENABLED' : 'OPTIONAL'],
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {badges.map(([label, Icon, on, state]) => (
+        <div key={label} className="rounded border border-cyan-400/15 bg-[#031326]/80 px-2.5 py-2 flex items-center gap-2">
+          <Icon className={`w-3.5 h-3.5 ${on ? 'text-cyan-300/80' : 'text-white/25'}`} />
+          <div>
+            <div className="text-[8px] tracking-wider text-white/55">{label}</div>
+            <div className={`text-[8px] tracking-wider ${on ? 'text-emerald-300/70' : 'text-white/25'}`}>{on ? '● ' : '○ '}{state}</div>
+          </div>
+        </div>
+      ))}
+      <div className="rounded border border-amber-300/15 bg-[#031326]/80 px-2.5 py-2 flex items-center gap-2">
+        <ShieldCheck className="w-3.5 h-3.5 text-amber-300/70" />
+        <div><div className="text-[8px] tracking-wider text-white/55">IBM HARDWARE</div><div className="text-[8px] tracking-wider text-amber-300/70">○ VERIFY ON DEMAND</div></div>
+      </div>
+    </div>
+  );
+}
+
+function TaskDefinitionPanel(props) {
+  const {
+    t, title, setTitle, categoryLabel, titlePlaceholder, prompt, setPrompt,
+    documentContexts, imageFiles, realTransactions, realScenarios, realOptimization,
+    removeImageAt, removeDocAt, setRealTransactions, setRealScenarios, setRealOptimization,
+    handleAIFile, quantumMode, setQuantumMode, isFraudCategory, error, loading, hasPrompt, generate, locked,
+  } = props;
+
+  const sources = [
+    ...documentContexts.map((d, i) => ({ key: `doc-${i}`, name: d.filename, icon: FileText, onRemove: () => removeDocAt(i) })),
+    ...imageFiles.map((img, i) => ({ key: `img-${i}`, name: img.filename, icon: ImageIcon, onRemove: () => removeImageAt(i) })),
+    ...(realTransactions ? [{ key: 'tx', name: `${realTransactions.filename} · ${realTransactions.transactions.length} işlem`, icon: FileText, onRemove: () => setRealTransactions(null) }] : []),
+    ...(realScenarios ? [{ key: 'sc', name: `${realScenarios.filename} · ${realScenarios.scenarios.length} senaryo`, icon: FileText, onRemove: () => setRealScenarios(null) }] : []),
+    ...(realOptimization ? [{ key: 'opt', name: `${realOptimization.filename} · ${realOptimization.items.length} kalem`, icon: FileText, onRemove: () => setRealOptimization(null) }] : []),
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className={PANEL}>
+        <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+          <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Görev Tanımı</span>
+        </div>
+        <div className="p-3 space-y-3">
+          <div>
+            <label className="block text-[9px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{t('reportTitle')} ({categoryLabel})</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} disabled={locked} placeholder={titlePlaceholder} className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[11px] text-cyan-100 focus:border-cyan-300 focus:outline-none disabled:opacity-50" />
+          </div>
+          <div>
+            <label className="block text-[9px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{t('analysisTopic')}</label>
+            <div className="relative">
+              <textarea value={prompt} onChange={e => setPrompt(e.target.value)} disabled={locked} placeholder={documentContexts.length > 0 ? 'Yuklenen belgelere dayanarak analiz uret...' : t('topicPh')} rows={5} className="w-full bg-black/25 border border-cyan-400/20 rounded p-2.5 pr-10 text-[11px] text-cyan-100 focus:border-cyan-300 focus:outline-none disabled:opacity-50" />
+              <div className="absolute bottom-2 right-2"><VoiceButton mode="input" onTranscript={text => setPrompt(prev => prev ? prev + ' ' + text : text)} size="sm" /></div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] text-cyan-300/40 tracking-widest uppercase">Kaynak Dosya</span>
+            <FileAttach onAIFile={handleAIFile} />
+          </div>
+          {quantumMode && (
+            <p className="text-[9px] text-white/35 leading-relaxed">
+              {isFraudCategory
+                ? 'Gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz; yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.'
+                : 'Gerçek senaryo verisi ("Senaryo"/"Olasılık" sütunları) veya kaynak tahsisi tablosu ("Kalem"/"Değer"/"Maliyet" sütunları) yükleyebilirsiniz; yüklenirse kuantum motoru YZ tahmini yerine bu gerçek verileri kullanır.'}
+            </p>
+          )}
+          {error && <div className="text-red-300 text-[10px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
+        </div>
+      </div>
+
+      <div className={PANEL}>
+        <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+          <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Veri Kaynakları</span>
+          <span className="ml-auto text-[9px] text-cyan-400/60">{sources.length}</span>
+        </div>
+        <div className="p-3 space-y-1.5">
+          {sources.length === 0 && <div className="text-[10px] text-white/25">Henüz kaynak eklenmedi</div>}
+          {sources.map((s) => (
+            <div key={s.key} className="flex items-center gap-2 text-[10px] text-white/60">
+              <s.icon className="w-3 h-3 text-cyan-400/50 flex-shrink-0" />
+              <span className="truncate flex-1">{s.name}</span>
+              <button type="button" onClick={s.onRemove} disabled={locked} className="text-red-300/70 hover:text-red-300 disabled:opacity-30">×</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={PANEL}>
+        <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+          <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Analiz Motorları</span>
+        </div>
+        <div className="p-3 space-y-2">
+          <EngineRow label="AI Reasoning (LLM)" on always />
+          <EngineRow label="Classical Baseline" on always />
+          <div onClick={() => !locked && setQuantumMode(!quantumMode)} className={`flex items-start gap-2.5 p-2.5 rounded border cursor-pointer transition select-none ${quantumMode ? 'bg-cyan-400/10 border-cyan-300/50' : 'bg-black/20 border-cyan-400/15 hover:border-cyan-400/35'} ${locked ? 'pointer-events-none opacity-60' : ''}`}>
+            <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition ${quantumMode ? 'bg-cyan-300 border-cyan-300' : 'border-cyan-400/40'}`}>{quantumMode && <Check className="w-2.5 h-2.5 text-[#031326]" />}</div>
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5"><Atom className="w-3.5 h-3.5 text-cyan-300" /><span className="text-cyan-100 font-display tracking-widest text-[11px]">{t('quantumMode')}</span></div>
+              <p className="text-[9px] text-white/40 leading-relaxed">{t(isFraudCategory ? 'quantumDescFraud' : 'quantumDesc')}</p>
+            </div>
+          </div>
+          <EngineRow label="IBM Quantum Verification" on={quantumMode} pending />
+        </div>
+        <div className="p-3 pt-0">
+          <button onClick={generate} disabled={loading || !hasPrompt || locked} className="w-full btn-gold py-2.5 rounded font-display tracking-widest text-[11px] disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" />{quantumMode ? t('analyzingQuantum') : t('analyzing')}</> : <>{quantumMode ? <Atom className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}{quantumMode ? t('generateQuantum') : t('generateAnalysis')}</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EngineRow({ label, on, always = false, pending = false }) {
+  return (
+    <div className="flex items-center gap-2 text-[10px]">
+      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${on ? 'bg-cyan-300 border-cyan-300' : 'border-white/15'}`}>{on && <Check className="w-2.5 h-2.5 text-[#031326]" />}</div>
+      <span className="text-white/55">{label}</span>
+      <span className={`ml-auto text-[8px] ${always ? 'text-emerald-300/70' : on ? (pending ? 'text-amber-300/70' : 'text-emerald-300/70') : 'text-white/25'}`}>
+        {always ? 'HAZIR' : on ? (pending ? 'TALEP ÜZERİNE' : 'ETKİN') : 'PASİF'}
+      </span>
+    </div>
+  );
+}
+
+function ResultPanel({ t, result, downloadDocx, downloadPdf, shareReport, reset, deepDiveScenario, loadingScenario }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {result.quantumWarning && (
+        <div className="bg-amber-500/10 border border-amber-400/40 rounded-lg p-3 text-xs text-amber-300 flex items-start gap-2">
+          <span>⚠️</span><span>{result.quantumWarning}</span>
+        </div>
+      )}
+      <div className={`${PANEL} flex items-center justify-between p-3 flex-wrap gap-2`}>
+        <div className="text-xs text-cyan-300/70 flex items-center gap-2">
+          {result.quantumMode && <Atom className="w-3 h-3 text-cyan-300" />}
+          {result.quantum && (
+            <span className="font-mono text-xs text-cyan-300/80" title="Qiskit Aer yerel kuantum devre simülatörü">
+              {result.quantum.backend} · {result.quantum.qubits} kübit · {result.quantum.shots} ölçüm
+            </span>
+          )}
+          {result.fraud && (
+            <span className="font-mono text-xs text-cyan-300/80" title="Kuantum çekirdek (kernel) anomali tespiti">
+              {result.fraud.backend} · {result.fraud.qubits} kübit · {result.fraud.flaggedCount}/{result.fraud.transactionCount} işaretlendi
+            </span>
+          )}
+          {result.optimizer && (
+            <span className="font-mono text-xs text-cyan-300/80" title="QAOA kaynak tahsisi optimizasyonu">
+              {result.optimizer.backend} · {result.optimizer.qubits} kübit · %{result.optimizer.totalCost}/%{result.optimizer.budgetPercent} bütçe kullanıldı
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <VoiceButton mode="output" text={result.content} size="sm" />
+          <button onClick={() => downloadDocx(result)} className="btn-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2"><Download className="w-4 h-4" /> {t('downloadDocx')}</button>
+          <button onClick={() => downloadPdf(result)} className="btn-gold px-4 py-2 rounded text-xs tracking-widest flex items-center gap-2"><FileDown className="w-4 h-4" /> {t('downloadPdf')}</button>
+          <button onClick={() => shareReport(result)} className="border border-cyan-400/30 text-cyan-200 px-4 py-2 rounded text-xs tracking-widest hover:bg-cyan-400/10 flex items-center gap-2"><Share2 className="w-4 h-4" /> {t('share')}</button>
+          <button onClick={reset} className="border border-cyan-400/30 text-cyan-200 px-4 py-2 rounded text-xs tracking-widest hover:bg-cyan-400/10">{t('newAnalysisBtn')}</button>
+        </div>
+      </div>
+
+      {result.quantum && <QuantumCircuitPanel quantum={result.quantum} />}
+
+      {result.quantumMode && result.scenarios && result.scenarios.length > 0 && <ScenarioComparisonTable scenarios={result.scenarios} />}
+      {result.quantumMode && result.scenarios && result.scenarios.length > 0 && <ScenarioPanel scenarios={result.scenarios} onDeepDive={deepDiveScenario} loadingScenario={loadingScenario} t={t} />}
+      {result.quantumMode && result.scenarios?.some(s => s.quantumProbability !== undefined) && <ScenarioComparisonChart scenarios={result.scenarios} />}
+
+      {result.fraud?.secondaryReview && (
+        <div className={`${PANEL} p-4 flex flex-col gap-3`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h4 className="font-display text-cyan-100 tracking-widest text-xs uppercase">İkincil Onay Katmanı</h4>
+              <p className="text-xs text-white/35 mt-0.5">Birincil işaretlerin hangilerinin uygulama içinde doğrudan onaylandığını gösterir.</p>
+            </div>
+            <div className="text-xs font-mono text-cyan-300/80">
+              {result.fraud.secondaryReview.confirmedCount}/{result.fraud.secondaryReview.total} onaylandı
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div className="rounded border border-emerald-500/20 bg-emerald-950/20 px-3 py-2">
+              <div className="text-emerald-300 font-mono">Onaylanan</div>
+              <div className="text-cyan-100 font-mono text-base">{result.fraud.secondaryReview.confirmedCount}</div>
+            </div>
+            <div className="rounded border border-amber-500/20 bg-amber-950/20 px-3 py-2">
+              <div className="text-amber-300 font-mono">Manuel inceleme</div>
+              <div className="text-cyan-100 font-mono text-base">{result.fraud.secondaryReview.reviewCount}</div>
+            </div>
+            <div className="rounded border border-cyan-500/20 bg-cyan-950/20 px-3 py-2">
+              <div className="text-cyan-300 font-mono">Kural sayısı</div>
+              <div className="text-cyan-100 font-mono text-base">{Object.keys(result.fraud.secondaryReview.rules || {}).length}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result.fraud?.transactions?.length > 0 && <FraudRiskChart transactions={result.fraud.transactions} confirmedIds={result.fraud.secondaryReview?.confirmedIds || []} />}
+      {result.optimizer?.items?.length > 0 && <OptimizerChart items={result.optimizer.items} />}
+
+      <div className={`${PANEL} p-8 report-content max-h-[70vh] overflow-auto text-white/80`}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result.content}</ReactMarkdown></div>
+    </motion.div>
+  );
+}
+
+// Real circuit stats (qubits/depth/shots/batches/backend) come straight from
+// the Qiskit Aer run -- only the gate-grid graphic below is a stylized,
+// representative rendering (the server doesn't ship a gate-by-gate diagram
+// to the client), sized off the real qubit/depth counts.
+function QuantumCircuitPanel({ quantum }) {
+  const qubits = quantum.qubits || 0;
+  const depth = quantum.circuitDepth || 0;
+  const rows = Math.max(1, Math.min(qubits, 8));
+  const cols = Math.max(1, Math.min(depth, 12));
+  const gateAt = (r, c) => (r + c * 2) % 5 === 0;
+  const gateLabel = (r, c) => ['H', 'RY', 'RZ', 'CRX'][(r + c) % 4];
+  return (
+    <div className={PANEL}>
+      <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+        <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Qiskit Devre Önizlemesi</span>
+        <span className="ml-auto text-[9px] text-white/30">{qubits} qubit · {depth} derinlik{quantum.shots ? ` · ${quantum.shots} shots` : ''}</span>
+      </div>
+      <div className="p-3 overflow-x-auto">
+        <div className="min-w-[420px]">
+          {Array.from({ length: rows }).map((_, r) => (
+            <div key={r} className="flex items-center gap-1.5 mb-1.5">
+              <span className="w-6 text-[8px] text-white/25 font-mono">q{r}</span>
+              <div className="flex-1 flex items-center gap-1.5 border-t border-cyan-400/15 pt-1.5">
+                {Array.from({ length: cols }).map((_, c) => gateAt(r, c) ? (
+                  <span key={c} className="px-1.5 py-1 rounded border border-cyan-400/40 bg-cyan-400/10 text-cyan-200 text-[8px] font-mono">{gateLabel(r, c)}</span>
+                ) : <span key={c} className="w-4 h-px bg-cyan-400/10" />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 border-t border-cyan-400/10 text-center">
+        {[['Qubit', qubits], ['Derinlik', depth], ['Shots', quantum.shots ?? '—'], ['Batch', quantum.batches ?? '—'], ['Kaynak', quantum.dataSource === 'real' ? 'Gerçek' : 'YZ tahmini']].map(([l, v]) => (
+          <div key={l} className="p-2 border-r border-cyan-400/10 last:border-r-0">
+            <div className="text-[11px] text-cyan-200 font-mono">{v}</div>
+            <div className="text-[8px] text-white/30">{l}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScenarioComparisonTable({ scenarios }) {
+  const hasHardware = scenarios.some((s) => s.hardwareProbability !== undefined);
+  return (
+    <div className={PANEL}>
+      <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+        <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Senaryo Sonuçları</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[10px]">
+          <thead>
+            <tr className="text-white/35 border-b border-cyan-400/10">
+              <th className="text-left font-normal px-3 py-2">Senaryo</th>
+              <th className="text-right font-normal px-3 py-2">AI (LLM)</th>
+              <th className="text-right font-normal px-3 py-2">Qiskit Aer (Sim)</th>
+              {hasHardware && <th className="text-right font-normal px-3 py-2">IBM Quantum (Real)</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {scenarios.map((s) => (
+              <tr key={s.id} className="border-b border-white/5 last:border-b-0">
+                <td className="px-3 py-1.5 text-white/70 truncate max-w-[220px]">{s.title}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-cyan-300/80">{s.llmEstimate !== undefined ? `%${s.llmEstimate}` : '—'}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-cyan-200">{s.quantumProbability !== undefined ? `%${s.quantumProbability}` : '—'}</td>
+                {hasHardware && <td className="px-3 py-1.5 text-right font-mono text-amber-300/80">{s.hardwareProbability !== undefined ? `%${s.hardwareProbability}` : '—'}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function DecisionTraceLive({ hasPrompt, quantumMode, loading, result, sourceCount, category }) {
+  const now = () => new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const steps = [
+    { label: 'Görev Tanımlandı', done: hasPrompt, detail: hasPrompt ? `Kategori: ${category}` : 'Bekleniyor' },
+    { label: 'Veri Doğrulama', done: hasPrompt, detail: sourceCount ? `${sourceCount} kaynak eklendi` : 'Kaynak eklenmedi (opsiyonel)' },
+    { label: 'AI Analizi', done: !!result, current: loading, detail: result ? `Sağlayıcı: ${result.provider || 'otomatik'}` : loading ? 'Çalışıyor…' : 'Bekleniyor' },
+    { label: 'Devre Üretimi', done: !!result?.quantum, current: loading && quantumMode, detail: result?.quantum ? `${result.quantum.qubits} qubit devre çalıştırıldı` : quantumMode ? 'Bekleniyor' : 'Devre dışı' },
+    { label: 'Karar Birleştirme', done: !!result, detail: result ? 'Kaynaklar tek rapora birleştirildi' : 'Bekleniyor' },
+    { label: 'Rapor Oluşturma', done: !!result, detail: result ? 'DOCX / PDF hazır' : 'Bekleniyor' },
+  ];
+  return (
+    <div className={PANEL}>
+      <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
+        <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Decision Trace</span>
+        <span className="ml-auto text-[8px] text-cyan-400/60">CANLI</span>
+      </div>
+      <div className="p-3 space-y-3">
+        {steps.map((s, i) => (
+          <div key={s.label} className="flex gap-2.5">
+            <div className="flex flex-col items-center">
+              <span className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 ${s.done ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : s.current ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-200 animate-pulse' : 'border-white/10 text-white/25'}`}>
+                {s.done ? <Check className="w-3 h-3" /> : <Clock className="w-2.5 h-2.5" />}
+              </span>
+              {i < steps.length - 1 && <span className="w-px flex-1 bg-white/10 mt-1" />}
+            </div>
+            <div className="pb-2.5 min-w-0">
+              <div className={`text-[9px] tracking-wider font-semibold ${s.done ? 'text-emerald-300/80' : s.current ? 'text-cyan-200' : 'text-white/35'}`}>{s.label}</div>
+              <div className="text-[9px] text-white/30 mt-0.5">{s.detail}</div>
+              {s.done && <div className="text-[8px] text-white/20 mt-0.5">{now()}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ScenarioPanel({ scenarios, onDeepDive, loadingScenario, t }) {
   return (
-    <div className="bg-navy-light/70 border border-gold/40 rounded-lg p-5">
-      <div className="flex items-center gap-2 mb-4"><Atom className="w-5 h-5 text-gold animate-pulse" /><h3 className="font-display text-gold tracking-widest text-sm">{t('quantumMatrix')}</h3></div>
+    <div className={`${PANEL} p-4`}>
+      <div className="flex items-center gap-2 mb-3"><Atom className="w-4 h-4 text-cyan-300 animate-pulse" /><h3 className="font-display text-cyan-100 tracking-widest text-xs">{t('quantumMatrix')}</h3></div>
       <div className="space-y-2">
         {scenarios.map((s, i) => (
-          <motion.div key={s.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className={`flex items-center gap-3 p-3 rounded border ${i === 0 ? 'border-gold/50 bg-gold/10' : 'border-gold/20 bg-navy/40 hover:border-gold/40'}`}>
+          <motion.div key={s.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className={`flex items-center gap-3 p-2.5 rounded border ${i === 0 ? 'border-cyan-300/50 bg-cyan-400/10' : 'border-cyan-400/15 bg-black/20 hover:border-cyan-400/35'}`}>
             <div className="flex-1 min-w-0">
-              <span className="text-gold/90 text-sm font-display tracking-wide truncate">{s.title}</span>
+              <span className="text-cyan-100/90 text-xs font-display tracking-wide truncate">{s.title}</span>
               {s.quantumProbability !== undefined && (
-                <div className="text-xs font-mono text-cyan-300/70 mt-0.5">
+                <div className="text-[10px] font-mono text-cyan-300/70 mt-0.5">
                   YZ tahmini %{s.llmEstimate} → kuantum devresi %{s.quantumProbability}
                 </div>
               )}
@@ -382,14 +598,14 @@ function CategoryPicker({ onSelect }) {
   const { t } = useLang();
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-display text-gold tracking-widest text-center mb-2">{t('newAnalysis')}</h2>
+      <h2 className="text-2xl font-display text-cyan-100 tracking-widest text-center mb-2">{t('newAnalysis')}</h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
           return (
-            <button key={cat.id} onClick={() => onSelect(cat.id)} className="bg-navy-light/70 border border-gold/30 hover:border-gold rounded-lg p-5 transition flex flex-col items-center gap-3" style={{ minHeight: 130 }}>
+            <button key={cat.id} onClick={() => onSelect(cat.id)} className="bg-[#031326]/80 border border-cyan-400/15 hover:border-cyan-300/50 rounded-lg p-5 transition flex flex-col items-center gap-3" style={{ minHeight: 130 }}>
               <Icon className="w-10 h-10" style={{ color: cat.color }} />
-              <p className="font-display tracking-wider text-xs text-gold uppercase text-center leading-tight">{t(cat.nameKey)}</p>
+              <p className="font-display tracking-wider text-xs text-cyan-100 uppercase text-center leading-tight">{t(cat.nameKey)}</p>
             </button>
           );
         })}
@@ -397,4 +613,3 @@ function CategoryPicker({ onSelect }) {
     </div>
   );
 }
-
