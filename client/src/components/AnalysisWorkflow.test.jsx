@@ -1,25 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
+import { LangProvider } from '../services/langContext.jsx';
+
+function renderWithLang(ui) { return render(<LangProvider>{ui}</LangProvider>); }
 
 describe('ResultSourceBadge', () => {
   it('labels a simulator result', () => {
-    render(<ResultSourceBadge source="qiskit_aer_simulation" />);
+    renderWithLang(<ResultSourceBadge source="qiskit_aer_simulation" />);
     expect(screen.getByText('SIMULATOR')).toBeInTheDocument();
   });
 
   it('labels a real-hardware-verified result', () => {
-    render(<ResultSourceBadge source="ibm_hardware_verified" />);
+    renderWithLang(<ResultSourceBadge source="ibm_hardware_verified" />);
     expect(screen.getByText('REAL HARDWARE')).toBeInTheDocument();
   });
 
   it('labels an AI-estimate result', () => {
-    render(<ResultSourceBadge source="ai_estimate" />);
+    renderWithLang(<ResultSourceBadge source="ai_estimate" />);
     expect(screen.getByText('AI ESTIMATE')).toBeInTheDocument();
   });
 
   it('falls back to AI ESTIMATE for an unrecognized/missing source', () => {
-    render(<ResultSourceBadge source={undefined} />);
+    renderWithLang(<ResultSourceBadge source={undefined} />);
     expect(screen.getByText('AI ESTIMATE')).toBeInTheDocument();
   });
 });
@@ -38,12 +41,12 @@ describe('DecisionPipelinePanel', () => {
   };
 
   it('renders nothing when the result has no evidence', () => {
-    const { container } = render(<DecisionPipelinePanel result={{ provider: 'Claude' }} />);
+    const { container } = renderWithLang(<DecisionPipelinePanel result={{ provider: 'Claude' }} />);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders one node per evidence engine plus the fusion and report nodes', () => {
-    render(<DecisionPipelinePanel result={baseResult} />);
+    renderWithLang(<DecisionPipelinePanel result={baseResult} />);
     expect(screen.getByText('GİRDİ')).toBeInTheDocument();
     expect(screen.getByText('YZ ANALİZİ')).toBeInTheDocument();
     expect(screen.getByText('SENARYO MOTORU')).toBeInTheDocument();
@@ -54,12 +57,12 @@ describe('DecisionPipelinePanel', () => {
 
   it('shows an IBM verification node when an evidence item was hardware-verified', () => {
     const verified = { ...baseResult, evidence: [baseResult.evidence[0], { ...baseResult.evidence[1], verified: true }] };
-    render(<DecisionPipelinePanel result={verified} />);
+    renderWithLang(<DecisionPipelinePanel result={verified} />);
     expect(screen.getByText('IBM DOĞRULAMASI')).toBeInTheDocument();
   });
 
   it('expands a node detail on click and collapses it on a second click', () => {
-    render(<DecisionPipelinePanel result={baseResult} />);
+    renderWithLang(<DecisionPipelinePanel result={baseResult} />);
     expect(screen.queryByText(/1 kuantum motoru çalıştı/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('KARAR FÜZYONU'));

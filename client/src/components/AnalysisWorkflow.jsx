@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Atom, Check, Cpu, Database, FileSearch, Flag, GitMerge, ServerCog, Sparkles, Bot, Cpu as CpuIcon, ShieldCheck, ChevronDown, Workflow } from 'lucide-react';
+import { useLang } from '../services/langContext.jsx';
 
 // Mirrors server/src/services/analysisOrchestrator.js's RESULT_SOURCE_TYPES
 // -- every quantum/fraud/optimizer result carries a `resultSource` computed
@@ -22,23 +23,23 @@ export function ResultSourceBadge({ source }) {
   );
 }
 
-const steps = [
-  ['GÖREV OLUŞTURULDU', Flag],
-  ['VERİ DOĞRULAMA', Database],
-  ['AI ANALİZİ', Sparkles],
-  ['DEVRE ÜRETİMİ', Atom],
-  ['KLASİK BENCHMARK', Cpu],
-  ['IBM DOĞRULAMA', ServerCog],
-  ['KARAR BİRLEŞTİRME', GitMerge],
-  ['RAPOR OLUŞTURMA', FileSearch],
-];
-
 export function AnalysisWorkflow({ hasPrompt, hasData, quantumMode, hasResult, loading = false }) {
+  const { t } = useLang();
+  const steps = [
+    [t('awStepCreated'), Flag],
+    [t('awStepValidate'), Database],
+    [t('awStepAI'), Sparkles],
+    [t('awStepCircuit'), Atom],
+    [t('awStepBenchmark'), Cpu],
+    [t('awStepIBM'), ServerCog],
+    [t('awStepFusion'), GitMerge],
+    [t('awStepReport'), FileSearch],
+  ];
   // hasResult -> pipeline fully settled; loading -> mid-run (AI/circuit
   // phase); otherwise reflect how far the operator has filled in the form.
   const active = hasResult ? steps.length - 1 : loading ? (quantumMode ? 3 : 2) : hasPrompt ? (hasData ? 1 : 0) : -1;
   return (
-    <div className="mb-3 rounded-lg border border-cyan-400/15 bg-[#031326]/80 overflow-x-auto" aria-label="ANATOLIA-Q analiz işlem hattı">
+    <div className="mb-3 rounded-lg border border-cyan-400/15 bg-[#031326]/80 overflow-x-auto" aria-label={t('awPipelineAria')}>
       <div className="flex min-w-[820px]">
         {steps.map(([label, Icon], index) => {
           const done = index < active || (hasResult && index === steps.length - 1);
@@ -59,15 +60,16 @@ export function AnalysisWorkflow({ hasPrompt, hasData, quantumMode, hasResult, l
         })}
       </div>
       <div className="px-3 py-1.5 border-t border-cyan-400/10 flex items-center gap-4 text-[9px] text-white/35">
-        <span className="flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-cyan-300" /> AI reasoning</span>
-        <span className="flex items-center gap-1.5"><Atom className={`w-3 h-3 ${quantumMode ? 'text-emerald-300' : 'text-white/20'}`} /> Kuantum {quantumMode ? 'etkin' : 'opsiyonel'}</span>
-        <span className="ml-auto">ANATOLIA-Q ANALYSIS PIPELINE</span>
+        <span className="flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-cyan-300" /> {t('awAiReasoning')}</span>
+        <span className="flex items-center gap-1.5"><Atom className={`w-3 h-3 ${quantumMode ? 'text-emerald-300' : 'text-white/20'}`} /> {t('awQuantum')} {quantumMode ? t('awEnabled') : t('awOptional')}</span>
+        <span className="ml-auto">{t('awPipelineFooter')}</span>
       </div>
     </div>
   );
 }
 
 export function ResultProvenance({ result }) {
+  const { t } = useLang();
   if (!result) return null;
   const quantum = result.quantum || result.quantumResult;
   const fraud = result.fraud || result.fraudQuantum;
@@ -81,10 +83,10 @@ export function ResultProvenance({ result }) {
     ['IBM HARDWARE', Boolean(ibm?.completed || ibm?.status === 'completed' || quantum?.hardwareVerified), 'HARDWARE'],
   ];
   return (
-    <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/80 p-3" aria-label="Analiz sonuç kaynakları">
+    <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/80 p-3" aria-label={t('awResultSourcesAria')}>
       <div className="flex items-center gap-2 mb-2">
         <FileSearch className="w-4 h-4 text-cyan-300" />
-        <span className="text-[10px] text-cyan-100 tracking-[0.14em] font-semibold">SONUÇ KAYNAKLARI</span>
+        <span className="text-[10px] text-cyan-100 tracking-[0.14em] font-semibold">{t('awResultSourcesLabel')}</span>
         <span className="ml-auto text-[8px] text-white/25">PROVENANCE</span>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -94,16 +96,10 @@ export function ResultProvenance({ result }) {
           </span>
         ))}
       </div>
-      <div className="mt-2 text-[9px] text-white/30">Simülasyon, yapay zekâ tahmini ve gerçek kuantum donanımı sonuçları ayrı kaynaklar olarak gösterilir.</div>
+      <div className="mt-2 text-[9px] text-white/30">{t('awProvenanceNote')}</div>
     </div>
   );
 }
-
-const ENGINE_NODE_INFO = {
-  'scenario-quantum': { label: 'SENARYO MOTORU', detail: 'Qiskit Aer kuantum devresi' },
-  'fraud-quantum-kernel': { label: 'FRAUD ÇEKİRDEĞİ', detail: 'Kuantum kernel anomali tespiti' },
-  'portfolio-qaoa': { label: 'OPTİMİZASYON MOTORU', detail: 'QAOA kaynak tahsisi' },
-};
 
 // UI-02 (technical audit): item 21 asked for a "HOW THIS RESULT WAS
 // PRODUCED" panel with clickable pipeline nodes, built from the run's
@@ -111,31 +107,38 @@ const ENGINE_NODE_INFO = {
 // Fusion verdict (decisionFusion.js) instead of the reader having to
 // cross-reference each engine's own panel to reconstruct what actually ran.
 export function DecisionPipelinePanel({ result }) {
+  const { t } = useLang();
   const [openId, setOpenId] = useState(null);
   if (!result?.evidence?.length) return null;
+
+  const ENGINE_NODE_INFO = {
+    'scenario-quantum': { label: t('awEngineScenarioLabel'), detail: t('awEngineScenarioDetail') },
+    'fraud-quantum-kernel': { label: t('awEngineFraudLabel'), detail: t('awEngineFraudDetail') },
+    'portfolio-qaoa': { label: t('awEngineOptimizerLabel'), detail: t('awEngineOptimizerDetail') },
+  };
 
   const aiItem = result.evidence.find((e) => e.engine === 'ai');
   const engineItems = result.evidence.filter((e) => e.engine !== 'ai');
   const anyHardwareVerified = engineItems.some((e) => e.verified);
 
   const nodes = [
-    { id: 'input', label: 'GİRDİ', detail: 'Kullanıcı talebi ve yüklenen kaynak belgeler doğrulandı.' },
-    { id: 'ai', label: 'YZ ANALİZİ', detail: `Sağlayıcı: ${aiItem?.source || result.provider || 'bilinmiyor'}` },
+    { id: 'input', label: t('awNodeInputLabel'), detail: t('awNodeInputDetail') },
+    { id: 'ai', label: t('awNodeAiLabel'), detail: `${t('awNodeAiDetailPrefix')}${aiItem?.source || result.provider || t('awUnknown')}` },
     ...engineItems.map((e) => ({
       id: e.engine,
       label: ENGINE_NODE_INFO[e.engine]?.label || e.engine.toUpperCase(),
       detail: `${ENGINE_NODE_INFO[e.engine]?.detail || ''} — ${e.method}${e.confidence ? ` (${e.confidence})` : ''}`,
     })),
-    ...(anyHardwareVerified ? [{ id: 'ibm', label: 'IBM DOĞRULAMASI', detail: 'En az bir sonuç gerçek IBM Quantum donanımında doğrulandı.' }] : []),
-    ...(result.decisionFusion ? [{ id: 'fusion', label: 'KARAR FÜZYONU', detail: result.decisionFusion.summary }] : []),
-    { id: 'report', label: 'RAPOR', detail: 'Yukarıdaki adımların birleşimi olarak nihai rapor üretildi.' },
+    ...(anyHardwareVerified ? [{ id: 'ibm', label: t('awNodeIbmLabel'), detail: t('awNodeIbmDetail') }] : []),
+    ...(result.decisionFusion ? [{ id: 'fusion', label: t('awNodeFusionLabel'), detail: result.decisionFusion.summary }] : []),
+    { id: 'report', label: t('awNodeReportLabel'), detail: t('awNodeReportDetail') },
   ];
 
   return (
-    <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/80 p-3" aria-label="Karar üretim izi">
+    <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/80 p-3" aria-label={t('awPipelineTraceAria')}>
       <div className="flex items-center gap-2 mb-3">
         <Workflow className="w-4 h-4 text-cyan-300" />
-        <h3 className="font-display text-cyan-100 tracking-widest text-xs">SONUÇ NASIL ÜRETİLDİ</h3>
+        <h3 className="font-display text-cyan-100 tracking-widest text-xs">{t('awPipelineTitle')}</h3>
       </div>
       <div className="flex flex-wrap items-stretch gap-1.5">
         {nodes.map((node, i) => (
