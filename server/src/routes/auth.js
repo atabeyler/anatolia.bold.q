@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
-import { query, logAuditEvent } from '../services/database.js';
+import { query, logAuditEvent, getPool } from '../services/database.js';
 import { sendApprovalEmail } from '../services/email.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { publicActionLimiter } from '../middleware/rateLimit.js';
@@ -390,6 +390,75 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
     }
 
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Renames a user's login code. Not folded into the general PATCH above --
+// user_code is referenced by column (not an enforced foreign key, see
+// services/database.js) across many tables, so a rename has to update all
+// of them together inside one transaction, or a partial failure would
+// leave some of the user's history orphaned under the old code.
+router.post('/admin/users/:userCode/rename', authMiddleware, requireAdmin, async (req, res) => {
+  const { userCode } = req.params;
+  const newUserCode = String(req.body?.newUserCode || '').trim();
+  try {
+    if (!newUserCode) {
+      return res.status(400).json({ error: 'Yeni kullanıcı kodu zorunlu' });
+    }
+    if (newUserCode.length > 50) {
+      return res.status(400).json({ error: 'Kullanıcı kodu en fazla 50 karakter olabilir' });
+    }
+    if (newUserCode === userCode) {
+      return res.status(400).json({ error: 'Yeni kullanıcı kodu eskisiyle aynı olamaz' });
+    }
+    if (userCode === req.user.userCode) {
+      // Renaming your own account would invalidate the JWT/cookie this very
+      // request is authenticated with mid-transaction -- simplest to just
+      // require doing it from another admin account instead.
+      return res.status(400).json({ error: 'Kendi kullanıcı kodunuzu bu ekrandan değiştiremezsiniz' });
+    }
+
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+
+      const existing = await client.query('SELECT 1 FROM auth_users WHERE user_code = $1', [userCode]);
+      if (existing.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+      }
+      const taken = await client.query('SELECT 1 FROM auth_users WHERE user_code = $1', [newUserCode]);
+      if (taken.rowCount > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Bu kullanıcı kodu zaten kullanımda' });
+      }
+
+      await client.query('UPDATE auth_users SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE analyses SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE approval_tokens SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE devices SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE sync_operations SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE messages SET from_user = $1 WHERE from_user = $2', [newUserCode, userCode]);
+      await client.query('UPDATE messages SET to_user = $1 WHERE to_user = $2', [newUserCode, userCode]);
+      await client.query('UPDATE emergency_logs SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE push_subscriptions SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE admin_audit_log SET actor_user_code = $1 WHERE actor_user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE admin_audit_log SET target_user_code = $1 WHERE target_user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE user_profiles SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE conversation_memory SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    await logAuditEvent(req.user, 'user_renamed', newUserCode, { previousUserCode: userCode });
+    res.json({ success: true, userCode: newUserCode });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

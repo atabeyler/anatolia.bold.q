@@ -233,6 +233,8 @@ export const adminApi = {
     req(`/api/auth/admin/users/${userCode}`, { method: 'PATCH', body: JSON.stringify({ nickname, password, isAdmin, email }) }),
   deleteUser: (userCode) =>
     req(`/api/auth/admin/users/${userCode}`, { method: 'DELETE' }),
+  renameUser: (userCode, newUserCode) =>
+    req(`/api/auth/admin/users/${userCode}/rename`, { method: 'POST', body: JSON.stringify({ newUserCode }) }),
   auditLog: () => req('/api/auth/admin/audit-log'),
 };
 

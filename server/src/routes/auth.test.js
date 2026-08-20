@@ -115,9 +115,43 @@ const logAuditEventMock = vi.fn(async (actor, action, targetUserCode = null, det
   auditLog.push({ id: auditLog.length + 1, actor_user_code: actor.userCode, actor_nickname: actor.nickname || null, action, target_user_code: targetUserCode, details, created_at: new Date() });
 });
 
+// A minimal fake transactional client for POST /admin/users/:userCode/rename
+// (see routes/auth.js) -- only auth_users is actually modeled here (backed
+// by the same authUsers Map the rest of this fake DB uses); the rename
+// route's UPDATEs against tables this file doesn't otherwise model
+// (analyses, devices, sync_operations, messages, emergency_logs,
+// push_subscriptions, admin_audit_log, user_profiles, conversation_memory)
+// are accepted as no-ops so the transaction completes.
+function makeFakeTransactionClient() {
+  return {
+    async query(sql, params = []) {
+      const s = sql.replace(/\s+/g, ' ').trim();
+      if (s === 'BEGIN' || s === 'COMMIT' || s === 'ROLLBACK') return { rows: [], rowCount: 0 };
+      if (s.startsWith('SELECT 1 FROM auth_users WHERE user_code = $1')) {
+        const row = authUsers.get(params[0]);
+        return { rows: row ? [{ '?column?': 1 }] : [], rowCount: row ? 1 : 0 };
+      }
+      if (s.startsWith('UPDATE auth_users SET user_code = $1 WHERE user_code = $2')) {
+        const [newCode, oldCode] = params;
+        const row = authUsers.get(oldCode);
+        if (row) {
+          authUsers.delete(oldCode);
+          row.user_code = newCode;
+          authUsers.set(newCode, row);
+        }
+        return { rows: [], rowCount: row ? 1 : 0 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+    release: vi.fn(),
+  };
+}
+const getPoolMock = vi.fn(() => ({ connect: async () => makeFakeTransactionClient() }));
+
 vi.mock('../services/database.js', () => ({
   query: (...args) => queryMock(...args),
   logAuditEvent: (...args) => logAuditEventMock(...args),
+  getPool: (...args) => getPoolMock(...args),
 }));
 
 process.env.DATABASE_URL = 'postgres://fake/db-for-tests';
@@ -481,5 +515,61 @@ describe('admin user-management routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.length).toBeGreaterThan(0);
     expect(res.body[0].action).toBe('user_updated');
+  });
+});
+
+describe('POST /api/auth/admin/users/:userCode/rename', () => {
+  it('renames a user, moving their row to the new user_code', async () => {
+    await seedUser({ userCode: 'OLD1', password: 'x', nickname: 'BOLD-OLD1' });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/OLD1/rename').set('Authorization', `Bearer ${adminToken()}`).send({ newUserCode: 'NEWCODE1' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, userCode: 'NEWCODE1' });
+    expect(authUsers.has('OLD1')).toBe(false);
+    expect(authUsers.has('NEWCODE1')).toBe(true);
+    expect(logAuditEventMock).toHaveBeenCalledWith(expect.objectContaining({ userCode: 'ADMIN-1' }), 'user_renamed', 'NEWCODE1', { previousUserCode: 'OLD1' });
+  });
+
+  it('rejects renaming to a user_code that is already taken', async () => {
+    await seedUser({ userCode: 'OLD2', password: 'x', nickname: 'BOLD-OLD2' });
+    await seedUser({ userCode: 'TAKEN', password: 'x', nickname: 'BOLD-TAKEN' });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/OLD2/rename').set('Authorization', `Bearer ${adminToken()}`).send({ newUserCode: 'TAKEN' });
+    expect(res.status).toBe(409);
+    expect(authUsers.has('OLD2')).toBe(true);
+  });
+
+  it('rejects renaming a user that does not exist', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/NOBODY/rename').set('Authorization', `Bearer ${adminToken()}`).send({ newUserCode: 'WHATEVER' });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects an empty new user_code', async () => {
+    await seedUser({ userCode: 'OLD3', password: 'x', nickname: 'BOLD-OLD3' });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/OLD3/rename').set('Authorization', `Bearer ${adminToken()}`).send({ newUserCode: '  ' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects renaming to the same user_code', async () => {
+    await seedUser({ userCode: 'OLD4', password: 'x', nickname: 'BOLD-OLD4' });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/OLD4/rename').set('Authorization', `Bearer ${adminToken()}`).send({ newUserCode: 'OLD4' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an admin renaming their own account from this endpoint', async () => {
+    await seedUser({ userCode: 'ADMIN-1', password: 'x', nickname: 'BOLD', isAdmin: true });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/ADMIN-1/rename').set('Authorization', `Bearer ${adminToken()}`).send({ newUserCode: 'NEWADMIN' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a non-admin JWT with 403', async () => {
+    await seedUser({ userCode: 'U14', password: 'x', nickname: 'BOLD-014' });
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users/U14/rename').set('Authorization', `Bearer ${userToken('U14', 'BOLD-014')}`).send({ newUserCode: 'WHATEVER' });
+    expect(res.status).toBe(403);
   });
 });

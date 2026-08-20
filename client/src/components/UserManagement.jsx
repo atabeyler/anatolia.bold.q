@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Trash2, ShieldOff, ShieldCheck, UserPlus, Pencil, ScrollText, TrendingUp } from 'lucide-react';
+import { X, Trash2, ShieldOff, ShieldCheck, UserPlus, Pencil, ScrollText, TrendingUp, Hash } from 'lucide-react';
 import { adminApi, api } from '../services/api.js';
 import { t } from '../services/i18n.js';
 
@@ -224,6 +224,21 @@ export default function UserManagementModal({ onClose, lang = 'tr' }) {
     }
   };
 
+  const handleRename = async (u) => {
+    const newCode = window.prompt(t(lang, 'userMgmtRenamePrompt').replace('{code}', u.user_code), u.user_code);
+    if (!newCode || !newCode.trim() || newCode.trim() === u.user_code) return;
+    setBusyCode(u.user_code);
+    setError('');
+    try {
+      await adminApi.renameUser(u.user_code, newCode.trim());
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusyCode(null);
+    }
+  };
+
   const handleDelete = async (u) => {
     if (!window.confirm(t(lang, 'userMgmtDeleteConfirm').replace('{code}', u.user_code))) return;
     setBusyCode(u.user_code);
@@ -333,6 +348,11 @@ export default function UserManagementModal({ onClose, lang = 'tr' }) {
                     title={t(lang, 'userMgmtEditTitle')}
                     className="p-1.5 rounded border border-cyan-300/30 text-cyan-200 hover:bg-cyan-500/10 transition disabled:opacity-40">
                     <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => handleRename(u)} disabled={busyCode === u.user_code}
+                    title={t(lang, 'userMgmtRenameTitle')}
+                    className="p-1.5 rounded border border-cyan-300/30 text-cyan-200 hover:bg-cyan-500/10 transition disabled:opacity-40">
+                    <Hash className="w-4 h-4" />
                   </button>
                   <button onClick={() => toggleBlock(u)} disabled={busyCode === u.user_code}
                     title={u.blocked ? t(lang, 'userMgmtUnblockTitle') : t(lang, 'userMgmtBlockTitle')}

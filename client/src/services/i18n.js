@@ -359,6 +359,7 @@ export const translations = {
     userMgmtEditNicknamePh: 'Rumuz', userMgmtEditPasswordPh: 'Yeni şifre (opsiyonel)',
     userMgmtSaveBtn: 'Kaydet', userMgmtSavingBtn: 'Kaydediliyor…', userMgmtCancelBtn: 'Vazgeç',
     userMgmtDeleteConfirm: '{code} kullanıcısını silmek istediğinize emin misiniz?',
+    userMgmtRenameTitle: 'Kullanıcı kodunu değiştir', userMgmtRenamePrompt: '{code} için yeni kullanıcı kodunu girin:',
 
     newAnalysisShort: 'ANALİZ',
     consultNav: 'SOHBET',
@@ -526,6 +527,7 @@ export const translations = {
     userMgmtEditNicknamePh: 'Nickname', userMgmtEditPasswordPh: 'New password (optional)',
     userMgmtSaveBtn: 'Save', userMgmtSavingBtn: 'Saving…', userMgmtCancelBtn: 'Cancel',
     userMgmtDeleteConfirm: 'Are you sure you want to delete user {code}?',
+    userMgmtRenameTitle: 'Change user code', userMgmtRenamePrompt: 'Enter the new user code for {code}:',
 
     newAnalysisShort: 'ANALYSIS',
     consultNav: 'CHAT',
@@ -649,6 +651,7 @@ export const translations = {
     userMgmtEditNicknamePh: 'Spitzname', userMgmtEditPasswordPh: 'Neues Passwort (optional)',
     userMgmtSaveBtn: 'Speichern', userMgmtSavingBtn: 'Wird gespeichert…', userMgmtCancelBtn: 'Abbrechen',
     userMgmtDeleteConfirm: 'Sind Sie sicher, dass Sie den Benutzer {code} löschen möchten?',
+    userMgmtRenameTitle: 'Benutzercode ändern', userMgmtRenamePrompt: 'Neuen Benutzercode für {code} eingeben:',
 
     newAnalysisShort: 'ANALYSE',
     consultNav: 'CHAT',
@@ -772,6 +775,7 @@ export const translations = {
     userMgmtEditNicknamePh: 'Pseudonyme', userMgmtEditPasswordPh: 'Nouveau mot de passe (facultatif)',
     userMgmtSaveBtn: 'Enregistrer', userMgmtSavingBtn: 'Enregistrement…', userMgmtCancelBtn: 'Annuler',
     userMgmtDeleteConfirm: 'Êtes-vous sûr de vouloir supprimer l\'utilisateur {code} ?',
+    userMgmtRenameTitle: 'Modifier le code utilisateur', userMgmtRenamePrompt: 'Entrez le nouveau code utilisateur pour {code} :',
 
     newAnalysisShort: 'ANALYSE',
     consultNav: 'CHAT',
@@ -895,6 +899,7 @@ export const translations = {
     userMgmtEditNicknamePh: 'الاسم المستعار', userMgmtEditPasswordPh: 'كلمة مرور جديدة (اختياري)',
     userMgmtSaveBtn: 'حفظ', userMgmtSavingBtn: 'جارٍ الحفظ…', userMgmtCancelBtn: 'إلغاء',
     userMgmtDeleteConfirm: 'هل أنت متأكد من حذف المستخدم {code}؟',
+    userMgmtRenameTitle: 'تغيير رمز المستخدم', userMgmtRenamePrompt: 'أدخل رمز المستخدم الجديد لـ {code}:',
 
     newAnalysisShort: 'تحليل',
     consultNav: 'محادثة',

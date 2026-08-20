@@ -10,6 +10,7 @@ vi.mock('../services/api.js', () => ({
     setBlocked: vi.fn(async () => ({})),
     updateUser: vi.fn(async () => ({})),
     deleteUser: vi.fn(async () => ({})),
+    renameUser: vi.fn(async () => ({})),
     auditLog: vi.fn(async () => []),
   },
 }));
@@ -80,6 +81,24 @@ describe('UserManagementModal', () => {
     await screen.findByText('U1');
     fireEvent.click(screen.getAllByTitle('Sil')[0]);
     await waitFor(() => expect(adminApi.deleteUser).toHaveBeenCalledWith('U1'));
+  });
+
+  it('renames a user via the prompt', async () => {
+    vi.stubGlobal('prompt', vi.fn(() => 'NEWCODE'));
+    adminApi.listUsers.mockResolvedValue(USERS);
+    render(<UserManagementModal onClose={vi.fn()} />);
+    await screen.findByText('U1');
+    fireEvent.click(screen.getAllByTitle('Kullanıcı kodunu değiştir')[0]);
+    await waitFor(() => expect(adminApi.renameUser).toHaveBeenCalledWith('U1', 'NEWCODE'));
+  });
+
+  it('does not rename when the prompt is cancelled or unchanged', async () => {
+    vi.stubGlobal('prompt', vi.fn(() => null));
+    adminApi.listUsers.mockResolvedValue(USERS);
+    render(<UserManagementModal onClose={vi.fn()} />);
+    await screen.findByText('U1');
+    fireEvent.click(screen.getAllByTitle('Kullanıcı kodunu değiştir')[0]);
+    expect(adminApi.renameUser).not.toHaveBeenCalled();
   });
 
   it('does not delete when confirmation is declined', async () => {
