@@ -59,6 +59,38 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe('POST /generate — priority/depth request fields', () => {
+  it('defaults to normal priority and standart depth when omitted', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/analysis/generate')
+      .set('Authorization', `Bearer ${token({ role: 'analyst' })}`)
+      .send({ category: 'ekonomi', prompt: 'test' });
+    expect(res.status).toBe(200);
+    expect(res.body.priority).toBe('normal');
+    expect(res.body.depth).toBe('standart');
+  });
+
+  it('accepts a valid priority/depth pair', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/analysis/generate')
+      .set('Authorization', `Bearer ${token({ role: 'analyst' })}`)
+      .send({ category: 'ekonomi', prompt: 'test', priority: 'kritik', depth: 'hizli' });
+    expect(res.status).toBe(200);
+    expect(res.body.priority).toBe('kritik');
+    expect(res.body.depth).toBe('hizli');
+  });
+
+  it('falls back to defaults for an unrecognized priority/depth value instead of erroring', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/analysis/generate')
+      .set('Authorization', `Bearer ${token({ role: 'analyst' })}`)
+      .send({ category: 'ekonomi', prompt: 'test', priority: 'not-a-real-priority', depth: 'not-a-real-depth' });
+    expect(res.status).toBe(200);
+    expect(res.body.priority).toBe('normal');
+    expect(res.body.depth).toBe('standart');
+  });
+});
+
 describe('POST /generate — classification access control', () => {
   it('blocks a viewer-role user from generating a CONFIDENTIAL category (savunma)', async () => {
     const app = buildApp();

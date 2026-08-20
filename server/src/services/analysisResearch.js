@@ -9,7 +9,12 @@ import { logger } from '../lib/logger.js';
 // `site:` filters. Grounds report content (mevzuat/kurum references) in real
 // search results instead of the model's training-data recall, which for
 // law/regulation numbers is a real hallucination risk.
-export async function gatherResearchContext(category, topic) {
+export async function gatherResearchContext(category, topic, depth = 'standart') {
+  // 'hizli' (see routes/analysis.js's depth setting) skips the network
+  // round-trip entirely instead of just formatting an empty result, since
+  // the whole point of the fast tier is not waiting on web search.
+  if (depth === 'hizli') return '';
+
   const group = getCategoryGroup(category);
   const sources = CATEGORY_GROUP_SOURCES[group];
   const siteFilter = [...sources.local, ...sources.international].map((d) => `site:${d}`).join(' OR ');

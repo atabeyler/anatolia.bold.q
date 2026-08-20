@@ -93,6 +93,16 @@ export async function initDatabase() {
   await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_client_id ON analyses(client_id);`);
   await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_sync_revision ON analyses(sync_revision);`);
 
+  // priority: a user-set urgency label on the request (see routes/analysis.js's
+  // /generate) -- surfaced in history/feed so a "kritik" request stands out
+  // from routine ones; does not change how the analysis itself runs.
+  // depth: unlike priority, this DOES change generation -- 'hizli' skips the
+  // web-research pass and caps AI output shorter, 'derin' forces web research
+  // on and raises the output cap; 'standart' is today's existing behavior
+  // (see routes/analysis.js's /generate, resolveDepthSettings()).
+  await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS priority VARCHAR(20) NOT NULL DEFAULT 'normal';`);
+  await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS depth VARCHAR(20) NOT NULL DEFAULT 'standart';`);
+
   await p.query(`
     CREATE TABLE IF NOT EXISTS devices (
       id SERIAL PRIMARY KEY,

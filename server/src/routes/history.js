@@ -20,6 +20,8 @@ const toAnalysisJson = (row) => ({
   title: row.title,
   content: row.content,
   ai_provider: row.aiProvider,
+  priority: row.priority,
+  depth: row.depth,
   created_at: row.createdAt,
 });
 

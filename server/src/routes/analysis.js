@@ -264,12 +264,24 @@ router.post('/upload', authMiddleware, analysisLimiter, uploadConcurrencyGate, u
  * quantum engine computes on these real rows directly instead of ones the
  * AI fabricated.
  */
+const VALID_PRIORITIES = ['dusuk', 'normal', 'yuksek', 'kritik'];
+const VALID_DEPTHS = ['hizli', 'standart', 'derin'];
+// 'hizli' skips gatherResearchContext's web-search round-trip entirely (see
+// analysisResearch.js) and asks for a shorter report; 'standart'/'derin'
+// both keep today's existing research + output-length behavior -- 'derin'
+// doesn't currently do MORE than 'standart' (see analysis.js's depth
+// handling below), it just guarantees research isn't skipped the way
+// 'hizli' does.
+const DEPTH_MAX_OUTPUT_TOKENS = { hizli: 3000 };
+
 router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
   try {
     const {
       category, title, prompt, quantumMode = false, documentContext = null, imageData = null,
       realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr',
     } = req.body;
+    const priority = VALID_PRIORITIES.includes(req.body.priority) ? req.body.priority : 'normal';
+    const depth = VALID_DEPTHS.includes(req.body.depth) ? req.body.depth : 'standart';
     const userCode = req.user.userCode;
 
     if (!category || !prompt) {
@@ -295,7 +307,7 @@ router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
       ? getQuantumSystemPrompt(category, { hasRealTransactions, hasRealScenarios, hasRealOptimization }, lang)
       : getSystemPromptForCategory(category, lang);
 
-    const webContext = await gatherResearchContext(category, prompt);
+    const webContext = await gatherResearchContext(category, prompt, depth);
 
     const basePrompt = `${prompt}
 
@@ -331,7 +343,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
 
     const result = imageData?.base64
       ? await generateAnalysisWithVision(systemPrompt, enrichedPrompt, imageData.base64, imageData.mimetype)
-      : await generateAnalysis(systemPrompt, enrichedPrompt);
+      : await generateAnalysis(systemPrompt, enrichedPrompt, { maxOutputTokens: DEPTH_MAX_OUTPUT_TOKENS[depth] });
 
     const {
       scenarios, quantumComputation, fraudComputation, optimizerComputation,
@@ -353,6 +365,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           title: title || prompt.slice(0, 80),
           content: finalContent,
           aiProvider: result.provider,
+          priority,
+          depth,
           fraudTransactionCount: fraudComputation ? fraudComputation.transactionCount : null,
           fraudFlaggedCount: fraudComputation ? fraudComputation.flaggedCount : null,
           clientId: randomUUID(),
@@ -400,6 +414,8 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       analysisId,
       provider: result.provider,
       content: finalContent,
+      priority,
+      depth,
       evidence,
       decisionFusion,
       docxBase64: docxBuffer.toString('base64'),

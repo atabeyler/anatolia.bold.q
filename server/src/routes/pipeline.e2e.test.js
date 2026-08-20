@@ -217,12 +217,15 @@ describe('Full pipeline E2E (login -> upload -> generate -> history -> export)',
     const genRes = await request(app)
       .post('/api/analysis/generate')
       .set('Authorization', authHeader)
-      .send({ category: 'ekonomi', title: 'E2E Pipeline Raporu', prompt: 'Test analizi üret', documentContext: uploadRes.body.text });
+      .send({ category: 'ekonomi', title: 'E2E Pipeline Raporu', prompt: 'Test analizi üret', documentContext: uploadRes.body.text, priority: 'kritik', depth: 'derin' });
     expect(genRes.status).toBe(200);
     expect(genRes.body.success).toBe(true);
     expect(genRes.body.analysisId).toBeTruthy();
     expect(genRes.body.content).toContain('evet'); // confirms documentContext reached the AI prompt
+    expect(genRes.body.priority).toBe('kritik');
+    expect(genRes.body.depth).toBe('derin');
     expect(tables.analyses).toHaveLength(1);
+    expect(tables.analyses[0]).toMatchObject({ priority: 'kritik', depth: 'derin' });
 
     // A-02/A-03: the AI narrative's Evidence Object and the fused
     // no-quantum-engines-ran verdict are present even without quantum mode.
@@ -237,6 +240,8 @@ describe('Full pipeline E2E (login -> upload -> generate -> history -> export)',
     expect(listRes.body).toHaveLength(1);
     expect(listRes.body[0].id).toBe(genRes.body.analysisId);
     expect(listRes.body[0].title).toBe('E2E Pipeline Raporu');
+    expect(listRes.body[0].priority).toBe('kritik');
+    expect(listRes.body[0].depth).toBe('derin');
 
     // 5) History detail -- same record, fetched by id.
     const detailRes = await request(app).get(`/api/history/${genRes.body.analysisId}`).set('Authorization', authHeader);

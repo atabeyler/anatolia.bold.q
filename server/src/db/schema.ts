@@ -20,6 +20,12 @@ export const analyses = pgTable('analyses', {
   // /fraud-trend endpoint.
   fraudTransactionCount: integer('fraud_transaction_count'),
   fraudFlaggedCount: integer('fraud_flagged_count'),
+  // User-set request metadata (see routes/analysis.js's /generate) -- priority
+  // is a display-only urgency label; depth changes generation behavior
+  // (web research pass, output length cap). See the matching ALTER TABLE
+  // comments in services/database.js for what each value does.
+  priority: varchar('priority', { length: 20 }).notNull().default('normal'),
+  depth: varchar('depth', { length: 20 }).notNull().default('standart'),
   createdAt: timestamp('created_at').defaultNow(),
   // Desktop/multi-device sync metadata -- see routes/sync.js and
   // services/database.js for the matching ALTER TABLE statements.

@@ -23,6 +23,16 @@ function renderView(props = {}) {
   return render(<LangProvider><AnalysisView category={null} onCategoryChange={vi.fn()} {...props} /></LangProvider>);
 }
 
+// The wizard now gates the prompt/quantum-mode/generate fields behind its
+// 5-step flow (see AnalysisWizard.jsx) -- the prompt textarea lives on step
+// 1, the quantum-mode toggle on step 3, and the actual "generate" button on
+// step 5. Clicks "SONRAKİ" `times` times from whatever step is current.
+function clickNext(times) {
+  for (let i = 0; i < times; i++) {
+    fireEvent.click(screen.getByRole('button', { name: /SONRAKİ/i }));
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() });
@@ -41,24 +51,33 @@ describe('AnalysisView', () => {
     expect(screen.getByText('ConsultChat stub')).toBeInTheDocument();
   });
 
-  it('disables the generate button until a prompt is entered', () => {
+  it('opens the new-analysis wizard for a selected category, with the generate button disabled until a prompt is entered', () => {
     renderView({ category: 'ekonomi' });
-    const button = screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i });
-    expect(button).toBeDisabled();
+    expect(screen.getByText('Yeni Analiz Başlat')).toBeInTheDocument();
+    clickNext(4);
+    expect(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i })).toBeDisabled();
+  });
+
+  it('enables the generate button once a prompt is entered', () => {
+    renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'test brief' } });
-    expect(button).not.toBeDisabled();
+    clickNext(4);
+    expect(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i })).not.toBeDisabled();
   });
 
   it('generates a standard analysis and renders the markdown report', async () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'ekonomik brifing talebi' } });
+    clickNext(4);
     fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
 
     await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled());
     expect(api.generateAnalysis.mock.calls[0][0]).toBe('ekonomi');
     expect(api.generateAnalysis.mock.calls[0][3]).toBe(false); // quantumMode off by default
+    expect(api.generateAnalysis.mock.calls[0][10]).toBe('normal'); // priority default
+    expect(api.generateAnalysis.mock.calls[0][11]).toBe('standart'); // depth default
     expect(await screen.findByText('Rapor')).toBeInTheDocument();
   });
 
@@ -66,7 +85,9 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(2);
     fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    clickNext(2);
     fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
 
     await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled());
@@ -78,6 +99,7 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(4);
     fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
     expect(await screen.findByText(/sunucu hatasi/)).toBeInTheDocument();
   });
@@ -94,7 +116,9 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(2);
     fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    clickNext(2);
     fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
 
     expect(await screen.findByText(/qiskit-aer-simulator/)).toBeInTheDocument();
@@ -104,6 +128,9 @@ describe('AnalysisView', () => {
 
     fireEvent.click(screen.getByText('YENİ ANALİZ'));
     expect(screen.queryByText(/qiskit-aer-simulator/)).not.toBeInTheDocument();
+    // The wizard reopens automatically once the result is cleared (see
+    // AnalysisView.jsx: it's shown whenever there is a category but no result).
+    expect(screen.getByText('Yeni Analiz Başlat')).toBeInTheDocument();
   });
 
   it('drills into an alternative scenario and back', async () => {
@@ -120,7 +147,9 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(2);
     fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    clickNext(2);
     fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
     await waitFor(() => expect(screen.getAllByText('Senaryo B').length).toBeGreaterThan(0));
 
@@ -136,6 +165,7 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(4);
     fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
     await screen.findByText('Rapor');
 
@@ -149,6 +179,7 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(4);
     fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
     await screen.findByText('Rapor');
 
@@ -161,6 +192,7 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(4);
     fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
     await screen.findByText('Rapor');
 
@@ -176,7 +208,9 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(2);
     fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    clickNext(2);
     fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
 
     expect(await screen.findByText(/Kuantum devre hesaplaması başarısız oldu/)).toBeInTheDocument();
@@ -190,7 +224,9 @@ describe('AnalysisView', () => {
     renderView({ category: 'ekonomi' });
     const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
     fireEvent.change(textarea, { target: { value: 'brief' } });
+    clickNext(2);
     fireEvent.click(screen.getByText('KUANTUM OLASILIK MODU'));
+    clickNext(2);
     fireEvent.click(screen.getByRole('button', { name: /KUANTUM OLASILIK ANALİZİ BAŞLAT/i }));
 
     await screen.findByText('Rapor');

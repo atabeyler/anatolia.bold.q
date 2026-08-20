@@ -83,18 +83,27 @@ const PROVIDER_CALL: Record<string, { model: () => any; maxOutputTokens?: number
   openai: { model: () => openaiProvider!.chat(MODELS.openai), maxOutputTokens: 8000 },
 };
 
-export async function generateAnalysis(systemPrompt: string, userPrompt: string): Promise<GenerateResult> {
+export async function generateAnalysis(
+  systemPrompt: string,
+  userPrompt: string,
+  options: { maxOutputTokens?: number } = {}
+): Promise<GenerateResult> {
   const errors: Array<{ provider: string; error: string }> = [];
 
   for (const { key, name } of pickProviderOrder(userPrompt.length)) {
     const startedAt = Date.now();
     const call = PROVIDER_CALL[key];
+    // An explicit override (see routes/analysis.js's depth setting) replaces
+    // the provider's own default cap; otherwise each provider keeps its
+    // existing default (Gemini's binding here takes no maxOutputTokens at
+    // all -- see PROVIDER_CALL above).
+    const maxOutputTokens = options.maxOutputTokens ?? call.maxOutputTokens;
     try {
       const { text, usage } = await generateText({
         model: call.model(),
         system: systemPrompt,
         prompt: userPrompt,
-        ...(call.maxOutputTokens ? { maxOutputTokens: call.maxOutputTokens } : {}),
+        ...(maxOutputTokens ? { maxOutputTokens } : {}),
       });
       recordAiAttempt(key, startedAt, true);
       return { provider: name, content: text, usage: usage ?? null };

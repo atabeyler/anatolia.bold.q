@@ -47,7 +47,10 @@ html[data-theme='light'] [class*='bg-[#021728]'],
 html[data-theme='light'] [class*='bg-[#010812]'],
 html[data-theme='light'] [class*='bg-[#000d1a]'],
 html[data-theme='light'] [class*='bg-[#020c18]'],
-html[data-theme='light'] [class*='bg-[#020f1e]'] {
+html[data-theme='light'] [class*='bg-[#020f1e]'],
+html[data-theme='light'] [class*='bg-[#031326]'],
+html[data-theme='light'] [class*='bg-[#010a15]'],
+html[data-theme='light'] [class*='bg-[#0a0e1a]'] {
   background: linear-gradient(150deg, rgba(255,255,255,0.97), rgba(236,246,250,0.97)) !important;
   background-color: rgba(249, 252, 253, 0.98) !important;
 }

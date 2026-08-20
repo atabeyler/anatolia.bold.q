@@ -16,6 +16,7 @@ import ConsultChat from './ConsultChat.jsx';
 import FileAttach from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
 import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
+import AnalysisWizard from './AnalysisWizard.jsx';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
@@ -29,6 +30,8 @@ export default function AnalysisView({ category, onCategoryChange }) {
   const [realScenarios, setRealScenarios] = useState(null); // { filename, scenarios, warnings }
   const [realOptimization, setRealOptimization] = useState(null); // { filename, items, budgetPercent, warnings }
   const [quantumMode, setQuantumMode] = useState(false);
+  const [priority, setPriority] = useState('normal');
+  const [depth, setDepth] = useState('standart');
   const [loading, setLoading] = useState(false);
   const [loadingScenario, setLoadingScenario] = useState(null);
   const [result, setResult] = useState(null);
@@ -91,7 +94,7 @@ export default function AnalysisView({ category, onCategoryChange }) {
       const aiImageData = imageFiles[0] ? { base64: imageFiles[0].base64, mimetype: imageFiles[0].mimetype } : null;
       const mergedContext = documentContexts.length ? documentContexts.map((d) => d.text).join('\n\n') : null;
       const realOptimizationPayload = realOptimization ? { items: realOptimization.items, budgetPercent: realOptimization.budgetPercent } : null;
-      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang);
+      const r = await api.generateAnalysis(category, title || prompt.slice(0, 80), prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang, priority, depth);
       setResult(r);
     } catch (e) {
       setError(localizedError(e));
@@ -163,6 +166,25 @@ export default function AnalysisView({ category, onCategoryChange }) {
 
   return (
     <div className="max-w-[1500px] mx-auto">
+      {!result && !scenarioResult && (
+        <AnalysisWizard
+          t={t}
+          open
+          onClose={() => onCategoryChange(null)}
+          category={category} setCategory={onCategoryChange} categoryLabel={categoryLabel} isFraudCategory={isFraudCategory}
+          title={title} setTitle={setTitle} titlePlaceholder={titlePlaceholder}
+          prompt={prompt} setPrompt={setPrompt}
+          priority={priority} setPriority={setPriority}
+          depth={depth} setDepth={setDepth}
+          quantumMode={quantumMode} setQuantumMode={setQuantumMode}
+          documentContexts={documentContexts} imageFiles={imageFiles}
+          realTransactions={realTransactions} realScenarios={realScenarios} realOptimization={realOptimization}
+          removeImageAt={removeImageAt} removeDocAt={removeDocAt}
+          setRealTransactions={setRealTransactions} setRealScenarios={setRealScenarios} setRealOptimization={setRealOptimization}
+          handleAIFile={handleAIFile}
+          error={error} loading={loading} hasPrompt={hasPrompt} generate={generate}
+        />
+      )}
       <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="mb-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-cyan-400/10 border border-cyan-400/30 flex items-center justify-center">
@@ -179,26 +201,28 @@ export default function AnalysisView({ category, onCategoryChange }) {
       <AnalysisWorkflow hasPrompt={hasPrompt} hasData={hasData} quantumMode={quantumMode} hasResult={!!result} loading={loading} />
 
       {!scenarioResult && (
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_280px] gap-3 items-start">
-          <TaskDefinitionPanel
-            t={t}
-            title={title} setTitle={setTitle}
-            categoryLabel={categoryLabel}
-            titlePlaceholder={titlePlaceholder}
-            prompt={prompt} setPrompt={setPrompt}
-            documentContexts={documentContexts} imageFiles={imageFiles}
-            realTransactions={realTransactions} realScenarios={realScenarios} realOptimization={realOptimization}
-            removeImageAt={removeImageAt} removeDocAt={removeDocAt}
-            setRealTransactions={setRealTransactions} setRealScenarios={setRealScenarios} setRealOptimization={setRealOptimization}
-            handleAIFile={handleAIFile}
-            quantumMode={quantumMode} setQuantumMode={setQuantumMode}
-            isFraudCategory={isFraudCategory}
-            error={error}
-            loading={loading}
-            hasPrompt={hasPrompt}
-            generate={generate}
-            locked={!!result}
-          />
+        <div className={`grid grid-cols-1 gap-3 items-start ${result ? 'lg:grid-cols-[300px_minmax(0,1fr)_280px]' : 'lg:grid-cols-[minmax(0,1fr)_280px]'}`}>
+          {result && (
+            <TaskDefinitionPanel
+              t={t}
+              title={title} setTitle={setTitle}
+              categoryLabel={categoryLabel}
+              titlePlaceholder={titlePlaceholder}
+              prompt={prompt} setPrompt={setPrompt}
+              documentContexts={documentContexts} imageFiles={imageFiles}
+              realTransactions={realTransactions} realScenarios={realScenarios} realOptimization={realOptimization}
+              removeImageAt={removeImageAt} removeDocAt={removeDocAt}
+              setRealTransactions={setRealTransactions} setRealScenarios={setRealScenarios} setRealOptimization={setRealOptimization}
+              handleAIFile={handleAIFile}
+              quantumMode={quantumMode} setQuantumMode={setQuantumMode}
+              isFraudCategory={isFraudCategory}
+              error={error}
+              loading={loading}
+              hasPrompt={hasPrompt}
+              generate={generate}
+              locked={!!result}
+            />
+          )}
 
           <section className="min-w-0 space-y-3">
             {!result && !loading && (
@@ -614,19 +638,64 @@ function ScenarioPanel({ scenarios, onDeepDive, loadingScenario, t }) {
   );
 }
 
+// Corner bracket scoped to its own (relatively positioned) parent, not the
+// viewport -- LoginPageDecor.jsx's <Corner> is `fixed` to the whole screen,
+// which only makes sense for a full-page boot screen. This mirrors its
+// visual language (the same command-center HUD corner) but stays contained
+// inside whatever panel renders it.
+function PanelCorner({ pos }) {
+  const cls = {
+    tl: 'top-0 left-0 border-t-2 border-l-2',
+    tr: 'top-0 right-0 border-t-2 border-r-2',
+    bl: 'bottom-0 left-0 border-b-2 border-l-2',
+    br: 'bottom-0 right-0 border-b-2 border-r-2',
+  }[pos];
+  return <span className={`absolute w-5 h-5 border-cyan-300/40 pointer-events-none ${cls}`} />;
+}
+
 function CategoryPicker({ onSelect }) {
   const { t } = useLang();
   return (
-    <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-display text-cyan-100 tracking-widest text-center mb-2">{t('newAnalysis')}</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {CATEGORIES.map((cat) => {
+    <div className="max-w-4xl mx-auto relative rounded-xl border border-cyan-400/15 bg-[#031326]/50 p-6 sm:p-8 overflow-hidden">
+      {/* Command-center HUD backdrop: faint scanning grid + center glow, contained to this panel (not viewport-fixed like the login screen's). */}
+      <div className="absolute inset-0 pointer-events-none opacity-60" style={{
+        backgroundImage: 'linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)',
+        backgroundSize: '32px 32px',
+      }} />
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,150,220,0.10) 0%, transparent 70%)',
+      }} />
+      <PanelCorner pos="tl" /><PanelCorner pos="tr" /><PanelCorner pos="bl" /><PanelCorner pos="br" />
+
+      <div className="relative flex items-center justify-center gap-2 mb-1">
+        <motion.span className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+          animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
+        <span className="text-[9px] tracking-[0.25em] text-emerald-400/80 font-mono uppercase">Sistem Hazır</span>
+      </div>
+      <h2 className="relative text-2xl font-display text-cyan-100 tracking-widest text-center mb-6">{t('newAnalysis')}</h2>
+
+      <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {CATEGORIES.map((cat, i) => {
           const Icon = cat.icon;
           return (
-            <button key={cat.id} onClick={() => onSelect(cat.id)} className="bg-[#031326]/80 border border-cyan-400/15 hover:border-cyan-300/50 rounded-lg p-5 transition flex flex-col items-center gap-3" style={{ minHeight: 130 }}>
-              <Icon className="w-10 h-10" style={{ color: cat.color }} />
-              <p className="font-display tracking-wider text-xs text-cyan-100 uppercase text-center leading-tight">{t(cat.nameKey)}</p>
-            </button>
+            <motion.button
+              key={cat.id}
+              onClick={() => onSelect(cat.id)}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05, duration: 0.3 }}
+              whileHover={{ y: -2 }}
+              className="group relative bg-[#031326]/80 border border-cyan-400/15 hover:border-cyan-300/60 rounded-lg p-5 transition-colors flex flex-col items-center gap-3 overflow-hidden"
+              style={{ minHeight: 130 }}
+            >
+              {/* Radar-sweep glow on hover -- same conic-gradient technique as LoginPageDecor's OrbitalLogo scanner. */}
+              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{
+                background: 'conic-gradient(from 0deg, transparent 70%, rgba(0,212,255,0.12) 100%)',
+              }} />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-cyan-400/50 group-hover:bg-emerald-400 transition-colors" />
+              <Icon className="relative w-10 h-10 transition-transform group-hover:scale-110" style={{ color: cat.color }} />
+              <p className="relative font-display tracking-wider text-xs text-cyan-100 uppercase text-center leading-tight">{t(cat.nameKey)}</p>
+            </motion.button>
           );
         })}
       </div>
