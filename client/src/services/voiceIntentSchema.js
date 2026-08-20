@@ -7,6 +7,7 @@
 // first. That is what stops the assistant from clicking a semi-random DOM
 // control for a critical intent it merely guessed at.
 import { CATEGORIES } from '../components/CategorySidebar.jsx';
+import { SUPPORTED_LANGS } from './i18n.js';
 
 // ─── Real, app-derived enums ──────────────────────────────────────────────
 export const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
@@ -28,11 +29,15 @@ export const CRITICAL_ACTIONS = new Set([
   'set_analysis_title',
   'set_analysis_prompt',
   'set_analysis_depth',
+  'set_analysis_priority',
   'wizard_next',
   'wizard_back',
+  'wizard_goto_step',
   'open_settings',
   'close_settings',
   'logout',
+  'open_user_management',
+  'close_user_management',
 ]);
 
 // Actions that must never execute straight off a voice match -- the engine
@@ -87,6 +92,43 @@ const RESET_WORDS = ['sifirla', 'sıfırla', 'temizle', 'reset', 'clear', 'zuruc
 const NEW_WORDS = ['yeni', 'new', 'neu', 'nouvelle', 'nouveau', 'جديد'];
 export const CONFIRM_WORDS = ['evet', 'onayliyorum', 'onaylıyorum', 'tamam', 'devam et', 'onayla', 'yes', 'confirm', 'proceed', 'ok', 'okay', 'ja', 'bestatigen', 'bestätigen', 'oui', 'confirmer', 'نعم', 'أؤكد'];
 export const CANCEL_WORDS = ['hayir', 'hayır', 'iptal', 'vazgec', 'vazgeç', 'no', 'cancel', 'nein', 'abbrechen', 'non', 'annuler', 'لا', 'إلغاء'];
+
+// ─── Analysis priority slot (wizard step 1 field, previously unreachable
+// by voice) -- independent slot-filler, same pattern as DEPTH_SYNONYMS.
+export const PRIORITY_IDS = ['dusuk', 'normal', 'yuksek', 'kritik'];
+const PRIORITY_SYNONYMS = {
+  dusuk:   { tr: ['düşük öncelik', 'dusuk oncelik', 'öncelik düşük', 'oncelik dusuk', 'düşük'], en: ['low priority', 'priority low', 'priority to low'], de: ['niedrige priorität', 'niedrige prioritat'], fr: ['priorité basse', 'priorite basse'], ar: ['أولوية منخفضة'] },
+  normal:  { tr: ['normal öncelik', 'normal oncelik', 'öncelik normal', 'oncelik normal'], en: ['normal priority', 'priority normal', 'priority to normal'], de: ['normale priorität', 'normale prioritat'], fr: ['priorité normale', 'priorite normale'], ar: ['أولوية عادية'] },
+  yuksek:  { tr: ['yüksek öncelik', 'yuksek oncelik', 'öncelik yüksek', 'oncelik yuksek', 'yüksek'], en: ['high priority', 'priority high', 'priority to high'], de: ['hohe priorität', 'hohe prioritat'], fr: ['priorité élevée', 'priorite elevee', 'priorité haute'], ar: ['أولوية عالية'] },
+  kritik:  { tr: ['kritik öncelik', 'kritik oncelik', 'öncelik kritik', 'oncelik kritik'], en: ['critical priority', 'priority critical', 'priority to critical'], de: ['kritische priorität', 'kritische prioritat'], fr: ['priorité critique', 'priorite critique'], ar: ['أولوية حرجة'] },
+};
+
+// ─── Report download/share slot words (multilingual) -- previously
+// registered (download_analysis) but never reachable from any spoken
+// phrase once a result was on screen (see voiceAssistantEngine.js).
+const DOWNLOAD_WORDS = ['indir', 'download', 'herunterladen', 'télécharger', 'telecharger', 'تنزيل', 'نزل'];
+const SHARE_WORDS = ['paylas', 'paylaş', 'share', 'teilen', 'partager', 'مشاركة', 'شارك'];
+const PDF_WORD = ['pdf'];
+
+// ─── Global app-preference slots: UI language and appearance theme -- work
+// from anywhere, not just the analysis wizard (see resolveLocalIntent).
+const LANGUAGE_TARGETS = {
+  en: { tr: ['ingilizce'], en: ['english'], de: ['englisch'], fr: ['anglais'], ar: ['إنجليزي', 'الإنجليزية'] },
+  tr: { tr: ['türkçe', 'turkce'], en: ['turkish'], de: ['türkisch', 'turkisch'], fr: ['turc'], ar: ['تركي', 'التركية'] },
+  de: { tr: ['almanca'], en: ['german'], de: ['deutsch'], fr: ['allemand'], ar: ['ألماني', 'الألمانية'] },
+  fr: { tr: ['fransızca', 'fransizca'], en: ['french'], de: ['französisch', 'franzosisch'], fr: ['français', 'francais'], ar: ['فرنسي', 'الفرنسية'] },
+  ar: { tr: ['arapça', 'arapca'], en: ['arabic'], de: ['arabisch'], fr: ['arabe'], ar: ['عربي', 'العربية'] },
+};
+const THEME_TARGETS = {
+  dark:   { tr: ['koyu tema', 'karanlık tema', 'karanlik tema', 'koyu mod'], en: ['dark mode', 'dark theme'], de: ['dunkles design', 'dunkelmodus'], fr: ['mode sombre', 'theme sombre', 'thème sombre'], ar: ['الوضع الداكن', 'السمة الداكنة'] },
+  light:  { tr: ['açık tema', 'acik tema', 'aydınlık tema', 'açık mod'], en: ['light mode', 'light theme'], de: ['helles design', 'hellmodus'], fr: ['mode clair', 'theme clair', 'thème clair'], ar: ['الوضع الفاتح', 'السمة الفاتحة'] },
+  system: { tr: ['sistem teması', 'sistem temasi', 'sistem moduna al'], en: ['system theme', 'system mode'], de: ['systemdesign', 'systemmodus'], fr: ['theme systeme', 'thème système', 'mode systeme'], ar: ['سمة النظام'] },
+};
+
+// ─── Wizard step-number slot ("3. adıma git" / "step 2" / "schritt 3") --
+// language-agnostic on the digit so it works uniformly across all 5
+// languages without needing ordinal-word tables for each one.
+const STEP_WORD = ['adim', 'adım', 'step', 'schritt', 'etape', 'étape', 'خطوة'];
 
 // ─── Text folding ──────────────────────────────────────────────────────────
 // Lowercases and strips Turkish/French/German diacritics for loose matching
@@ -159,6 +201,55 @@ export function mentionsNew(text) { const t = foldText(text); return NEW_WORDS.s
 export function matchConfirm(text) { const t = foldText(text); return CONFIRM_WORDS.some((w) => includesWord(t, w)); }
 export function matchCancel(text) { const t = foldText(text); return CANCEL_WORDS.some((w) => includesWord(t, w)); }
 
+export function matchPriority(text) {
+  const t = foldText(text);
+  for (const id of PRIORITY_IDS) {
+    const bag = PRIORITY_SYNONYMS[id];
+    if (!bag) continue;
+    for (const words of Object.values(bag)) {
+      for (const w of words) if (includesWord(t, w)) return id;
+    }
+  }
+  return null;
+}
+
+export function mentionsDownload(text) { const t = foldText(text); return DOWNLOAD_WORDS.some((w) => includesWord(t, w)); }
+export function mentionsPdf(text) { const t = foldText(text); return PDF_WORD.some((w) => includesWord(t, w)); }
+export function mentionsShare(text) { const t = foldText(text); return SHARE_WORDS.some((w) => includesWord(t, w)); }
+
+/** Returns the target language id (en|tr|de|fr|ar) a spoken command names, or null. */
+export function matchLanguageTarget(text) {
+  const t = foldText(text);
+  for (const id of SUPPORTED_LANGS) {
+    const bag = LANGUAGE_TARGETS[id];
+    if (!bag) continue;
+    for (const words of Object.values(bag)) {
+      for (const w of words) if (includesWord(t, w)) return id;
+    }
+  }
+  return null;
+}
+
+/** Returns the target theme mode (dark|light|system) a spoken command names, or null. */
+export function matchThemeTarget(text) {
+  const t = foldText(text);
+  for (const id of Object.keys(THEME_TARGETS)) {
+    const bag = THEME_TARGETS[id];
+    for (const words of Object.values(bag)) {
+      for (const w of words) if (includesWord(t, w)) return id;
+    }
+  }
+  return null;
+}
+
+/** Returns a wizard step number (1-5) spoken alongside a step-word ("3. adıma git", "step 2"), or null. */
+export function matchWizardStepNumber(text) {
+  const t = foldText(text);
+  if (!STEP_WORD.some((w) => includesWord(t, w))) return null;
+  const m = t.match(/([1-5])/);
+  return m ? m[1] : null;
+}
+
 // A critical-intent utterance is one whose meaning is unambiguous enough
 // (mentions analysis/quantum by name) that the assistant must resolve it
 // through a real semantic action -- never through ui_activate's fuzzy
@@ -192,6 +283,18 @@ export const ACTION_PARAM_SCHEMAS = {
   },
   set_analysis_depth: {
     value: { type: 'depth', required: true },
+  },
+  set_analysis_priority: {
+    value: { type: 'enum', values: PRIORITY_IDS, required: true },
+  },
+  wizard_goto_step: {
+    step: { type: 'enum', values: ['1', '2', '3', '4', '5'], required: true },
+  },
+  set_language: {
+    value: { type: 'enum', values: SUPPORTED_LANGS, required: true },
+  },
+  set_theme: {
+    value: { type: 'enum', values: ['dark', 'light', 'system'], required: true },
   },
 };
 

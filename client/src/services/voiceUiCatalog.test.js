@@ -29,4 +29,23 @@ describe('voiceUiCatalog', () => {
       expect(Object.keys(entry.synonyms || {}).length).toBeGreaterThan(0);
     }
   });
+
+  it('disambiguates open/close phrase pairs by picking the more specific (longer) match', () => {
+    expect(matchUiCatalogAction('ayarları kapat', SCREENS.DASHBOARD_HOME)?.action).toBe('close_settings');
+    expect(matchUiCatalogAction('ayarlara git', SCREENS.DASHBOARD_HOME)?.action).toBe('open_settings');
+    expect(matchUiCatalogAction('sohbeti kapat', SCREENS.DASHBOARD_HOME)?.action).toBe('close_voice_chat');
+    expect(matchUiCatalogAction('sohbet', SCREENS.DASHBOARD_HOME)?.action).toBe('open_voice_chat');
+  });
+
+  it('resolves the new menu/info/notification/sidebar navigation actions', () => {
+    expect(matchUiCatalogAction('menuyu ac', SCREENS.DASHBOARD_HOME)?.action).toBe('open_menu');
+    expect(matchUiCatalogAction('hakkimizda', SCREENS.DASHBOARD_HOME)?.action).toBe('open_about');
+    expect(matchUiCatalogAction('bildirimleri ac', SCREENS.DASHBOARD_HOME)?.action).toBe('open_notifications');
+    expect(matchUiCatalogAction('kenar cubugunu daralt', SCREENS.DASHBOARD_HOME)?.action).toBe('collapse_sidebar');
+  });
+
+  it('marks admin-only entries with requiredPermission so callers can gate them', () => {
+    const radar = UI_CATALOG.find((e) => e.action === 'open_user_management');
+    expect(radar?.requiredPermission).toBe('admin');
+  });
 });

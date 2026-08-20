@@ -382,10 +382,17 @@ export default function DashboardPage({ user, onLogout }) {
       dispatch,
       setPendingAnalysis,
       setSettingsOpen,
+      setMenuOpen,
+      setInfoPanel,
+      setNotifOpen,
+      setSidebarCollapsed,
+      setUserMgmtOpen,
+      setLang,
+      isAdmin: !!user.isAdmin,
     }));
 
     return () => unregisterActions('dashboard');
-  }, [onLogout]);
+  }, [onLogout, user.isAdmin, setLang]);
 
   return (
     <div className="quantum-bg min-h-screen flex flex-col relative">

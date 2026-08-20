@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import EmergencyButton from './EmergencyButton.jsx';
 import { LangProvider } from '../services/langContext.jsx';
 import { api, getToken } from '../services/api.js';
+import { executeAction } from '../services/voiceActionRegistry.js';
 
 // EmergencyButton's ChatPanel also drives a full WebRTC video-meeting flow
 // (RTCPeerConnection/getUserMedia/MediaRecorder/screen share). That's
@@ -111,6 +112,14 @@ describe('EmergencyButton', () => {
     fireEvent.click(screen.getByRole('button', { name: '' }));
 
     expect(fakeSocket.emit).toHaveBeenCalledWith('chat:send', { to: 'BOLD-002', message: 'merhaba' });
+  });
+
+  it('registers a close_emergency voice action that closes the modal', async () => {
+    renderButton();
+    fireEvent.click(screen.getByLabelText('ACİL MERKEZ'));
+    expect(screen.getByText('Merkeze Bildir')).toBeInTheDocument();
+    await executeAction('close_emergency');
+    await waitFor(() => expect(screen.queryByText('Merkeze Bildir')).not.toBeInTheDocument());
   });
 
   it('shows the "start video meeting" control only for admins', () => {

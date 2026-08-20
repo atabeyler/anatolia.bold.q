@@ -4,32 +4,44 @@ import { buildDashboardVoiceActions } from './dashboardVoiceActions.js';
 
 const REQUIRED_UNIVERSAL_ACTIONS = ['ui_activate', 'ui_set_value', 'ui_select', 'ui_scroll', 'ui_key', 'ui_focus'];
 const REQUIRED_SEMANTIC_ACTIONS = [
-  'navigate_home', 'navigate_analysis', 'start_analysis', 'navigate_history', 'new_analysis',
+  'navigate_home', 'navigate_analysis', 'start_analysis', 'navigate_history', 'close_history', 'new_analysis',
   'open_voice_chat', 'close_voice_chat', 'open_guide', 'close_guide',
   'logout', 'open_emergency', 'set_analysis_title', 'set_analysis_prompt',
-  'generate_analysis', 'toggle_quantum', 'download_analysis', 'reset_analysis',
-  'set_analysis_depth', 'wizard_next', 'wizard_back', 'open_settings', 'close_settings',
+  'generate_analysis', 'toggle_quantum', 'download_analysis', 'download_analysis_pdf', 'share_analysis', 'reset_analysis',
+  'set_analysis_depth', 'set_analysis_priority', 'wizard_next', 'wizard_back', 'wizard_goto_step',
+  'open_settings', 'close_settings', 'set_language', 'set_theme',
+  'open_menu', 'close_menu', 'open_about', 'open_mission', 'open_contact', 'close_info',
+  'open_notifications', 'close_notifications', 'expand_sidebar', 'collapse_sidebar',
 ];
+const REQUIRED_ADMIN_ACTIONS = ['open_user_management', 'close_user_management'];
 
 const scope = '__voice_coverage_gate__';
 afterEach(() => unregisterActions(scope));
 
+const baseDeps = () => ({
+  setView: vi.fn(),
+  setActiveCategory: vi.fn(),
+  setHistoryOpen: vi.fn(),
+  setVoiceChatOpen: vi.fn(),
+  setGuideOpen: vi.fn(),
+  setJWT: vi.fn(),
+  disconnectSocket: vi.fn(),
+  onLogout: vi.fn(),
+  dispatch: vi.fn(),
+  setPendingAnalysis: vi.fn(),
+  setSettingsOpen: vi.fn(),
+  setMenuOpen: vi.fn(),
+  setInfoPanel: vi.fn(),
+  setNotifOpen: vi.fn(),
+  setSidebarCollapsed: vi.fn(),
+  setUserMgmtOpen: vi.fn(),
+  setLang: vi.fn(),
+});
+
 // Builds the actual DashboardPage actions with mock deps, so this file tests
 // what the app really registers — not a hand-copied list that can drift.
-function registerRealDashboardActions() {
-  const deps = {
-    setView: vi.fn(),
-    setActiveCategory: vi.fn(),
-    setHistoryOpen: vi.fn(),
-    setVoiceChatOpen: vi.fn(),
-    setGuideOpen: vi.fn(),
-    setJWT: vi.fn(),
-    disconnectSocket: vi.fn(),
-    onLogout: vi.fn(),
-    dispatch: vi.fn(),
-    setPendingAnalysis: vi.fn(),
-    setSettingsOpen: vi.fn(),
-  };
+function registerRealDashboardActions(extra = {}) {
+  const deps = { ...baseDeps(), ...extra };
   const actions = buildDashboardVoiceActions(deps);
   registerActions(scope, actions);
   return deps;
@@ -48,12 +60,19 @@ describe('Voice Control Coverage Gate', () => {
       expect(advertised.has(name), `Semantic voice action is not advertised: ${name}`).toBe(true);
     }
     // Catches names removed/renamed in DashboardPage that this gate doesn't know about yet.
-    for (const action of buildDashboardVoiceActions({
-      setView: vi.fn(), setActiveCategory: vi.fn(), setHistoryOpen: vi.fn(), setVoiceChatOpen: vi.fn(),
-      setGuideOpen: vi.fn(), setJWT: vi.fn(), disconnectSocket: vi.fn(), onLogout: vi.fn(), dispatch: vi.fn(),
-      setPendingAnalysis: vi.fn(), setSettingsOpen: vi.fn(),
-    })) {
+    for (const action of buildDashboardVoiceActions(baseDeps())) {
       expect(REQUIRED_SEMANTIC_ACTIONS.includes(action.name), `Undocumented semantic voice action: ${action.name}`).toBe(true);
+    }
+  });
+
+  it('only registers/advertises admin actions (user management) for an admin session', () => {
+    const nonAdminNames = new Set(buildDashboardVoiceActions(baseDeps()).map((a) => a.name));
+    for (const name of REQUIRED_ADMIN_ACTIONS) {
+      expect(nonAdminNames.has(name), `Admin action leaked to a non-admin voice registration: ${name}`).toBe(false);
+    }
+    const adminNames = new Set(buildDashboardVoiceActions({ ...baseDeps(), isAdmin: true }).map((a) => a.name));
+    for (const name of REQUIRED_ADMIN_ACTIONS) {
+      expect(adminNames.has(name), `Admin action missing from an admin voice registration: ${name}`).toBe(true);
     }
   });
 
@@ -130,6 +149,64 @@ describe('Voice Control Coverage Gate', () => {
 
     expect(executeAction('close_settings', {})).toBe(true);
     expect(deps.setSettingsOpen).toHaveBeenCalledWith(false);
+
+    expect(executeAction('close_history', {})).toBe(true);
+    expect(deps.setHistoryOpen).toHaveBeenCalledWith(false);
+
+    expect(executeAction('download_analysis_pdf', {})).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:downloadPdf', {});
+
+    expect(executeAction('share_analysis', {})).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:share', {});
+
+    expect(executeAction('set_analysis_priority', { value: 'yuksek' })).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:analysis:set', { field: 'priority', value: 'yuksek' });
+
+    expect(executeAction('wizard_goto_step', { step: '3' })).toBe(true);
+    expect(deps.dispatch).toHaveBeenCalledWith('aq:wizard:goto', { step: 3 });
+
+    expect(executeAction('set_language', { value: 'de' })).toBe(true);
+    expect(deps.setLang).toHaveBeenCalledWith('de');
+
+    expect(executeAction('open_menu', {})).toBe(true);
+    expect(deps.setMenuOpen).toHaveBeenCalledWith(true);
+
+    expect(executeAction('close_menu', {})).toBe(true);
+    expect(deps.setMenuOpen).toHaveBeenCalledWith(false);
+
+    expect(executeAction('open_about', {})).toBe(true);
+    expect(deps.setInfoPanel).toHaveBeenCalledWith('about');
+
+    expect(executeAction('open_mission', {})).toBe(true);
+    expect(deps.setInfoPanel).toHaveBeenCalledWith('mission');
+
+    expect(executeAction('open_contact', {})).toBe(true);
+    expect(deps.setInfoPanel).toHaveBeenCalledWith('contact');
+
+    expect(executeAction('close_info', {})).toBe(true);
+    expect(deps.setInfoPanel).toHaveBeenCalledWith(null);
+
+    expect(executeAction('open_notifications', {})).toBe(true);
+    expect(deps.setNotifOpen).toHaveBeenCalledWith(true);
+
+    expect(executeAction('close_notifications', {})).toBe(true);
+    expect(deps.setNotifOpen).toHaveBeenCalledWith(false);
+
+    expect(executeAction('expand_sidebar', {})).toBe(true);
+    expect(deps.setSidebarCollapsed).toHaveBeenCalledWith(false);
+
+    expect(executeAction('collapse_sidebar', {})).toBe(true);
+    expect(deps.setSidebarCollapsed).toHaveBeenCalledWith(true);
+  });
+
+  it('invokes the real admin-only handlers when registered for an admin session', () => {
+    const deps = registerRealDashboardActions({ isAdmin: true });
+
+    expect(executeAction('open_user_management', {})).toBe(true);
+    expect(deps.setUserMgmtOpen).toHaveBeenCalledWith(true);
+
+    expect(executeAction('close_user_management', {})).toBe(true);
+    expect(deps.setUserMgmtOpen).toHaveBeenCalledWith(false);
   });
 
   it('keeps the complete advertised action surface uniquely named and documented', () => {

@@ -33,6 +33,17 @@ function getStoredTheme() {
   return VALID_THEMES.has(saved) ? saved : 'dark';
 }
 
+// Persists + applies a theme mode outside of SettingsPanel's own React
+// state -- used by the voice assistant's set_theme action (see
+// dashboardVoiceActions.js) so "koyu temaya geç" works whether or not the
+// settings panel happens to be open, the same way the panel's own theme
+// buttons do (setTheme() there does exactly this, just from local state).
+function setThemePersisted(mode) {
+  const safeMode = VALID_THEMES.has(mode) ? mode : 'dark';
+  try { window.localStorage.setItem(THEME_KEY, safeMode); } catch {}
+  applyTheme(safeMode);
+}
+
 if (typeof window !== 'undefined') {
   applyTheme(getStoredTheme());
   const media = window.matchMedia?.('(prefers-color-scheme: light)');
@@ -292,8 +303,7 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
 
   const setTheme = (mode) => {
     setThemeMode(mode);
-    try { window.localStorage.setItem(THEME_KEY, mode); } catch {}
-    applyTheme(mode);
+    setThemePersisted(mode);
   };
 
   const togglePush = async () => {
@@ -384,4 +394,4 @@ function GuideModal({ onClose, t, lang }) {
   </motion.div></motion.div>;
 }
 
-export { DropdownOverlay, MenuPanel, SettingsPanel, InfoModal, GuideModal, applyTheme, getStoredTheme };
+export { DropdownOverlay, MenuPanel, SettingsPanel, InfoModal, GuideModal, applyTheme, getStoredTheme, setThemePersisted };

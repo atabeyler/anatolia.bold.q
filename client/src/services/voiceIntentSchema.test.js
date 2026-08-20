@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CATEGORY_IDS, DEPTH_IDS, CRITICAL_ACTIONS, CONFIRM_REQUIRED_ACTIONS,
+  CATEGORY_IDS, DEPTH_IDS, PRIORITY_IDS, CRITICAL_ACTIONS, CONFIRM_REQUIRED_ACTIONS,
   matchCategory, matchDepth, matchQuantum, isCriticalIntentText,
   mentionsNext, mentionsBack, mentionsReset, matchConfirm, matchCancel,
+  matchPriority, mentionsDownload, mentionsPdf, mentionsShare,
+  matchLanguageTarget, matchThemeTarget, matchWizardStepNumber,
   coerceAndValidateParams, validateActionCandidate, validateActionPlan,
 } from './voiceIntentSchema.js';
 
@@ -184,5 +186,44 @@ describe('voiceIntentSchema: validateActionCandidate / validateActionPlan', () =
       expect(typeof name).toBe('string');
       expect(name).not.toBe('ui_activate');
     }
+  });
+});
+
+describe('voiceIntentSchema: priority/download/share/language/theme/step slot matching', () => {
+  it('maps priority synonyms', () => {
+    expect(matchPriority('önceliği yüksek yap')).toBe('yuksek');
+    expect(matchPriority('set priority to critical')).toBe('kritik');
+    expect(matchPriority('düşük öncelik')).toBe('dusuk');
+    expect(matchPriority('bugün hava nasıl')).toBeNull();
+    for (const id of PRIORITY_IDS) expect(typeof id).toBe('string');
+  });
+
+  it('detects download/pdf/share intent words', () => {
+    expect(mentionsDownload('raporu indir')).toBe(true);
+    expect(mentionsDownload('download the report')).toBe(true);
+    expect(mentionsPdf('pdf olarak indir')).toBe(true);
+    expect(mentionsPdf('raporu indir')).toBe(false);
+    expect(mentionsShare('raporu paylaş')).toBe(true);
+    expect(mentionsShare('share the report')).toBe(true);
+  });
+
+  it('maps a spoken target language to its internal language id', () => {
+    expect(matchLanguageTarget('dili almanca yap')).toBe('de');
+    expect(matchLanguageTarget('switch to french')).toBe('fr');
+    expect(matchLanguageTarget('İngilizceye çevir')).toBe('en');
+    expect(matchLanguageTarget('bugün hava nasıl')).toBeNull();
+  });
+
+  it('maps a spoken theme target to dark/light/system', () => {
+    expect(matchThemeTarget('koyu temaya geç')).toBe('dark');
+    expect(matchThemeTarget('light mode')).toBe('light');
+    expect(matchThemeTarget('sistem temasına al')).toBe('system');
+    expect(matchThemeTarget('bugün hava nasıl')).toBeNull();
+  });
+
+  it('extracts a wizard step number only when a step-word is present', () => {
+    expect(matchWizardStepNumber('3. adıma git')).toBe('3');
+    expect(matchWizardStepNumber('go to step 2')).toBe('2');
+    expect(matchWizardStepNumber('3 elma aldım')).toBeNull(); // digit with no step word
   });
 });

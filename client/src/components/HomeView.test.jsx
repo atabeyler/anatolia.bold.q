@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HomeView from './HomeView.jsx';
 import { LangProvider } from '../services/langContext.jsx';
 import { api } from '../services/api.js';
+import { executeAction, getActionsForAI } from '../services/voiceActionRegistry.js';
 
 vi.mock('./TurkeyMap.jsx', () => ({ default: () => <div>TurkeyMap stub</div> }));
 vi.mock('../services/api.js', () => ({
@@ -111,6 +112,23 @@ describe('HomeView command center', () => {
     expect(screen.getByText(tx.askAnatolia)).toBeInTheDocument();
     expect(screen.queryByText(/Sistem Durumu/i)).not.toBeInTheDocument();
     localStorage.removeItem('anatolia_lang');
+  });
+
+  it('registers open_briefing/close_briefing voice actions that drive the modal, and refresh_briefing only for admins', async () => {
+    api.morningBriefToday.mockResolvedValue({ exists: true, date: '2026-01-05', items: [{ title: 'Haber' }] });
+    renderHome({ isAdmin: true });
+    await screen.findByText('TurkeyMap stub');
+    await executeAction('open_briefing');
+    expect(await screen.findByRole('button', { name: /1\. Haber/i })).toBeInTheDocument();
+    await executeAction('close_briefing');
+    await waitFor(() => expect(screen.queryByRole('button', { name: /1\. Haber/i })).not.toBeInTheDocument());
+    expect(getActionsForAI().map((a) => a.name)).toContain('refresh_briefing');
+  });
+
+  it('does not advertise refresh_briefing for a non-admin session', async () => {
+    renderHome({ isAdmin: false });
+    await screen.findByText('TurkeyMap stub');
+    expect(getActionsForAI().map((a) => a.name)).not.toContain('refresh_briefing');
   });
 
   it('filters briefing items by search query', async () => {

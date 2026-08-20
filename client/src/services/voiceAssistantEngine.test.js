@@ -19,6 +19,12 @@ function register(deps = {}) {
     dispatch: vi.fn(),
     setPendingAnalysis: vi.fn(),
     setSettingsOpen: vi.fn(),
+    setMenuOpen: vi.fn(),
+    setInfoPanel: vi.fn(),
+    setNotifOpen: vi.fn(),
+    setSidebarCollapsed: vi.fn(),
+    setUserMgmtOpen: vi.fn(),
+    setLang: vi.fn(),
     ...deps,
   };
   registerActions(scope, buildDashboardVoiceActions(merged));
@@ -134,6 +140,94 @@ describe('processVoiceCommand: context-aware follow-ups on the analysis screen',
   it('an explicit new category command still switches category even mid-wizard', async () => {
     const result = await processVoiceCommand('Enerji analizi başlat', ctx);
     expect(result.actions[0].params.category).toBe('enerji');
+  });
+
+  it('resolves a priority word against the active wizard', async () => {
+    const result = await processVoiceCommand('önceliği yüksek yap', ctx);
+    expect(result.actions).toEqual([{ action: 'set_analysis_priority', params: { value: 'yuksek' } }]);
+  });
+
+  it('resolves an explicit wizard step number ("3. adıma git")', async () => {
+    const result = await processVoiceCommand('3. adıma git', ctx);
+    expect(result.actions).toEqual([{ action: 'wizard_goto_step', params: { step: '3' } }]);
+  });
+
+  it('resolves "step 2" in English too', async () => {
+    const result = await processVoiceCommand('go to step 2', { ...ctx, lang: 'en' });
+    expect(result.actions).toEqual([{ action: 'wizard_goto_step', params: { step: '2' } }]);
+  });
+});
+
+describe('processVoiceCommand: report download/share stay reachable once a result is on screen', () => {
+  beforeEach(() => register());
+
+  // wizardOpen flips false once a result exists (see AnalysisView.jsx) --
+  // hasResult is what keeps these context-aware commands reachable.
+  const resultCtx = { page: 'dashboard-analysis', lang: 'tr', category: 'enerji', wizardOpen: false, hasResult: true };
+
+  it('resolves "raporu indir" to download_analysis', async () => {
+    const result = await processVoiceCommand('raporu indir', resultCtx);
+    expect(result.actions).toEqual([{ action: 'download_analysis', params: {} }]);
+  });
+
+  it('resolves "pdf olarak indir" to download_analysis_pdf, not the docx download', async () => {
+    const result = await processVoiceCommand('pdf olarak indir', resultCtx);
+    expect(result.actions).toEqual([{ action: 'download_analysis_pdf', params: {} }]);
+  });
+
+  it('resolves "raporu paylaş" to share_analysis', async () => {
+    const result = await processVoiceCommand('raporu paylaş', resultCtx);
+    expect(result.actions).toEqual([{ action: 'share_analysis', params: {} }]);
+  });
+
+  it('does nothing download/share-specific once wizardOpen is false and there is no result either', async () => {
+    const result = await processVoiceCommand('raporu indir', { ...resultCtx, hasResult: false });
+    expect(result.actions).toEqual([]);
+  });
+});
+
+describe('processVoiceCommand: global language/theme preference commands (work from any screen)', () => {
+  beforeEach(() => register());
+
+  it('resolves "dili almanca yap" to set_language(de)', async () => {
+    const result = await processVoiceCommand('dili almanca yap', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'set_language', params: { value: 'de' } }]);
+  });
+
+  it('resolves "switch to french" to set_language(fr)', async () => {
+    const result = await processVoiceCommand('switch to french', { page: 'dashboard-home', lang: 'en' });
+    expect(result.actions).toEqual([{ action: 'set_language', params: { value: 'fr' } }]);
+  });
+
+  it('resolves "koyu temaya geç" to set_theme(dark)', async () => {
+    const result = await processVoiceCommand('koyu temaya geç', { page: 'dashboard-home', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'set_theme', params: { value: 'dark' } }]);
+  });
+
+  it('resolves "light mode" to set_theme(light)', async () => {
+    const result = await processVoiceCommand('light mode', { page: 'dashboard-home', lang: 'en' });
+    expect(result.actions).toEqual([{ action: 'set_theme', params: { value: 'light' } }]);
+  });
+});
+
+describe('processVoiceCommand: regression -- category commands never cross-trigger an unrelated tab/action', () => {
+  beforeEach(() => register());
+
+  it('"Savunma analizi başlat" resolves to exactly the defense category, nothing else', async () => {
+    const result = await processVoiceCommand('Savunma analizi başlat', { page: 'dashboard-analysis', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'start_analysis', params: { category: 'savunma', depth: 'standart', quantum: false } }]);
+  });
+
+  it('"Enerji analizi başlat" selects energy and never triggers an unrelated tab (e.g. history/"Tarih")', async () => {
+    const result = await processVoiceCommand('Enerji analizi başlat', { page: 'dashboard-analysis', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'start_analysis', params: { category: 'enerji', depth: 'standart', quantum: false } }]);
+    expect(result.actions.some((a) => a.action === 'navigate_history')).toBe(false);
+    expect(result.actions.some((a) => a.action === 'navigate_home')).toBe(false);
+  });
+
+  it('"Derin kuantum destekli enerji analizi başlat" yields exactly category=energy, depth=deep, quantum=true', async () => {
+    const result = await processVoiceCommand('Derin kuantum destekli enerji analizi başlat', { page: 'dashboard-analysis', lang: 'tr' });
+    expect(result.actions).toEqual([{ action: 'start_analysis', params: { category: 'enerji', depth: 'derin', quantum: true } }]);
   });
 });
 

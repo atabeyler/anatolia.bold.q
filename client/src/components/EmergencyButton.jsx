@@ -6,6 +6,8 @@ import VoiceButton from './VoiceButton.jsx';
 import FileAttach from './FileAttach.jsx';
 import { useLang } from '../services/langContext.jsx';
 import ChatPanel from './EmergencyChatPanel.jsx';
+import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
+import { catalogEntry } from '../services/voiceActionCatalog.js';
 
 const PANELS = { CENTER: 'center', USERS: 'users', CHAT: 'chat' };
 
@@ -42,6 +44,18 @@ export default function EmergencyButton({ authenticated, user }) {
     };
     window.addEventListener('aq:emergency:open', onOpen);
     return () => window.removeEventListener('aq:emergency:open', onOpen);
+  }, []);
+
+  // close_emergency (see voiceActionCatalog.js) -- open_emergency is
+  // dispatched by dashboardVoiceActions.js as a window event this
+  // component already listens for; closing needs its own action because
+  // the `open` boolean lives in this component's local state, the same
+  // self-registration pattern PersonnelRadar.jsx uses for open/close_radar.
+  useEffect(() => {
+    registerActions('emergency-button', [
+      { name: 'close_emergency', description: catalogEntry('close_emergency')?.description || 'Close the emergency center panel', params: {}, handler: () => setOpen(false) },
+    ]);
+    return () => unregisterActions('emergency-button');
   }, []);
 
   const onDragStart = (e) => {

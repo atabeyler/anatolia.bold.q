@@ -44,6 +44,8 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   const generateRef = useRef(null);
   const downloadDocxRef = useRef(null);
+  const downloadPdfRef = useRef(null);
+  const shareRef = useRef(null);
   const resetRef = useRef(null);
 
   // Applies category/depth/quantum/prompt/title a voice command (start_analysis)
@@ -71,31 +73,46 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
       if (field === 'title') setTitle(value ?? '');
       if (field === 'prompt') setPrompt((prev) => (value ? (prev ? prev + ' ' + value : value) : prev));
       if (field === 'depth' && DEPTH_IDS.includes(value)) setDepth(value);
+      if (field === 'priority' && ['dusuk', 'normal', 'yuksek', 'kritik'].includes(value)) setPriority(value);
     };
     const onQuantum = (e) => setQuantumMode((e?.detail?.mode || 'on') !== 'off');
     const onGenerate = () => generateRef.current?.();
     const onDownload = () => downloadDocxRef.current?.();
+    const onDownloadPdf = () => downloadPdfRef.current?.();
+    const onShare = () => shareRef.current?.();
     const onReset = () => resetRef.current?.();
     // wizard_next/wizard_back (see dashboardVoiceActions.js) -- lets voice
     // commands ("Sonraki"/"Geri dön") drive the 5-step wizard from outside
     // it, the same way set_analysis_title/prompt already drive its fields.
     const onWizardNext = () => setWizardStep((s) => Math.min(5, s + 1));
     const onWizardBack = () => setWizardStep((s) => Math.max(1, s - 1));
+    // wizard_goto_step -- jumps directly to a numbered step (1-5) instead
+    // of stepping through wizard_next repeatedly.
+    const onWizardGoto = (e) => {
+      const step = Number(e?.detail?.step);
+      if (Number.isFinite(step) && step >= 1 && step <= 5) setWizardStep(step);
+    };
     window.addEventListener('aq:analysis:set', onSet);
     window.addEventListener('aq:analysis:quantum', onQuantum);
     window.addEventListener('aq:analysis:generate', onGenerate);
     window.addEventListener('aq:analysis:download', onDownload);
+    window.addEventListener('aq:analysis:downloadPdf', onDownloadPdf);
+    window.addEventListener('aq:analysis:share', onShare);
     window.addEventListener('aq:analysis:reset', onReset);
     window.addEventListener('aq:wizard:next', onWizardNext);
     window.addEventListener('aq:wizard:back', onWizardBack);
+    window.addEventListener('aq:wizard:goto', onWizardGoto);
     return () => {
       window.removeEventListener('aq:analysis:set', onSet);
       window.removeEventListener('aq:analysis:quantum', onQuantum);
       window.removeEventListener('aq:analysis:generate', onGenerate);
       window.removeEventListener('aq:analysis:download', onDownload);
+      window.removeEventListener('aq:analysis:downloadPdf', onDownloadPdf);
+      window.removeEventListener('aq:analysis:share', onShare);
       window.removeEventListener('aq:analysis:reset', onReset);
       window.removeEventListener('aq:wizard:next', onWizardNext);
       window.removeEventListener('aq:wizard:back', onWizardBack);
+      window.removeEventListener('aq:wizard:goto', onWizardGoto);
     };
   }, []);
 
@@ -114,6 +131,10 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
         quantum: quantumMode,
         wizardStep,
         wizardOpen: !result && !scenarioResult,
+        // Lets context-aware voice commands (download/share/reset) keep
+        // working once a result is on screen, when wizardOpen has already
+        // flipped false -- see voiceAssistantEngine.js's resolveLocalIntent.
+        hasResult: !!result,
       },
     }));
   }, [category, depth, quantumMode, wizardStep, result, scenarioResult]);
@@ -243,6 +264,8 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   generateRef.current = generate;
   downloadDocxRef.current = downloadDocx;
+  downloadPdfRef.current = downloadPdf;
+  shareRef.current = shareReport;
   resetRef.current = reset;
 
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;

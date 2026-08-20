@@ -3,6 +3,8 @@ import { t as translate } from './i18n.js';
 import {
   matchCategory, matchDepth, matchQuantum, mentionsAnalysis, mentionsStartVerb,
   mentionsNext, mentionsBack, mentionsReset, matchConfirm, matchCancel,
+  matchPriority, mentionsDownload, mentionsPdf, mentionsShare,
+  matchLanguageTarget, matchThemeTarget, matchWizardStepNumber,
   validateActionPlan, CONFIRM_REQUIRED_ACTIONS,
 } from './voiceIntentSchema.js';
 import { matchUiCatalogAction } from './voiceUiCatalog.js';
@@ -162,22 +164,42 @@ function resolveLocalIntent(transcript, context, knownActionNames) {
     return { actions: [], speak: translate(lang, 'voiceClarifyCategory') };
   }
 
+  // ── Global app-preference commands (UI language / appearance theme) --
+  // work from any authenticated screen, not just mid-wizard, since they
+  // are not analysis-scoped state.
+  const languageTarget = matchLanguageTarget(raw);
+  if (languageTarget) {
+    return { actions: [{ action: 'set_language', params: { value: languageTarget } }], speak: translate(languageTarget, 'voiceContextAck') };
+  }
+  const themeTarget = matchThemeTarget(raw);
+  if (themeTarget) {
+    return { actions: [{ action: 'set_theme', params: { value: themeTarget } }], speak: translate(lang, 'voiceContextAck') };
+  }
+
   // ── Context-aware follow-ups: the user is on the analysis screen with a
   // wizard already open for a category -- "Derin yap", "Kuantumu aç",
   // "Sonraki", "Sıfırla", bare "Başlat" resolve against that live wizard
-  // state without needing the category repeated.
-  if (context.page === 'dashboard-analysis' && context.wizardOpen && context.category) {
+  // state without needing the category repeated. Also reachable once a
+  // result is already on screen (wizardOpen has flipped false, but
+  // hasResult is true) so "raporu indir"/"paylaş" work post-generation.
+  if (context.page === 'dashboard-analysis' && context.category && (context.wizardOpen || context.hasResult)) {
     const steps = [];
     if (depth) steps.push({ action: 'set_analysis_depth', params: { value: depth } });
     if (quantum !== null) steps.push({ action: 'toggle_quantum', params: { mode: quantum ? 'on' : 'off' } });
+    const priority = matchPriority(raw);
+    if (priority) steps.push({ action: 'set_analysis_priority', params: { value: priority } });
     if (mentionsNext(raw)) steps.push({ action: 'wizard_next', params: {} });
     if (mentionsBack(raw)) steps.push({ action: 'wizard_back', params: {} });
+    const stepNumber = matchWizardStepNumber(raw);
+    if (stepNumber) steps.push({ action: 'wizard_goto_step', params: { step: stepNumber } });
     if (mentionsReset(raw)) steps.push({ action: 'reset_analysis', params: {} });
+    if (mentionsShare(raw)) steps.push({ action: 'share_analysis', params: {} });
+    if (mentionsDownload(raw)) steps.push({ action: mentionsPdf(raw) ? 'download_analysis_pdf' : 'download_analysis', params: {} });
     // A bare start verb ("Başlat") with no other slot matched means "run
     // the analysis with what's already configured" -- only when nothing
-    // more specific (depth/quantum/next/back/reset) already claimed it, so
-    // "kuantumu aç" (which also contains the generic verb "aç") doesn't
-    // also fire generate_analysis.
+    // more specific (depth/quantum/priority/next/back/reset/download/share)
+    // already claimed it, so "kuantumu aç" (which also contains the
+    // generic verb "aç") doesn't also fire generate_analysis.
     if (steps.length === 0 && hasStartVerb) steps.push({ action: 'generate_analysis', params: {} });
 
     if (steps.length > 0) {
@@ -200,8 +222,8 @@ function resolveLocalIntent(transcript, context, knownActionNames) {
 
 function speakForUiMatch(lang, entry) {
   const key = {
-    nav_home: 'home', nav_analysis: 'analysis', nav_history: 'history', open_voice_chat: 'voiceChat',
-  }[entry.id];
+    navigate_home: 'home', navigate_analysis: 'analysis', navigate_history: 'history', open_voice_chat: 'voiceChat',
+  }[entry.action];
   if (key) return (FALLBACK_TEXT[lang] || FALLBACK_TEXT.tr)[key];
   return translate(lang, 'voiceContextAck');
 }
