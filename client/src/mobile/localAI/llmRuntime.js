@@ -15,13 +15,32 @@
 // branches on platform -- once a real `LocalLLM` Capacitor plugin is
 // registered, this factory picks it up with zero changes to
 // llmProvider.js or above.
-function getCapacitorPlugin(pluginName, capacitorGlobal) {
+export function getCapacitorPlugin(pluginName, capacitorGlobal) {
   const cap = capacitorGlobal || (typeof window !== 'undefined' ? window.Capacitor : undefined);
   return cap?.Plugins?.[pluginName];
 }
 
 export function isRuntimeInstallable({ capacitorGlobal } = {}) {
   return !!getCapacitorPlugin('LocalLLM', capacitorGlobal);
+}
+
+// Real device-RAM/disk reading from the native plugin (ActivityManager.
+// MemoryInfo + StatFs on the Kotlin side -- see LocalLLMPlugin.kt's
+// getDeviceInfo()), used by modelSpec.js's selectTierForDevice() to pick
+// the right model tier and by deviceCapability.js's checkDeviceCapability()
+// as `nativeDeviceInfo`. Returns null (never throws) when the plugin isn't
+// registered or the call fails -- callers already treat a missing RAM
+// signal as "not capable" (deviceCapability.js's fail-safe), so a null
+// here correctly routes the app to offline-extractive instead of guessing.
+export async function getNativeDeviceInfo({ capacitorGlobal } = {}) {
+  const plugin = getCapacitorPlugin('LocalLLM', capacitorGlobal);
+  if (!plugin?.getDeviceInfo) return null;
+  try {
+    const info = await plugin.getDeviceInfo();
+    return (info && typeof info.totalMemBytes === 'number') ? info : null;
+  } catch {
+    return null;
+  }
 }
 
 // Real factory, shaped exactly like desktop's createLlamaRuntime(). Throws

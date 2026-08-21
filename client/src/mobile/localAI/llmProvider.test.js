@@ -55,4 +55,19 @@ describe('mobile createLLMQuery', () => {
     const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory: createLlamaRuntime });
     await expect(run({ mode: 'chat', text: 'merhaba' })).rejects.toThrow('android_native_llm_plugin_missing');
   });
+
+  it('caps oversized chat/generate input before it reaches the runtime (resource-safety context cap)', async () => {
+    const db = await createTestMobileDb();
+    const generate = vi.fn(async () => 'ok');
+    const runtimeFactory = vi.fn(async () => ({ generate }));
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory });
+
+    const huge = 'x'.repeat(10000);
+    await run({ mode: 'chat', text: huge });
+
+    const [promptSent] = generate.mock.calls[0];
+    // The huge input must have been truncated well below its original
+    // length before being folded into the final prompt sent to the runtime.
+    expect(promptSent.length).toBeLessThan(huge.length);
+  });
 });

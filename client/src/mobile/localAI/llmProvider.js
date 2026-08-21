@@ -9,6 +9,20 @@ const GENERATE_INSTRUCTION =
   'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak yapılandırılmış, başlıklı bir analiz taslağı yaz. ' +
   'Kesin veri yoksa varsayım olduğunu belirt.';
 
+// Resource-safety context cap (task spec point 8). Phone-class contextSize
+// is 1536-2048 tokens (modelSpec.js); roughly budgeting ~4 chars/token for
+// Turkish/English mixed text, this leaves headroom for the instruction +
+// RAG context block + the requested maxTokens output after the user's own
+// text is truncated to this length. Truncating here (not just trusting the
+// UI to keep input short) means a pasted wall of text can't blow the
+// context window and force llama.cpp to either error or silently drop
+// context on the native side.
+const MAX_INPUT_CHARS = 2000;
+
+function capInput(text) {
+  return String(text || '').slice(0, MAX_INPUT_CHARS);
+}
+
 // Mirrors desktop/localAI/llmProvider.js -- same request/response shapes,
 // same runtimeFactory injection seam, only the underlying runtime differs
 // (llmRuntime.js here calls a native Capacitor plugin instead of
@@ -18,13 +32,19 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
 
   function getRuntime() {
     if (!runtimePromise) {
-      runtimePromise = runtimeFactory({ modelPath: modelManager.spec.filename, contextSize: modelManager.spec.contextSize, systemPrompt: SYSTEM_PROMPT });
+      // A resolvable-on-disk relative path (modelManager's own
+      // MODELS_SUBDIR/filename), not just the bare filename -- see
+      // modelManager.js's relativePath comment for why. The native plugin
+      // resolves this against the app's private storage root itself.
+      runtimePromise = runtimeFactory({ modelPath: modelManager.relativePath, contextSize: modelManager.spec.contextSize, systemPrompt: SYSTEM_PROMPT });
     }
     return runtimePromise;
   }
 
   async function run(request = {}) {
-    const { mode = 'chat', text = '', entityIds = [], category = '', title = '', prompt = '', lang = 'tr' } = request;
+    const { mode = 'chat', text: rawText = '', entityIds = [], category = '', title = '', prompt: rawPrompt = '', lang = 'tr' } = request;
+    const text = capInput(rawText);
+    const prompt = capInput(rawPrompt);
 
     if (!modelManager.isAvailableSync(isInstalled)) {
       throw new Error('local_llm_unavailable');

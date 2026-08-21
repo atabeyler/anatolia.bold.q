@@ -118,6 +118,15 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
 
   return {
     spec,
+    // Exposed so llmProvider.js can hand the native LocalLLM plugin a real,
+    // resolvable-on-disk path (this module's own MODELS_SUBDIR + filename)
+    // instead of just spec.filename -- a bare filename has no directory
+    // component and the native side would otherwise have to duplicate
+    // MODELS_SUBDIR as a second source of truth. The native plugin resolves
+    // this relative path against the app's private files dir (Android's
+    // equivalent of @capacitor/filesystem's Directory.Data -- see
+    // LocalLLMPlugin.kt's comment on that mapping).
+    relativePath,
     isModelInstalled,
     downloadModel,
     removeModel,

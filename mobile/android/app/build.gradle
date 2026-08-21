@@ -18,6 +18,14 @@ if (hasSigningConfig) {
 android {
     namespace = "com.boldkimya.anatoliaq"
     compileSdk = rootProject.ext.compileSdkVersion
+    // Local Android Local AI native library (LocalLLM Capacitor plugin --
+    // see app/src/main/java/.../localllm/ and app/src/main/cpp/). Requires
+    // the NDK to be installed (Android Studio -> SDK Manager -> SDK Tools
+    // -> NDK (side by side)); ndkVersion pins which one Gradle downloads/
+    // uses if not already present. CMake 3.22.1+ is bundled with recent
+    // NDK installs. NOT built/verified in this sandbox -- see the final
+    // report.
+    ndkVersion "27.0.12077973"
     defaultConfig {
         applicationId "com.boldkimya.anatoliaq"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -29,6 +37,28 @@ android {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+        // arm64-v8a only, deliberately: llama.cpp's CPU inference needs
+        // 64-bit NEON to be fast enough to be usable at all on a phone;
+        // armeabi-v7a support would roughly double native build/test
+        // surface for a tier of device this feature already excludes via
+        // the RAM floor in modelSpec.js (a device old/weak enough to still
+        // be 32-bit-only Android is very unlikely to also clear the 3 GB+
+        // RAM floor). x86_64 is included for the emulator.
+        ndk {
+            abiFilters "arm64-v8a", "x86_64"
+        }
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+                cppFlags "-O3"
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
         }
     }
     if (hasSigningConfig) {

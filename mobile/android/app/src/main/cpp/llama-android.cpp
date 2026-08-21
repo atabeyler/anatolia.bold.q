@@ -1,0 +1,229 @@
+// JNI bridge between LlamaBridge.kt and llama.cpp's public C API
+// (llama.h). Adapted from the structure of llama.cpp's own maintained
+// Android sample (examples/llama.android's llama-android.cpp, MIT
+// licensed) -- same call sequence (load model -> create context -> apply
+// chat template -> tokenize -> decode in batches -> sample loop ->
+// detokenize), condensed into one blocking generate() call instead of that
+// sample's Kotlin-Flow token-streaming design, since llmRuntime.js's
+// plugin.generate() contract (client/src/mobile/localAI/llmRuntime.js)
+// returns one final string, not a stream.
+//
+// NOT COMPILED HERE -- no NDK in this sandbox. Function names/signatures
+// below match llama.cpp's public API as of the commit generation this was
+// written against (mid-2025-era llama.cpp; see CMakeLists.txt's submodule
+// pinning note). llama.cpp's C API has changed function names before
+// (e.g. llama_load_model_from_file -> llama_model_load_from_file,
+// llama_new_context_with_model -> llama_init_from_model) -- if the pinned
+// commit is older or newer than what this was written against, expect to
+// need small renames here, not a rewrite; the call *sequence* below is
+// stable and has been for a long time.
+
+#include <android/log.h>
+#include <jni.h>
+#include <string>
+#include <vector>
+
+#include "llama.h"
+
+#define LOG_TAG "AnatoliaLlama"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+namespace {
+
+// One (model, context) pair per loaded handle. A raw pointer cast to a
+// jlong is the "opaque handle" LlamaBridge.kt's Kotlin side holds --
+// mirrors llama.cpp's own Android sample's approach (it does the same
+// pointer<->Long cast for its Llm class' internal state).
+struct LlamaSession {
+    llama_model *model = nullptr;
+    llama_context *ctx = nullptr;
+    const llama_vocab *vocab = nullptr;
+    int32_t contextSize = 0;
+};
+
+bool g_backendInitialized = false;
+
+void ensureBackendInitialized() {
+    if (!g_backendInitialized) {
+        llama_backend_init();
+        g_backendInitialized = true;
+    }
+}
+
+} // namespace
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeLoad(
+        JNIEnv *env, jobject /* thiz */,
+        jstring jModelPath, jint jContextSize, jint jThreadCount) {
+    ensureBackendInitialized();
+
+    const char *modelPathChars = env->GetStringUTFChars(jModelPath, nullptr);
+    std::string modelPath(modelPathChars);
+    env->ReleaseStringUTFChars(jModelPath, modelPathChars);
+
+    llama_model_params modelParams = llama_model_default_params();
+    // CPU-only on purpose: no GPU/NNAPI backend is assumed present or
+    // reliable across the wide range of Android GPUs/drivers this app
+    // targets -- ggml's CPU backend (NEON on arm64) is the only path
+    // validated by llama.cpp's own Android sample. n_gpu_layers stays 0.
+    modelParams.n_gpu_layers = 0;
+
+    llama_model *model = llama_model_load_from_file(modelPath.c_str(), modelParams);
+    if (model == nullptr) {
+        LOGE("llama_model_load_from_file failed for %s", modelPath.c_str());
+        return 0;
+    }
+
+    llama_context_params ctxParams = llama_context_default_params();
+    ctxParams.n_ctx = static_cast<uint32_t>(jContextSize);
+    ctxParams.n_batch = static_cast<uint32_t>(jContextSize);
+    ctxParams.n_threads = jThreadCount;
+    ctxParams.n_threads_batch = jThreadCount;
+
+    llama_context *ctx = llama_init_from_model(model, ctxParams);
+    if (ctx == nullptr) {
+        LOGE("llama_init_from_model failed");
+        llama_model_free(model);
+        return 0;
+    }
+
+    auto *session = new LlamaSession();
+    session->model = model;
+    session->ctx = ctx;
+    session->vocab = llama_model_get_vocab(model);
+    session->contextSize = jContextSize;
+
+    LOGI("Model loaded: %s (contextSize=%d)", modelPath.c_str(), jContextSize);
+    return reinterpret_cast<jlong>(session);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
+        JNIEnv *env, jobject /* thiz */,
+        jlong jHandle, jstring jSystemPrompt, jstring jPrompt,
+        jint jMaxTokens, jfloat jTemperature) {
+    auto *session = reinterpret_cast<LlamaSession *>(jHandle);
+    if (session == nullptr || session->ctx == nullptr) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "session not loaded");
+        return nullptr;
+    }
+
+    const char *systemPromptChars = env->GetStringUTFChars(jSystemPrompt, nullptr);
+    const char *userPromptChars = env->GetStringUTFChars(jPrompt, nullptr);
+    std::string systemPrompt(systemPromptChars);
+    std::string userPrompt(userPromptChars);
+    env->ReleaseStringUTFChars(jSystemPrompt, systemPromptChars);
+    env->ReleaseStringUTFChars(jPrompt, userPromptChars);
+
+    // --- 1. Apply the model's own chat template (system + user turn) ---
+    // A chat-tuned model (Qwen2.5-Instruct) expects its own special
+    // tokens/role markers, not a raw text blob -- see LlamaBridge.kt's
+    // comment on why this was verified to matter on desktop's
+    // node-llama-cpp runtime; the equivalent for llama.cpp's C API is
+    // llama_chat_apply_template, using the template baked into the GGUF's
+    // metadata (tmpl = nullptr means "use the model's own").
+    llama_chat_message chatMessages[2];
+    chatMessages[0] = {"system", systemPrompt.c_str()};
+    chatMessages[1] = {"user", userPrompt.c_str()};
+
+    std::vector<char> formattedBuf(userPrompt.size() + systemPrompt.size() + 1024);
+    int32_t formattedLen = llama_chat_apply_template(
+            session->model, nullptr, chatMessages, 2, /* add_ass */ true,
+            formattedBuf.data(), static_cast<int32_t>(formattedBuf.size()));
+    if (formattedLen > static_cast<int32_t>(formattedBuf.size())) {
+        // Buffer was too small -- grow and retry once, as llama.cpp's own
+        // examples do (the first call also reports the required size).
+        formattedBuf.resize(formattedLen);
+        formattedLen = llama_chat_apply_template(
+                session->model, nullptr, chatMessages, 2, true,
+                formattedBuf.data(), static_cast<int32_t>(formattedBuf.size()));
+    }
+    std::string formattedPrompt = (formattedLen > 0)
+            ? std::string(formattedBuf.data(), formattedLen)
+            // Fails safe to a plain concatenation if the GGUF has no chat
+            // template metadata at all, rather than failing the whole call.
+            : (systemPrompt + "\n" + userPrompt);
+
+    // --- 2. Tokenize ---
+    const int32_t maxPromptTokens = session->contextSize; // generous upper bound for sizing
+    std::vector<llama_token> promptTokens(maxPromptTokens);
+    int32_t nPromptTokens = llama_tokenize(
+            session->vocab, formattedPrompt.c_str(), static_cast<int32_t>(formattedPrompt.size()),
+            promptTokens.data(), maxPromptTokens, /* add_special */ true, /* parse_special */ true);
+    if (nPromptTokens < 0) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "tokenize failed (prompt too long for context)");
+        return nullptr;
+    }
+    promptTokens.resize(nPromptTokens);
+
+    // Leave room for generation within the fixed context window -- a
+    // resource-safety guard mirrored from the JS-side MAX_INPUT_CHARS cap
+    // in llmProvider.js, enforced again here since this native call is the
+    // actual hard boundary (task spec point 8).
+    int32_t maxNewTokens = jMaxTokens;
+    if (nPromptTokens + maxNewTokens > session->contextSize) {
+        maxNewTokens = session->contextSize - nPromptTokens;
+    }
+    if (maxNewTokens <= 0) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "prompt too long for the configured context size");
+        return nullptr;
+    }
+
+    // --- 3. Decode the prompt in one batch ---
+    llama_batch batch = llama_batch_get_one(promptTokens.data(), nPromptTokens);
+    if (llama_decode(session->ctx, batch) != 0) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "llama_decode failed on prompt");
+        return nullptr;
+    }
+
+    // --- 4. Sampler chain (greedy-ish temperature sampling) ---
+    llama_sampler_chain_params samplerParams = llama_sampler_chain_default_params();
+    llama_sampler *sampler = llama_sampler_chain_init(samplerParams);
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9f, 1));
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(jTemperature > 0.0f ? jTemperature : 0.1f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+    // --- 5. Generation loop ---
+    std::string output;
+    output.reserve(maxNewTokens * 4);
+    int32_t nCur = nPromptTokens;
+    char pieceBuf[256];
+
+    for (int32_t i = 0; i < maxNewTokens; i++) {
+        llama_token newToken = llama_sampler_sample(sampler, session->ctx, -1);
+        if (llama_vocab_is_eog(session->vocab, newToken)) {
+            break; // model signaled end-of-turn -- normal completion, not an error
+        }
+        llama_sampler_accept(sampler, newToken);
+
+        int32_t pieceLen = llama_token_to_piece(session->vocab, newToken, pieceBuf, sizeof(pieceBuf), 0, true);
+        if (pieceLen > 0) {
+            output.append(pieceBuf, pieceLen);
+        }
+
+        llama_token nextTokenArr[1] = {newToken};
+        llama_batch nextBatch = llama_batch_get_one(nextTokenArr, 1);
+        if (llama_decode(session->ctx, nextBatch) != 0) {
+            LOGE("llama_decode failed mid-generation at token %d", i);
+            break; // return whatever was generated so far rather than losing the whole answer
+        }
+        nCur++;
+    }
+
+    llama_sampler_free(sampler);
+
+    return env->NewStringUTF(output.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeFree(
+        JNIEnv * /* env */, jobject /* thiz */, jlong jHandle) {
+    auto *session = reinterpret_cast<LlamaSession *>(jHandle);
+    if (session == nullptr) return;
+    if (session->ctx != nullptr) llama_free(session->ctx);
+    if (session->model != nullptr) llama_model_free(session->model);
+    delete session;
+}

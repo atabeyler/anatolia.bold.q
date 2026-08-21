@@ -1,12 +1,14 @@
 import { queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
 import { createModelManager } from './modelManager.js';
 import { createLLMQuery } from './llmProvider.js';
+import { MODEL_TIERS, selectTierForDevice } from './modelSpec.js';
+import { getNativeDeviceInfo } from './llmRuntime.js';
 
 // Mirrors desktop/localAI/registry.js's ordering and seam:
 //   1. local-llm         -- real generative inference via a native
-//                            Capacitor plugin (see llmRuntime.js -- the
-//                            plugin itself is a documented follow-up, not
-//                            built in this sandbox; see the final report).
+//                            Capacitor plugin (LocalLLM, see llmRuntime.js
+//                            and mobile/android/app/src/main/java/.../
+//                            localllm/LocalLLMPlugin.kt).
 //   2. offline-extractive -- unchanged, always available, and the fallback
 //                            for a "generate a new analysis" request too
 //                            (synthesizeFromArchive).
@@ -17,16 +19,39 @@ import { createLLMQuery } from './llmProvider.js';
 // below updates a cached flag; call it once at app start and after any
 // Model Manager UI action (install/remove), same pattern
 // mobileBridge.js already uses for connectivity state.
-const modelManager = createModelManager();
+//
+// Device-tiered model selection (task spec point 4): modelManager starts
+// pointed at the MID tier (the same model desktop pins, a safe default
+// while device RAM is still unknown) and refreshInstalledState() -- which
+// mobileBridge.js's mobileAI.modelStatus/modelDownload/modelRemove already
+// call -- also re-reads real device RAM via the native plugin and swaps in
+// the right tier's ModelManager before any install-state or capability
+// check runs. A device the native plugin can't (or doesn't yet) report RAM
+// for stays on the MID tier's own capability gate, which fails safe
+// (deviceCapability.js's no_ram_signal reason) rather than assuming a tier
+// fits.
+let modelManager = createModelManager({ spec: MODEL_TIERS.mid });
 let installedCache = false;
+let deviceInfoCache = null;
 
 export async function refreshInstalledState() {
+  deviceInfoCache = await getNativeDeviceInfo();
+  const tierSpec = selectTierForDevice(deviceInfoCache) || MODEL_TIERS.mid;
+  if (tierSpec.id !== modelManager.spec.id) {
+    modelManager = createModelManager({ spec: tierSpec, deviceInfo: { nativeDeviceInfo: deviceInfoCache } });
+  }
   installedCache = await modelManager.isModelInstalled();
   return installedCache;
 }
 
 export function getModelManager() {
   return modelManager;
+}
+
+// Informational only (diagnostics/Settings UI) -- the actual gating always
+// goes through modelManager.checkCapability(), never this cache directly.
+export function getDeviceInfo() {
+  return deviceInfoCache;
 }
 
 const PROVIDERS = [
