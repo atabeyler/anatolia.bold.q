@@ -108,22 +108,28 @@ jobs:
           done
 
       # SBOM generation (CycloneDX), one per npm workspace -- purely
-      # additive, never blocking. Published as a build artifact so a
-      # deployment/compliance process can pull the exact dependency
-      # manifest for a given commit without re-resolving it later.
+      # additive, never blocking (continue-on-error + `|| true` per
+      # invocation: a transient npx/registry hiccup on the runner must
+      # never fail the build over a reporting artifact). Published as a
+      # build artifact so a deployment/compliance process can pull the
+      # exact dependency manifest for a given commit without re-resolving
+      # it later.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Generate SBOMs (CycloneDX)
+        continue-on-error: true
         run: |
-          npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom-root.json .
-          (cd server && npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-server.json .)
-          (cd client && npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-client.json .)
+          npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom-root.json . || echo "::warning::root SBOM generation failed, continuing"
+          (cd server && npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-server.json .) || echo "::warning::server SBOM generation failed, continuing"
+          (cd client && npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-client.json .) || echo "::warning::client SBOM generation failed, continuing"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sbom
           path: sbom-*.json
           retention-days: 90
+          if-no-files-found: warn
 
   desktop:
     runs-on: ubuntu-latest
