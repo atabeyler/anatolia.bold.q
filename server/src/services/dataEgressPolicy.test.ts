@@ -8,7 +8,6 @@ import {
 
 beforeEach(() => {
   delete process.env.APPROVED_CLOUD_PROVIDERS;
-  delete process.env.CONFIDENTIAL_CLOUD_OVERRIDE;
 });
 
 describe('isCloudProviderAllowed', () => {
@@ -29,20 +28,19 @@ describe('isCloudProviderAllowed', () => {
     expect(isCloudProviderAllowed('INTERNAL', 'openai')).toBe(false);
   });
 
-  it('CONFIDENTIAL: denied by default (local/on-prem only)', () => {
-    expect(isCloudProviderAllowed('CONFIDENTIAL', 'claude')).toBe(false);
+  it('CONFIDENTIAL: only the approved set (default: all three), same as INTERNAL', () => {
+    expect(isCloudProviderAllowed('CONFIDENTIAL', 'claude')).toBe(true);
+    expect(isCloudProviderAllowed('CONFIDENTIAL', 'gemini')).toBe(true);
+    expect(isCloudProviderAllowed('CONFIDENTIAL', 'openai')).toBe(true);
   });
 
-  it('CONFIDENTIAL: allowed only with the explicit override AND on the approved list', () => {
-    process.env.CONFIDENTIAL_CLOUD_OVERRIDE = 'true';
-    expect(isCloudProviderAllowed('CONFIDENTIAL', 'claude')).toBe(true);
+  it('CONFIDENTIAL: narrows to an explicit approved list', () => {
     process.env.APPROVED_CLOUD_PROVIDERS = 'gemini';
     expect(isCloudProviderAllowed('CONFIDENTIAL', 'claude')).toBe(false);
     expect(isCloudProviderAllowed('CONFIDENTIAL', 'gemini')).toBe(true);
   });
 
-  it('RESTRICTED: never allowed, unconditionally -- not even with every override set', () => {
-    process.env.CONFIDENTIAL_CLOUD_OVERRIDE = 'true';
+  it('RESTRICTED: never allowed, unconditionally -- not even with every provider approved', () => {
     process.env.APPROVED_CLOUD_PROVIDERS = 'claude,gemini,openai';
     expect(isCloudProviderAllowed('RESTRICTED', 'claude')).toBe(false);
     expect(isCloudProviderAllowed('RESTRICTED', 'gemini')).toBe(false);

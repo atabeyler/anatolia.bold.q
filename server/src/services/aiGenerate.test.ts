@@ -61,7 +61,6 @@ function fakeRes() {
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.APPROVED_CLOUD_PROVIDERS;
-  delete process.env.CONFIDENTIAL_CLOUD_OVERRIDE;
 });
 
 describe('AQ-001/AQ-014: RESTRICTED classification never reaches a cloud AI adapter', () => {
@@ -118,19 +117,12 @@ describe('AQ-001/AQ-014: other classifications still reach the provider (policy 
     expect(result.provider).toBe('Gemini (Google)');
   });
 
-  it('CONFIDENTIAL without an explicit override denies cloud entirely', async () => {
-    await expect(generateAnalysis('sys', 'user prompt', {}, 'CONFIDENTIAL')).rejects.toThrow(PolicyDenialError);
-    expect(claudeModelFactory).not.toHaveBeenCalled();
-  });
-
-  it('CONFIDENTIAL with CONFIDENTIAL_CLOUD_OVERRIDE=true is allowed to reach an approved provider', async () => {
-    process.env.CONFIDENTIAL_CLOUD_OVERRIDE = 'true';
+  it('CONFIDENTIAL: generateAnalysis calls the first approved provider factory, same as INTERNAL', async () => {
     await generateAnalysis('sys', 'user prompt', {}, 'CONFIDENTIAL');
     expect(claudeModelFactory).toHaveBeenCalledTimes(1);
   });
 
-  it('CONFIDENTIAL override still cannot reach a provider outside the approved set', async () => {
-    process.env.CONFIDENTIAL_CLOUD_OVERRIDE = 'true';
+  it('CONFIDENTIAL restricted to a smaller approved-provider set via APPROVED_CLOUD_PROVIDERS skips the excluded ones', async () => {
     process.env.APPROVED_CLOUD_PROVIDERS = 'gemini';
     await generateAnalysis('sys', 'user prompt', {}, 'CONFIDENTIAL');
     expect(claudeModelFactory).not.toHaveBeenCalled();

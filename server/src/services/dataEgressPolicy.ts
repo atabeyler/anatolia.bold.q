@@ -10,13 +10,12 @@
  * fallback, red-team) must go through it before invoking a provider
  * adapter -- see aiGenerate.ts, routes/voice.js.
  *
- * Policy (fixed, not admin-configurable beyond the two documented escape
- * hatches below):
+ * Policy (fixed, not admin-configurable beyond the documented escape hatch
+ * below):
  *   PUBLIC        -> any configured cloud provider allowed
  *   INTERNAL      -> only the approved cloud provider set (APPROVED_CLOUD_PROVIDERS)
- *   CONFIDENTIAL  -> local/on-prem by default; cloud only with an explicit
- *                    operator opt-in (CONFIDENTIAL_CLOUD_OVERRIDE=true), and
- *                    still restricted to the approved provider set
+ *   CONFIDENTIAL  -> only the approved cloud provider set (APPROVED_CLOUD_PROVIDERS),
+ *                    same as INTERNAL -- no operator opt-in required
  *   RESTRICTED    -> cloud is never allowed, unconditionally, no override
  *
  * Fails closed: an unrecognized/missing classification is treated as
@@ -41,10 +40,6 @@ function approvedCloudProviders(): Set<string> {
   return new Set(list.map((s) => s.trim().toLowerCase()).filter(Boolean));
 }
 
-function confidentialCloudOverrideEnabled(): boolean {
-  return process.env.CONFIDENTIAL_CLOUD_OVERRIDE === 'true';
-}
-
 // The actual policy decision -- pure function, no I/O, so it's trivially
 // unit-testable independent of env-var setup elsewhere.
 export function isCloudProviderAllowed(classification: string | null | undefined, providerKey: string): boolean {
@@ -55,9 +50,8 @@ export function isCloudProviderAllowed(classification: string | null | undefined
     case 'PUBLIC':
       return true;
     case 'INTERNAL':
-      return approvedCloudProviders().has(key);
     case 'CONFIDENTIAL':
-      return confidentialCloudOverrideEnabled() && approvedCloudProviders().has(key);
+      return approvedCloudProviders().has(key);
     case 'RESTRICTED':
       return false; // unconditional -- no env/config can ever flip this true
     default:
