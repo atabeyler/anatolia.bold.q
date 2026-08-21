@@ -39,6 +39,12 @@ COPY client/ client/
 RUN npm run build --prefix client \
     && rm -rf client/node_modules/.vite
 
+# Runs as an unprivileged user rather than root -- the quantum subprocess
+# (server/quantum/*.py) and any file-upload handling have no need for root,
+# and running as root widens the blast radius of any RCE in either runtime.
+RUN chown -R node:node /app
+USER node
+
 ENV NODE_ENV=production
 EXPOSE 10000
 

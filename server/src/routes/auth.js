@@ -260,11 +260,17 @@ router.get('/check/:token', async (req, res) => {
     if (!t.approved) return res.json({ status: 'pending' });
 
     const user = await findUser(t.user_code);
-    if (user?.blocked) {
+    // The account this token was issued for may have been deleted between
+    // the approval email being sent and it being clicked -- fail closed
+    // instead of falling back to a default ANALYST role for a nonexistent
+    // account, which would silently mint a JWT nobody actually owns.
+    if (!user) {
+      await query('DELETE FROM approval_tokens WHERE token = $1', [token]);
+      return res.status(404).json({ status: 'not_found', error: 'Kullanıcı bulunamadı' });
+    }
+    if (user.blocked) {
       return res.status(403).json({ status: 'blocked', error: 'Hesabınız engellenmiş' });
     }
-    const nickname = user?.nickname || t.user_code;
-    const role = user?.role || ROLES.ANALYST;
     // isAdmin is derived from the SAME resolved role that goes into the
     // token, not read separately off the DB row -- otherwise a user whose
     // `role` and `is_admin` columns disagree (see the admin-user-management
@@ -272,7 +278,21 @@ router.get('/check/:token', async (req, res) => {
     // pre-existing row could still diverge) would get a token where
     // rbac.js's requireRole(ADMIN) and this file's own requireAdmin()
     // (which checks isAdmin) disagree about whether the user is an admin.
+    const nickname = user.nickname || t.user_code;
+    const role = user.role || ROLES.ANALYST;
     const isAdmin = role === ROLES.ADMIN;
+
+    // Consume the token atomically before issuing the JWT: an approval
+    // token is meant to authorize exactly one login, not act as a standing
+    // bearer credential that mints a fresh 2h session on every poll until
+    // it expires. The DELETE...RETURNING also resolves a concurrent-poll
+    // race -- only the request that actually deletes the row gets to issue
+    // the JWT; a duplicate in-flight request sees rowCount 0.
+    const consumed = await query('DELETE FROM approval_tokens WHERE token = $1 RETURNING token', [token]);
+    if (consumed.rowCount === 0) {
+      return res.status(409).json({ status: 'not_found', error: 'Token zaten kullanıldı' });
+    }
+
     const jwtToken = jwt.sign({ userCode: t.user_code, nickname, role, isAdmin }, JWT_SECRET, { expiresIn: '2h' });
     setAuthCookie(res, jwtToken, 2 * 60 * 60 * 1000);
     res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname, role, isAdmin });
@@ -517,6 +537,9 @@ router.post('/admin/users/:userCode/rename', authMiddleware, requireAdmin, async
       await client.query('UPDATE admin_audit_log SET target_user_code = $1 WHERE target_user_code = $2', [newUserCode, userCode]);
       await client.query('UPDATE user_profiles SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
       await client.query('UPDATE conversation_memory SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE webauthn_credentials SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE decision_records SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
+      await client.query('UPDATE quantum_hardware_jobs SET user_code = $1 WHERE user_code = $2', [newUserCode, userCode]);
 
       await client.query('COMMIT');
     } catch (err) {

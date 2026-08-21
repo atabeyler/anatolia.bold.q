@@ -3,7 +3,12 @@ import bcrypt from 'bcryptjs';
 function decodeJwtPayload(jwt) {
   try {
     const [, payloadB64] = jwt.split('.');
-    return JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
+    // JWT payload segments are base64url (RFC 4648 §5: '-'/'_', no
+    // padding), not plain base64 -- Node's 'base64' decoder silently drops
+    // those characters instead of mapping them, which shifts the byte
+    // alignment and corrupts the decoded JSON rather than throwing.
+    // 'base64url' decodes them correctly.
+    return JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
   } catch {
     return null;
   }

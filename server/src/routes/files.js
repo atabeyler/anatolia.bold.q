@@ -110,7 +110,7 @@ router.post('/upload', authMiddleware, uploadLimiter, upload.single('file'), asy
   }
 });
 
-router.get('/:filename', async (req, res) => {
+router.get('/:filename', authMiddleware, async (req, res) => {
   const name = path.basename(req.params.filename);
   const forceAttachment = ACTIVE_CONTENT_EXTS.test(name);
   res.set('X-Content-Type-Options', 'nosniff');

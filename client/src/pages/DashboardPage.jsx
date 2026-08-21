@@ -17,7 +17,7 @@ import AppFooter from '../components/AppFooter.jsx';
 import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
 import DesktopConflictModal from '../components/DesktopConflictModal.jsx';
 import ReauthBanner from '../components/ReauthBanner.jsx';
-import { api, setJWT, getToken, logoutRequest } from '../services/api.js';
+import { api, setJWT, getToken, logoutRequest, clearLocalChatHistory } from '../services/api.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -230,6 +230,7 @@ export default function DashboardPage({ user, onLogout }) {
     const onBlocked = () => {
       logoutRequest();
       setJWT(null);
+      clearLocalChatHistory();
       disconnectSocket();
       onLogout();
     };
@@ -359,7 +360,7 @@ export default function DashboardPage({ user, onLogout }) {
 
   const startAnalysis = (cat) => { setActiveCategory(cat); setView('analysis'); };
 
-  const logout = () => { logoutRequest(); setJWT(null); disconnectSocket(); onLogout(); };
+  const logout = () => { logoutRequest(); setJWT(null); clearLocalChatHistory(); disconnectSocket(); onLogout(); };
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('aq:context', {

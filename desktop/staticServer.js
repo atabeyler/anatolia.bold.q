@@ -24,11 +24,21 @@ const MIME = {
 // server here means the web build config never has to change to
 // accommodate Electron.
 export function serveStaticDir(rootDir, { port = 0, host = '127.0.0.1' } = {}) {
+  // path.resolve (not path.join) collapses any ".." segments before the
+  // comparison below, and path.relative + a ".." prefix check catches both
+  // traversal *and* the sibling-directory prefix-bypass that a plain
+  // `filePath.startsWith(rootDir)` check misses -- e.g. rootDir
+  // "/app/dist" would wrongly accept "/app/dist-secrets" since that string
+  // also starts with "/app/dist". Works the same way on every OS (this was
+  // never actually Windows-specific).
+  const resolvedRoot = path.resolve(rootDir);
+
   const server = http.createServer((req, res) => {
     const urlPath = decodeURIComponent(req.url.split('?')[0]);
-    let filePath = path.join(rootDir, urlPath);
+    let filePath = path.resolve(resolvedRoot, '.' + path.sep + urlPath);
 
-    if (!filePath.startsWith(rootDir)) {
+    const relative = path.relative(resolvedRoot, filePath);
+    if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
       res.writeHead(403);
       res.end();
       return;
@@ -38,7 +48,7 @@ export function serveStaticDir(rootDir, { port = 0, host = '127.0.0.1' } = {}) {
       if (err || (stats.isDirectory() && !fs.existsSync(path.join(filePath, 'index.html')))) {
         // SPA fallback: any unmatched route serves index.html, same as the
         // server's own catch-all (server/src/index.js) does for the web.
-        filePath = path.join(rootDir, 'index.html');
+        filePath = path.join(resolvedRoot, 'index.html');
       } else if (stats.isDirectory()) {
         filePath = path.join(filePath, 'index.html');
       }

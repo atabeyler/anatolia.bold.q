@@ -10,7 +10,7 @@ describe('openDatabase / migrations', () => {
     expect(names).toEqual(expect.arrayContaining(['analyses', 'sync_queue', 'conflicts', 'sync_state', 'device_meta', 'diagnostics_log', '_migrations']));
 
     const migrations = await dbAll(db, 'SELECT name FROM _migrations');
-    expect(migrations).toHaveLength(2); // not re-applied on a second connection
+    expect(migrations).toHaveLength(3); // not re-applied on a second connection
   });
 
   it('dbRun/dbGet/dbAll round-trip a row', async () => {

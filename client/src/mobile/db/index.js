@@ -1,10 +1,12 @@
 import migration001 from './migrations/001_init.sql?raw';
 import migration002 from './migrations/002_diagnostics.sql?raw';
+import migration003 from './migrations/003_offline_lockout.sql?raw';
 
 const DB_NAME = 'anatoliaq';
 const MIGRATIONS = [
   ['001_init.sql', migration001],
   ['002_diagnostics.sql', migration002],
+  ['003_offline_lockout.sql', migration003],
 ];
 
 // Opens (creating if needed) the on-device SQLite database via the given

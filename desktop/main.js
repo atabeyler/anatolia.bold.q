@@ -516,54 +516,74 @@ app.whenReady().then(async () => {
     platform: process.platform, appVersion: app.getVersion(),
   });
 
-  connectivity = createConnectivityMonitor({ apiBaseUrl: CLOUD_URL });
-  connectivity.onChange((state) => {
-    diagnostics.info('connectivity_change', { state });
-    mainWindow?.webContents.send('connectivity:change', state);
-  });
-  connectivity.start();
-  // A reconnect (local -> cloud) triggers an immediate sync instead of
-  // waiting for the next timer tick -- spec point 3: sync starts
-  // automatically the moment connectivity returns, with no user action.
-  // onReconnect() (not the raw onChange()) is required here: it only fires
-  // on a genuine local->cloud transition, not on performSync()'s own
-  // sync->cloud settling step at the end of every sync pass -- see
-  // connectivity.js's onReconnect doc comment for the infinite-loop bug
-  // this previously caused (the sync status badge flickering constantly).
-  connectivity.onReconnect(() => performSync().catch(() => {}));
+  // macOS keeps the app process alive after all windows close (see
+  // window-all-closed below), which also tears this down -- 'activate'
+  // (the dock-icon reopen) used to only recreate the window and left sync/
+  // connectivity dead for the rest of that run, silently, until the app was
+  // fully quit and relaunched. Wrapped in one function so both the initial
+  // boot and every later reopen start it the same way.
+  function startBackgroundServices() {
+    connectivity = createConnectivityMonitor({ apiBaseUrl: CLOUD_URL });
+    connectivity.onChange((state) => {
+      diagnostics.info('connectivity_change', { state });
+      mainWindow?.webContents.send('connectivity:change', state);
+    });
+    connectivity.start();
+    // A reconnect (local -> cloud) triggers an immediate sync instead of
+    // waiting for the next timer tick -- spec point 3: sync starts
+    // automatically the moment connectivity returns, with no user action.
+    // onReconnect() (not the raw onChange()) is required here: it only fires
+    // on a genuine local->cloud transition, not on performSync()'s own
+    // sync->cloud settling step at the end of every sync pass -- see
+    // connectivity.js's onReconnect doc comment for the infinite-loop bug
+    // this previously caused (the sync status badge flickering constantly).
+    connectivity.onReconnect(() => performSync().catch(() => {}));
+
+    performSync().catch(() => {});
+
+    // Periodic background sync in addition to the reconnect-triggered one
+    // above, so a long-lived idle session with a flaky-but-technically-online
+    // connection still eventually reconciles.
+    syncTimer = setInterval(() => performSync().catch(() => {}), 5 * 60 * 1000);
+    syncTimer.unref?.();
+
+    if (!isDev && app.isPackaged) {
+      // Checked via this app's own server (appUpdate.js / server/src/routes/
+      // version.js), never GitHub's API directly. Only surfaces a banner for
+      // the renderer to show -- nothing downloads until the user approves it
+      // via the update:approve IPC handler above. Failure here (no releases
+      // published yet, machine offline, ...) is never fatal -- the app just
+      // runs the version it already has.
+      checkAndBroadcastUpdate().catch(() => {});
+      updateTimer = setInterval(() => checkAndBroadcastUpdate().catch(() => {}), 5 * 60 * 1000);
+      updateTimer.unref?.();
+    }
+  }
+
+  function stopBackgroundServices() {
+    if (syncTimer) clearInterval(syncTimer);
+    if (updateTimer) clearInterval(updateTimer);
+    syncTimer = null;
+    updateTimer = null;
+    connectivity?.stop();
+    connectivity = null;
+  }
 
   registerIpcHandlers();
   buildAppMenu();
   createSplashWindow();
   await createWindow();
-  performSync().catch(() => {});
-
-  // Periodic background sync in addition to the reconnect-triggered one
-  // above, so a long-lived idle session with a flaky-but-technically-online
-  // connection still eventually reconciles.
-  syncTimer = setInterval(() => performSync().catch(() => {}), 5 * 60 * 1000);
-  syncTimer.unref?.();
-
-  if (!isDev && app.isPackaged) {
-    // Checked via this app's own server (appUpdate.js / server/src/routes/
-    // version.js), never GitHub's API directly. Only surfaces a banner for
-    // the renderer to show -- nothing downloads until the user approves it
-    // via the update:approve IPC handler above. Failure here (no releases
-    // published yet, machine offline, ...) is never fatal -- the app just
-    // runs the version it already has.
-    checkAndBroadcastUpdate().catch(() => {});
-    updateTimer = setInterval(() => checkAndBroadcastUpdate().catch(() => {}), 5 * 60 * 1000);
-    updateTimer.unref?.();
-  }
+  startBackgroundServices();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    // window-all-closed (macOS branch) stopped these -- restart them any
+    // time we're reopening from that stopped state, not just on cold boot.
+    if (!connectivity) startBackgroundServices();
   });
-});
 
-app.on('window-all-closed', () => {
-  if (syncTimer) clearInterval(syncTimer);
-  if (updateTimer) clearInterval(updateTimer);
-  connectivity?.stop();
-  if (process.platform !== 'darwin') app.quit();
+  app.on('window-all-closed', () => {
+    stopBackgroundServices();
+    if (process.platform !== 'darwin') app.quit();
+  });
 });

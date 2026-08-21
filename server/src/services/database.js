@@ -6,6 +6,16 @@ const { Pool } = pkg;
 
 let pool;
 
+function buildSslConfig() {
+  if (process.env.NODE_ENV !== 'production') return false;
+  const caCert = process.env.DATABASE_CA_CERT;
+  if (caCert) {
+    return { rejectUnauthorized: true, ca: caCert };
+  }
+  logger.warn('DATABASE_CA_CERT not set — Postgres TLS connections are encrypted but unverified (MITM risk); set DATABASE_CA_CERT to enable certificate verification.');
+  return { rejectUnauthorized: false };
+}
+
 export function getPool() {
   if (!pool) {
     pool = new Pool({
@@ -15,12 +25,12 @@ export function getPool() {
       // rejectUnauthorized: true here made every connection attempt hang
       // indefinitely instead of failing -- which in turn blocked
       // initDatabase() from ever settling, and index.js never reached
-      // server.listen() (see the 2026-07-21 outage). Back to false, which
-      // still gets an encrypted connection, just without CA verification.
-      // TRACKED TECH DEBT: pin Render's actual CA bundle instead of disabling
-      // verification outright once it's confirmed stable, rather than leaving
-      // this as the permanent state.
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      // server.listen() (see the 2026-07-21 outage). DATABASE_CA_CERT (PEM,
+      // e.g. Render's CA bundle) lets an operator opt back into verified TLS
+      // once it's confirmed stable for this deployment; without it, this
+      // stays the documented tradeoff (encrypted but unverified) rather than
+      // silently upgrading and risking the same outage again.
+      ssl: buildSslConfig(),
       max: 10,
       idleTimeoutMillis: 30000,
       // A bounded connection attempt, so any future DB connectivity problem

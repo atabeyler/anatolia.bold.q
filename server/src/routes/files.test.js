@@ -104,16 +104,23 @@ describe('POST /api/files/upload', () => {
 });
 
 describe('GET /api/files/:filename', () => {
+  it('401s without a valid auth token', async () => {
+    writeTestFile('abc123.png', 'fake-png-bytes');
+    const app = buildApp();
+    const res = await request(app).get('/api/files/abc123.png');
+    expect(res.status).toBe(401);
+  });
+
   it('returns 404 for a file that does not exist', async () => {
     const app = buildApp();
-    const res = await request(app).get('/api/files/does-not-exist.png');
+    const res = await request(app).get('/api/files/does-not-exist.png').set('Authorization', authHeader());
     expect(res.status).toBe(404);
   });
 
   it('serves a safe file type (e.g. an image) inline, without forcing a download', async () => {
     writeTestFile('abc123.png', 'fake-png-bytes');
     const app = buildApp();
-    const res = await request(app).get('/api/files/abc123.png');
+    const res = await request(app).get('/api/files/abc123.png').set('Authorization', authHeader());
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition']).toBeUndefined();
     expect(res.headers['x-content-type-options']).toBe('nosniff');
@@ -122,7 +129,7 @@ describe('GET /api/files/:filename', () => {
   it('forces a download for an .html upload (closes a same-origin stored-XSS path)', async () => {
     writeTestFile('evil.html', '<script>alert(document.cookie)</script>');
     const app = buildApp();
-    const res = await request(app).get('/api/files/evil.html');
+    const res = await request(app).get('/api/files/evil.html').set('Authorization', authHeader());
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition']).toMatch(/^attachment/);
     expect(res.headers['x-content-type-options']).toBe('nosniff');
@@ -131,7 +138,7 @@ describe('GET /api/files/:filename', () => {
   it('forces a download for an .svg upload (SVG can carry <script>)', async () => {
     writeTestFile('image.svg', '<svg onload="alert(1)"></svg>');
     const app = buildApp();
-    const res = await request(app).get('/api/files/image.svg');
+    const res = await request(app).get('/api/files/image.svg').set('Authorization', authHeader());
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition']).toMatch(/^attachment/);
   });
@@ -139,7 +146,7 @@ describe('GET /api/files/:filename', () => {
   it('resolves a path-traversal attempt to just the basename instead of escaping the upload dir', async () => {
     writeTestFile('safe.txt', 'hello');
     const app = buildApp();
-    const res = await request(app).get('/api/files/' + encodeURIComponent('../safe.txt'));
+    const res = await request(app).get('/api/files/' + encodeURIComponent('../safe.txt')).set('Authorization', authHeader());
     // path.basename() strips any directory components, so this must resolve
     // to a plain "..safe.txt"-style lookup inside UPLOAD_DIR (not found), never
     // escape it -- either outcome (404, or a coincidental same-name hit inside

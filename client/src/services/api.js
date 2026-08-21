@@ -272,10 +272,33 @@ export function setJWT(jwt) {
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
 }
 
+// ConsultChat.jsx persists its message history under this key so a
+// consultation survives a reload/relaunch -- but on a shared/kiosk device
+// that history must not carry over to the next person who logs in, so
+// every logout path clears it (see DashboardPage.jsx's logout()/onBlocked).
+// Duplicated literal rather than imported from ConsultChat.jsx to avoid
+// pulling a React component into this module.
+const CONSULT_HISTORY_KEY = 'aq_consult_history';
+
+export function clearLocalChatHistory() {
+  try { localStorage.removeItem(CONSULT_HISTORY_KEY); } catch { /* best-effort */ }
+}
+
 // Clears the session server-side (the cookie for web; harmless no-op call
 // for native, which clears its own localStorage JWT via setJWT(null)).
 export async function logoutRequest() {
   try { await api.logout(); } catch { /* best-effort -- setJWT(null)/disconnect still run */ }
+}
+
+// JWT payload segments are base64url (RFC 4648 §5: '-'/'_', no padding),
+// not plain base64 -- atob() throws (or on some engines silently mangles
+// the input) on the '-'/'_' characters a token's payload commonly contains,
+// which was surfacing as a false "invalid session" logout on native shells.
+function base64UrlDecode(input) {
+  let base64 = input.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4;
+  if (pad) base64 += '='.repeat(4 - pad);
+  return atob(base64);
 }
 
 // Synchronous, native-shell only: decodes the JWT desktop/mobile store
@@ -285,7 +308,7 @@ export function getCurrentUser() {
   const jwt = getJWT();
   if (!jwt) return null;
   try {
-    const payload = JSON.parse(atob(jwt.split('.')[1]));
+    const payload = JSON.parse(base64UrlDecode(jwt.split('.')[1]));
     if (payload.exp && Date.now() >= payload.exp * 1000) {
       setJWT(null);
       return null;
