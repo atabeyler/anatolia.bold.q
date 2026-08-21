@@ -1,0 +1,32 @@
+name: CodeQL
+
+# Static analysis (SAST, AQ-015). Findings are published to the repo's
+# Security tab as code-scanning alerts -- this workflow does NOT fail on
+# findings (GitHub's default `github/codeql-action` behavior), so it never
+# blocks a push/PR the way ci.yml's required checks do. Scans server/ and
+# client/ (both plain JS/TS, one CodeQL language covers both) on every push
+# to main and weekly on a schedule, so drift between dependency updates
+# still gets re-scanned even with no code changes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - uses: github/codeql-action/analyze@v3

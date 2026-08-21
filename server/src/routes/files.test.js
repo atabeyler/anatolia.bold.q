@@ -1,14 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
 
 const { default: filesRouter } = await import('./files.js');
+const { JWT_SECRET } = await import('../lib/jwtSecret.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '../../uploads');
+
+function authHeader(userCode = 'U1', nickname = 'BOLD-001') {
+  return `Bearer ${jwt.sign({ userCode, nickname, isAdmin: false }, JWT_SECRET, { expiresIn: '1h' })}`;
+}
 
 function buildApp() {
   const app = express();
@@ -34,6 +40,67 @@ afterEach(() => {
     const f = testFiles.pop();
     fs.rmSync(f, { force: true });
   }
+});
+
+describe('POST /api/files/upload', () => {
+  const ORIGINAL_URL = process.env.FILE_SCAN_WEBHOOK_URL;
+
+  afterEach(() => {
+    if (ORIGINAL_URL === undefined) delete process.env.FILE_SCAN_WEBHOOK_URL;
+    else process.env.FILE_SCAN_WEBHOOK_URL = ORIGINAL_URL;
+    vi.unstubAllGlobals();
+  });
+
+  it('401s without a valid auth token', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/files/upload').attach('file', Buffer.from('hello'), 'a.txt');
+    expect(res.status).toBe(401);
+  });
+
+  it('accepts an upload when no malware-scan webhook is configured (unchanged pre-existing behavior)', async () => {
+    delete process.env.FILE_SCAN_WEBHOOK_URL;
+    const app = buildApp();
+    const res = await request(app).post('/api/files/upload').set('Authorization', authHeader())
+      .attach('file', Buffer.from('hello world'), 'report.txt');
+    expect(res.status).toBe(200);
+    expect(res.body.filename).toBe('report.txt');
+    testFiles.push(path.join(UPLOAD_DIR, path.basename(new URL(res.body.url, 'http://x').pathname)));
+  });
+
+  it('accepts an upload the scan webhook reports clean', async () => {
+    process.env.FILE_SCAN_WEBHOOK_URL = 'https://scan.test/webhook';
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ clean: true }) })));
+    const app = buildApp();
+    const res = await request(app).post('/api/files/upload').set('Authorization', authHeader())
+      .attach('file', Buffer.from('hello world'), 'report2.txt');
+    expect(res.status).toBe(200);
+    testFiles.push(path.join(UPLOAD_DIR, path.basename(new URL(res.body.url, 'http://x').pathname)));
+  });
+
+  it('rejects an upload the scan webhook flags, and does not leave the file on disk', async () => {
+    process.env.FILE_SCAN_WEBHOOK_URL = 'https://scan.test/webhook';
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ clean: false, reason: 'EICAR-Test-Signature' }) })));
+    const app = buildApp();
+    const before = fs.readdirSync(UPLOAD_DIR);
+    const res = await request(app).post('/api/files/upload').set('Authorization', authHeader())
+      .attach('file', Buffer.from('hello world'), 'evil-payload.txt');
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('EICAR-Test-Signature');
+    // Poll briefly for the async fs.unlink (fire-and-forget in the route) to land.
+    await new Promise((r) => setTimeout(r, 50));
+    const after = fs.readdirSync(UPLOAD_DIR);
+    expect(after).toEqual(before);
+  });
+
+  it('fails closed for a CONFIDENTIAL upload when the scan webhook is unreachable', async () => {
+    process.env.FILE_SCAN_WEBHOOK_URL = 'https://scan.test/webhook';
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
+    const app = buildApp();
+    const res = await request(app).post('/api/files/upload').set('Authorization', authHeader())
+      .field('classification', 'CONFIDENTIAL')
+      .attach('file', Buffer.from('hello world'), 'sensitive.txt');
+    expect(res.status).toBe(422);
+  });
 });
 
 describe('GET /api/files/:filename', () => {

@@ -38,7 +38,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - name: Validate quantum script syntax
-        run: python3 -m py_compile quantum/scenario_quantum.py quantum/fraud_detection.py quantum/portfolio_optimizer.py quantum/_ibm_backend.py quantum/_reproducibility.py
+        run: python3 -m py_compile quantum/scenario_quantum.py quantum/fraud_detection.py quantum/fraud_detection_13q.py quantum/portfolio_optimizer.py quantum/_ibm_backend.py quantum/_reproducibility.py
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -65,6 +65,65 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # Secret scanning + dependency/SBOM reporting (AQ-015). Kept separate from
+  # server/client/desktop above so a finding here never blocks those from
+  # reporting their own pass/fail independently.
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Blocking: a real secret committed to the repo is a hard stop, not
+      # advisory debt. Runs the open-source gitleaks CLI binary directly
+      # (not the gitleaks-action wrapper, which has had org/license-gating
+      # history unrelated to the underlying OSS scanner) against the
+      # checked-out working tree. Verified clean against this repo as of
+      # this commit, with one confirmed false positive (an Android emulator
+      # system-image id, not a credential) allowlisted in .gitleaksignore --
+      # see that file's comment for the exact fingerprint and why.
+      - name: Secret scan (gitleaks)
+        run: |
+          set -euo pipefail
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --no-git -v
+
+      # Advisory only, never blocking: this repo currently carries several
+      # pre-existing high/critical transitive-dependency findings with no
+      # available fix yet (e.g. xlsx's prototype-pollution/ReDoS advisories,
+      # GHSA-4r6h-8v6p-xvw6 / GHSA-5pgg-2g8v-p4x9 -- no upstream patch
+      # exists as of this workflow being added). Gating CI on `npm audit`
+      # today would permanently red the build over debt this task didn't
+      # introduce and can't unilaterally resolve (replacing xlsx is a
+      # separate, larger effort). This still surfaces every run's findings
+      # in the log for operators to track, without blocking merges.
+      - name: Dependency vulnerability scan (npm audit, informational)
+        continue-on-error: true
+        run: |
+          for dir in . server client; do
+            echo "::group::npm audit ($dir)"
+            (cd "$dir" && npm audit --audit-level=high) || true
+            echo "::endgroup::"
+          done
+
+      # SBOM generation (CycloneDX), one per npm workspace -- purely
+      # additive, never blocking. Published as a build artifact so a
+      # deployment/compliance process can pull the exact dependency
+      # manifest for a given commit without re-resolving it later.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate SBOMs (CycloneDX)
+        run: |
+          npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom-root.json .
+          (cd server && npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-server.json .)
+          (cd client && npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file ../sbom-client.json .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom-*.json
+          retention-days: 90
 
   desktop:
     runs-on: ubuntu-latest

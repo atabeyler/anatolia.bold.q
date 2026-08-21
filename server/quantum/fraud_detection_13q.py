@@ -2,8 +2,10 @@
 Keeps production fraud_detection.py untouched while validating the expanded feature map.
 """
 import sys, json, math
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.quantum_info import Statevector
+
+from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
 
 FEATURES = [
     "amount", "hour", "frequency", "newCounterparty", "crossBorder",
@@ -43,6 +45,28 @@ def feature_map(x):
     return qc
 
 
+def build_swap_test_circuit(circuit_a, circuit_b):
+    """Standard swap test (ported from fraud_detection.py -- see that
+    module's comment for the derivation): H on an ancilla, controlled-swap
+    every corresponding qubit of the two feature-map registers, H again,
+    measure the ancilla. P(ancilla=0) = 1/2 + 1/2*|<psi_a|psi_b>|^2, so the
+    fidelity is recovered as 2*P(0) - 1."""
+    n = circuit_a.num_qubits
+    anc = QuantumRegister(1, 'anc')
+    reg_a = QuantumRegister(n, 'a')
+    reg_b = QuantumRegister(n, 'b')
+    creg = ClassicalRegister(1, 'meas')
+    qc = QuantumCircuit(anc, reg_a, reg_b, creg)
+    qc.compose(circuit_a, qubits=reg_a, inplace=True)
+    qc.compose(circuit_b, qubits=reg_b, inplace=True)
+    qc.h(anc[0])
+    for k in range(n):
+        qc.cswap(anc[0], reg_a[k], reg_b[k])
+    qc.h(anc[0])
+    qc.measure(anc[0], creg[0])
+    return qc
+
+
 def classical(rows):
     n=len(rows); d=len(rows[0])
     centroid=[sum(r[j] for r in rows)/n for j in range(d)]
@@ -52,11 +76,11 @@ def classical(rows):
     return [round((x-lo)/span*100,1) for x in dist],[bool(x>threshold) for x in dist]
 
 
-def detect(transactions):
+def detect(transactions, skip_hardware=False):
     transactions=transactions[:MAX_INPUT_TRANSACTIONS]
     n=len(transactions)
     if n<3:
-        return {"backend":"qiskit-statevector-kernel-13q","qubits":13,"featureNames":FEATURES,"thresholdK":THRESHOLD_K,"transactionCount":n,"flaggedCount":0,"transactions":[]}
+        return {"backend":"qiskit-statevector-kernel-13q","qubits":13,"featureNames":FEATURES,"thresholdK":THRESHOLD_K,"transactionCount":n,"flaggedCount":0,"transactions":[],"hardwareVerification":None,"ibmDiagnostic":"not attempted (fewer than 3 transactions)"}
     rows=normalize(transactions)
     circuits=[feature_map(r) for r in rows]
     states=[Statevector.from_instruction(qc) for qc in circuits]
@@ -81,6 +105,44 @@ def detect(transactions):
         out.append(row)
     out.sort(key=lambda x:-x["riskScore"])
     agreement=sum(1 for t in out if t["flagged"]==t["classicalFlagged"])
+
+    # Optional: verify the exact kernel value for the single most informative
+    # pair (highest-risk vs. most-typical transaction) via a swap test on
+    # real IBM Quantum hardware -- ported from fraud_detection.py, whose
+    # hardware lane was never carried over when this 13-qubit experiment
+    # became the production script (fraudDetection.js spawns this file, not
+    # fraud_detection.py), leaving the "optional real hardware verification"
+    # claim unfulfilled for fraud/AML analyses. Kept fully separate from the
+    # riskScore/flagged decision above, which stays deterministic either way.
+    top_idx = raw.index(max(raw))
+    typical_idx = raw.index(min(raw))
+    hardware_verification = None
+    ibm_diagnostic = "not configured (IBM_QUANTUM_TOKEN/IBM_QUANTUM_INSTANCE unset)"
+    if skip_hardware:
+        ibm_diagnostic = "skipped (fast response; hardware verification runs separately)"
+    elif top_idx == typical_idx:
+        ibm_diagnostic = "not attempted (all transactions scored identically)"
+    elif is_ibm_configured():
+        ibm_diagnostic = "configured, attempting hardware run..."
+        swap_qc = build_swap_test_circuit(circuits[top_idx], circuits[typical_idx])
+        ibm_result = run_on_ibm_hardware(swap_qc, 2048)
+        if ibm_result:
+            counts, backend_name = ibm_result
+            zero_count = sum(c for bitstring, c in counts.items() if bitstring.replace(' ', '') == '0')
+            total = sum(counts.values()) or 1
+            measured_fidelity = max(0.0, min(1.0, 2 * (zero_count / total) - 1))
+            exact_fidelity = float(abs(states[top_idx].inner(states[typical_idx])) ** 2)
+            hardware_verification = {
+                "backend": backend_name,
+                "shots": total,
+                "pair": {"a": transactions[top_idx].get("id"), "b": transactions[typical_idx].get("id")},
+                "exactFidelity": round(exact_fidelity, 4),
+                "measuredFidelity": round(measured_fidelity, 4),
+            }
+            ibm_diagnostic = f"succeeded on {backend_name}"
+        else:
+            ibm_diagnostic = f"configured but failed: {LAST_IBM_ERROR['message'] or 'unknown error'}"
+
     return {
         "backend":"qiskit-statevector-kernel-13q",
         "qubits":len(FEATURES),
@@ -90,6 +152,8 @@ def detect(transactions):
         "flaggedCount":sum(1 for t in out if t["flagged"]),
         "circuitDepth":circuits[0].depth(),
         "transactions":out,
+        "hardwareVerification":hardware_verification,
+        "ibmDiagnostic":ibm_diagnostic,
         "classicalBenchmark":{"flaggedCount":sum(1 for t in out if t["classicalFlagged"]),"agreementCount":agreement,"agreementPercent":round(agreement/n*100,1)},
         "optimizedPairCount":n*(n-1)//2,
     }
@@ -97,7 +161,8 @@ def detect(transactions):
 
 def main():
     payload=json.loads(sys.stdin.read() or "{}")
-    print(json.dumps(detect(payload.get("transactions",[]))))
+    skip_hardware=bool(payload.get("skipHardware"))
+    print(json.dumps(detect(payload.get("transactions",[]), skip_hardware)))
 
 if __name__=="__main__":
     try: main()

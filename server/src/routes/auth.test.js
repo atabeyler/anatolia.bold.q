@@ -166,9 +166,9 @@ function buildApp() {
   return app;
 }
 
-async function seedUser({ userCode, password, nickname, isAdmin = false, blocked = false }) {
+async function seedUser({ userCode, password, nickname, isAdmin = false, blocked = false, role }) {
   const password_hash = await bcrypt.hash(password, 4);
-  authUsers.set(userCode, { user_code: userCode, password_hash, nickname, is_admin: isAdmin, blocked, created_at: new Date() });
+  authUsers.set(userCode, { user_code: userCode, password_hash, nickname, is_admin: isAdmin, role, blocked, created_at: new Date() });
 }
 
 function adminToken(userCode = 'ADMIN-1', nickname = 'BOLD') {
@@ -340,6 +340,25 @@ describe('GET /api/auth/check/:token', () => {
     const res = await request(app).get('/api/auth/check/tok-8');
     expect(res.headers['set-cookie']?.[0]).toMatch(/^anatolia_jwt=/);
   });
+
+  it('derives isAdmin from the resolved role, so a role:"admin" account approved via this flow gets a token where isAdmin and role agree', async () => {
+    // Regression test: this row's is_admin column is deliberately false while
+    // role is 'admin' -- simulating a row that diverged before the
+    // admin-user-management routes were fixed to always keep the two in
+    // sync. Before that fix, this token would carry role:'admin' but no
+    // isAdmin claim at all, so this file's own requireAdmin() (checks
+    // isAdmin) and lib/rbac.js's requireRole(ADMIN) (checks role) disagreed
+    // about whether the same account was an admin.
+    await seedUser({ userCode: 'U9', password: 'x', nickname: 'BOLD-009', isAdmin: false, role: 'admin' });
+    approvalTokens.set('tok-9', { token: 'tok-9', user_code: 'U9', approved: true, expires_at: new Date(Date.now() + 60000) });
+    const app = buildApp();
+    const res = await request(app).get('/api/auth/check/tok-9');
+    expect(res.body.role).toBe('admin');
+    expect(res.body.isAdmin).toBe(true);
+    const decoded = jwt.verify(res.body.jwt, JWT_SECRET);
+    expect(decoded.isAdmin).toBe(true);
+    expect(decoded.role).toBe('admin');
+  });
 });
 
 describe('GET /api/auth/me', () => {
@@ -437,6 +456,24 @@ describe('admin user-management routes', () => {
     expect(authUsers.has('NEW4')).toBe(false);
   });
 
+  it('derives is_admin from role:"admin" even when isAdmin is omitted, instead of creating a role/isAdmin mismatch', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ userCode: 'NEW5', password: 'Longenough1!', role: 'admin' });
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe('admin');
+    expect(res.body.is_admin).toBe(true);
+  });
+
+  it('derives is_admin from role:"admin" even when isAdmin is explicitly false, never trusting isAdmin independently', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/admin/users').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ userCode: 'NEW6', password: 'Longenough1!', role: 'admin', isAdmin: false });
+    expect(res.status).toBe(201);
+    expect(res.body.role).toBe('admin');
+    expect(res.body.is_admin).toBe(true);
+  });
+
   it('updates a user email via PATCH', async () => {
     await seedUser({ userCode: 'U12', password: 'x', nickname: 'BOLD-012' });
     const app = buildApp();
@@ -445,6 +482,37 @@ describe('admin user-management routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.email).toBe('u12@example.com');
     expect(authUsers.get('U12').email).toBe('u12@example.com');
+  });
+
+  it('PATCHing only role:"admin" also promotes is_admin, so the two never diverge', async () => {
+    await seedUser({ userCode: 'U15', password: 'x', nickname: 'BOLD-015', isAdmin: false, role: 'analyst' });
+    const app = buildApp();
+    const res = await request(app).patch('/api/auth/admin/users/U15').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ role: 'admin' });
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('admin');
+    expect(res.body.is_admin).toBe(true);
+    expect(authUsers.get('U15').is_admin).toBe(true);
+  });
+
+  it('PATCHing only isAdmin:true also sets role to "admin", so the two never diverge', async () => {
+    await seedUser({ userCode: 'U16', password: 'x', nickname: 'BOLD-016', isAdmin: false, role: 'analyst' });
+    const app = buildApp();
+    const res = await request(app).patch('/api/auth/admin/users/U16').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ isAdmin: true });
+    expect(res.status).toBe(200);
+    expect(res.body.is_admin).toBe(true);
+    expect(res.body.role).toBe('admin');
+  });
+
+  it('PATCHing role:"admin" alongside a conflicting isAdmin:false lets role win (matching lib/rbac.js resolveRole precedence)', async () => {
+    await seedUser({ userCode: 'U17', password: 'x', nickname: 'BOLD-017', isAdmin: false, role: 'analyst' });
+    const app = buildApp();
+    const res = await request(app).patch('/api/auth/admin/users/U17').set('Authorization', `Bearer ${adminToken()}`)
+      .send({ role: 'admin', isAdmin: false });
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('admin');
+    expect(res.body.is_admin).toBe(true);
   });
 
   it('rejects an invalid email format on PATCH', async () => {

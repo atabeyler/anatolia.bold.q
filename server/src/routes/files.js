@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { isS3Configured, uploadObject, getPresignedDownloadUrl } from '../lib/objectStorage.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { uploadLimiter } from '../middleware/rateLimit.js';
+import { scanFile } from '../lib/fileScan.js';
+import { logAuditEvent } from '../services/database.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '../../uploads');
@@ -61,6 +63,30 @@ router.post('/upload', authMiddleware, uploadLimiter, upload.single('file'), asy
   try {
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'Dosya bulunamadı' });
+
+    // Optional classification hint (AQ-013) -- callers that know the
+    // upload is headed for a CONFIDENTIAL/RESTRICTED analysis can pass it
+    // so a scan-webhook outage fails closed instead of open for those; any
+    // other/missing value defaults to INTERNAL, matching the previous
+    // (unscanned) behavior when no scan webhook is configured at all.
+    const classification = req.body?.classification;
+
+    // Malware scan / CDR hook (see lib/fileScan.js): a no-op pass unless
+    // FILE_SCAN_WEBHOOK_URL is configured, so an unconfigured deployment's
+    // upload flow is completely unchanged. Runs on disk-mode content by
+    // reading the just-written file back (multer already wrote it), and on
+    // S3-mode content from the in-memory buffer before it ever leaves this
+    // process, in both cases before the file becomes downloadable/attached
+    // to anything.
+    const buffer = USE_S3 ? file.buffer : fs.readFileSync(file.path);
+    const scanResult = await scanFile(buffer, { filename: file.originalname, mimetype: file.mimetype, classification });
+    if (!scanResult.ok) {
+      if (!USE_S3) fs.unlink(file.path, () => {});
+      await logAuditEvent(req.user, 'file_scan_rejected', req.user.userCode, {
+        filename: file.originalname, mimetype: file.mimetype, classification, reason: scanResult.reason,
+      });
+      return res.status(422).json({ error: 'Dosya güvenlik taramasından geçemedi', reason: scanResult.reason });
+    }
 
     if (USE_S3) {
       const key = uuidv4() + (path.extname(file.originalname) || '');

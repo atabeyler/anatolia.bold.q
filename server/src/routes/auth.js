@@ -245,9 +245,17 @@ router.get('/check/:token', async (req, res) => {
     }
     const nickname = user?.nickname || t.user_code;
     const role = user?.role || ROLES.ANALYST;
-    const jwtToken = jwt.sign({ userCode: t.user_code, nickname, role }, JWT_SECRET, { expiresIn: '2h' });
+    // isAdmin is derived from the SAME resolved role that goes into the
+    // token, not read separately off the DB row -- otherwise a user whose
+    // `role` and `is_admin` columns disagree (see the admin-user-management
+    // routes below, which now keep the two in sync on every write, but a
+    // pre-existing row could still diverge) would get a token where
+    // rbac.js's requireRole(ADMIN) and this file's own requireAdmin()
+    // (which checks isAdmin) disagree about whether the user is an admin.
+    const isAdmin = role === ROLES.ADMIN;
+    const jwtToken = jwt.sign({ userCode: t.user_code, nickname, role, isAdmin }, JWT_SECRET, { expiresIn: '2h' });
     setAuthCookie(res, jwtToken, 2 * 60 * 60 * 1000);
-    res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname, role });
+    res.json({ status: 'approved', jwt: jwtToken, userCode: t.user_code, nickname, role, isAdmin });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -309,16 +317,22 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    // isAdmin stays the source of truth for the 'admin' role (see
-    // lib/rbac.js's resolveRole) -- an explicit role is honored, otherwise
-    // it's derived from isAdmin so existing admin-only clients keep working.
+    // An explicit role is honored, otherwise it's derived from isAdmin so
+    // existing admin-only clients keep working. is_admin is then always
+    // DERIVED from the resolved role (never independently trusted from the
+    // request body) so the two columns can never disagree -- previously a
+    // caller passing role:'admin' with isAdmin omitted/false created a user
+    // where lib/rbac.js's requireRole(ADMIN) (reads `role`) and this file's
+    // own requireAdmin() (reads `isAdmin`) granted different sets of routes
+    // to the same account.
     const resolvedRole = role || (isAdmin ? ROLES.ADMIN : ROLES.ANALYST);
+    const resolvedIsAdmin = resolvedRole === ROLES.ADMIN;
     const { rows } = await query(
       `INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, email, role)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (user_code) DO NOTHING
        RETURNING user_code, nickname, email, is_admin, role, blocked, created_at`,
-      [userCode, passwordHash, nickname || userCode, !!isAdmin, email || null, resolvedRole]
+      [userCode, passwordHash, nickname || userCode, resolvedIsAdmin, email || null, resolvedRole]
     );
     if (rows.length === 0) {
       return res.status(409).json({ error: 'Bu kullanıcı kodu zaten kayıtlı' });
@@ -361,12 +375,18 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
       params.push(email || null);
       sets.push(`email = $${params.length}`);
     }
-    if (isAdmin !== undefined) {
-      params.push(!!isAdmin);
+    // is_admin and role are always written together, derived from a single
+    // resolved value, so they can never end up disagreeing (see the same
+    // fix in POST /admin/users above for the divergence this prevents) --
+    // whichever of the two the caller provided wins; if both were provided,
+    // `role` is authoritative (matching lib/rbac.js's resolveRole(), which
+    // also prefers `role` over the legacy `isAdmin` flag).
+    if (role !== undefined || isAdmin !== undefined) {
+      const effectiveRole = role !== undefined ? role : (isAdmin ? ROLES.ADMIN : ROLES.ANALYST);
+      const effectiveIsAdmin = effectiveRole === ROLES.ADMIN;
+      params.push(effectiveIsAdmin);
       sets.push(`is_admin = $${params.length}`);
-    }
-    if (role !== undefined) {
-      params.push(role);
+      params.push(effectiveRole);
       sets.push(`role = $${params.length}`);
     }
     if (blocked !== undefined) {

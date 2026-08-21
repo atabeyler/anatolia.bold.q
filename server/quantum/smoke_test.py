@@ -63,6 +63,50 @@ def check_fraud_detection():
     print("[smoke] fraud_detection.py OK")
 
 
+def check_fraud_detection_13q():
+    """fraud_detection_13q.py is the script actually spawned in production
+    (see server/src/services/fraudDetection.js) -- unlike fraud_detection.py
+    above, this one previously had no smoke coverage at all."""
+    transactions = [
+        {
+            "id": f"T{i}", "amount": 1000 + i * 500, "hour": i % 24, "frequency": 1,
+            "newCounterparty": i % 2, "crossBorder": 0, "txCount10m": i % 3, "txCount1h": i % 5,
+            "amountSum1h": 2000 + i * 300, "amountSum24h": 5000 + i * 700, "timeSinceLastTx": 600 + i * 60,
+            "newCounterpartyCount24h": i % 4, "uniqueCounterparty7d": i % 6, "amountDeviation": (i % 3) - 1,
+        }
+        for i in range(6)
+    ]
+    result = run_worker("fraud_detection_13q.py", {"transactions": transactions})
+    assert result["backend"] == "qiskit-statevector-kernel-13q", result
+    assert len(result["transactions"]) == len(transactions), result
+    assert all("riskScore" in t and "flagged" in t for t in result["transactions"]), result
+    # No IBM credentials in this CI environment -- must report "not
+    # configured", never silently substitute hardware noise for the
+    # deterministic statevector-kernel decision above.
+    assert result["hardwareVerification"] is None, result
+    assert "not configured" in result["ibmDiagnostic"], result
+    print("[smoke] fraud_detection_13q.py OK")
+
+
+def check_fraud_detection_13q_skip_hardware():
+    """Regression test for AQ-010: skipHardware=True (the fast /generate
+    request path, see fraudDetection.js's computeFraudRiskScores) must
+    report the hardware lane as explicitly skipped, never attempted."""
+    transactions = [
+        {
+            "id": f"T{i}", "amount": 1000 + i * 500, "hour": i % 24, "frequency": 1,
+            "newCounterparty": i % 2, "crossBorder": 0, "txCount10m": i % 3, "txCount1h": i % 5,
+            "amountSum1h": 2000 + i * 300, "amountSum24h": 5000 + i * 700, "timeSinceLastTx": 600 + i * 60,
+            "newCounterpartyCount24h": i % 4, "uniqueCounterparty7d": i % 6, "amountDeviation": (i % 3) - 1,
+        }
+        for i in range(6)
+    ]
+    result = run_worker("fraud_detection_13q.py", {"transactions": transactions, "skipHardware": True})
+    assert result["hardwareVerification"] is None, result
+    assert "skipped" in result["ibmDiagnostic"], result
+    print("[smoke] fraud_detection_13q.py skipHardware OK")
+
+
 def check_portfolio_optimizer():
     items = [
         {"id": "I1", "value": 40, "cost": 30}, {"id": "I2", "value": 35, "cost": 25},
@@ -106,6 +150,8 @@ def check_portfolio_optimizer_skip_hardware_never_attempts():
 if __name__ == "__main__":
     check_scenario_quantum()
     check_fraud_detection()
+    check_fraud_detection_13q()
+    check_fraud_detection_13q_skip_hardware()
     check_portfolio_optimizer()
     check_portfolio_optimizer_skip_hardware_never_attempts()
     print("[smoke] all quantum workers OK")
