@@ -121,23 +121,29 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     // A chat-tuned model (Qwen2.5-Instruct) expects its own special
     // tokens/role markers, not a raw text blob -- see LlamaBridge.kt's
     // comment on why this was verified to matter on desktop's
-    // node-llama-cpp runtime; the equivalent for llama.cpp's C API is
-    // llama_chat_apply_template, using the template baked into the GGUF's
-    // metadata (tmpl = nullptr means "use the model's own").
+    // node-llama-cpp runtime. At this pinned llama.cpp commit,
+    // llama_chat_apply_template() no longer takes a model pointer (it just
+    // defaults an unset/unknown tmpl to "chatml" -- see src/llama.cpp) so
+    // the model's own template must be fetched explicitly first via
+    // llama_model_chat_template() (reads the GGUF's tokenizer.chat_template
+    // metadata) and passed in; nullptr from that call (no template in the
+    // GGUF) still falls through to llama_chat_apply_template's own "chatml"
+    // default, which happens to be correct for Qwen2.5-Instruct anyway.
+    const char *modelTmpl = llama_model_chat_template(session->model, /* name */ nullptr);
     llama_chat_message chatMessages[2];
     chatMessages[0] = {"system", systemPrompt.c_str()};
     chatMessages[1] = {"user", userPrompt.c_str()};
 
     std::vector<char> formattedBuf(userPrompt.size() + systemPrompt.size() + 1024);
     int32_t formattedLen = llama_chat_apply_template(
-            session->model, nullptr, chatMessages, 2, /* add_ass */ true,
+            modelTmpl, chatMessages, 2, /* add_ass */ true,
             formattedBuf.data(), static_cast<int32_t>(formattedBuf.size()));
     if (formattedLen > static_cast<int32_t>(formattedBuf.size())) {
         // Buffer was too small -- grow and retry once, as llama.cpp's own
         // examples do (the first call also reports the required size).
         formattedBuf.resize(formattedLen);
         formattedLen = llama_chat_apply_template(
-                session->model, nullptr, chatMessages, 2, true,
+                modelTmpl, chatMessages, 2, true,
                 formattedBuf.data(), static_cast<int32_t>(formattedBuf.size()));
     }
     std::string formattedPrompt = (formattedLen > 0)
