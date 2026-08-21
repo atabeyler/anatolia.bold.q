@@ -123,7 +123,13 @@ class LocalLLMPlugin : Plugin() {
                 loadedSystemPrompt = systemPrompt
                 call.resolve()
             } catch (t: Throwable) {
-                call.reject("local_llm_native_load_failed: ${t.message}", t)
+                // t is caught as Throwable deliberately (see class comment --
+                // must also catch UnsatisfiedLinkError, an Error, not an
+                // Exception, when anatolia_llama.so isn't built yet), but
+                // PluginCall.reject()'s (String, Throwable) overload only
+                // accepts Exception -- pass the message instead of the
+                // Throwable itself so this compiles regardless of t's type.
+                call.reject("local_llm_native_load_failed: ${t.message}", t.toString())
             }
         }
     }
@@ -160,7 +166,7 @@ class LocalLLMPlugin : Plugin() {
             ret.put("text", text)
             call.resolve(ret)
         } catch (t: Throwable) {
-            call.reject("local_llm_generate_failed: ${t.message}", t)
+            call.reject("local_llm_generate_failed: ${t.message}", t.toString())
         }
     }
 
@@ -192,7 +198,7 @@ class LocalLLMPlugin : Plugin() {
             ret.put("lowRamDevice", am.isLowRamDevice)
             call.resolve(ret)
         } catch (t: Throwable) {
-            call.reject("local_llm_device_info_failed: ${t.message}", t)
+            call.reject("local_llm_device_info_failed: ${t.message}", t.toString())
         }
     }
 
