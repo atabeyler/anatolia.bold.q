@@ -1,6 +1,7 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { query } from '../services/database.js';
+import { logger } from '../lib/logger.js';
 import { getStatus as getAiStatus } from '../services/ai.js';
 import { isIbmHardwareConfigured } from '../services/quantum.js';
 import { checkQuantumWorkerHealth } from '../services/quantumProcess.js';
@@ -182,6 +183,17 @@ router.post('/decisions/:analysisId/replay', asyncRoute(async (req, res) => {
       body: JSON.stringify({ ...record.request_payload, ...req.body }),
       signal: AbortSignal.timeout(180000),
     });
+    // /generate can fail before it ever reaches its own JSON error handler
+    // (e.g. a proxy/timeout page, or an unhandled exception rendered by a
+    // non-JSON error page) -- parsing that as JSON would throw and mask the
+    // real upstream status/body behind a generic 502. Check content-type
+    // first so a non-JSON response is surfaced as-is instead.
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await response.text();
+      logger.warn({ status: response.status, contentType, bodyPreview: text.slice(0, 300) }, '[Platform] Replay got a non-JSON response from /api/analysis/generate');
+      return res.status(502).json({ error: 'Analiz yeniden çalıştırılamadı', detail: `Beklenmeyen yanıt (HTTP ${response.status})` });
+    }
     const payload = await response.json();
     return res.status(response.status).json({ ...payload, replayOfAnalysisId: analysisId });
   } catch (err) {

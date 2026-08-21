@@ -5,11 +5,13 @@ name: CodeQL
 # findings (GitHub's default `github/codeql-action` behavior), so it never
 # blocks a push/PR the way ci.yml's required checks do. Scans server/ and
 # client/ (both plain JS/TS, one CodeQL language covers both) on every push
-# to main and weekly on a schedule, so drift between dependency updates
-# still gets re-scanned even with no code changes.
+# to any branch (matching ci.yml's own push trigger, since this repo's
+# normal workflow is a direct push rather than a PR -- see CLAUDE.md) and
+# weekly on a schedule, so drift between dependency updates still gets
+# re-scanned even with no code changes.
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
   schedule:

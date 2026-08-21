@@ -46,6 +46,7 @@ export default [
         crypto: 'readonly',
         AbortController: 'readonly',
         AbortSignal: 'readonly',
+        BroadcastChannel: 'readonly',
       },
     },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },

@@ -341,7 +341,7 @@ function registerIpcHandlers() {
     }
   });
   ipcMain.handle('update:getAvailable', () => pendingUpdate);
-  ipcMain.handle('update:install', () => {
+  ipcMain.handle('update:install', async () => {
     if (!downloadedInstallerPath) return { ok: false, error: 'İndirilen kurulum dosyası yok' };
     if (process.platform === 'linux') {
       // AppImages aren't downloaded with the executable bit set -- without
@@ -349,7 +349,16 @@ function registerIpcHandlers() {
       // instead of running it.
       try { fs.chmodSync(downloadedInstallerPath, 0o755); } catch { /* best-effort */ }
     }
-    shell.openPath(downloadedInstallerPath);
+    // shell.openPath resolves to an empty string on success, or a
+    // human-readable error message on failure -- it never rejects, so a
+    // failure (e.g. no handler registered for the installer's file type)
+    // used to go unnoticed and the app would quit anyway, leaving the user
+    // with no update installed and no error shown.
+    const openError = await shell.openPath(downloadedInstallerPath);
+    if (openError) {
+      diagnostics?.error('update_install_open_failed', { message: openError });
+      return { ok: false, error: openError };
+    }
     // Windows: the NSIS installer needs this process to exit so it can
     // replace the running app's files. macOS: opening the .dmg only mounts
     // it in Finder -- quitting first means the currently-running .app isn't

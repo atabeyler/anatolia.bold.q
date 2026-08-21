@@ -7,6 +7,7 @@ import path from 'path';
 import pinoHttp from 'pino-http';
 import { fileURLToPath } from 'url';
 import { logger } from './lib/logger.js';
+import { logEnvValidationWarnings } from './lib/validateEnv.js';
 import { attachSentryErrorHandler } from './lib/sentry.js';
 import { initDatabase, initMemoryTables } from './services/database.js';
 import { ensureDecisionTables, purgeExpiredDecisionRecords } from './services/decisionIntelligence.js';
@@ -59,6 +60,8 @@ const NATIVE_APP_ORIGINS = [
 // any origin. Locally (no APP_URL / non-production) all origins are still
 // allowed for developer convenience.
 const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL, ...NATIVE_APP_ORIGINS] : true;
+
+logEnvValidationWarnings();
 
 const app = express();
 // The deployment platform's reverse proxy terminates TLS upstream and

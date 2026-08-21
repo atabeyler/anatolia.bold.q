@@ -259,8 +259,17 @@ export const adminApi = {
 
 // Dispatched whenever the JWT is written/cleared in this tab, so App.jsx can
 // react to login/logout without polling getCurrentUser() on an interval
-// (the 'storage' event alone only fires for *other* tabs, not this one).
+// (the 'storage' event alone only fires for *other* tabs, not this one, and
+// only when localStorage is actually written -- which the web build never
+// does, see below).
 export const AUTH_CHANGED_EVENT = 'anatoliaq:auth-changed';
+
+// Cross-tab login/logout sync on the web build: it authenticates via an
+// httpOnly cookie, so it never writes anatolia_jwt to localStorage and the
+// 'storage' event (App.jsx's other cross-tab signal, still needed for
+// native) never fires for it. BroadcastChannel is same-origin-only same as
+// 'storage' would be, and every browser this app targets supports it.
+const AUTH_BROADCAST_CHANNEL = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('anatoliaq-auth') : null;
 
 export function setJWT(jwt) {
   if (isNativeShell()) {
@@ -270,6 +279,7 @@ export function setJWT(jwt) {
   // Web has nothing to store here -- routes/auth.js already set/cleared the
   // httpOnly cookie as part of the login/logout request itself.
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
+  AUTH_BROADCAST_CHANNEL?.postMessage('changed');
 }
 
 // ConsultChat.jsx persists its message history under this key so a

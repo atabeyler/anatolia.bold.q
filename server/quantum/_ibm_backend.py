@@ -42,6 +42,19 @@ def is_ibm_configured():
     return bool(IBM_TOKEN and IBM_INSTANCE)
 
 
+def _redact(text):
+    """Strips the configured IBM token/instance CRN out of diagnostic text
+    before it's cached in LAST_IBM_ERROR -- that message is surfaced back
+    through Node's ibmDiagnostic to the client, and some qiskit-ibm-runtime
+    SDK exceptions embed the credentials they failed to authenticate with
+    verbatim in their message."""
+    if IBM_TOKEN:
+        text = text.replace(IBM_TOKEN, "***REDACTED***")
+    if IBM_INSTANCE:
+        text = text.replace(IBM_INSTANCE, "***REDACTED***")
+    return text
+
+
 def run_on_ibm_hardware(circuit, shots):
     """Attempts to run `circuit` on the least-busy real IBM backend, waiting
     up to IBM_WAIT_SECONDS for the job to finish. Returns (counts, backend_name)
@@ -90,5 +103,5 @@ def run_on_ibm_hardware(circuit, shots):
         # log it so it's diagnosable, without treating it as the overall
         # request's failure (the caller falls back to the simulator either way).
         print(f"[quantum] IBM hardware run failed, falling back to simulator: {exc}", file=sys.stderr)
-        LAST_IBM_ERROR["message"] = f"{type(exc).__name__}: {exc}"
+        LAST_IBM_ERROR["message"] = _redact(f"{type(exc).__name__}: {exc}")
         return None

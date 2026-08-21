@@ -80,7 +80,10 @@ export async function resolveConflict(db, { conflictId, deviceId, resolution }) 
         `,
         values: [
           crypto.randomUUID(), conflict.entity_type, conflict.entity_id,
-          JSON.stringify({ title: localPayload.title, content: localPayload.content }),
+          // All locally-editable fields, not just title/content -- a
+          // 'kept_local' resolution used to drop category/aiProvider even
+          // if the local edit also touched those, silently losing them.
+          JSON.stringify({ title: localPayload.title, content: localPayload.content, category: localPayload.category, aiProvider: localPayload.aiProvider ?? null }),
           conflict.server_version, deviceId, ts, ts,
         ],
       }

@@ -31,7 +31,15 @@ async function fetchLatestRelease() {
   });
   if (!r.ok) throw new Error(`GitHub releases lookup failed (HTTP ${r.status})`);
   const releases = await r.json();
-  const release = Array.isArray(releases) ? releases.find((item) => item && !item.draft) : releases;
+  // GitHub's /releases response is normally created_at-descending, but that
+  // ordering isn't a documented contract -- sorting explicitly by
+  // published_at means a future change to release/tag creation order (or
+  // GitHub's own API behavior) can't silently pick a stale release as
+  // "latest".
+  const candidates = Array.isArray(releases) ? releases.filter((item) => item && !item.draft) : (releases ? [releases] : []);
+  const release = candidates.sort(
+    (a, b) => new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
+  )[0];
   if (!release) throw new Error('GitHub releases lookup returned no published release');
 
   return {

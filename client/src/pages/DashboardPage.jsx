@@ -180,15 +180,39 @@ export default function DashboardPage({ user, onLogout }) {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission === 'default') {
+    if (Notification.permission !== 'default') return;
+    // Most browsers ignore (or auto-deny) a permission prompt that isn't
+    // triggered by a user gesture -- firing this unconditionally on mount
+    // just burned the one real prompt opportunity on page load instead of
+    // the user's first actual interaction with the dashboard.
+    const requestOnce = () => {
       Notification.requestPermission().catch(() => {});
-    }
+      window.removeEventListener('pointerdown', requestOnce);
+      window.removeEventListener('keydown', requestOnce);
+    };
+    window.addEventListener('pointerdown', requestOnce, { once: true });
+    window.addEventListener('keydown', requestOnce, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', requestOnce);
+      window.removeEventListener('keydown', requestOnce);
+    };
   }, []);
+
+  // pushNotification/notifyDevice/normalizeText/t are recreated every render
+  // (pushNotification closes over soundEnabled/soundVolume, t over lang) --
+  // mirrored here so the socket-registration effect below can read the
+  // latest ones from a ref instead of listing lang/soundEnabled/soundVolume
+  // as effect deps, which previously tore down and re-registered every
+  // socket listener (and the actual sock.on/off calls, not just this
+  // closure) on every language switch or volume-slider drag.
+  const liveHandlersRef = useRef();
+  liveHandlersRef.current = { t, pushNotification, notifyDevice, normalizeText };
 
   useEffect(() => {
     const socketIdentity = user.isAdmin ? 'BOLD' : (user.nickname || user.userCode);
     const sock = connectSocket(socketIdentity, getToken());
     const onBroadcast = (data) => {
+      const { t, pushNotification, notifyDevice, normalizeText } = liveHandlersRef.current;
       const me = user.nickname || user.userCode;
       if (data.from === me) return;
       if (data?.initiator && data.initiator === me) return;
@@ -205,6 +229,7 @@ export default function DashboardPage({ user, onLogout }) {
       setTimeout(() => setEmergencyToast(null), 8000);
     };
     const onChatReceive = (data) => {
+      const { t, pushNotification, notifyDevice } = liveHandlersRef.current;
       if (data.from === (user.nickname || user.userCode)) return;
       pushNotification({
         type: 'chat',
@@ -217,6 +242,7 @@ export default function DashboardPage({ user, onLogout }) {
     };
     const onSystemNotification = (data) => {
       if (!data) return;
+      const { t, pushNotification, notifyDevice } = liveHandlersRef.current;
       const me = user.nickname || user.userCode;
       if (data.initiator && me && data.initiator === me) return;
       pushNotification({
@@ -236,6 +262,7 @@ export default function DashboardPage({ user, onLogout }) {
     };
     const onHardwareVerified = (data) => {
       if (!data) return;
+      const { t, pushNotification, notifyDevice } = liveHandlersRef.current;
       const ok = !!data.hardwareVerification;
       pushNotification({
         type: 'system',
@@ -257,7 +284,7 @@ export default function DashboardPage({ user, onLogout }) {
       sock.off('auth:blocked', onBlocked);
       sock.off('analysis:hardwareVerified', onHardwareVerified);
     };
-  }, [user.userCode, lang, soundEnabled, soundVolume]);
+  }, [user.userCode]);
 
   useEffect(() => {
     const nickname = user.nickname || user.userCode;
@@ -271,7 +298,7 @@ export default function DashboardPage({ user, onLogout }) {
     const consentKey = 'anatolia_location_consent';
     let consent = localStorage.getItem(consentKey);
     if (consent === null) {
-      const granted = window.confirm(t('locationConsentPrompt'));
+      const granted = window.confirm(liveHandlersRef.current.t('locationConsentPrompt'));
       consent = granted ? 'granted' : 'denied';
       localStorage.setItem(consentKey, consent);
     }
@@ -301,7 +328,10 @@ export default function DashboardPage({ user, onLogout }) {
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [user.nickname, user.userCode, lang]);
+  // t (used only for the one-time consent prompt above) is read from
+  // liveHandlersRef instead of the closure, so a language switch doesn't
+  // tear down and restart the GPS watch for no functional reason.
+  }, [user.nickname, user.userCode]);
 
   useEffect(() => {
     if (!myCoords?.lat || !myCoords?.lng) return;

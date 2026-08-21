@@ -63,7 +63,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       throw new Error(body.error || `Cihaz kaydı başarısız (HTTP ${res.status})`);
     }
 
-    const offlinePasswordHash = password ? bcrypt.hashSync(password, 10) : undefined;
+    const offlinePasswordHash = password ? bcrypt.hashSync(password, 12) : undefined;
     const { persisted } = secureStore.save({
       jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin,
       offlinePasswordHash,

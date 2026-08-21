@@ -6,6 +6,7 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.quantum_info import Statevector
 
 from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
+from _reproducibility import environment_fingerprint, reproducibility_block
 
 FEATURES = [
     "amount", "hour", "frequency", "newCounterparty", "crossBorder",
@@ -14,6 +15,13 @@ FEATURES = [
     "amountDeviation",
 ]
 MAX_INPUT_TRANSACTIONS = 3000
+# Ported from fraud_detection.py: above this, the O(n^2) pairwise kernel
+# below (13 features here, vs. 5 there, so proportionally more expensive
+# per pair) gets a cheap classical pre-filter pass first instead of running
+# unbounded inside fraudDetection.js's TIMEOUT_MS -- this file is the one
+# actually spawned in production (fraudDetection.js), so it needs the same
+# safeguard fraud_detection.py has, not a weaker one.
+MAX_KERNEL_TRANSACTIONS = 3000
 # Calibrated against the ANATOLIA-Q BDDK/AML blind benchmark V3 (2000 records,
 # 200 planted anomalies, 60/70/70 easy/medium/hard). At K=1.07, 17 of the 70
 # Hard-difficulty anomalies were missed entirely (recall 91.5%). 0.79 is the
@@ -78,9 +86,26 @@ def classical(rows):
 
 def detect(transactions, skip_hardware=False):
     transactions=transactions[:MAX_INPUT_TRANSACTIONS]
+    n_total=len(transactions)
+    if n_total<3:
+        return {"backend":"qiskit-statevector-kernel-13q","qubits":13,"featureNames":FEATURES,"thresholdK":THRESHOLD_K,"transactionCount":n_total,"flaggedCount":0,"transactions":[],"hardwareVerification":None,"ibmDiagnostic":"not attempted (fewer than 3 transactions)","prefiltered":False,"excludedByPrefilter":0,"environmentFingerprint":environment_fingerprint(),"reproducibility":None}
+
+    prefiltered=False
+    excluded_by_prefilter=0
+    if n_total>MAX_KERNEL_TRANSACTIONS:
+        # Pre-score every transaction with the cheap classical detector and
+        # keep only the most anomalous-looking MAX_KERNEL_TRANSACTIONS for
+        # the expensive O(n^2) quantum kernel -- see fraud_detection.py's
+        # detect() for the identical reasoning.
+        full_rows=normalize(transactions)
+        prescores,_=classical(full_rows)
+        ranked=sorted(range(n_total),key=lambda i:-prescores[i])[:MAX_KERNEL_TRANSACTIONS]
+        ranked.sort()
+        transactions=[transactions[i] for i in ranked]
+        prefiltered=True
+        excluded_by_prefilter=n_total-len(transactions)
+
     n=len(transactions)
-    if n<3:
-        return {"backend":"qiskit-statevector-kernel-13q","qubits":13,"featureNames":FEATURES,"thresholdK":THRESHOLD_K,"transactionCount":n,"flaggedCount":0,"transactions":[],"hardwareVerification":None,"ibmDiagnostic":"not attempted (fewer than 3 transactions)"}
     rows=normalize(transactions)
     circuits=[feature_map(r) for r in rows]
     states=[Statevector.from_instruction(qc) for qc in circuits]
@@ -143,7 +168,7 @@ def detect(transactions, skip_hardware=False):
         else:
             ibm_diagnostic = f"configured but failed: {LAST_IBM_ERROR['message'] or 'unknown error'}"
 
-    return {
+    result = {
         "backend":"qiskit-statevector-kernel-13q",
         "qubits":len(FEATURES),
         "featureNames":FEATURES,
@@ -156,7 +181,12 @@ def detect(transactions, skip_hardware=False):
         "ibmDiagnostic":ibm_diagnostic,
         "classicalBenchmark":{"flaggedCount":sum(1 for t in out if t["classicalFlagged"]),"agreementCount":agreement,"agreementPercent":round(agreement/n*100,1)},
         "optimizedPairCount":n*(n-1)//2,
+        "prefiltered":prefiltered,
+        "excludedByPrefilter":excluded_by_prefilter,
+        "environmentFingerprint":environment_fingerprint(),
     }
+    result["reproducibility"] = reproducibility_block({"transactions": transactions}, circuits[top_idx], out)
+    return result
 
 
 def main():

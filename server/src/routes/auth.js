@@ -62,21 +62,24 @@ async function seedLegacyUsersIfEmpty() {
       return;
     }
     if (ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD) {
-      // AQ-007: in production this is a real "admin uses a weaker/shared
-      // path than non-admin users" gap -- the admin account would be
-      // bootstrapped with the exact same bcrypt hash as all 10 non-admin
-      // legacy accounts, so anyone holding SHARED_PASSWORD (a deploy log, an
+      // AQ-007: this is a real "admin uses a weaker/shared path than
+      // non-admin users" gap -- the admin account would be bootstrapped
+      // with the exact same bcrypt hash as all 10 non-admin legacy
+      // accounts, so anyone holding SHARED_PASSWORD (a deploy log, an
       // ex-operator, a leaked env var) gets admin too. A warning alone was
-      // easy to miss at deploy time; fail closed instead so a production
-      // boot without a distinct ADMIN_SEED_PASSWORD never silently seeds a
-      // shared admin credential. Non-production environments (dev/test/CI)
-      // keep the previous warn-and-continue behavior so local setup and
-      // existing test fixtures aren't broken.
-      if (process.env.NODE_ENV === 'production') {
+      // easy to miss at deploy time; fail closed instead so a boot without
+      // a distinct ADMIN_SEED_PASSWORD never silently seeds a shared admin
+      // credential -- gated on NODE_ENV !== 'development' (not
+      // === 'production') since a reachable staging/test deployment left
+      // with NODE_ENV unset or something other than 'production' is
+      // exactly the case this is meant to catch; only explicit local
+      // development (.env.example's default) keeps the previous
+      // warn-and-continue behavior so local setup isn't broken.
+      if (process.env.NODE_ENV !== 'development') {
         console.error(
-          'auth_users seed ABORTED: ADMIN_SEED_PASSWORD is not set in production. Refusing to seed the admin ' +
-          'account (120184) with the same bootstrap password as every non-admin legacy account -- set a ' +
-          'distinct ADMIN_SEED_PASSWORD and restart.'
+          `auth_users seed ABORTED: ADMIN_SEED_PASSWORD is not set (NODE_ENV=${process.env.NODE_ENV || '(unset)'}). Refusing to ` +
+          'seed the admin account (120184) with the same bootstrap password as every non-admin legacy account -- set a ' +
+          'distinct ADMIN_SEED_PASSWORD and restart, or set NODE_ENV=development for local-only setups.'
         );
         seeded = false; // allow a retry once the operator sets it and restarts
         return;
@@ -88,10 +91,10 @@ async function seedLegacyUsersIfEmpty() {
       );
     }
 
-    const analystPasswordHash = await bcrypt.hash(LEGACY_SEED_PASSWORD, 10);
+    const analystPasswordHash = await bcrypt.hash(LEGACY_SEED_PASSWORD, 12);
     const adminPasswordHash = ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD
       ? analystPasswordHash
-      : await bcrypt.hash(ADMIN_SEED_PASSWORD, 10);
+      : await bcrypt.hash(ADMIN_SEED_PASSWORD, 12);
     for (const u of LEGACY_SEED_USERS) {
       await query(
         'INSERT INTO auth_users (user_code, password_hash, nickname, is_admin) VALUES ($1, $2, $3, $4) ON CONFLICT (user_code) DO NOTHING',
@@ -117,7 +120,7 @@ async function findUser(userCode) {
 // distinguish a valid user code from an invalid one even though the error
 // message is now identical (see the unified "Kullanıcı kodu veya şifre
 // hatalı" message below).
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-a-real-password-timing-decoy', 10);
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-a-real-password-timing-decoy', 12);
 
 // Step 1: verify the password, generate a token for mail approval, and send the email
 router.post('/login-request', publicActionLimiter, async (req, res) => {
@@ -356,7 +359,7 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Geçersiz rol' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     // An explicit role is honored, otherwise it's derived from isAdmin so
     // existing admin-only clients keep working. is_admin is then always
     // DERIVED from the resolved role (never independently trusted from the
@@ -404,7 +407,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
     if (password) {
       const passwordError = validatePassword(password);
       if (passwordError) return res.status(400).json({ error: passwordError });
-      params.push(await bcrypt.hash(password, 10));
+      params.push(await bcrypt.hash(password, 12));
       sets.push(`password_hash = $${params.length}`);
     }
     if (nickname !== undefined) {

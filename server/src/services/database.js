@@ -264,18 +264,23 @@ async function backfillAnalysesSyncMetadata(p) {
   const { rows } = await p.query(
     `SELECT id FROM analyses WHERE client_id IS NULL OR sync_revision IS NULL`
   );
-  for (const row of rows) {
-    await p.query(
-      `UPDATE analyses
-       SET client_id = COALESCE(client_id, $2),
-           sync_revision = COALESCE(sync_revision, nextval('analyses_sync_revision_seq'))
-       WHERE id = $1`,
-      [row.id, randomUUID()]
-    );
-  }
-  if (rows.length) {
-    logger.info({ count: rows.length }, '[Database] Backfilled analyses sync metadata');
-  }
+  if (!rows.length) return;
+  // One batched UPDATE instead of one round-trip per row. client_id is
+  // still generated application-side with crypto.randomUUID() (see the
+  // comment above the client_id column, ~line 87) rather than DB-side
+  // gen_random_uuid(), for the same reason: no PG13+/pgcrypto assumption.
+  // unnest() pairs each id with its own generated client_id in one pass.
+  const ids = rows.map((row) => row.id);
+  const clientIds = rows.map(() => randomUUID());
+  await p.query(
+    `UPDATE analyses AS a
+     SET client_id = COALESCE(a.client_id, v.client_id),
+         sync_revision = COALESCE(a.sync_revision, nextval('analyses_sync_revision_seq'))
+     FROM (SELECT unnest($1::int[]) AS id, unnest($2::uuid[]) AS client_id) AS v
+     WHERE a.id = v.id`,
+    [ids, clientIds]
+  );
+  logger.info({ count: rows.length }, '[Database] Backfilled analyses sync metadata');
 }
 
 export async function query(text, params) {

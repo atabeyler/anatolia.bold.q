@@ -21,10 +21,10 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY server/package.json server/package-lock.json server/
-RUN npm install --prefix server
+RUN npm ci --prefix server
 
 COPY client/package.json client/package-lock.json client/
-RUN npm install --prefix client
+RUN npm ci --prefix client
 
 COPY server/quantum/requirements.txt server/quantum/requirements.txt
 # --ignore-installed: the base image ships a system PyJWT (via apt/
@@ -36,8 +36,16 @@ RUN pip3 install --break-system-packages --ignore-installed -r server/quantum/re
 
 COPY server/ server/
 COPY client/ client/
+# The running server only ever serves the built client/dist static files
+# (see index.js's express.static call) -- client/node_modules (including
+# the devDependencies vite build itself needed, like vite proper) is never
+# read at runtime, so the whole tree is dropped instead of just the vite
+# cache dir, and server's own devDependencies (eslint, vitest, typescript,
+# etc. -- tsx itself is a real dependency, needed to run src/index.js) are
+# pruned the same way: smaller final image, smaller attack surface.
 RUN npm run build --prefix client \
-    && rm -rf client/node_modules/.vite
+    && rm -rf client/node_modules \
+    && npm prune --omit=dev --prefix server
 
 # Runs as an unprivileged user rather than root -- the quantum subprocess
 # (server/quantum/*.py) and any file-upload handling have no need for root,
@@ -47,5 +55,10 @@ USER node
 
 ENV NODE_ENV=production
 EXPOSE 10000
+
+# node's own http client instead of curl -- bookworm-slim doesn't ship curl
+# and adding it just for this would be extra attack surface for one probe.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:' + (process.env.PORT || 10000) + '/api/platform/health/live', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 CMD ["npm", "run", "start", "--prefix", "server"]

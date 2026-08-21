@@ -81,7 +81,10 @@ export default function UpdateBanner() {
     }
   };
 
-  const install = () => desktopUpdate.install();
+  const install = async () => {
+    const result = await desktopUpdate.install();
+    if (!result?.ok) setStage('error');
+  };
 
   const pct = progress?.total ? Math.round((progress.received / progress.total) * 100) : null;
 

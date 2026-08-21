@@ -94,8 +94,23 @@ export function getQuantumWorkerPoolStats() {
  *
  * @param {{mode: string, scriptPath: string, payload: object, timeoutMs: number, label: string}} opts
  */
+// Per-request array-length caps (MAX_SCENARIOS etc. in the calling
+// services) bound how many items go into a payload, but not the serialized
+// byte size of any one item's string fields (e.g. a very long `id`). This
+// is the last-resort ceiling on the whole stdin write, and on how much
+// stdout/stderr a runaway or misbehaving worker gets to accumulate in
+// memory before being cut off.
+const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_OUTPUT_BYTES = 10 * 1024 * 1024; // 10MB
+
 export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, label }) {
   const startedAt = Date.now();
+  const payloadJson = JSON.stringify(payload);
+  if (Buffer.byteLength(payloadJson) > MAX_PAYLOAD_BYTES) {
+    logger.warn({ bytes: Buffer.byteLength(payloadJson) }, `[${label}] Payload exceeds MAX_PAYLOAD_BYTES, refusing to spawn worker`);
+    recordRequestMetric(`quantum.${label}`, Date.now() - startedAt, 413);
+    return null;
+  }
   await acquireSlot();
   try {
     const result = await new Promise((resolve) => {
@@ -117,14 +132,26 @@ export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, l
 
       let out = '';
       let err = '';
+      let outputOverflowed = false;
       const timer = setTimeout(() => {
         logger.warn(`[${label}] Timed out — proceeding without worker result`);
         proc.kill('SIGKILL');
         finish(null);
       }, timeoutMs);
 
-      proc.stdout.on('data', (d) => { out += d; });
-      proc.stderr.on('data', (d) => { err += d; });
+      const appendCapped = (current, chunk) => {
+        if (current.length >= MAX_OUTPUT_BYTES) {
+          if (!outputOverflowed) {
+            outputOverflowed = true;
+            logger.warn(`[${label}] Worker output exceeded MAX_OUTPUT_BYTES, killing process`);
+            proc.kill('SIGKILL');
+          }
+          return current;
+        }
+        return current + chunk;
+      };
+      proc.stdout.on('data', (d) => { out = appendCapped(out, d); });
+      proc.stderr.on('data', (d) => { err = appendCapped(err, d); });
       proc.on('error', (e) => {
         clearTimeout(timer);
         logger.warn({ err: e }, `[${label}] Process error`);
@@ -133,6 +160,9 @@ export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, l
       proc.on('close', (code) => {
         clearTimeout(timer);
         if (settled) return;
+        if (outputOverflowed) {
+          return finish(null);
+        }
         if (code !== 0) {
           logger.warn({ code, stderr: err.trim().slice(0, 300) }, `[${label}] Worker process failed`);
           return finish(null);
@@ -151,8 +181,12 @@ export async function runQuantumWorker({ mode, scriptPath, payload, timeoutMs, l
       });
 
       proc.stdin.on('error', () => {});
-      proc.stdin.write(JSON.stringify(payload));
-      proc.stdin.end();
+      try {
+        proc.stdin.write(payloadJson);
+        proc.stdin.end();
+      } catch (e) {
+        logger.warn({ err: e }, `[${label}] Failed to write worker stdin`);
+      }
     });
     recordRequestMetric(`quantum.${label}`, Date.now() - startedAt, result === null ? 500 : 200);
     return result;

@@ -3,9 +3,22 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import GlobalVoiceAssistant from './components/GlobalVoiceAssistant.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
+import QuantumLogo from './components/QuantumLogo.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
 import { resolveCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
 import { useLang } from './services/langContext.jsx';
+
+// Shared by both loading gaps below (initial auth resolution, and the lazy
+// route chunk boundary) -- a bare background color there used to render as
+// an unexplained blank dark screen on a slow connection, easy to mistake
+// for the app failing to load.
+function LoadingFallback() {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-[#0a0e1a]">
+      <QuantumLogo size="sm" />
+    </div>
+  );
+}
 
 // The dashboard (and everything it pulls in -- analysis views, chat, voice,
 // history, the 3D globe, etc.) made up the bulk of the single ~790KB main
@@ -57,9 +70,14 @@ export default function App() {
     let alive = true;
     const sync = () => resolveCurrentUser().then((u) => { if (alive) setUser(u); });
     const onStorage = (e) => { if (!e.key || e.key === 'anatolia_jwt') sync(); };
+    // 'storage' only covers native (anatolia_jwt in localStorage); the web
+    // build's httpOnly-cookie session never writes that key, so other web
+    // tabs need the BroadcastChannel api.js's setJWT() posts to instead.
+    const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('anatoliaq-auth') : null;
 
     window.addEventListener(AUTH_CHANGED_EVENT, sync);
     window.addEventListener('storage', onStorage);
+    authChannel?.addEventListener('message', sync);
 
     let expiryTimer;
     if (user?.exp) {
@@ -75,6 +93,7 @@ export default function App() {
       alive = false;
       window.removeEventListener(AUTH_CHANGED_EVENT, sync);
       window.removeEventListener('storage', onStorage);
+      authChannel?.close();
       if (expiryTimer) clearTimeout(expiryTimer);
     };
   }, [user]);
@@ -85,7 +104,7 @@ export default function App() {
     return (
       <>
         {showSplash && <SplashScreen />}
-        <div className="fixed inset-0 bg-[#0a0e1a]" />
+        <LoadingFallback />
       </>
     );
   }
@@ -94,7 +113,7 @@ export default function App() {
     <>
       {showSplash && <SplashScreen />}
       <UpdateBanner />
-      <Suspense fallback={<div className="fixed inset-0 bg-[#0a0e1a]" />}>
+      <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />} />
           <Route path="/ui-buttons" element={user ? <ButtonShowcasePage /> : <Navigate to="/login" />} />
