@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Moon, Sun, Monitor, Search as SearchIcon, KeyRound, Trash2, Pencil, Fingerprint, TriangleAlert } from 'lucide-react';
 import QuantumLogo from './QuantumLogo.jsx';
+import LocalAIPanel from './LocalAIPanel.jsx';
 import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../services/push.js';
 import { isPasskeySupported, registerPasskey } from '../services/webauthn.js';
+import { isNativeApp } from '../services/nativeBridge.js';
 import { api } from '../services/api.js';
 import { guideModules, localeFor } from '../services/i18n.js';
 import { isRtl } from '../services/langContext.jsx';
@@ -324,7 +326,7 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
   };
 
   const tabs = [
-    { key: 'language', label: t('settingsLanguage') }, { key: 'sound', label: t('settingsSound') }, { key: 'push', label: t('settingsPush') }, ...(showAppearance ? [{ key: 'appearance', label: t('settingsAppearance') }] : []), ...(authenticated ? [{ key: 'security', label: t('settingsSecurity') }] : []), { key: 'about', label: t('settingsAbout') },
+    { key: 'language', label: t('settingsLanguage') }, { key: 'sound', label: t('settingsSound') }, { key: 'push', label: t('settingsPush') }, ...(showAppearance ? [{ key: 'appearance', label: t('settingsAppearance') }] : []), ...(authenticated ? [{ key: 'security', label: t('settingsSecurity') }] : []), ...(isNativeApp ? [{ key: 'localAI', label: t('settingsLocalAI') }] : []), { key: 'about', label: t('settingsAbout') },
   ];
 
   const themeOptions = [
@@ -349,6 +351,7 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
         {typeof setSidebarCollapsed === 'function' && <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>}
       </div>}
       {tab === 'security' && authenticated && <SecurityPanel t={t} lang={lang} />}
+      {tab === 'localAI' && isNativeApp && <LocalAIPanel t={t} />}
       {tab === 'about' && <div><p className="text-[12px] text-cyan-100/80 mb-3">{t('appName')} · {t('settingsVersion')} {__APP_VERSION__}</p><button onClick={onOpenGuide} className="text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2">{t('settingsOpenGuide')}</button></div>}
     </div>
   </motion.div></>;

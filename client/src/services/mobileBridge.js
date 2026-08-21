@@ -225,11 +225,12 @@ export const mobileAI = {
     if (!userId) return { ok: false, error: 'Oturum açılmamış' };
     return createLocalAIProvider({ db: await getDb(), userId, diagnostics: await getDiagnostics() }).query(request);
   }),
-  // Model Manager surface -- mirrors desktopAI's, same follow-up note:
-  // real logic, not yet wired into a Settings UI panel. On Android,
-  // isAvailable() also depends on the native LocalLLM plugin (see
-  // mobile/localAI/llmRuntime.js) which does not exist yet -- see the
-  // final report's Android follow-up.
+  // Model Manager surface -- mirrors desktopAI's, and is wired into the
+  // same Settings > Local AI panel (components/LocalAIPanel.jsx) via
+  // nativeBridge.js. On Android, isAvailable() also depends on the native
+  // LocalLLM plugin (see mobile/localAI/llmRuntime.js) which does not
+  // exist yet -- see the final report's Android follow-up. This UI path
+  // has not been exercised against a real Capacitor/Android runtime.
   modelStatus: guard(async () => {
     const mm = getModelManager();
     const installed = await refreshInstalledState();
