@@ -58,24 +58,38 @@ set(GGML_OPENMP OFF CACHE BOOL "" FORCE) # avoid an extra runtime dependency on 
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/CMakeLists.txt")
     add_subdirectory(llama.cpp llama.cpp-build)
+
+    add_library(anatolia_llama SHARED
+        llama-android.cpp
+    )
+
+    target_link_libraries(anatolia_llama
+        llama
+        ggml
+        android
+        log
+    )
+
+    target_include_directories(anatolia_llama PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/ggml/include
+    )
 else()
-    message(FATAL_ERROR
+    # Do NOT hard-fail the configure step here: this CMakeLists.txt is invoked
+    # by every Gradle build of the Android app (including the automated
+    # android-release.yml CI pipeline), and until the llama.cpp submodule
+    # (see the header comment above) is actually added on a real dev machine,
+    # `anatolia_llama.so` simply doesn't exist. LlamaBridge.kt's
+    # `System.loadLibrary("anatolia_llama")` then throws UnsatisfiedLinkError,
+    # which LocalLLMPlugin.kt already catches as `Throwable` around every
+    # LlamaBridge call and reports as a plugin-call failure -- the same
+    # "local LLM unavailable" path the JS registry already falls back from to
+    # extractive Q LOCAL DATA. So a missing submodule degrades this one
+    # feature at runtime instead of breaking the Gradle/CI build.
+    message(WARNING
         "llama.cpp source not found at ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp -- "
-        "see this file's header comment for the required `git submodule add` step.")
+        "skipping the anatolia_llama native target for this build (see this "
+        "file's header comment for the required `git submodule add` step). "
+        "The app will still build; the Android local LLM feature will report "
+        "itself unavailable at runtime until the submodule is added.")
 endif()
-
-add_library(anatolia_llama SHARED
-    llama-android.cpp
-)
-
-target_link_libraries(anatolia_llama
-    llama
-    ggml
-    android
-    log
-)
-
-target_include_directories(anatolia_llama PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/ggml/include
-)
