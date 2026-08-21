@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { userProfiles, conversationMemory } from '../db/schema.js';
 import { generateAnalysis } from '../services/ai.js';
+import { classifyData } from '../services/decisionIntelligence.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -101,6 +102,11 @@ router.post('/save-conversation', authMiddleware, async (req, res) => {
 
     if (!history?.length) return res.status(400).json({ error: 'Geçmiş boş' });
 
+    // No category here either (this is a saved consultation transcript, not
+    // a categorized analysis) -- defaults to INTERNAL like routes/analysis.js's
+    // /chat, overridable via an explicit dataClassification in the request.
+    const memoryClassification = classifyData(null, req.body.dataClassification);
+
     // Summarize the conversation and extract key facts with AI
     let summary = '';
     let keyFacts = '';
@@ -117,7 +123,9 @@ KISA ve öz yanıt ver — maksimum 300 kelime.`;
 
       const result = await generateAnalysis(
         'Sen bir konuşma özetleyicisisin. Kısa ve öz özetle.',
-        summaryPrompt
+        summaryPrompt,
+        {},
+        memoryClassification
       );
       summary = result.content;
 
@@ -127,7 +135,9 @@ ${history.map(m => `${m.role === 'user' ? 'K' : 'A'}: ${m.content.slice(0, 200)}
 
       const factsResult = await generateAnalysis(
         'Anahtar bilgileri madde madde listele.',
-        factsPrompt
+        factsPrompt,
+        {},
+        memoryClassification
       );
       keyFacts = factsResult.content;
     } catch {

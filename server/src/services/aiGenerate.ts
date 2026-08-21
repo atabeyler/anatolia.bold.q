@@ -11,6 +11,9 @@ import type { Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { recordRequestMetric } from '../lib/requestMetrics.js';
 import { anthropicProvider, googleProvider, openaiProvider, MODELS, pickProviderOrder } from './aiProviders.js';
+import { filterAllowedProviders, isCloudProviderAllowed, PolicyDenialError } from './dataEgressPolicy.js';
+
+export { PolicyDenialError };
 
 // Records latency + success/failure for one provider attempt, keyed
 // `ai.<provider>` -- see getMetricsSnapshot()/the /api/platform/metrics
@@ -45,30 +48,38 @@ export async function generateAnalysisWithVision(
   systemPrompt: string,
   userPrompt: string,
   imageBase64: string,
-  imageMimetype: string
+  imageMimetype: string,
+  classification: string = 'INTERNAL'
 ): Promise<GenerateResult> {
   if (anthropicProvider) {
-    try {
-      const { text, usage } = await generateText({
-        model: anthropicProvider(MODELS.claudeText),
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', image: imageBase64, mediaType: imageMimetype },
-              { type: 'text', text: userPrompt },
-            ],
-          },
-        ],
-        maxOutputTokens: 8000,
-      });
-      return { provider: 'Claude Vision (Anthropic)', content: text, usage };
-    } catch (err) {
-      logger.warn({ err }, 'Claude Vision failed -> falling back to text');
+    if (!isCloudProviderAllowed(classification, 'claude')) {
+      logger.warn({ classification, provider: 'claude', route: 'generateAnalysisWithVision', reason: 'classification_forbids_cloud_provider' }, '[DataEgressPolicy] cloud AI provider call denied');
+    } else {
+      try {
+        const { text, usage } = await generateText({
+          model: anthropicProvider(MODELS.claudeText),
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image', image: imageBase64, mediaType: imageMimetype },
+                { type: 'text', text: userPrompt },
+              ],
+            },
+          ],
+          maxOutputTokens: 8000,
+        });
+        return { provider: 'Claude Vision (Anthropic)', content: text, usage };
+      } catch (err) {
+        logger.warn({ err }, 'Claude Vision failed -> falling back to text');
+      }
     }
   }
-  return generateAnalysis(systemPrompt, `[Görsel eklendi — görsel AI kullanılamıyor]\n\n${userPrompt}`);
+  // Text-only fallback still goes through generateAnalysis's own policy
+  // gate below with the same classification -- vision being denied/failed
+  // never implies the text fallback may skip the check.
+  return generateAnalysis(systemPrompt, `[Görsel eklendi — görsel AI kullanılamıyor]\n\n${userPrompt}`, {}, classification);
 }
 
 // Per-provider call shape: Claude/OpenAI cap output and return real token
@@ -86,11 +97,23 @@ const PROVIDER_CALL: Record<string, { model: () => any; maxOutputTokens?: number
 export async function generateAnalysis(
   systemPrompt: string,
   userPrompt: string,
-  options: { maxOutputTokens?: number } = {}
+  options: { maxOutputTokens?: number } = {},
+  classification: string = 'INTERNAL'
 ): Promise<GenerateResult> {
   const errors: Array<{ provider: string; error: string }> = [];
 
-  for (const { key, name } of pickProviderOrder(userPrompt.length)) {
+  const candidates = pickProviderOrder(userPrompt.length);
+  const allowed = filterAllowedProviders(classification, candidates, 'generateAnalysis');
+  if (allowed.length === 0 && candidates.length > 0) {
+    // Every configured/eligible provider was excluded by policy, not by an
+    // actual call failure -- this must never look like AllProvidersFailedError
+    // (which implies "the providers were tried and errored"), since a caller
+    // (or the client UI) reacting to that would suggest retrying, when this
+    // is a fail-closed policy decision that a retry can never satisfy.
+    throw new PolicyDenialError(`Bu veri sınıfı (${classification}) için hiçbir cloud AI sağlayıcısına izin verilmiyor`);
+  }
+
+  for (const { key, name } of allowed) {
     const startedAt = Date.now();
     const call = PROVIDER_CALL[key];
     // An explicit override (see routes/analysis.js's depth setting) replaces
@@ -127,13 +150,32 @@ export async function generateAnalysis(
 export async function streamConsultationText(
   systemPrompt: string,
   userPrompt: string,
-  res: Response
+  res: Response,
+  classification: string = 'INTERNAL'
 ): Promise<{ provider: string; content: string }> {
-  const attempts: AttemptDef[] = [
-    anthropicProvider ? { name: 'Claude (Anthropic)', model: anthropicProvider(MODELS.claudeText) } : null,
-    googleProvider ? { name: 'Gemini (Google)', model: googleProvider(MODELS.gemini) } : null,
-    openaiProvider ? { name: 'GPT-4o (OpenAI)', model: openaiProvider.chat(MODELS.openai) } : null,
-  ].filter((x): x is AttemptDef => x !== null);
+  // Policy filter runs on plain {key,name} entries first -- the adapter
+  // factory (anthropicProvider(...), which actually constructs an SDK model
+  // handle) is only called afterward, for keys that survive the filter.
+  // Building the model handle before filtering would call into the
+  // provider adapter even for a denied provider, which is exactly what the
+  // AQ-001/AQ-014 regression test (aiGenerate.test.ts) checks for.
+  const keyCandidates: { key: string; name: string }[] = [
+    anthropicProvider ? { key: 'claude', name: 'Claude (Anthropic)' } : null,
+    googleProvider ? { key: 'gemini', name: 'Gemini (Google)' } : null,
+    openaiProvider ? { key: 'openai', name: 'GPT-4o (OpenAI)' } : null,
+  ].filter((x): x is { key: string; name: string } => x !== null);
+
+  const allowedKeys = filterAllowedProviders(classification, keyCandidates, 'streamConsultationText');
+  if (allowedKeys.length === 0 && keyCandidates.length > 0) {
+    throw new PolicyDenialError(`Bu veri sınıfı (${classification}) için hiçbir cloud AI sağlayıcısına izin verilmiyor`);
+  }
+
+  const MODEL_FACTORY: Record<string, () => any> = {
+    claude: () => anthropicProvider!(MODELS.claudeText),
+    gemini: () => googleProvider!(MODELS.gemini),
+    openai: () => openaiProvider!.chat(MODELS.openai),
+  };
+  const attempts: (AttemptDef & { key: string })[] = allowedKeys.map(({ key, name }) => ({ key, name, model: MODEL_FACTORY[key]() }));
 
   for (const attempt of attempts) {
     const startedAt = Date.now();
@@ -183,6 +225,46 @@ export async function streamConsultationText(
   throw new AllProvidersFailedError('Tüm AI sağlayıcılar başarısız');
 }
 
+// Generic schema-constrained structured generation (Claude -> Gemini ->
+// OpenAI, same policy-gated fallback as generateAnalysis), factored out of
+// parseVoiceIntent's original hardcoded 3-provider pattern so other
+// features (e.g. AQ-017's option/COA comparison) that need reliable JSON
+// output don't have to duplicate it.
+export async function generateStructured<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  schema: z.ZodType<T>,
+  classification: string = 'INTERNAL',
+  route = 'generateStructured'
+): Promise<T> {
+  const candidates = [
+    anthropicProvider ? { key: 'claude' } : null,
+    googleProvider ? { key: 'gemini' } : null,
+    openaiProvider ? { key: 'openai' } : null,
+  ].filter((x): x is { key: string } => x !== null);
+  const allowed = filterAllowedProviders(classification, candidates, route);
+  if (allowed.length === 0 && candidates.length > 0) {
+    throw new PolicyDenialError(`Bu veri sınıfı (${classification}) için hiçbir cloud AI sağlayıcısına izin verilmiyor`);
+  }
+
+  const MODEL_FACTORY: Record<string, () => any> = {
+    claude: () => anthropicProvider!(MODELS.claudeText),
+    gemini: () => googleProvider!(MODELS.gemini),
+    openai: () => openaiProvider!.chat(MODELS.openai),
+  };
+
+  for (const { key } of allowed) {
+    try {
+      const { object } = await generateObject({ model: MODEL_FACTORY[key](), schema, system: systemPrompt, prompt: userPrompt });
+      return object;
+    } catch (err) {
+      logger.warn({ err, provider: key, route }, 'generateStructured: provider failed, trying next');
+    }
+  }
+
+  throw new AllProvidersFailedError('Tüm AI sağlayıcılar başarısız');
+}
+
 const voiceIntentSchema = z.object({
   actions: z.array(z.object({
     action: z.string(),
@@ -197,47 +279,68 @@ export type VoiceIntentResult = z.infer<typeof voiceIntentSchema>;
 // generation + manual JSON.parse -- the previous approach broke whenever a model
 // wrapped its reply in prose/markdown or emitted an unescaped character, which
 // made the voice assistant fall back to "could not understand" far too often.
-export async function parseVoiceIntent(systemPrompt: string, userMessage: string): Promise<VoiceIntentResult> {
+export async function parseVoiceIntent(systemPrompt: string, userMessage: string, classification: string = 'INTERNAL'): Promise<VoiceIntentResult> {
+  const attempted = { any: false };
+
   if (anthropicProvider) {
-    try {
-      const { object } = await generateObject({
-        model: anthropicProvider(MODELS.claudeVoice),
-        schema: voiceIntentSchema,
-        system: systemPrompt,
-        prompt: userMessage,
-      });
-      return object;
-    } catch (err) {
-      logger.warn({ err }, '[VoiceIntent] Claude failed, trying Gemini');
+    if (isCloudProviderAllowed(classification, 'claude')) {
+      attempted.any = true;
+      try {
+        const { object } = await generateObject({
+          model: anthropicProvider(MODELS.claudeVoice),
+          schema: voiceIntentSchema,
+          system: systemPrompt,
+          prompt: userMessage,
+        });
+        return object;
+      } catch (err) {
+        logger.warn({ err }, '[VoiceIntent] Claude failed, trying Gemini');
+      }
+    } else {
+      logger.warn({ classification, provider: 'claude', route: 'parseVoiceIntent', reason: 'classification_forbids_cloud_provider' }, '[DataEgressPolicy] cloud AI provider call denied');
     }
   }
 
   if (googleProvider) {
-    try {
-      const { object } = await generateObject({
-        model: googleProvider(MODELS.gemini),
-        schema: voiceIntentSchema,
-        system: systemPrompt,
-        prompt: userMessage,
-      });
-      return object;
-    } catch (err) {
-      logger.warn({ err }, '[VoiceIntent] Gemini failed, trying GPT-4o');
+    if (isCloudProviderAllowed(classification, 'gemini')) {
+      attempted.any = true;
+      try {
+        const { object } = await generateObject({
+          model: googleProvider(MODELS.gemini),
+          schema: voiceIntentSchema,
+          system: systemPrompt,
+          prompt: userMessage,
+        });
+        return object;
+      } catch (err) {
+        logger.warn({ err }, '[VoiceIntent] Gemini failed, trying GPT-4o');
+      }
+    } else {
+      logger.warn({ classification, provider: 'gemini', route: 'parseVoiceIntent', reason: 'classification_forbids_cloud_provider' }, '[DataEgressPolicy] cloud AI provider call denied');
     }
   }
 
   if (openaiProvider) {
-    try {
-      const { object } = await generateObject({
-        model: openaiProvider.chat(MODELS.openai),
-        schema: voiceIntentSchema,
-        system: systemPrompt,
-        prompt: userMessage,
-      });
-      return object;
-    } catch (err) {
-      logger.warn({ err }, '[VoiceIntent] GPT-4o also failed');
+    if (isCloudProviderAllowed(classification, 'openai')) {
+      attempted.any = true;
+      try {
+        const { object } = await generateObject({
+          model: openaiProvider.chat(MODELS.openai),
+          schema: voiceIntentSchema,
+          system: systemPrompt,
+          prompt: userMessage,
+        });
+        return object;
+      } catch (err) {
+        logger.warn({ err }, '[VoiceIntent] GPT-4o also failed');
+      }
+    } else {
+      logger.warn({ classification, provider: 'openai', route: 'parseVoiceIntent', reason: 'classification_forbids_cloud_provider' }, '[DataEgressPolicy] cloud AI provider call denied');
     }
+  }
+
+  if (!attempted.any && (anthropicProvider || googleProvider || openaiProvider)) {
+    throw new PolicyDenialError(`Bu veri sınıfı (${classification}) için hiçbir cloud AI sağlayıcısına izin verilmiyor`);
   }
 
   // AllProvidersFailedError (not a plain Error) so callers that switch on

@@ -5,11 +5,31 @@ import {
   markDecisionStage,
   resolveDataProvenance,
 } from '../services/analysisOrchestrator.js';
+import crypto from 'crypto';
 import {
   classifyData,
   saveDecisionRecord,
 } from '../services/decisionIntelligence.js';
 import { recordRequestMetric } from '../lib/requestMetrics.js';
+
+function sha256(text) {
+  return crypto.createHash('sha256').update(String(text)).digest('hex');
+}
+
+// AQ-009 execution fingerprint: a hash per distinct input source that fed
+// this analysis (uploaded document, each quantum engine's own dataset),
+// so it can later be proven which sources actually produced a given
+// report -- distinct from decisionIntelligence.js's input_hash, which
+// hashes the whole sanitized request as a single unit.
+export function buildSourceHashes(requestBody, body) {
+  const hashes = [];
+  if (requestBody.documentContext) hashes.push({ source: 'documentContext', hash: sha256(requestBody.documentContext) });
+  for (const engine of ['quantum', 'fraud', 'optimizer']) {
+    const h = body?.[engine]?.reproducibility?.inputHash;
+    if (h) hashes.push({ source: engine, hash: h });
+  }
+  return hashes;
+}
 
 function recordCountFromRequest(body = {}) {
   if (Array.isArray(body.realTransactions)) return body.realTransactions.length;
@@ -154,6 +174,7 @@ export function analysisTraceMiddleware(req, res, next) {
         durationMs,
         quantumParams: buildQuantumParams(body),
         predictedOutcome: buildPredictedOutcome(body),
+        sourceHashes: buildSourceHashes(requestBody, body),
       }).catch(() => {});
 
       body.decisionMeta = {

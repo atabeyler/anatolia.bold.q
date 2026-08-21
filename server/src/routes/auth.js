@@ -61,6 +61,25 @@ async function seedLegacyUsersIfEmpty() {
       return;
     }
     if (ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD) {
+      // AQ-007: in production this is a real "admin uses a weaker/shared
+      // path than non-admin users" gap -- the admin account would be
+      // bootstrapped with the exact same bcrypt hash as all 10 non-admin
+      // legacy accounts, so anyone holding SHARED_PASSWORD (a deploy log, an
+      // ex-operator, a leaked env var) gets admin too. A warning alone was
+      // easy to miss at deploy time; fail closed instead so a production
+      // boot without a distinct ADMIN_SEED_PASSWORD never silently seeds a
+      // shared admin credential. Non-production environments (dev/test/CI)
+      // keep the previous warn-and-continue behavior so local setup and
+      // existing test fixtures aren't broken.
+      if (process.env.NODE_ENV === 'production') {
+        console.error(
+          'auth_users seed ABORTED: ADMIN_SEED_PASSWORD is not set in production. Refusing to seed the admin ' +
+          'account (120184) with the same bootstrap password as every non-admin legacy account -- set a ' +
+          'distinct ADMIN_SEED_PASSWORD and restart.'
+        );
+        seeded = false; // allow a retry once the operator sets it and restarts
+        return;
+      }
       console.warn(
         'auth_users seed: ADMIN_SEED_PASSWORD is not set -- the admin account (120184) is being seeded ' +
         'with the SAME bootstrap password as every non-admin legacy account. Set ADMIN_SEED_PASSWORD to a ' +

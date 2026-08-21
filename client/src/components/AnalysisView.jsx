@@ -733,6 +733,13 @@ function ScenarioComparisonTable({ scenarios }) {
           </tbody>
         </table>
       </div>
+      {/* AQ-006: this table's quantum columns are a quantum-transformed
+          scenario distribution (the AI's estimate re-expressed via a
+          quantum circuit measurement), not an independent real-world
+          measurement or a validated event-occurrence probability. */}
+      <p className="px-3 pb-2 text-[11px] text-white/30 leading-relaxed">
+        Kuantum sütunları (Qiskit Aer / IBM Quantum), YZ tahmininin bir kuantum devresine yüklenip ölçüm yoluyla yeniden ifade edilmesiyle elde edilen kuantum dönüşümlü bir dağılımdır — bağımsız bir gerçek-dünya ölçümü veya doğrulanmış olay gerçekleşme olasılığı değildir.
+      </p>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildPredictedOutcome, buildQuantumParams } from './analysisTrace.js';
+import { buildPredictedOutcome, buildQuantumParams, buildSourceHashes } from './analysisTrace.js';
+import { QUANTUM_ENGINE_VERSION } from '../services/decisionIntelligence.js';
 
 describe('buildQuantumParams', () => {
   it('returns an empty object when no engine ran', () => {
@@ -77,5 +78,51 @@ describe('buildPredictedOutcome', () => {
       optimizer: { totalValue: 72, totalCost: 60, selected: ['A', 'C'] },
     });
     expect(predicted.optimizer).toEqual({ totalValue: 72, totalCost: 60, selected: ['A', 'C'] });
+  });
+});
+
+// AQ-009: execution fingerprint
+describe('buildSourceHashes', () => {
+  it('returns an empty list when there is no document and no quantum reproducibility data', () => {
+    expect(buildSourceHashes({}, {})).toEqual([]);
+  });
+
+  it('hashes an uploaded document rather than including it raw', () => {
+    const hashes = buildSourceHashes({ documentContext: 'gizli belge içeriği' }, {});
+    expect(hashes).toHaveLength(1);
+    expect(hashes[0].source).toBe('documentContext');
+    expect(hashes[0].hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashes[0].hash).not.toContain('gizli belge içeriği');
+  });
+
+  it('is deterministic for the same document content', () => {
+    const a = buildSourceHashes({ documentContext: 'aynı içerik' }, {});
+    const b = buildSourceHashes({ documentContext: 'aynı içerik' }, {});
+    expect(a[0].hash).toBe(b[0].hash);
+  });
+
+  it('collects each quantum engine\'s own reproducibility input hash', () => {
+    const hashes = buildSourceHashes({}, {
+      quantum: { reproducibility: { inputHash: 'a'.repeat(64) } },
+      fraud: { reproducibility: { inputHash: 'b'.repeat(64) } },
+      optimizer: { reproducibility: { inputHash: 'c'.repeat(64) } },
+    });
+    expect(hashes.map((h) => h.source).sort()).toEqual(['fraud', 'optimizer', 'quantum']);
+  });
+
+  it('combines a document hash with engine hashes', () => {
+    const hashes = buildSourceHashes(
+      { documentContext: 'belge' },
+      { quantum: { reproducibility: { inputHash: 'a'.repeat(64) } } }
+    );
+    expect(hashes).toHaveLength(2);
+  });
+});
+
+describe('QUANTUM_ENGINE_VERSION (AQ-009)', () => {
+  it('is a non-empty version string reflecting the pinned quantum dependencies', () => {
+    expect(typeof QUANTUM_ENGINE_VERSION).toBe('string');
+    expect(QUANTUM_ENGINE_VERSION.length).toBeGreaterThan(0);
+    expect(QUANTUM_ENGINE_VERSION).toContain('qiskit');
   });
 });

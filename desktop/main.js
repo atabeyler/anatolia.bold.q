@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createDiagnostics } from './diagnostics.js';
 import { openDatabase } from './db/index.js';
+import { createDbKeyStore } from './db/dbKey.js';
 import { listAnalyses, getAnalysis, createAnalysis, updateAnalysis, deleteAnalysis } from './db/analysesRepo.js';
 import { getOrCreateDeviceId } from './auth/deviceId.js';
 import { createSecureStore } from './auth/secureStore.js';
@@ -443,7 +444,25 @@ function buildAppMenu() {
       ],
     },
     { label: 'Düzen', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }] },
-    { label: 'Görünüm', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    {
+      label: 'Görünüm',
+      submenu: [
+        { role: 'reload' },
+        // DevTools exposes the renderer's full JS console/network/storage
+        // inspector -- fine for development, but a production install must
+        // not hand every user a live debugger into an app that holds
+        // decrypted session data in memory. Uses the same isDev gate as
+        // the rest of this file's dev-only branches (main.js's update-check
+        // skip, the production-only load-path branch).
+        ...(isDev ? [{ role: 'toggleDevTools' }] : []),
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -474,8 +493,15 @@ app.whenReady().then(async () => {
     });
   });
 
+  // AQ-002: sensitive analyses fields (title/content) are encrypted at rest
+  // with a key protected by safeStorage -- see db/dbKey.js/fieldCrypto.js.
+  // getOrCreateKey() returns null (encrypting nothing, matching pre-AQ-002
+  // behavior) on a platform/config where safeStorage isn't available,
+  // rather than falling back to an insecure hardcoded key.
+  const dbKeyStore = createDbKeyStore(app.getPath('userData'), safeStorage);
   db = openDatabase(path.join(app.getPath('userData'), 'anatolia-q.db'), {
     onMigrations: (applied) => diagnostics.info('db_migrated', { applied: applied.length, files: applied }),
+    encryptionKey: dbKeyStore.getOrCreateKey(),
   });
   // Points the local-llm provider's Model Manager at this install's real
   // userData dir instead of registry.js's ~/.anatolia-q fallback (which

@@ -11,6 +11,7 @@ import { attachSentryErrorHandler } from './lib/sentry.js';
 import { initDatabase, initMemoryTables } from './services/database.js';
 import { ensureDecisionTables, purgeExpiredDecisionRecords } from './services/decisionIntelligence.js';
 import { ensureQuantumJobTables, startQuantumJobWorker } from './services/quantumJobQueue.js';
+import { setDbReady } from './services/dbReadiness.js';
 import { initSocketHandlers } from './services/socket.js';
 import { requestMetricsMiddleware } from './lib/requestMetrics.js';
 import { analysisTraceMiddleware } from './middleware/analysisTrace.js';
@@ -27,6 +28,7 @@ import syncRoutes from './routes/sync.js';
 import deviceRoutes from './routes/devices.js';
 import webauthnRoutes from './routes/webauthn.js';
 import versionRoutes from './routes/version.js';
+import healthRoutes from './routes/health.js';
 import { startMorningBriefScheduler } from './services/morningBrief.js';
 
 // .env is loaded by instrument.js, preloaded via node/tsx's --import flag
@@ -124,10 +126,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestMetricsMiddleware);
 
-// Lightweight liveness endpoint kept for external uptime monitors.
+// Lightweight liveness endpoint kept for external uptime monitors and
+// backward compatibility with existing health checks.
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', uptime: process.uptime(), timestamp: Date.now() });
 });
+// AQ-004: separate liveness ("process is up") from readiness ("DB actually
+// initialized") -- see routes/health.js. Mounted at the same /api/health
+// prefix as the route above; Express only matches that route on the exact
+// path, so /api/health/live and /api/health/ready fall through to this
+// router without conflict.
+app.use('/api/health', healthRoutes);
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -191,6 +200,7 @@ initDatabase()
       purgeExpiredDecisionRecords().catch((err) => logger.warn({ err }, 'Decision retention sweep failed'));
     }, 6 * 60 * 60 * 1000);
     retentionTimer.unref();
+    setDbReady(true);
     logger.info('Database ready');
   })
   .catch(err => {

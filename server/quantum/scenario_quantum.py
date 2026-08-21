@@ -14,6 +14,15 @@ It is not real quantum hardware (IBM Quantum, etc.); this distinction is
 always made explicit in this script's output and in the Node service that
 calls it, via the "qiskit-aer-simulator" backend name.
 
+AQ-006 (quantum output semantics): "quantumProbability" (and the client's
+label "Kuantum Dönüşümlü Senaryo Dağılımı" / "Quantum-transformed scenario
+distribution") is a measurement-outcome frequency from re-expressing the
+LLM's own probability estimate as circuit amplitudes and re-measuring it --
+it is NOT an independent real-world measurement and NOT a validated
+event-occurrence probability. Nothing here or downstream (server/src/
+middleware/analysisTrace.js, client/src/components/QuantumCharts.jsx,
+AnalysisView.jsx) should ever present it as the latter.
+
 Input:  JSON via stdin -> {"shots": 4096, "scenarios": [{"id": "...", "weight": 0.42}, ...]}
 Output: JSON via stdout -> {"backend", "qubits", "shots", "batches", "circuitDepth",
                             "circuitDiagram", "phantomStateMass", "environmentFingerprint",

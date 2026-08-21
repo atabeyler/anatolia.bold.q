@@ -1,25 +1,34 @@
 import { randomUUID } from 'node:crypto';
+import { getEncryptionKey } from './index.js';
+import { encryptField, decryptField } from './fieldCrypto.js';
 
 const now = () => new Date().toISOString();
 
-const rowToRecord = (row) => ({
-  id: row.id,
-  userId: row.user_id,
-  organizationId: row.organization_id,
-  deviceId: row.device_id,
-  type: row.type,
-  version: row.version,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-  deletedAt: row.deleted_at,
-  syncStatus: row.sync_status,
-  category: row.category,
-  title: row.title,
-  content: row.content,
-  aiProvider: row.ai_provider,
-  fraudTransactionCount: row.fraud_transaction_count,
-  fraudFlaggedCount: row.fraud_flagged_count,
-});
+// title/content are the actual report text (AQ-002) -- encrypted at rest
+// with a key protected by Electron's safeStorage (see dbKey.js/
+// fieldCrypto.js). getEncryptionKey() is read fresh on every call rather
+// than captured once, since it's only set once openDatabase() has run.
+const rowToRecord = (row) => {
+  const key = getEncryptionKey();
+  return {
+    id: row.id,
+    userId: row.user_id,
+    organizationId: row.organization_id,
+    deviceId: row.device_id,
+    type: row.type,
+    version: row.version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    syncStatus: row.sync_status,
+    category: row.category,
+    title: decryptField(row.title, key),
+    content: decryptField(row.content, key),
+    aiProvider: row.ai_provider,
+    fraudTransactionCount: row.fraud_transaction_count,
+    fraudFlaggedCount: row.fraud_flagged_count,
+  };
+};
 
 function enqueue(db, { entityType, entityId, op, payload, baseVersion, deviceId }) {
   db.prepare(`
@@ -54,11 +63,12 @@ export function getAnalysis(db, userId, id) {
 export function createAnalysis(db, { userId, deviceId, category, title, content, aiProvider }) {
   const id = randomUUID();
   const ts = now();
+  const key = getEncryptionKey();
   const create = db.transaction(() => {
     db.prepare(`
       INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider)
       VALUES (@id, @userId, NULL, @deviceId, 'analysis', 1, @ts, @ts, 'pending', @category, @title, @content, @aiProvider)
-    `).run({ id, userId, deviceId, ts, category, title, content, aiProvider: aiProvider || null });
+    `).run({ id, userId, deviceId, ts, category, title: encryptField(title, key), content: encryptField(content, key), aiProvider: aiProvider || null });
 
     // A fresh create always lands at server version 1 (routes/sync.js's
     // create path is deterministic on that), so no baseVersion is needed.
@@ -80,6 +90,7 @@ export function updateAnalysis(db, { userId, deviceId, id, title, content }) {
 
   const ts = now();
   const previousVersion = current.version;
+  const key = getEncryptionKey();
   const update = db.transaction(() => {
     db.prepare(`
       UPDATE analyses SET
@@ -89,7 +100,7 @@ export function updateAnalysis(db, { userId, deviceId, id, title, content }) {
         updated_at = @ts,
         sync_status = 'pending'
       WHERE id = @id
-    `).run({ id, title: title ?? null, content: content ?? null, ts });
+    `).run({ id, title: encryptField(title ?? null, key), content: encryptField(content ?? null, key), ts });
 
     enqueue(db, {
       entityType: 'analysis', entityId: id, op: 'update',

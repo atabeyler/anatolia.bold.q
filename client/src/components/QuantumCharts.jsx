@@ -103,9 +103,9 @@ export function ScenarioComparisonChart({ scenarios }) {
 
   return (
     <ChartCard
-      title="Senaryo Karsilastirmasi: YZ Tahmini vs Kuantum Sonucu"
-      subtitle="Her senaryo icin YZ'nin ilk tahmini ile kuantum devresinin urettigi olasilik; ince cizgi guven araligini gosterir."
-      legend={<Legend items={[{ label: 'YZ Tahmini', color: SERIES_LLM }, { label: 'Kuantum Sonucu (guven araligi ile)', color: SERIES_QUANTUM }]} />}
+      title="Senaryo Karsilastirmasi: YZ Tahmini vs Kuantum Donusumlu Senaryo Dagilimi"
+      subtitle="YZ'nin ilk tahmini, bir kuantum devresine yuklenerek olcum yoluyla yeniden ifade edilir (ince cizgi guven araligini gosterir). Bu deger bagimsiz gercek-dunya olcumu veya dogrulanmis olay gerceklesme olasiligi DEGILDIR -- YZ tahmininin kuantum donusumlu bir yeniden ifadesidir."
+      legend={<Legend items={[{ label: 'YZ Tahmini', color: SERIES_LLM }, { label: 'Kuantum Donusumlu Dagilim (guven araligi ile)', color: SERIES_QUANTUM }]} />}
       tableToggle
       showTable={showTable}
       onToggleTable={() => setShowTable((v) => !v)}
@@ -136,7 +136,7 @@ export function ScenarioComparisonChart({ scenarios }) {
                     onMouseMove={(e) => show(e, [`YZ Tahmini: %${s.llmEstimate}`, s.title])}
                     onMouseLeave={hide} style={{ cursor: 'pointer' }} />
                   <path d={roundedTopBarPath(qX, yFor(s.quantumProbability), barW, qH, 4)} fill={SERIES_QUANTUM}
-                    onMouseMove={(e) => show(e, [`Kuantum: %${s.quantumProbability}`, hasRange ? `Aralik: %${s.quantumRangeLow}-%${s.quantumRangeHigh}` : '', s.title].filter(Boolean))}
+                    onMouseMove={(e) => show(e, [`Kuantum Donusumlu Dagilim: %${s.quantumProbability}`, hasRange ? `Aralik: %${s.quantumRangeLow}-%${s.quantumRangeHigh}` : '', s.title].filter(Boolean))}
                     onMouseLeave={hide} style={{ cursor: 'pointer' }} />
                   {hasRange && (
                     <line x1={qX + barW / 2} x2={qX + barW / 2} y1={yFor(s.quantumRangeHigh)} y2={yFor(s.quantumRangeLow)} stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" />

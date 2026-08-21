@@ -3,7 +3,20 @@ import { authMiddleware } from '../middleware/auth.js';
 import { publicActionLimiter } from '../middleware/rateLimit.js';
 import https from 'https';
 import { parseVoiceIntent } from '../services/ai.js';
+import { assertProviderAllowed } from '../services/dataEgressPolicy.js';
 import { logger } from '../lib/logger.js';
+
+// /transcribe and /speak talk to OpenAI directly (raw https, not through
+// aiGenerate.ts's funnel -- see dataEgressPolicy.js's module comment on why
+// every cloud-provider call path must still be gated). Neither endpoint has
+// a JSON body to carry a `dataClassification` field (transcribe's body is
+// raw audio bytes; speak's is TTS input), so the classification is read
+// from a header instead, defaulting to INTERNAL like every other
+// unclassified call path in this codebase (see decisionIntelligence.js's
+// classifyData default).
+function classificationFromHeader(req) {
+  return req.headers['x-data-classification'] || 'INTERNAL';
+}
 
 const router = express.Router();
 
@@ -34,6 +47,7 @@ function openaiRequest(path, body, headers) {
 
 router.post('/transcribe', authMiddleware, publicActionLimiter, async (req, res) => {
   try {
+    assertProviderAllowed(classificationFromHeader(req), 'openai', 'voice.transcribe');
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(503).json({ error: 'OpenAI API key tanimli degil' });
     const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
@@ -52,12 +66,13 @@ router.post('/transcribe', authMiddleware, publicActionLimiter, async (req, res)
     return res.json({ text: data.text || '' });
   } catch (err) {
     logger.error({ err }, 'Whisper error');
-    return res.status(500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
 router.post('/speak', authMiddleware, publicActionLimiter, express.json({ limit: '1mb' }), async (req, res) => {
   try {
+    assertProviderAllowed(classificationFromHeader(req), 'openai', 'voice.speak');
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       logger.error('[TTS] OPENAI_API_KEY not set — TTS disabled, client will use browser TTS');
@@ -83,7 +98,7 @@ router.post('/speak', authMiddleware, publicActionLimiter, express.json({ limit:
     return res.send(result.body);
   } catch (err) {
     logger.error({ err }, '[TTS] Server error');
-    return res.status(500).json({ error: err.message });
+    return res.status(err.status || 500).json({ error: err.message, code: err.code });
   }
 });
 
@@ -171,7 +186,7 @@ ${JSON.stringify(actions)}
 
 Kullanıcı şunu söyledi: "${transcript}"`;
 
-    const parsed = await parseVoiceIntent(systemPrompt, userMessage);
+    const parsed = await parseVoiceIntent(systemPrompt, userMessage, context.dataClassification || 'INTERNAL');
 
     // Defense in depth: even though the client re-validates every action
     // against its own schema before executing anything, never hand back an

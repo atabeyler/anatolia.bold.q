@@ -23,9 +23,11 @@ export {
 export type { CategoryGroup } from './aiPrompts.js';
 export {
   AllProvidersFailedError,
+  PolicyDenialError,
   generateAnalysis,
   generateAnalysisWithVision,
   streamConsultationText,
   parseVoiceIntent,
+  generateStructured,
 } from './aiGenerate.js';
 export type { VoiceIntentResult } from './aiGenerate.js';

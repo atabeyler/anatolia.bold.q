@@ -4,6 +4,14 @@ import { logger } from '../lib/logger.js';
 
 export const ANALYSIS_PROMPT_VERSION = '2026-08-12-v1';
 export const DEFAULT_RETENTION_DAYS = Number(process.env.DECISION_RETENTION_DAYS || 365);
+// AQ-009 (execution fingerprint): the quantum engines' pinned dependency
+// versions (server/quantum/requirements.txt) -- a static, deploy-time value
+// rather than a per-request round-trip from the Python worker (that would
+// need reproducibility.js's environment_fingerprint() piped back through
+// quantumJobQueue.js on every call, a materially larger change). Still
+// genuinely answers "which engine version produced this" for any record,
+// since it's bumped whenever the pinned requirements change.
+export const QUANTUM_ENGINE_VERSION = 'qiskit==1.4.6;qiskit-aer==0.17.2;qiskit-ibm-runtime==0.44.0';
 
 /**
  * Deterministic hash of a JSON-shaped value: sorts object keys recursively
@@ -93,6 +101,13 @@ export async function ensureDecisionTables() {
   // the real-world outcome later recorded via updateDecisionOutcome() to
   // auto-calibrate engine accuracy (see computeOutcomeCalibration below).
   await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS predicted_outcome JSONB;`);
+  // AQ-009 execution fingerprint: which quantum engine build produced this
+  // record's quantum_params, and the content hashes of every source that
+  // fed the request (uploaded document + each quantum engine's own input
+  // dataset hash) -- distinct from input_hash above, which hashes the
+  // whole sanitized request as one unit rather than per-source.
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS quantum_engine_version VARCHAR(200);`);
+  await query(`ALTER TABLE decision_records ADD COLUMN IF NOT EXISTS source_hashes JSONB;`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_analysis ON decision_records(analysis_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_user ON decision_records(user_code, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_decision_records_category ON decision_records(category, created_at DESC);`);
@@ -139,6 +154,7 @@ export async function saveDecisionRecord({
   durationMs,
   quantumParams,
   predictedOutcome,
+  sourceHashes = [],
 }) {
   if (!process.env.DATABASE_URL || !userCode) return null;
   try {
@@ -156,8 +172,8 @@ export async function saveDecisionRecord({
        (analysis_id, replay_of, user_code, category, title, prompt, request_payload,
         provenance, data_quality, evidence, decision_trace, ai_provider, model_name,
         prompt_version, data_classification, duration_ms, input_hash, evidence_hash, record_hash,
-        quantum_params, predicted_outcome)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb)
+        quantum_params, predicted_outcome, quantum_engine_version, source_hashes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb,$22,$23::jsonb)
        RETURNING id`,
       [
         analysisId, replayOf, userCode, category || null, title || null, prompt || null,
@@ -166,7 +182,7 @@ export async function saveDecisionRecord({
         JSON.stringify(decisionTrace || {}), aiProvider || null, modelForProvider(aiProvider),
         ANALYSIS_PROMPT_VERSION, resolvedClassification, durationMs || null,
         inputHash, evidenceHash, recordHash, JSON.stringify(quantumParams || {}),
-        JSON.stringify(predictedOutcome || {}),
+        JSON.stringify(predictedOutcome || {}), QUANTUM_ENGINE_VERSION, JSON.stringify(sourceHashes || []),
       ]
     );
     return rows[0]?.id || null;
