@@ -90,7 +90,7 @@
   "awNodeInputLabel": "ENTRÉE",
   "awNodeInputDetail": "Demande utilisateur et documents sources téléversés validés.",
   "awNodeAiLabel": "ANALYSE IA",
-  "awNodeAiDetailPrefix": "Fournisseur : ",
+  "awNodeAiDetail": "Analyse terminée",
   "awUnknown": "inconnu",
   "awNodeIbmLabel": "VÉRIFICATION IBM",
   "awNodeIbmDetail": "Au moins un résultat a été vérifié sur du matériel IBM Quantum réel.",

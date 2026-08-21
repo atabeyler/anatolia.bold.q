@@ -90,7 +90,7 @@
   "awNodeInputLabel": "INPUT",
   "awNodeInputDetail": "User request and uploaded source documents validated.",
   "awNodeAiLabel": "AI ANALYSIS",
-  "awNodeAiDetailPrefix": "Provider: ",
+  "awNodeAiDetail": "Analysis complete",
   "awUnknown": "unknown",
   "awNodeIbmLabel": "IBM VERIFICATION",
   "awNodeIbmDetail": "At least one result was verified on real IBM Quantum hardware.",

@@ -117,13 +117,12 @@ export function DecisionPipelinePanel({ result }) {
     'portfolio-qaoa': { label: t('awEngineOptimizerLabel'), detail: t('awEngineOptimizerDetail') },
   };
 
-  const aiItem = result.evidence.find((e) => e.engine === 'ai');
   const engineItems = result.evidence.filter((e) => e.engine !== 'ai');
   const anyHardwareVerified = engineItems.some((e) => e.verified);
 
   const nodes = [
     { id: 'input', label: t('awNodeInputLabel'), detail: t('awNodeInputDetail') },
-    { id: 'ai', label: t('awNodeAiLabel'), detail: `${t('awNodeAiDetailPrefix')}${aiItem?.source || result.provider || t('awUnknown')}` },
+    { id: 'ai', label: t('awNodeAiLabel'), detail: t('awNodeAiDetail') },
     ...engineItems.map((e) => ({
       id: e.engine,
       label: ENGINE_NODE_INFO[e.engine]?.label || e.engine.toUpperCase(),

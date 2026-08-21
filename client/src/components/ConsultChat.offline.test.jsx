@@ -116,6 +116,8 @@ describe('ConsultChat offline/local AI routing', () => {
     await waitFor(() => expect(api.chatConsult).toHaveBeenCalled());
     expect(nativeAI.query).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('cloud answer')).toBeTruthy());
-    expect(screen.getByText('Claude (Anthropic)')).toBeTruthy();
+    // The badge shows the generic engine label, never the specific AI
+    // provider name (Claude/Gemini/GPT) -- see EngineBadge.jsx.
+    expect(screen.getByText('Q CLOUD')).toBeTruthy();
   });
 });

@@ -90,7 +90,7 @@
   "awNodeInputLabel": "EINGABE",
   "awNodeInputDetail": "Nutzeranfrage und hochgeladene Quelldokumente validiert.",
   "awNodeAiLabel": "KI-ANALYSE",
-  "awNodeAiDetailPrefix": "Anbieter: ",
+  "awNodeAiDetail": "Analyse abgeschlossen",
   "awUnknown": "unbekannt",
   "awNodeIbmLabel": "IBM-VERIFIZIERUNG",
   "awNodeIbmDetail": "Mindestens ein Ergebnis wurde auf echter IBM-Quantenhardware verifiziert.",

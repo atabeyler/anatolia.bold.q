@@ -90,7 +90,7 @@
   "awNodeInputLabel": "GİRDİ",
   "awNodeInputDetail": "Kullanıcı talebi ve yüklenen kaynak belgeler doğrulandı.",
   "awNodeAiLabel": "YZ ANALİZİ",
-  "awNodeAiDetailPrefix": "Sağlayıcı: ",
+  "awNodeAiDetail": "Analiz tamamlandı",
   "awUnknown": "bilinmiyor",
   "awNodeIbmLabel": "IBM DOĞRULAMASI",
   "awNodeIbmDetail": "En az bir sonuç gerçek IBM Quantum donanımında doğrulandı.",

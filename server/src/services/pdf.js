@@ -32,7 +32,7 @@ function registerFonts(doc) {
   doc.registerFont(CODE_FONT, path.join(FONTS_DIR, 'LiberationMono-Regular.ttf'));
 }
 
-function drawCoverPage(doc, { category, title, userCode, aiProvider }) {
+function drawCoverPage(doc, { category, title, userCode }) {
   const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
   const docNo = `ANATOLIA-Q/${category.toUpperCase()}-${Date.now().toString().slice(-6)}`;
 
@@ -55,7 +55,7 @@ function drawCoverPage(doc, { category, title, userCode, aiProvider }) {
   const info = [
     ['Belge No', docNo],
     ['Tarih', dateStr],
-    ['Hazırlayan', `ANATOLIA-Q (${aiProvider})`],
+    ['Hazırlayan', 'ANATOLIA-Q'],
     ['Kullanıcı', userCode],
     ['Sınıflandırma', 'GİZLİLİK DERECESİ: GİZLİ'],
     ['Versiyon', 'v1.0'],
@@ -239,7 +239,7 @@ function parseAndDraw(doc, md) {
   }
 }
 
-export async function generateReportPdf({ category, title, content, userCode, aiProvider }) {
+export async function generateReportPdf({ category, title, content, userCode }) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margins: { top: 56, bottom: 56, left: 56, right: 56 }, bufferPages: true });
@@ -249,7 +249,7 @@ export async function generateReportPdf({ category, title, content, userCode, ai
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      drawCoverPage(doc, { category, title, userCode, aiProvider });
+      drawCoverPage(doc, { category, title, userCode });
       parseAndDraw(doc, content);
 
       const range = doc.bufferedPageRange();

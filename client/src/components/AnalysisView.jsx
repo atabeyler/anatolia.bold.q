@@ -593,7 +593,7 @@ function ResultPanel({ t, result, downloadDocx, downloadPdf, shareReport, reset,
       )}
       <div className={`${PANEL} flex items-center justify-between p-3 flex-wrap gap-2`}>
         <div className="text-xs text-cyan-300/70 flex items-center gap-2">
-          <EngineBadge engine={result.engine} providerLabel={result.providerLabel} size="md" />
+          <EngineBadge engine={result.engine} size="md" />
           {result.quantumMode && <Atom className="w-3 h-3 text-cyan-300" />}
           {result.quantum && (
             <>
@@ -768,7 +768,7 @@ function DecisionTraceLive({ hasPrompt, quantumMode, loading, result, sourceCoun
   const steps = [
     { label: 'Görev Tanımlandı', done: hasPrompt, detail: hasPrompt ? `Kategori: ${category}` : 'Bekleniyor' },
     { label: 'Veri Doğrulama', done: hasPrompt, detail: sourceCount ? `${sourceCount} kaynak eklendi` : 'Kaynak eklenmedi (opsiyonel)' },
-    { label: 'AI Analizi', done: !!result, current: loading, detail: result ? `Sağlayıcı: ${result.provider || 'otomatik'}` : loading ? 'Çalışıyor…' : 'Bekleniyor' },
+    { label: 'AI Analizi', done: !!result, current: loading, detail: result ? 'Tamamlandı' : loading ? 'Çalışıyor…' : 'Bekleniyor' },
     { label: 'Devre Üretimi', done: !!result?.quantum, current: loading && quantumMode, detail: result?.quantum ? `${result.quantum.qubits} qubit devre çalıştırıldı` : quantumMode ? 'Bekleniyor' : 'Devre dışı' },
     { label: 'Karar Birleştirme', done: !!result, detail: result ? 'Kaynaklar tek rapora birleştirildi' : 'Bekleniyor' },
     { label: 'Rapor Oluşturma', done: !!result, detail: result ? 'DOCX / PDF hazır' : 'Bekleniyor' },

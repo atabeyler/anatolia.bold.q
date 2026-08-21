@@ -187,7 +187,7 @@ export default function ConsultChat() {
 
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
       {messages.map((m, i) => <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col gap-1 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-        {m.role === 'assistant' && <span className="px-1"><EngineBadge engine={m.engine} providerLabel={m.provider} /></span>}
+        {m.role === 'assistant' && <span className="px-1"><EngineBadge engine={m.engine} /></span>}
         <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed break-words ${m.role === 'user' ? 'bg-gold/20 text-gold border border-gold/30 rounded-tr-none' : m.error ? 'bg-red-950/40 text-red-400 border border-red-800/30 rounded-tl-none' : 'bg-navy/70 text-gold/90 border border-gold/15 rounded-tl-none report-content'}`}>{m.role === 'assistant' ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown> : <p className="whitespace-pre-wrap">{m.content}</p>}</div>
       </motion.div>)}
       {loading && <div className="text-gold/60 text-sm">{t('analyzing')}</div>}

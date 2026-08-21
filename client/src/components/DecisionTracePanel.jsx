@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Clock3, Database, ShieldCheck, Sparkles, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Circle, Clock3, Database, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useLang } from '../services/langContext.jsx';
 
 function stageLabel(name, t) {
@@ -32,9 +32,8 @@ export default function DecisionTracePanel({ record }) {
       </header>
 
       <div className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-[12px]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 text-[12px]">
           <Meta icon={Database} label={t('dtDataSource')} value={record.provenance?.source || record.provenance?.type || '—'} />
-          <Meta icon={Sparkles} label={t('dtAiProvider')} value={record.ai_provider || '—'} />
           <Meta icon={Clock3} label={t('dtDuration')} value={record.duration_ms ? `${record.duration_ms} ms` : '—'} />
           <Meta icon={ShieldCheck} label={t('dtClassification')} value={record.data_classification || '—'} />
         </div>
@@ -54,7 +53,6 @@ export default function DecisionTracePanel({ record }) {
                       <div className="flex items-center gap-2"><span className="text-[13px] text-white/75 font-medium">{stageLabel(stage.stage, t)}</span><span className="text-[11px] text-white/25">#{String(index + 1).padStart(2, '0')}</span><span className={`ml-auto text-[11px] ${failed ? 'text-red-300' : 'text-emerald-300/70'}`}>{String(stage.status || 'recorded').toUpperCase()}</span></div>
                       <div className="mt-1 text-[12px] text-white/30 flex flex-wrap gap-x-4 gap-y-1">
                         {stage.metadata?.durationMs != null && <span>{stage.metadata.durationMs} ms</span>}
-                        {stage.metadata?.provider && <span>Provider: {stage.metadata.provider}</span>}
                         {stage.metadata?.backend && <span>Backend: {stage.metadata.backend}</span>}
                         {stage.metadata?.error && <span className="text-red-300/70">{stage.metadata.error}</span>}
                       </div>

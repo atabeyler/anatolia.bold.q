@@ -13,18 +13,17 @@ const CONFIG = {
   [ENGINE.LOCAL_DATA]: { icon: HardDrive, key: 'qLocalDataBadge', className: 'text-amber-300/80' },
 };
 
-export default function EngineBadge({ engine, providerLabel, size = 'sm' }) {
+export default function EngineBadge({ engine, size = 'sm' }) {
   const { t } = useLang();
   const config = CONFIG[engine] || CONFIG[ENGINE.CLOUD];
   const Icon = config.icon;
   const iconSize = size === 'sm' ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5';
-  // Cloud keeps showing the actual provider name (e.g. "Claude (Anthropic)")
-  // as its label, same as before this task -- the Cloud icon already makes
-  // it unambiguous. The two local engines always show their explicit,
-  // distinct "Q LOCAL LLM (Offline)" / "Q LOCAL DATA (Offline)" label
-  // instead of a generic "local" label, so they're never confusable with
-  // each other or with cloud (task spec point 8).
-  const label = engine === ENGINE.CLOUD ? (providerLabel || t(config.key)) : t(config.key);
+  // Every engine shows its generic "Q CLOUD" / "Q LOCAL LLM (Offline)" /
+  // "Q LOCAL DATA (Offline)" label -- never the specific AI provider name
+  // (Claude/Gemini/GPT), so which vendor answered is never exposed in the
+  // UI. The three labels stay visually distinct so the engines are never
+  // confusable with each other.
+  const label = t(config.key);
   return (
     <span className={`inline-flex items-center gap-1 font-mono uppercase tracking-wide ${config.className} ${size === 'sm' ? 'text-xs' : 'text-[14px]'}`}>
       <Icon className={iconSize} />

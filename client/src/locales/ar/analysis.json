@@ -90,7 +90,7 @@
   "awNodeInputLabel": "المدخل",
   "awNodeInputDetail": "تم التحقق من طلب المستخدم والمستندات المصدرية المرفوعة.",
   "awNodeAiLabel": "تحليل الذكاء الاصطناعي",
-  "awNodeAiDetailPrefix": "المزوّد: ",
+  "awNodeAiDetail": "اكتمل التحليل",
   "awUnknown": "غير معروف",
   "awNodeIbmLabel": "التحقق من IBM",
   "awNodeIbmDetail": "تم التحقق من نتيجة واحدة على الأقل على أجهزة IBM Quantum الحقيقية.",

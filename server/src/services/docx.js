@@ -269,7 +269,7 @@ function parseMarkdown(md) {
 /**
  * Cover page — ANATOLIA-Q standard cover
  */
-function buildCoverPage(category, title, userCode, aiProvider) {
+function buildCoverPage(category, title, userCode) {
   const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
   const docNo = `ANATOLIA-Q/${category.toUpperCase()}-${Date.now().toString().slice(-6)}`;
 
@@ -314,7 +314,7 @@ function buildCoverPage(category, title, userCode, aiProvider) {
       [
         ['Belge No', docNo],
         ['Tarih', dateStr],
-        ['Hazırlayan', `ANATOLIA-Q (${aiProvider})`],
+        ['Hazırlayan', 'ANATOLIA-Q'],
         ['Kullanıcı', userCode],
         ['Sınıflandırma', 'GİZLİLİK DERECESİ: GİZLİ'],
         ['Versiyon', 'v1.0']
@@ -328,8 +328,8 @@ function buildCoverPage(category, title, userCode, aiProvider) {
 /**
  * Main docx generator function
  */
-export async function generateReportDocx({ category, title, content, userCode, aiProvider }) {
-  const cover = buildCoverPage(category, title, userCode, aiProvider);
+export async function generateReportDocx({ category, title, content, userCode }) {
+  const cover = buildCoverPage(category, title, userCode);
   const body = parseMarkdown(content);
 
   const doc = new Document({
