@@ -17,6 +17,7 @@ import {
   getConsultationPrompt,
   getStatus,
   isFraudCategory,
+  wrapUntrustedEvidence,
 } from '../services/ai.js';
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
@@ -335,10 +336,18 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
         realOptimization.items.map((it) => `${it.id}: değer ${it.value}, maliyet ${it.cost}`).join('\n') + '\n\n'
       : '';
 
+    // AQ-005 (prompt injection / untrusted evidence): documentContext (an
+    // uploaded file's extracted text) and webContext (live web research
+    // results) both originate outside this system's control -- wrapping
+    // them in the delimited untrusted-evidence block UNTRUSTED_EVIDENCE_POLICY
+    // (see aiPrompts.ts) instructs the model to honor means any embedded
+    // "ignore previous instructions"-style text inside either one is
+    // treated as data to report on, never as a directive this request
+    // itself obeys.
     const hasRealData = hasRealTransactions || hasRealScenarios || hasRealOptimization;
-    const webContextPrefix = webContext ? `${webContext}\n` : '';
+    const webContextPrefix = webContext ? `${wrapUntrustedEvidence('CANLI WEB ARAŞTIRMASI', webContext)}\n` : '';
     const enrichedPrompt = documentContext || hasRealData
-      ? `${webContextPrefix}[YÜKLENEN KAYNAK BELGE]\n${documentContext || ''}\n\n${realTransactionsNote}${realScenariosNote}${realOptimizationNote}[ANALİZ TALEBİ]\n${basePrompt}`
+      ? `${webContextPrefix}${wrapUntrustedEvidence('YÜKLENEN KAYNAK BELGE', documentContext || '')}\n\n${realTransactionsNote}${realScenariosNote}${realOptimizationNote}[ANALİZ TALEBİ]\n${basePrompt}`
       : `${webContextPrefix}${basePrompt}`;
 
     const result = imageData?.base64
@@ -347,7 +356,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
 
     const {
       scenarios, quantumComputation, fraudComputation, optimizerComputation,
-      finalContent, quantumWarning, hardwareScenarios, hardwareTransactions,
+      finalContent, quantumWarning, hardwareScenarios, hardwareTransactions, hardwareOptimization,
     } = await runQuantumEngines({
       quantumMode, fraudCategory, resultContent: result.content,
       hasRealTransactions, realTransactions,
@@ -394,7 +403,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
     sendAnalysisReport(userCode, category, title || prompt.slice(0, 80), docxBuffer)
       .catch(e => logger.error({ err: e }, 'Mail error'));
 
-    const hardwarePending = isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions });
+    const hardwarePending = isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions, hardwareOptimization });
 
     // A-02/A-03 (technical audit): normalize every claim this run produced
     // into Evidence Objects, then fuse them into one agreement verdict --
@@ -481,13 +490,16 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
             qaoaLayers: optimizerComputation.qaoaLayers ?? null,
             hybrid: !!optimizerComputation.hybrid,
             partitionCount: optimizerComputation.partitionCount ?? 1,
+            hardwareVerification: optimizerComputation.hardwareVerification || null,
+            ibmDiagnostic: optimizerComputation.ibmDiagnostic || null,
+            hardwarePending: hardwarePending && !!hardwareOptimization,
           }
         : null
     });
 
     if (hardwarePending) {
       scheduleHardwareVerification({
-        io: req.app.get('io'), analysisId, userCode, hardwareScenarios, hardwareTransactions, finalContent,
+        io: req.app.get('io'), analysisId, userCode, hardwareScenarios, hardwareTransactions, hardwareOptimization, finalContent,
       });
     }
   } catch (err) {

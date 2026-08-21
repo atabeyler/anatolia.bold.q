@@ -59,13 +59,13 @@ function HoloBrandPanel() {
         </div>
         <div>
           <div className="font-display text-cyan-100 tracking-[0.2em] text-sm">ANATOLIA-Q</div>
-          <div className="text-[9px] text-cyan-300/50 tracking-[0.2em] uppercase">{t('appSubtitle')}</div>
+          <div className="text-[12px] text-cyan-300/50 tracking-[0.2em] uppercase">{t('appSubtitle')}</div>
         </div>
       </div>
 
       <HologramSphere className="w-full max-w-[280px]" />
 
-      <div className="flex items-center gap-5 mt-8 text-[10px] font-mono tracking-wider">
+      <div className="flex items-center gap-5 mt-8 text-[13px] font-mono tracking-wider">
         <span className="flex items-center gap-1.5 text-emerald-400/80">
           <motion.span className="w-1.5 h-1.5 rounded-full bg-emerald-400" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
           {t('statusSystemActive')}

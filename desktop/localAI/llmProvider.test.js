@@ -9,8 +9,8 @@ function seedReport(db, { id = 'r1', title = 'Ekim Ayı Bütçe Raporu', categor
   `).run(id, category, title, content);
 }
 
-function fakeModelManager({ available = true } = {}) {
-  return { isAvailable: () => available, modelPath: '/fake/model.gguf', spec: { contextSize: 4096 } };
+function fakeModelManager({ available = true, verifyChecksum = async () => ({ ok: true }) } = {}) {
+  return { isAvailable: () => available, modelPath: '/fake/model.gguf', spec: { contextSize: 4096 }, verifyChecksum };
 }
 
 describe('createLLMQuery', () => {
@@ -75,5 +75,43 @@ describe('createLLMQuery', () => {
 
     await run({ mode: 'chat', text: 'iki' });
     expect(runtimeFactory).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-verifies the model file checksum on every fresh load (AQ: not just at download time)', async () => {
+    const db = createTestDb();
+    const generate = vi.fn(async () => 'ok');
+    const runtimeFactory = vi.fn(async () => ({ generate }));
+    const verifyChecksum = vi.fn(async () => ({ ok: true }));
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager({ verifyChecksum }), runtimeFactory });
+
+    await run({ mode: 'chat', text: 'bir' });
+    expect(verifyChecksum).toHaveBeenCalledTimes(1);
+    expect(runtimeFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to load a model file whose checksum no longer matches (swapped/corrupted file)', async () => {
+    const db = createTestDb();
+    const runtimeFactory = vi.fn(async () => ({ generate: vi.fn() }));
+    const verifyChecksum = vi.fn(async () => ({ ok: false, expected: 'aaa', actual: 'bbb' }));
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager({ verifyChecksum }), runtimeFactory });
+
+    await expect(run({ mode: 'chat', text: 'merhaba' })).rejects.toThrow('local_llm_integrity_check_failed');
+    expect(runtimeFactory).not.toHaveBeenCalled();
+  });
+
+  it('does not permanently cache a failed load -- a later call can succeed once the file is valid again', async () => {
+    const db = createTestDb();
+    const generate = vi.fn(async () => 'ok');
+    const runtimeFactory = vi.fn(async () => ({ generate }));
+    let ok = false;
+    const verifyChecksum = vi.fn(async () => ({ ok }));
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager({ verifyChecksum }), runtimeFactory });
+
+    await expect(run({ mode: 'chat', text: 'once' })).rejects.toThrow('local_llm_integrity_check_failed');
+
+    ok = true;
+    const result = await run({ mode: 'chat', text: 'tekrar' });
+    expect(result.type).toBe('generated');
+    expect(runtimeFactory).toHaveBeenCalledTimes(1);
   });
 });

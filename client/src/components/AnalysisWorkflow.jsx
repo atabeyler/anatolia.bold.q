@@ -17,7 +17,7 @@ export function ResultSourceBadge({ source }) {
   const info = RESULT_SOURCE_INFO[source] || RESULT_SOURCE_INFO.ai_estimate;
   const { Icon } = info;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[8px] tracking-wider font-semibold ${info.className}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] tracking-wider font-semibold ${info.className}`}>
       <Icon className="w-2.5 h-2.5" /> {info.label}
     </span>
   );
@@ -51,15 +51,15 @@ export function AnalysisWorkflow({ hasPrompt, hasData, quantumMode, hasResult, l
                   {done || (hasResult && index === steps.length - 1) ? <Check className="w-3 h-3" /> : <Icon className={`w-3 h-3 ${current ? 'animate-pulse' : ''}`} />}
                 </span>
                 <div className="min-w-0">
-                  <div className="text-[7px] text-white/25">0{index + 1}</div>
-                  <div className={`text-[8px] tracking-[0.1em] font-semibold truncate ${current ? 'text-cyan-200' : done ? 'text-emerald-300/80' : 'text-white/35'}`}>{label}</div>
+                  <div className="text-[11px] text-white/25">0{index + 1}</div>
+                  <div className={`text-[11px] tracking-[0.1em] font-semibold truncate ${current ? 'text-cyan-200' : done ? 'text-emerald-300/80' : 'text-white/35'}`}>{label}</div>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
-      <div className="px-3 py-1.5 border-t border-cyan-400/10 flex items-center gap-4 text-[9px] text-white/35">
+      <div className="px-3 py-1.5 border-t border-cyan-400/10 flex items-center gap-4 text-[12px] text-white/35">
         <span className="flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-cyan-300" /> {t('awAiReasoning')}</span>
         <span className="flex items-center gap-1.5"><Atom className={`w-3 h-3 ${quantumMode ? 'text-emerald-300' : 'text-white/20'}`} /> {t('awQuantum')} {quantumMode ? t('awEnabled') : t('awOptional')}</span>
         <span className="ml-auto">{t('awPipelineFooter')}</span>
@@ -86,17 +86,17 @@ export function ResultProvenance({ result }) {
     <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/80 p-3" aria-label={t('awResultSourcesAria')}>
       <div className="flex items-center gap-2 mb-2">
         <FileSearch className="w-4 h-4 text-cyan-300" />
-        <span className="text-[10px] text-cyan-100 tracking-[0.14em] font-semibold">{t('awResultSourcesLabel')}</span>
-        <span className="ml-auto text-[8px] text-white/25">PROVENANCE</span>
+        <span className="text-[13px] text-cyan-100 tracking-[0.14em] font-semibold">{t('awResultSourcesLabel')}</span>
+        <span className="ml-auto text-[11px] text-white/25">PROVENANCE</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {chips.map(([label, enabled, kind]) => (
-          <span key={label} className={`px-2.5 py-1.5 rounded border text-[9px] tracking-wider ${enabled ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-white/25'}`}>
+          <span key={label} className={`px-2.5 py-1.5 rounded border text-[12px] tracking-wider ${enabled ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-white/25'}`}>
             {enabled ? '●' : '○'} {label} <span className="text-white/25 ml-1">{kind}</span>
           </span>
         ))}
       </div>
-      <div className="mt-2 text-[9px] text-white/30">{t('awProvenanceNote')}</div>
+      <div className="mt-2 text-[12px] text-white/30">{t('awProvenanceNote')}</div>
     </div>
   );
 }
@@ -146,17 +146,17 @@ export function DecisionPipelinePanel({ result }) {
             <button
               type="button"
               onClick={() => setOpenId(openId === node.id ? null : node.id)}
-              className={`px-2.5 py-1.5 rounded border text-[9px] tracking-wider flex items-center gap-1 transition-colors ${openId === node.id ? 'border-cyan-300/60 bg-cyan-400/15 text-cyan-100' : 'border-cyan-400/20 bg-black/20 text-cyan-200/80 hover:border-cyan-400/40'}`}
+              className={`px-2.5 py-1.5 rounded border text-[12px] tracking-wider flex items-center gap-1 transition-colors ${openId === node.id ? 'border-cyan-300/60 bg-cyan-400/15 text-cyan-100' : 'border-cyan-400/20 bg-black/20 text-cyan-200/80 hover:border-cyan-400/40'}`}
             >
               {node.label}
               <ChevronDown className={`w-2.5 h-2.5 transition-transform ${openId === node.id ? 'rotate-180' : ''}`} />
             </button>
-            {i < nodes.length - 1 && <span className="text-cyan-400/30 text-[10px]">→</span>}
+            {i < nodes.length - 1 && <span className="text-cyan-400/30 text-[13px]">→</span>}
           </div>
         ))}
       </div>
       {openId && (
-        <div className="mt-3 p-2.5 rounded border border-cyan-400/15 bg-black/30 text-[10px] text-cyan-200/80 leading-relaxed">
+        <div className="mt-3 p-2.5 rounded border border-cyan-400/15 bg-black/30 text-[13px] text-cyan-200/80 leading-relaxed">
           {nodes.find((n) => n.id === openId)?.detail}
         </div>
       )}

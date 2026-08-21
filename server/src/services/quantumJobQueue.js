@@ -24,10 +24,17 @@ import { logger } from '../lib/logger.js';
 import { broadcastToUser } from './socket.js';
 import { verifyScenarioHardwareAsync, buildScenarioHardwareSection } from './quantum.js';
 import { verifyFraudHardwareAsync, buildFraudHardwareSection } from './fraudDetection.js';
+import { verifyOptimizerHardwareAsync, buildOptimizerHardwareSection } from './portfolioOptimizer.js';
 
 const POLL_MS = Number(process.env.QUANTUM_JOB_POLL_MS) || 5000;
 const BATCH_SIZE = 3;
 const MAX_ATTEMPTS = 2;
+// A job claimed (status='processing') that never reaches completeJob/failJob
+// -- e.g. the server process was killed mid-processJob, during the IBM
+// hardware wait -- previously stayed 'processing' forever with no retry, so
+// that report's hardware verification was silently lost. Any job still
+// 'processing' after this long is treated as orphaned and reclaimed.
+const STALE_PROCESSING_MS = 10 * 60 * 1000;
 
 export async function ensureQuantumJobTables() {
   if (!process.env.DATABASE_URL) return;
@@ -67,7 +74,23 @@ export async function enqueueHardwareVerificationJob({ analysisId, userCode, kin
   }
 }
 
+async function reclaimStaleJobs() {
+  // A 'processing' row past STALE_PROCESSING_MS never reached completeJob/
+  // failJob (process crash/restart mid-job) -- put it back to 'pending' so
+  // claimBatch picks it up again, counting it as one attempt so it can't
+  // loop forever against a job that reliably crashes the worker.
+  await query(
+    `UPDATE quantum_hardware_jobs
+     SET status = CASE WHEN attempts + 1 >= $2 THEN 'failed' ELSE 'pending' END,
+         attempts = attempts + 1, updated_at = NOW(),
+         error = COALESCE(error, '') || ' [reclaimed after stale processing]'
+     WHERE status = 'processing' AND updated_at < NOW() - ($1 || ' milliseconds')::interval`,
+    [STALE_PROCESSING_MS, MAX_ATTEMPTS]
+  );
+}
+
 async function claimBatch() {
+  await reclaimStaleJobs().catch((err) => logger.warn({ err }, '[QuantumJobQueue] Failed to reclaim stale jobs'));
   const { rows } = await query(
     `UPDATE quantum_hardware_jobs SET status = 'processing', updated_at = NOW()
      WHERE id IN (
@@ -98,7 +121,9 @@ async function failJob(id, attempts, err) {
 async function processJob(job, io) {
   const hw = job.kind === 'scenario'
     ? await verifyScenarioHardwareAsync(job.payload)
-    : await verifyFraudHardwareAsync(job.payload);
+    : job.kind === 'fraud'
+      ? await verifyFraudHardwareAsync(job.payload)
+      : await verifyOptimizerHardwareAsync(job.payload.items, job.payload.budgetPercent);
 
   if (!hw?.hardwareVerification) {
     await completeJob(job.id);
@@ -107,7 +132,9 @@ async function processJob(job, io) {
 
   const section = job.kind === 'scenario'
     ? buildScenarioHardwareSection(job.payload, hw.hardwareVerification)
-    : buildFraudHardwareSection(hw.hardwareVerification);
+    : job.kind === 'fraud'
+      ? buildFraudHardwareSection(hw.hardwareVerification)
+      : buildOptimizerHardwareSection(hw.hardwareVerification);
 
   if (job.analysis_id && isDbConfigured() && section) {
     const db = getDb();
@@ -137,23 +164,37 @@ let pollTimer = null;
  * Starts the poller. Idempotent — a second call is a no-op so callers don't
  * need to track whether it's already running.
  */
+let isPolling = false;
+
 export function startQuantumJobWorker(io) {
   if (!process.env.DATABASE_URL || pollTimer) return;
   pollTimer = setInterval(async () => {
-    let jobs;
+    // A single hardware job can take up to IBM_QUANTUM_WAIT_SECONDS (60s+),
+    // far longer than POLL_MS (5s default) -- without this guard, every tick
+    // during a long hardware wait re-enters claimBatch/processJob
+    // concurrently, growing DB claim churn and in-flight job count
+    // unbounded across that wait. Skipping overlapping ticks keeps at most
+    // one batch in flight at a time.
+    if (isPolling) return;
+    isPolling = true;
     try {
-      jobs = await claimBatch();
-    } catch (err) {
-      logger.warn({ err }, '[QuantumJobQueue] Failed to claim jobs');
-      return;
-    }
-    for (const job of jobs) {
+      let jobs;
       try {
-        await processJob(job, io);
+        jobs = await claimBatch();
       } catch (err) {
-        logger.warn({ err, jobId: job.id }, '[QuantumJobQueue] Job failed');
-        await failJob(job.id, job.attempts, err).catch(() => {});
+        logger.warn({ err }, '[QuantumJobQueue] Failed to claim jobs');
+        return;
       }
+      for (const job of jobs) {
+        try {
+          await processJob(job, io);
+        } catch (err) {
+          logger.warn({ err, jobId: job.id }, '[QuantumJobQueue] Job failed');
+          await failJob(job.id, job.attempts, err).catch(() => {});
+        }
+      }
+    } finally {
+      isPolling = false;
     }
   }, POLL_MS);
   pollTimer.unref();

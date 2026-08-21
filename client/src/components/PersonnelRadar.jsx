@@ -127,9 +127,9 @@ export function RadarModal({ onClose, lang }) {
               <path d={`M 50 50 L ${cx} ${cy}`} stroke="rgba(0,255,120,0.12)" strokeWidth="10" fill="none" strokeLinecap="round" />
             </svg>
 
-            <span className="absolute top-1.5 left-2 text-[7px] font-mono text-cyan-400/25">TÜRKİYE</span>
-            <span className="absolute bottom-1.5 left-2 text-[7px] font-mono text-cyan-400/20">25.6°D</span>
-            <span className="absolute bottom-1.5 right-2 text-[7px] font-mono text-cyan-400/20">44.8°D</span>
+            <span className="absolute top-1.5 left-2 text-[11px] font-mono text-cyan-400/25">TÜRKİYE</span>
+            <span className="absolute bottom-1.5 left-2 text-[11px] font-mono text-cyan-400/20">25.6°D</span>
+            <span className="absolute bottom-1.5 right-2 text-[11px] font-mono text-cyan-400/20">44.8°D</span>
 
             {userEntries.map(([nick, loc]) => {
               const { x, y } = latLngToPercent(loc.lat, loc.lng);
@@ -143,7 +143,7 @@ export function RadarModal({ onClose, lang }) {
                     className={`w-3.5 h-3.5 rounded-full border-2 ${isSel ? 'bg-gold border-gold' : 'bg-emerald-400 border-emerald-300'}`}
                     style={{ boxShadow: isSel ? '0 0 12px #d4af37' : '0 0 10px #4ade80' }}
                   />
-                  <span className="absolute left-1/2 -translate-x-1/2 -top-4 text-[8px] font-mono text-emerald-300 whitespace-nowrap bg-black/70 px-1 rounded">
+                  <span className="absolute left-1/2 -translate-x-1/2 -top-4 text-[11px] font-mono text-emerald-300 whitespace-nowrap bg-black/70 px-1 rounded">
                     {nick}
                   </span>
                 </button>

@@ -24,6 +24,16 @@ const APP_URL = process.env.APP_URL || 'http://localhost:10000';
 // the seed, this list is never read again — all account management goes
 // through the /admin/users endpoints below.
 const LEGACY_SEED_PASSWORD = process.env.SHARED_PASSWORD;
+// Optional, separate seed password for the one legacy admin account
+// (120184) -- without this, the admin account is seeded with the exact
+// same bcrypt hash as all 10 non-admin legacy accounts (SHARED_PASSWORD),
+// so anyone who obtains that one value (env leak, deploy log, an
+// ex-operator) can log into the admin account too, until it's individually
+// rotated. Set ADMIN_SEED_PASSWORD in production to give the admin account
+// its own distinct bootstrap credential; SHARED_PASSWORD remains the
+// fallback so existing deployments that haven't set it yet keep working
+// (a warning is logged either way -- see seedLegacyUsersIfEmpty below).
+const ADMIN_SEED_PASSWORD = process.env.ADMIN_SEED_PASSWORD || LEGACY_SEED_PASSWORD;
 const LEGACY_SEED_USERS = [
   { userCode: '120184', nickname: 'BOLD', isAdmin: true },
   { userCode: '847293', nickname: 'BOLD-001', isAdmin: false },
@@ -50,12 +60,22 @@ async function seedLegacyUsersIfEmpty() {
       console.error('auth_users seed skipped: SHARED_PASSWORD env var is not set');
       return;
     }
+    if (ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD) {
+      console.warn(
+        'auth_users seed: ADMIN_SEED_PASSWORD is not set -- the admin account (120184) is being seeded ' +
+        'with the SAME bootstrap password as every non-admin legacy account. Set ADMIN_SEED_PASSWORD to a ' +
+        'distinct value and rotate the admin password immediately after first login.'
+      );
+    }
 
-    const passwordHash = await bcrypt.hash(LEGACY_SEED_PASSWORD, 10);
+    const analystPasswordHash = await bcrypt.hash(LEGACY_SEED_PASSWORD, 10);
+    const adminPasswordHash = ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD
+      ? analystPasswordHash
+      : await bcrypt.hash(ADMIN_SEED_PASSWORD, 10);
     for (const u of LEGACY_SEED_USERS) {
       await query(
         'INSERT INTO auth_users (user_code, password_hash, nickname, is_admin) VALUES ($1, $2, $3, $4) ON CONFLICT (user_code) DO NOTHING',
-        [u.userCode, passwordHash, u.nickname, u.isAdmin]
+        [u.userCode, u.isAdmin ? adminPasswordHash : analystPasswordHash, u.nickname, u.isAdmin]
       );
     }
     console.log('auth_users seeded from legacy user list (one-time migration)');

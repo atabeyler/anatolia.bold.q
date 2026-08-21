@@ -17,7 +17,10 @@ import {
   computeFraudRiskScores, mergeFraudResults,
   verifyFraudHardwareAsync, buildFraudHardwareSection,
 } from './fraudDetection.js';
-import { computeOptimalAllocation, mergeOptimizerResults } from './portfolioOptimizer.js';
+import {
+  computeOptimalAllocation, mergeOptimizerResults,
+  verifyOptimizerHardwareAsync, buildOptimizerHardwareSection,
+} from './portfolioOptimizer.js';
 import { broadcastToUser } from './socket.js';
 import { enqueueHardwareVerificationJob } from './quantumJobQueue.js';
 import { parseScenarios, parseTransactions, parseOptimizationProblem } from './analysisParsers.js';
@@ -58,6 +61,7 @@ export async function runQuantumEngines({
   // sent, see scheduleHardwareVerification below.
   let hardwareTransactions = null;
   let hardwareScenarios = null;
+  let hardwareOptimization = null;
 
   if (quantumMode && fraudCategory) {
     const transactions = hasRealTransactions ? realTransactions : parseTransactions(resultContent);
@@ -97,9 +101,14 @@ export async function runQuantumEngines({
     // when the user uploaded one directly.
     const optimizationProblem = hasRealOptimization ? realOptimization : parseOptimizationProblem(resultContent);
     if (optimizationProblem?.items?.length) {
-      optimizerComputation = await computeOptimalAllocation(optimizationProblem.items, optimizationProblem.budgetPercent);
+      // skipHardware: true -- the reported selection always comes from the
+      // local simulator; a real-hardware verification data point (if
+      // configured) is scheduled separately below via scheduleHardwareVerification,
+      // exactly like the scenario/fraud engines above.
+      optimizerComputation = await computeOptimalAllocation(optimizationProblem.items, optimizationProblem.budgetPercent, { skipHardware: true });
       if (optimizerComputation) {
         optimizerComputation.dataSource = hasRealOptimization ? 'uploaded' : 'ai-generated';
+        hardwareOptimization = optimizationProblem;
         const note = mergeOptimizerResults(optimizerComputation);
         if (note) finalContent += note;
       } else {
@@ -110,11 +119,11 @@ export async function runQuantumEngines({
 
   if (quantumWarning) finalContent += `\n\n> ⚠️ ${quantumWarning}`;
 
-  return { scenarios, quantumComputation, fraudComputation, optimizerComputation, finalContent, quantumWarning, hardwareScenarios, hardwareTransactions };
+  return { scenarios, quantumComputation, fraudComputation, optimizerComputation, finalContent, quantumWarning, hardwareScenarios, hardwareTransactions, hardwareOptimization };
 }
 
-export function isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions }) {
-  return isIbmHardwareConfigured() && !!(hardwareScenarios || hardwareTransactions);
+export function isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions, hardwareOptimization }) {
+  return isIbmHardwareConfigured() && !!(hardwareScenarios || hardwareTransactions || hardwareOptimization);
 }
 
 async function appendHardwareSectionToSavedReport(analysisId, finalContent, section) {
@@ -141,9 +150,9 @@ async function appendHardwareSectionToSavedReport(analysisId, finalContent, sect
  * to in-process fire-and-forget processing when DATABASE_URL isn't
  * configured, so non-DB deployments keep working.
  */
-export function scheduleHardwareVerification({ io, analysisId, userCode, hardwareScenarios, hardwareTransactions, finalContent }) {
-  const kind = hardwareScenarios ? 'scenario' : 'fraud';
-  const payload = hardwareScenarios || hardwareTransactions;
+export function scheduleHardwareVerification({ io, analysisId, userCode, hardwareScenarios, hardwareTransactions, hardwareOptimization, finalContent }) {
+  const kind = hardwareScenarios ? 'scenario' : hardwareTransactions ? 'fraud' : 'optimizer';
+  const payload = hardwareScenarios || hardwareTransactions || hardwareOptimization;
 
   enqueueHardwareVerificationJob({ analysisId, userCode, kind, payload }).then((jobId) => {
     if (jobId) return;
@@ -151,16 +160,20 @@ export function scheduleHardwareVerification({ io, analysisId, userCode, hardwar
       try {
         const hw = kind === 'scenario'
           ? await verifyScenarioHardwareAsync(payload)
-          : await verifyFraudHardwareAsync(payload);
+          : kind === 'fraud'
+            ? await verifyFraudHardwareAsync(payload)
+            : await verifyOptimizerHardwareAsync(payload.items, payload.budgetPercent);
         if (!hw?.hardwareVerification) return;
 
         const section = kind === 'scenario'
           ? buildScenarioHardwareSection(payload, hw.hardwareVerification)
-          : buildFraudHardwareSection(hw.hardwareVerification);
+          : kind === 'fraud'
+            ? buildFraudHardwareSection(hw.hardwareVerification)
+            : buildOptimizerHardwareSection(hw.hardwareVerification);
         await appendHardwareSectionToSavedReport(analysisId, finalContent, section);
 
         broadcastToUser(io, userCode, 'analysis:hardwareVerified', {
-          analysisId, kind: kind === 'scenario' ? 'quantum' : 'fraud',
+          analysisId, kind: kind === 'scenario' ? 'quantum' : kind,
           hardwareVerification: hw.hardwareVerification, ibmDiagnostic: hw.ibmDiagnostic,
         }).catch(() => {});
       } catch (err) {

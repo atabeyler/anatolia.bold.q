@@ -146,7 +146,7 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         onClick={() => inputRef.current?.click()}
         disabled={loading}
         title={onAIFile ? t('faTooltipAI') : onFile ? t('faTooltipFile') : t('faTooltipDoc')}
-        className={`flex items-center gap-1 border border-gold/25 text-gold/50 hover:text-gold hover:border-gold/50 rounded transition disabled:opacity-40 ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-2.5 py-1.5 text-xs'} font-mono tracking-wider`}
+        className={`flex items-center gap-1 border border-gold/25 text-gold/50 hover:text-gold hover:border-gold/50 rounded transition disabled:opacity-40 ${compact ? 'px-2 py-1.5 text-[14px]' : 'px-2.5 py-1.5 text-xs'} font-mono tracking-wider`}
       >
         {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
         {!compact && (loading ? t('faUploading') : (filename ? t('faAddMore') : t('faAttach')))}

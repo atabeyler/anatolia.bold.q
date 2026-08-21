@@ -25,7 +25,29 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
 
   function getRuntime() {
     if (!runtimePromise) {
-      runtimePromise = runtimeFactory({ modelPath: modelManager.modelPath, contextSize: modelManager.spec.contextSize, systemPrompt: SYSTEM_PROMPT });
+      // Re-verify the model file's SHA-256 on every fresh load, not just
+      // once at download time (see modelManager.js's downloadModel()) --
+      // isAvailable() above only checks that a file exists at modelPath,
+      // not that it's still the file that was originally verified. Without
+      // this, a file swapped in later (disk corruption, another local
+      // process, malware) would be loaded and executed by node-llama-cpp
+      // with no detection. getRuntime() itself only runs once per process
+      // (the runtime is cached in runtimePromise), so this cost is paid
+      // once per app session, not per query.
+      runtimePromise = (async () => {
+        const check = await modelManager.verifyChecksum();
+        if (!check.ok) {
+          throw new Error('local_llm_integrity_check_failed');
+        }
+        return runtimeFactory({ modelPath: modelManager.modelPath, contextSize: modelManager.spec.contextSize, systemPrompt: SYSTEM_PROMPT });
+      })().catch((err) => {
+        // A failed load must not be cached as "the" runtime promise --
+        // otherwise every subsequent query in this session would
+        // permanently fail the same way (e.g. a transient read error)
+        // instead of getting a chance to re-verify on the next call.
+        runtimePromise = null;
+        throw err;
+      });
     }
     return runtimePromise;
   }

@@ -233,7 +233,7 @@ body { margin: 0; background: #040914; color: #e6f3ff; font-family: 'Times New R
     height: 28px !important;
     padding: 0 0.45rem !important;
     border-radius: 7px !important;
-    font-size: 9px !important;
+    font-size: 11px !important;
     line-height: 1 !important;
     gap: 0.3rem !important;
   }
@@ -258,7 +258,7 @@ body { margin: 0; background: #040914; color: #e6f3ff; font-family: 'Times New R
   .btn-danger-glow,
   .btn-success-glow {
     padding: 0.38rem 0.52rem !important;
-    font-size: 10px !important;
+    font-size: 12px !important;
     letter-spacing: 0.03em !important;
     min-height: 30px !important;
     border-radius: 8px !important;
@@ -285,7 +285,7 @@ body { margin: 0; background: #040914; color: #e6f3ff; font-family: 'Times New R
   input,
   textarea,
   select {
-    font-size: 12px !important;
+    font-size: 13px !important;
   }
 
   header { padding: 8px 12px !important; }
@@ -297,7 +297,7 @@ body { margin: 0; background: #040914; color: #e6f3ff; font-family: 'Times New R
     height: 24px !important;
     padding: 0 0.35rem !important;
     border-radius: 6px !important;
-    font-size: 8px !important;
+    font-size: 10px !important;
     gap: 0.25rem !important;
   }
   .header-control svg {
@@ -320,7 +320,7 @@ body { margin: 0; background: #040914; color: #e6f3ff; font-family: 'Times New R
   .btn-danger-glow,
   .btn-success-glow {
     padding: 0.32rem 0.42rem !important;
-    font-size: 9px !important;
+    font-size: 11px !important;
     min-height: 26px !important;
     border-radius: 7px !important;
   }
@@ -339,8 +339,8 @@ body { margin: 0; background: #040914; color: #e6f3ff; font-family: 'Times New R
   input,
   textarea,
   select {
-    font-size: 11px !important;
+    font-size: 12px !important;
   }
 
-  h1.text-lg { font-size: .85rem !important; }
+  h1.text-lg { font-size: .95rem !important; }
 }

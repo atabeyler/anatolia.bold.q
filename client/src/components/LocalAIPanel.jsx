@@ -106,7 +106,7 @@ export default function LocalAIPanel({ t }) {
             {installed ? <CircleCheck className="w-4 h-4 text-emerald-300/80 shrink-0" /> : <CircleAlert className="w-4 h-4 text-amber-300/80 shrink-0" />}
             <span className="text-xs text-cyan-100">{installed ? t('localAIInstalled') : t('localAINotInstalled')}</span>
           </div>
-          {spec && <div className="text-[11px] text-cyan-300/50 pl-6 mt-0.5">{spec.label} · {formatBytes(spec.sizeBytes)}</div>}
+          {spec && <div className="text-[14px] text-cyan-300/50 pl-6 mt-0.5">{spec.label} · {formatBytes(spec.sizeBytes)}</div>}
         </div>
       )}
 
@@ -115,19 +115,19 @@ export default function LocalAIPanel({ t }) {
           <div className="text-xs tracking-[0.18em] uppercase text-gold/60 mb-1.5 flex items-center gap-1.5">
             <Cpu className="w-3.5 h-3.5" />{t('localAIDeviceInfo')}
           </div>
-          <div className="text-[11px] text-cyan-100/70 space-y-0.5">
+          <div className="text-[14px] text-cyan-100/70 space-y-0.5">
             <div>{t('localAIRamLabel')}: {formatBytes(capability.totalMemBytes)}</div>
             {typeof capability.freeDiskBytes === 'number' && <div>{t('localAIDiskLabel')}: {formatBytes(capability.freeDiskBytes)}</div>}
             {typeof capability.cpuCount === 'number' && <div>{t('localAICpuLabel')}: {capability.cpuCount}</div>}
           </div>
-          {capable === false && <p className="text-[11px] text-amber-300/80 mt-1.5 leading-relaxed">{t('localAINotCapable')}</p>}
+          {capable === false && <p className="text-[14px] text-amber-300/80 mt-1.5 leading-relaxed">{t('localAINotCapable')}</p>}
         </div>
       )}
 
-      {error && <p className="text-[11px] text-red-300 mb-2 leading-relaxed">{error}</p>}
+      {error && <p className="text-[14px] text-red-300 mb-2 leading-relaxed">{error}</p>}
 
       {downloading && (
-        <p className="text-[11px] text-cyan-300/70 mb-2">
+        <p className="text-[14px] text-cyan-300/70 mb-2">
           {progress && progress.total ? `${t('localAIDownloading')} (${formatBytes(progress.received)} / ${formatBytes(progress.total)})` : t('localAIDownloading')}
         </p>
       )}
@@ -137,7 +137,7 @@ export default function LocalAIPanel({ t }) {
           <button
             onClick={handleDownload}
             disabled={downloading}
-            className="w-full flex items-center justify-center gap-2 text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
+            className="w-full flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
           >
             <Download className="w-4 h-4" />
             {downloading ? t('localAIDownloading') : t('localAIDownloadButton')}
@@ -147,7 +147,7 @@ export default function LocalAIPanel({ t }) {
           <button
             onClick={handleRemove}
             disabled={removing}
-            className="w-full flex items-center justify-center gap-2 text-[12px] border border-red-400/30 text-red-200 rounded px-2.5 py-2 disabled:opacity-40"
+            className="w-full flex items-center justify-center gap-2 text-[14px] border border-red-400/30 text-red-200 rounded px-2.5 py-2 disabled:opacity-40"
           >
             <Trash2 className="w-4 h-4" />
             {removing ? t('localAIRemoving') : t('localAIRemoveButton')}

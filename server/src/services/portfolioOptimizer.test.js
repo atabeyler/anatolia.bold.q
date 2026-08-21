@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeOptimalAllocation, mergeOptimizerResults } from './portfolioOptimizer.js';
+import { computeOptimalAllocation, mergeOptimizerResults, buildOptimizerHardwareSection } from './portfolioOptimizer.js';
 
 describe('computeOptimalAllocation', () => {
   it('returns null without spawning a process for fewer than 2 items', async () => {
@@ -126,5 +126,35 @@ describe('mergeOptimizerResults', () => {
     };
     const note = mergeOptimizerResults(result);
     expect(note).not.toContain('Hibrit çözüm');
+  });
+});
+
+describe('buildOptimizerHardwareSection', () => {
+  it('returns empty string when there is no hardware verification', () => {
+    expect(buildOptimizerHardwareSection(null)).toBe('');
+    expect(buildOptimizerHardwareSection({ backend: 'ibm_torino' })).toBe('');
+  });
+
+  it('reports a real-hardware verification result without altering the reported selection', () => {
+    const section = buildOptimizerHardwareSection({
+      backend: 'ibm_torino',
+      shots: 4096,
+      matchesSimulator: true,
+      best: { totalValue: 35, totalCost: 30, selectedBits: '10' },
+    });
+    expect(section).toContain('Gerçek Donanım Doğrulaması');
+    expect(section).toContain('ibm_torino');
+    expect(section).toContain('raporlanan seçimi değiştirmez');
+    expect(section).toContain('aynı sonuca ulaştı');
+  });
+
+  it('flags a mismatch as expected hardware noise, not a corrected answer', () => {
+    const section = buildOptimizerHardwareSection({
+      backend: 'ibm_torino',
+      shots: 4096,
+      matchesSimulator: false,
+      best: { totalValue: 20, totalCost: 15, selectedBits: '01' },
+    });
+    expect(section).toContain('donanım gürültüsü nedeniyle beklenen bir sapma');
   });
 });

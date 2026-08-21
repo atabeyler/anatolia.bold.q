@@ -205,10 +205,10 @@ function SecurityPanel({ t, lang }) {
       <p className="text-xs text-gold/60 leading-relaxed mb-3">{t('securityPasskeyIntro')}</p>
 
       {!passkeySupported && (
-        <p className="text-[11px] text-gold/50 mb-3">{t('securityPasskeyUnsupported')}</p>
+        <p className="text-[14px] text-gold/50 mb-3">{t('securityPasskeyUnsupported')}</p>
       )}
 
-      {error && <p className="text-[11px] text-red-300 mb-2">{error}</p>}
+      {error && <p className="text-[14px] text-red-300 mb-2">{error}</p>}
 
       {credentials === null && <p className="text-xs text-cyan-100/50">{t('securityPasskeyLoading')}</p>}
 
@@ -235,7 +235,7 @@ function SecurityPanel({ t, lang }) {
                   ) : (
                     <div className="text-xs text-cyan-100 truncate">{cred.deviceName}</div>
                   )}
-                  <div className="text-[10px] text-cyan-300/40 leading-relaxed">
+                  <div className="text-[13px] text-cyan-300/40 leading-relaxed">
                     <div>{t('securityPasskeyCreated')}: {formatDateTime(cred.createdAt, lang) || '—'}</div>
                     <div>{cred.lastUsedAt ? `${t('securityPasskeyLastUsed')}: ${formatDateTime(cred.lastUsedAt, lang)}` : t('securityPasskeyNeverUsed')}</div>
                   </div>
@@ -267,7 +267,7 @@ function SecurityPanel({ t, lang }) {
         <button
           onClick={handleRegister}
           disabled={busy || !passkeySupported}
-          className="w-full flex items-center justify-center gap-2 text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
+          className="w-full flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
         >
           <KeyRound className="w-4 h-4" />
           {busy ? t('securityPasskeyAdding') : t('securityPasskeyAdd')}
@@ -336,23 +336,23 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
   ];
 
   return <><DropdownOverlay onClose={onClose} closeLabel={t('settingsTooltip')} /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="fixed top-16 right-3 sm:right-6 z-[70] w-[92vw] sm:w-[380px] max-h-[75vh] overflow-hidden flex flex-col border border-cyan-300/30 rounded-lg bg-[#061326]/95 backdrop-blur shadow-xl theme-surface" onClick={(e) => e.stopPropagation()}>
-    <div className="flex items-center justify-between px-3 py-2.5 border-b border-gold/20 shrink-0"><div className="flex items-center gap-2"><span className="w-1 h-4 bg-cyan-400 rounded-full" /><div className="text-[11px] tracking-widest uppercase text-cyan-200">{t('settingsTitle')}</div></div><button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" aria-label="Close"><X className="w-4 h-4" /></button></div>
-    <div className="flex border-b border-gold/10 px-1 shrink-0 overflow-x-auto">{tabs.map((tb) => <button key={tb.key} onClick={() => setTab(tb.key)} className={`relative px-3 py-2 text-[11px] tracking-wide uppercase transition whitespace-nowrap ${tab === tb.key ? 'text-cyan-200' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>{tb.label}{tab === tb.key && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-cyan-400 rounded-full" />}</button>)}</div>
+    <div className="flex items-center justify-between px-3 py-2.5 border-b border-gold/20 shrink-0"><div className="flex items-center gap-2"><span className="w-1 h-4 bg-cyan-400 rounded-full" /><div className="text-[14px] tracking-widest uppercase text-cyan-200">{t('settingsTitle')}</div></div><button onClick={onClose} className="text-cyan-200/70 hover:text-cyan-100" aria-label="Close"><X className="w-4 h-4" /></button></div>
+    <div className="flex border-b border-gold/10 px-1 shrink-0 overflow-x-auto">{tabs.map((tb) => <button key={tb.key} onClick={() => setTab(tb.key)} className={`relative px-3 py-2 text-[14px] tracking-wide uppercase transition whitespace-nowrap ${tab === tb.key ? 'text-cyan-200' : 'text-cyan-100/40 hover:text-cyan-100/70'}`}>{tb.label}{tab === tb.key && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-cyan-400 rounded-full" />}</button>)}</div>
     <div className="p-3 overflow-auto flex-1">
       {tab === 'language' && <div className="space-y-0.5">{SETTINGS_LANGUAGES.map((l) => <button key={l.code} onClick={() => setLang(l.code)} dir={isRtl(l.code) ? 'rtl' : 'ltr'} className={`w-full flex items-center justify-between px-2.5 py-2.5 rounded text-sm transition ${lang === l.code ? 'bg-cyan-500/10 text-cyan-100' : 'text-cyan-100/70 hover:bg-white/5'}`}><span>{l.label}</span>{lang === l.code && <Check className="w-4 h-4 text-cyan-300 shrink-0" />}</button>)}</div>}
-      {tab === 'sound' && <div><button onClick={() => setSoundEnabled((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-3"><span>{t('settingsSoundEnable')}</span>{soundEnabled ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button><div className="flex items-center gap-2"><span className="text-xs text-gold/50 shrink-0">{t('settingsSoundVolume')}</span><input type="range" min="0.02" max="0.2" step="0.01" value={soundVolume} onChange={(e) => setSoundVolume(Number(e.target.value))} className="flex-1" /></div></div>}
-      {tab === 'push' && <div><button onClick={togglePush} disabled={pushState === 'unsupported' || pushState === 'checking'} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-2 disabled:opacity-40"><span>{t('settingsPushEnable')}</span>{pushState === 'subscribed' ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>{pushState === 'unsupported' && <p className="text-[11px] text-gold/50">{t('settingsPushUnsupported')}</p>}{pushError && <p className="text-[11px] text-red-300">{pushError}</p>}</div>}
+      {tab === 'sound' && <div><button onClick={() => setSoundEnabled((v) => !v)} className="w-full flex items-center justify-between text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-3"><span>{t('settingsSoundEnable')}</span>{soundEnabled ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button><div className="flex items-center gap-2"><span className="text-xs text-gold/50 shrink-0">{t('settingsSoundVolume')}</span><input type="range" min="0.02" max="0.2" step="0.01" value={soundVolume} onChange={(e) => setSoundVolume(Number(e.target.value))} className="flex-1" /></div></div>}
+      {tab === 'push' && <div><button onClick={togglePush} disabled={pushState === 'unsupported' || pushState === 'checking'} className="w-full flex items-center justify-between text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 mb-2 disabled:opacity-40"><span>{t('settingsPushEnable')}</span>{pushState === 'subscribed' ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>{pushState === 'unsupported' && <p className="text-[14px] text-gold/50">{t('settingsPushUnsupported')}</p>}{pushError && <p className="text-[14px] text-red-300">{pushError}</p>}</div>}
       {tab === 'appearance' && <div className="space-y-4">
         <div>
           <div className="text-xs tracking-[0.18em] uppercase text-gold/60 mb-2">{themeCopy.title}</div>
-          <div className="grid grid-cols-3 gap-2">{themeOptions.map(({ key, label, Icon }) => <button type="button" key={key} onClick={() => setTheme(key)} className={`theme-option rounded-lg border px-2 py-3 flex flex-col items-center gap-1.5 transition ${themeMode === key ? 'theme-option-active border-cyan-300/70 bg-cyan-500/15 text-cyan-100' : 'border-cyan-300/25 text-cyan-100/65 hover:bg-white/5'}`}><Icon className="w-4 h-4" /><span className="text-[11px]">{label}</span>{themeMode === key && <Check className="w-3.5 h-3.5 text-cyan-300" />}</button>)}</div>
+          <div className="grid grid-cols-3 gap-2">{themeOptions.map(({ key, label, Icon }) => <button type="button" key={key} onClick={() => setTheme(key)} className={`theme-option rounded-lg border px-2 py-3 flex flex-col items-center gap-1.5 transition ${themeMode === key ? 'theme-option-active border-cyan-300/70 bg-cyan-500/15 text-cyan-100' : 'border-cyan-300/25 text-cyan-100/65 hover:bg-white/5'}`}><Icon className="w-4 h-4" /><span className="text-[14px]">{label}</span>{themeMode === key && <Check className="w-3.5 h-3.5 text-cyan-300" />}</button>)}</div>
           <p className="text-xs text-gold/45 mt-2 leading-relaxed">{themeCopy.hint}</p>
         </div>
-        {typeof setSidebarCollapsed === 'function' && <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>}
+        {typeof setSidebarCollapsed === 'function' && <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>}
       </div>}
       {tab === 'security' && authenticated && <SecurityPanel t={t} lang={lang} />}
       {tab === 'localAI' && isNativeApp && <LocalAIPanel t={t} />}
-      {tab === 'about' && <div><p className="text-[12px] text-cyan-100/80 mb-3">{t('appName')} · {t('settingsVersion')} {__APP_VERSION__}</p><button onClick={onOpenGuide} className="text-[12px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2">{t('settingsOpenGuide')}</button></div>}
+      {tab === 'about' && <div><p className="text-[14px] text-cyan-100/80 mb-3">{t('appName')} · {t('settingsVersion')} {__APP_VERSION__}</p><button onClick={onOpenGuide} className="text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2">{t('settingsOpenGuide')}</button></div>}
     </div>
   </motion.div></>;
 }

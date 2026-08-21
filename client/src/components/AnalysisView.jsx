@@ -344,7 +344,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
             {cat && <cat.icon className="w-5 h-5 text-cyan-300" />}
           </div>
           <div>
-            <div className="text-[9px] tracking-[0.24em] text-cyan-300/60">ANATOLIA-Q / ANALİZ MERKEZİ</div>
+            <div className="text-[12px] tracking-[0.24em] text-cyan-300/60">ANATOLIA-Q / ANALİZ MERKEZİ</div>
             <h2 className="text-sm sm:text-lg font-display tracking-[0.14em] text-cyan-100 uppercase">{categoryLabel}</h2>
           </div>
         </div>
@@ -381,15 +381,15 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
             {!result && !loading && (
               <div className={`${PANEL} p-8 flex flex-col items-center justify-center text-center min-h-[260px]`}>
                 <Sparkles className="w-8 h-8 text-cyan-400/40 mb-3" />
-                <div className="text-[11px] tracking-[0.14em] text-white/40">ANALİZ AKIŞI BEKLEMEDE</div>
-                <p className="text-[10px] text-white/25 mt-1 max-w-sm">Görevi tanımlayıp raporu üret dediğinizde AI analizi, kuantum devresi ve karar izi burada canlı olarak akacak.</p>
+                <div className="text-[14px] tracking-[0.14em] text-white/40">ANALİZ AKIŞI BEKLEMEDE</div>
+                <p className="text-[13px] text-white/25 mt-1 max-w-sm">Görevi tanımlayıp raporu üret dediğinizde AI analizi, kuantum devresi ve karar izi burada canlı olarak akacak.</p>
               </div>
             )}
             {loading && (
               <div className={`${PANEL} p-8 flex flex-col items-center justify-center text-center min-h-[260px]`}>
                 <Loader2 className="w-8 h-8 text-cyan-300 animate-spin mb-3" />
-                <div className="text-[11px] tracking-[0.14em] text-cyan-200">{quantumMode ? t('analyzingQuantum') : t('analyzing')}</div>
-                <p className="text-[10px] text-white/25 mt-1">AI çıkarımı ve {quantumMode ? 'kuantum devresi ' : ''}çalıştırılıyor…</p>
+                <div className="text-[14px] tracking-[0.14em] text-cyan-200">{quantumMode ? t('analyzingQuantum') : t('analyzing')}</div>
+                <p className="text-[13px] text-white/25 mt-1">AI çıkarımı ve {quantumMode ? 'kuantum devresi ' : ''}çalıştırılıyor…</p>
               </div>
             )}
 
@@ -441,14 +441,14 @@ function EngineBadges({ quantumMode, hasData }) {
         <div key={label} className="rounded border border-cyan-400/15 bg-[#031326]/80 px-2.5 py-2 flex items-center gap-2">
           <Icon className={`w-3.5 h-3.5 ${on ? 'text-cyan-300/80' : 'text-white/25'}`} />
           <div>
-            <div className="text-[8px] tracking-wider text-white/55">{label}</div>
-            <div className={`text-[8px] tracking-wider ${on ? 'text-emerald-300/70' : 'text-white/25'}`}>{on ? '● ' : '○ '}{state}</div>
+            <div className="text-[11px] tracking-wider text-white/55">{label}</div>
+            <div className={`text-[11px] tracking-wider ${on ? 'text-emerald-300/70' : 'text-white/25'}`}>{on ? '● ' : '○ '}{state}</div>
           </div>
         </div>
       ))}
       <div className="rounded border border-amber-300/15 bg-[#031326]/80 px-2.5 py-2 flex items-center gap-2">
         <ShieldCheck className="w-3.5 h-3.5 text-amber-300/70" />
-        <div><div className="text-[8px] tracking-wider text-white/55">IBM HARDWARE</div><div className="text-[8px] tracking-wider text-amber-300/70">○ VERIFY ON DEMAND</div></div>
+        <div><div className="text-[11px] tracking-wider text-white/55">IBM HARDWARE</div><div className="text-[11px] tracking-wider text-amber-300/70">○ VERIFY ON DEMAND</div></div>
       </div>
     </div>
   );
@@ -474,44 +474,44 @@ function TaskDefinitionPanel(props) {
     <div className="space-y-3">
       <div className={PANEL}>
         <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
-          <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Görev Tanımı</span>
+          <span className="text-[13px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Görev Tanımı</span>
         </div>
         <div className="p-3 space-y-3">
           <div>
-            <label className="block text-[9px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{t('reportTitle')} ({categoryLabel})</label>
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} disabled={locked} placeholder={titlePlaceholder} className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[11px] text-cyan-100 focus:border-cyan-300 focus:outline-none disabled:opacity-50" />
+            <label className="block text-[12px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{t('reportTitle')} ({categoryLabel})</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} disabled={locked} placeholder={titlePlaceholder} className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[14px] text-cyan-100 focus:border-cyan-300 focus:outline-none disabled:opacity-50" />
           </div>
           <div>
-            <label className="block text-[9px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{t('analysisTopic')}</label>
+            <label className="block text-[12px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{t('analysisTopic')}</label>
             <div className="relative">
-              <textarea value={prompt} onChange={e => setPrompt(e.target.value)} disabled={locked} placeholder={documentContexts.length > 0 ? 'Yuklenen belgelere dayanarak analiz uret...' : t('topicPh')} rows={5} className="w-full bg-black/25 border border-cyan-400/20 rounded p-2.5 pr-10 text-[11px] text-cyan-100 focus:border-cyan-300 focus:outline-none disabled:opacity-50" />
+              <textarea value={prompt} onChange={e => setPrompt(e.target.value)} disabled={locked} placeholder={documentContexts.length > 0 ? 'Yuklenen belgelere dayanarak analiz uret...' : t('topicPh')} rows={5} className="w-full bg-black/25 border border-cyan-400/20 rounded p-2.5 pr-10 text-[14px] text-cyan-100 focus:border-cyan-300 focus:outline-none disabled:opacity-50" />
               <div className="absolute bottom-2 right-2"><VoiceButton mode="input" onTranscript={text => setPrompt(prev => prev ? prev + ' ' + text : text)} size="sm" /></div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[9px] text-cyan-300/40 tracking-widest uppercase">Kaynak Dosya</span>
+            <span className="text-[12px] text-cyan-300/40 tracking-widest uppercase">Kaynak Dosya</span>
             <FileAttach onAIFile={handleAIFile} />
           </div>
           {quantumMode && (
-            <p className="text-[9px] text-white/35 leading-relaxed">
+            <p className="text-[12px] text-white/35 leading-relaxed">
               {isFraudCategory
                 ? 'Gerçek işlem dökümü (CSV/Excel — "Tutar" ve "Saat"/"Tarih" sütunları gerekli) yükleyebilirsiniz; yüklenirse kuantum motoru yapay örnek kayıtlar yerine bu gerçek kayıtları puanlar.'
                 : 'Gerçek senaryo verisi ("Senaryo"/"Olasılık" sütunları) veya kaynak tahsisi tablosu ("Kalem"/"Değer"/"Maliyet" sütunları) yükleyebilirsiniz; yüklenirse kuantum motoru YZ tahmini yerine bu gerçek verileri kullanır.'}
             </p>
           )}
-          {error && <div className="text-red-300 text-[10px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
+          {error && <div className="text-red-300 text-[13px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
         </div>
       </div>
 
       <div className={PANEL}>
         <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
-          <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Veri Kaynakları</span>
-          <span className="ml-auto text-[9px] text-cyan-400/60">{sources.length}</span>
+          <span className="text-[13px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Veri Kaynakları</span>
+          <span className="ml-auto text-[12px] text-cyan-400/60">{sources.length}</span>
         </div>
         <div className="p-3 space-y-1.5">
-          {sources.length === 0 && <div className="text-[10px] text-white/25">Henüz kaynak eklenmedi</div>}
+          {sources.length === 0 && <div className="text-[13px] text-white/25">Henüz kaynak eklenmedi</div>}
           {sources.map((s) => (
-            <div key={s.key} className="flex items-center gap-2 text-[10px] text-white/60">
+            <div key={s.key} className="flex items-center gap-2 text-[13px] text-white/60">
               <s.icon className="w-3 h-3 text-cyan-400/50 flex-shrink-0" />
               <span className="truncate flex-1">{s.name}</span>
               <button type="button" onClick={s.onRemove} disabled={locked} className="text-red-300/70 hover:text-red-300 disabled:opacity-30">×</button>
@@ -522,7 +522,7 @@ function TaskDefinitionPanel(props) {
 
       <div className={PANEL}>
         <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
-          <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Analiz Motorları</span>
+          <span className="text-[13px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Analiz Motorları</span>
         </div>
         <div className="p-3 space-y-2">
           <EngineRow label="AI Reasoning (LLM)" on always />
@@ -530,14 +530,14 @@ function TaskDefinitionPanel(props) {
           <div onClick={() => !locked && setQuantumMode(!quantumMode)} className={`flex items-start gap-2.5 p-2.5 rounded border cursor-pointer transition select-none ${quantumMode ? 'bg-cyan-400/10 border-cyan-300/50' : 'bg-black/20 border-cyan-400/15 hover:border-cyan-400/35'} ${locked ? 'pointer-events-none opacity-60' : ''}`}>
             <div className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition ${quantumMode ? 'bg-cyan-300 border-cyan-300' : 'border-cyan-400/40'}`}>{quantumMode && <Check className="w-2.5 h-2.5 text-[#031326]" />}</div>
             <div>
-              <div className="flex items-center gap-1.5 mb-0.5"><Atom className="w-3.5 h-3.5 text-cyan-300" /><span className="text-cyan-100 font-display tracking-widest text-[11px]">{t('quantumMode')}</span></div>
-              <p className="text-[9px] text-white/40 leading-relaxed">{t(isFraudCategory ? 'quantumDescFraud' : 'quantumDesc')}</p>
+              <div className="flex items-center gap-1.5 mb-0.5"><Atom className="w-3.5 h-3.5 text-cyan-300" /><span className="text-cyan-100 font-display tracking-widest text-[14px]">{t('quantumMode')}</span></div>
+              <p className="text-[12px] text-white/40 leading-relaxed">{t(isFraudCategory ? 'quantumDescFraud' : 'quantumDesc')}</p>
             </div>
           </div>
           <EngineRow label="IBM Quantum Verification" on={quantumMode} pending />
         </div>
         <div className="p-3 pt-0">
-          <button onClick={generate} disabled={loading || !hasPrompt || locked} className="w-full btn-gold py-2.5 rounded font-display tracking-widest text-[11px] disabled:opacity-50 flex items-center justify-center gap-2">
+          <button onClick={generate} disabled={loading || !hasPrompt || locked} className="w-full btn-gold py-2.5 rounded font-display tracking-widest text-[14px] disabled:opacity-50 flex items-center justify-center gap-2">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" />{quantumMode ? t('analyzingQuantum') : t('analyzing')}</> : <>{quantumMode ? <Atom className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}{quantumMode ? t('generateQuantum') : t('generateAnalysis')}</>}
           </button>
         </div>
@@ -548,10 +548,10 @@ function TaskDefinitionPanel(props) {
 
 function EngineRow({ label, on, always = false, pending = false }) {
   return (
-    <div className="flex items-center gap-2 text-[10px]">
+    <div className="flex items-center gap-2 text-[13px]">
       <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${on ? 'bg-cyan-300 border-cyan-300' : 'border-white/15'}`}>{on && <Check className="w-2.5 h-2.5 text-[#031326]" />}</div>
       <span className="text-white/55">{label}</span>
-      <span className={`ml-auto text-[8px] ${always ? 'text-emerald-300/70' : on ? (pending ? 'text-amber-300/70' : 'text-emerald-300/70') : 'text-white/25'}`}>
+      <span className={`ml-auto text-[11px] ${always ? 'text-emerald-300/70' : on ? (pending ? 'text-amber-300/70' : 'text-emerald-300/70') : 'text-white/25'}`}>
         {always ? 'HAZIR' : on ? (pending ? 'TALEP ÜZERİNE' : 'ETKİN') : 'PASİF'}
       </span>
     </div>
@@ -666,18 +666,18 @@ function QuantumCircuitPanel({ quantum }) {
   return (
     <div className={PANEL}>
       <div className="h-9 px-3 flex items-center gap-2 border-b border-cyan-400/10">
-        <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Qiskit Devre Önizlemesi</span>
+        <span className="text-[13px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Qiskit Devre Önizlemesi</span>
         <ResultSourceBadge source={quantum.resultSource} />
-        <span className="ml-auto text-[9px] text-white/30">{qubits} qubit · {depth} derinlik{quantum.shots ? ` · ${quantum.shots} shots` : ''}</span>
+        <span className="ml-auto text-[12px] text-white/30">{qubits} qubit · {depth} derinlik{quantum.shots ? ` · ${quantum.shots} shots` : ''}</span>
       </div>
       <div className="p-3 overflow-x-auto">
         <div className="min-w-[420px]">
           {Array.from({ length: rows }).map((_, r) => (
             <div key={r} className="flex items-center gap-1.5 mb-1.5">
-              <span className="w-6 text-[8px] text-white/25 font-mono">q{r}</span>
+              <span className="w-6 text-[11px] text-white/25 font-mono">q{r}</span>
               <div className="flex-1 flex items-center gap-1.5 border-t border-cyan-400/15 pt-1.5">
                 {Array.from({ length: cols }).map((_, c) => gateAt(r, c) ? (
-                  <span key={c} className="px-1.5 py-1 rounded border border-cyan-400/40 bg-cyan-400/10 text-cyan-200 text-[8px] font-mono">{gateLabel(r, c)}</span>
+                  <span key={c} className="px-1.5 py-1 rounded border border-cyan-400/40 bg-cyan-400/10 text-cyan-200 text-[11px] font-mono">{gateLabel(r, c)}</span>
                 ) : <span key={c} className="w-4 h-px bg-cyan-400/10" />)}
               </div>
             </div>
@@ -687,13 +687,13 @@ function QuantumCircuitPanel({ quantum }) {
       <div className="grid grid-cols-2 sm:grid-cols-5 border-t border-cyan-400/10 text-center">
         {[['Qubit', qubits], ['Derinlik', depth], ['Shots', quantum.shots ?? '—'], ['Batch', quantum.batches ?? '—'], ['Kaynak', quantum.dataSource === 'real' ? 'Gerçek' : 'YZ tahmini']].map(([l, v]) => (
           <div key={l} className="p-2 border-r border-cyan-400/10 last:border-r-0">
-            <div className="text-[11px] text-cyan-200 font-mono">{v}</div>
-            <div className="text-[8px] text-white/30">{l}</div>
+            <div className="text-[14px] text-cyan-200 font-mono">{v}</div>
+            <div className="text-[11px] text-white/30">{l}</div>
           </div>
         ))}
       </div>
       {quantum.classicalBenchmark && (
-        <div className="px-3 py-2 border-t border-cyan-400/10 text-[9px] text-white/40">
+        <div className="px-3 py-2 border-t border-cyan-400/10 text-[12px] text-white/40">
           {quantum.classicalBenchmark.topScenarioAgrees
             ? '✅ Klasik (YZ) taban çizgisiyle aynı senaryo en olası çıktı'
             : '⚠️ Kuantum devresi en olası senaryoyu klasik tahminden farklı belirledi'}
@@ -709,10 +709,10 @@ function ScenarioComparisonTable({ scenarios }) {
   return (
     <div className={PANEL}>
       <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
-        <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Senaryo Sonuçları</span>
+        <span className="text-[13px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Senaryo Sonuçları</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[10px]">
+        <table className="w-full text-[13px]">
           <thead>
             <tr className="text-white/35 border-b border-cyan-400/10">
               <th className="text-left font-normal px-3 py-2">Senaryo</th>
@@ -750,8 +750,8 @@ function DecisionTraceLive({ hasPrompt, quantumMode, loading, result, sourceCoun
   return (
     <div className={PANEL}>
       <div className="h-9 px-3 flex items-center border-b border-cyan-400/10">
-        <span className="text-[10px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Decision Trace</span>
-        <span className="ml-auto text-[8px] text-cyan-400/60">CANLI</span>
+        <span className="text-[13px] text-cyan-100 tracking-[0.15em] font-semibold uppercase">Decision Trace</span>
+        <span className="ml-auto text-[11px] text-cyan-400/60">CANLI</span>
       </div>
       <div className="p-3 space-y-3">
         {steps.map((s, i) => (
@@ -763,9 +763,9 @@ function DecisionTraceLive({ hasPrompt, quantumMode, loading, result, sourceCoun
               {i < steps.length - 1 && <span className="w-px flex-1 bg-white/10 mt-1" />}
             </div>
             <div className="pb-2.5 min-w-0">
-              <div className={`text-[9px] tracking-wider font-semibold ${s.done ? 'text-emerald-300/80' : s.current ? 'text-cyan-200' : 'text-white/35'}`}>{s.label}</div>
-              <div className="text-[9px] text-white/30 mt-0.5">{s.detail}</div>
-              {s.done && <div className="text-[8px] text-white/20 mt-0.5">{now()}</div>}
+              <div className={`text-[12px] tracking-wider font-semibold ${s.done ? 'text-emerald-300/80' : s.current ? 'text-cyan-200' : 'text-white/35'}`}>{s.label}</div>
+              <div className="text-[12px] text-white/30 mt-0.5">{s.detail}</div>
+              {s.done && <div className="text-[11px] text-white/20 mt-0.5">{now()}</div>}
             </div>
           </div>
         ))}
@@ -778,19 +778,19 @@ function ScenarioPanel({ scenarios, onDeepDive, loadingScenario, t }) {
   return (
     <div className={`${PANEL} p-4`}>
       <div className="flex items-center gap-2 mb-1"><Atom className="w-4 h-4 text-cyan-300 animate-pulse" /><h3 className="font-display text-cyan-100 tracking-widest text-xs">{t('quantumMatrix')}</h3></div>
-      <p className="text-[9px] text-white/30 mb-3 leading-relaxed">YZ'nin ilk tahmini kuantum genliği olarak devreye yüklenir; burada gösterilen yüzde dünyadaki olayın bağımsız bir kuantum ölçümü <strong>değildir</strong> — bu genliğin belirlenmiş bir karışım (mixer) devresinden geçtikten sonraki ölçüm dağılımıdır. Devre, YZ'nin ön tahminini dönüştürür; onu doğrulayan bağımsız bir gerçek-dünya ölçümü üretmez.</p>
+      <p className="text-[12px] text-white/30 mb-3 leading-relaxed">YZ'nin ilk tahmini kuantum genliği olarak devreye yüklenir; burada gösterilen yüzde dünyadaki olayın bağımsız bir kuantum ölçümü <strong>değildir</strong> — bu genliğin belirlenmiş bir karışım (mixer) devresinden geçtikten sonraki ölçüm dağılımıdır. Devre, YZ'nin ön tahminini dönüştürür; onu doğrulayan bağımsız bir gerçek-dünya ölçümü üretmez.</p>
       <div className="space-y-2">
         {scenarios.map((s, i) => (
           <motion.div key={s.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className={`flex items-center gap-3 p-2.5 rounded border ${i === 0 ? 'border-cyan-300/50 bg-cyan-400/10' : 'border-cyan-400/15 bg-black/20 hover:border-cyan-400/35'}`}>
             <div className="flex-1 min-w-0">
               <span className="text-cyan-100/90 text-xs font-display tracking-wide truncate">{s.title}</span>
               {s.quantumProbability !== undefined && (
-                <div className="text-[10px] font-mono text-cyan-300/70 mt-0.5">
+                <div className="text-[13px] font-mono text-cyan-300/70 mt-0.5">
                   YZ tahmini %{s.llmEstimate} → kuantum devresi %{s.quantumProbability}
                 </div>
               )}
             </div>
-            {i !== 0 && <button onClick={() => onDeepDive(s)} disabled={!!loadingScenario} className="flex-shrink-0 btn-gold px-3 py-1.5 rounded text-[11px] tracking-widest flex items-center gap-1 disabled:opacity-50">{loadingScenario === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><BarChart3 className="w-3 h-3" /> {t('analyzeBtn')}</>}</button>}
+            {i !== 0 && <button onClick={() => onDeepDive(s)} disabled={!!loadingScenario} className="flex-shrink-0 btn-gold px-3 py-1.5 rounded text-[14px] tracking-widest flex items-center gap-1 disabled:opacity-50">{loadingScenario === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><BarChart3 className="w-3 h-3" /> {t('analyzeBtn')}</>}</button>}
           </motion.div>
         ))}
       </div>
@@ -830,7 +830,7 @@ function CategoryPicker({ onSelect }) {
       <div className="relative flex items-center justify-center gap-2 mb-1">
         <motion.span className="w-1.5 h-1.5 rounded-full bg-emerald-400"
           animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.4, repeat: Infinity }} />
-        <span className="text-[9px] tracking-[0.25em] text-emerald-400/80 font-mono uppercase">Sistem Hazır</span>
+        <span className="text-[12px] tracking-[0.25em] text-emerald-400/80 font-mono uppercase">Sistem Hazır</span>
       </div>
       <h2 className="relative text-2xl font-display text-cyan-100 tracking-widest text-center mb-6">{t('newAnalysis')}</h2>
 

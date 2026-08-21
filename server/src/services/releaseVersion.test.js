@@ -34,11 +34,36 @@ describe('getLatestVersionInfo', () => {
     const info = await getLatestVersionInfo();
 
     expect(info.version).toBe('2.1.140');
-    expect(info.assets.androidApk).toEqual({ url: 'https://x/apk', name: 'ANATOLIA-Q-2.1.140.apk', size: 100 });
-    expect(info.assets.desktopWin).toEqual({ url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 });
-    expect(info.assets.desktopMac).toEqual({ url: 'https://x/dmg', name: 'ANATOLIA-Q-2.1.140.dmg', size: 300 });
-    expect(info.assets.desktopLinux).toEqual({ url: 'https://x/appimage', name: 'ANATOLIA-Q-2.1.140.AppImage', size: 400 });
+    expect(info.assets.androidApk).toEqual({ url: 'https://x/apk', name: 'ANATOLIA-Q-2.1.140.apk', size: 100, sha256: null });
+    expect(info.assets.desktopWin).toEqual({ url: 'https://x/exe', name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200, sha256: null });
+    expect(info.assets.desktopMac).toEqual({ url: 'https://x/dmg', name: 'ANATOLIA-Q-2.1.140.dmg', size: 300, sha256: null });
+    expect(info.assets.desktopLinux).toEqual({ url: 'https://x/appimage', name: 'ANATOLIA-Q-2.1.140.AppImage', size: 400, sha256: null });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces GitHub-computed SHA-256 asset digests (AQ-003 update integrity)', async () => {
+    const release = fakeRelease();
+    release.assets[1].digest = `sha256:${'a'.repeat(64)}`;
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [release] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatestVersionInfo } = await import('./releaseVersion.js');
+
+    const info = await getLatestVersionInfo();
+
+    expect(info.assets.desktopWin.sha256).toBe('a'.repeat(64));
+    expect(info.assets.desktopMac.sha256).toBeNull();
+  });
+
+  it('ignores a malformed digest rather than passing it through as a hash', async () => {
+    const release = fakeRelease();
+    release.assets[1].digest = 'not-a-real-digest';
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [release] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatestVersionInfo } = await import('./releaseVersion.js');
+
+    const info = await getLatestVersionInfo();
+
+    expect(info.assets.desktopWin.sha256).toBeNull();
   });
 
   it('fetches fresh release data on every call', async () => {

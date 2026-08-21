@@ -131,6 +131,7 @@ vi.mock('../services/ai.js', () => ({
   isFraudCategory: () => false,
   getCategoryGroup: () => 'defense',
   CATEGORY_GROUP_SOURCES: { defense: { local: [], international: [] } },
+  wrapUntrustedEvidence: (label, content) => `--- UNTRUSTED EVIDENCE START --- (${label})\n${content}\n--- UNTRUSTED EVIDENCE END ---`,
 }));
 const generateReportDocxMock = vi.fn(async () => Buffer.from('fake-docx-bytes'));
 const generateReportPdfMock = vi.fn(async () => Buffer.from('fake-pdf-bytes'));

@@ -8,9 +8,20 @@
 const REPO = 'atabeyler/anatolia.bold.q';
 const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases?per_page=20`;
 
+// GitHub computes and serves a SHA-256 digest for every release asset
+// itself (the `digest` field, e.g. "sha256:abcd...") -- surfacing it here
+// lets desktop/appUpdate.js verify the downloaded installer's integrity
+// before ever executing it (see AQ-003 hardening), without this server or
+// the release workflow having to separately generate/publish checksums.
+function extractSha256(digest) {
+  if (!digest) return null;
+  const m = /^sha256:([0-9a-f]{64})$/i.exec(digest);
+  return m ? m[1].toLowerCase() : null;
+}
+
 function pickAsset(assets, suffix) {
   const asset = (assets || []).find((a) => a.name?.endsWith(suffix));
-  return asset ? { url: asset.browser_download_url, name: asset.name, size: asset.size } : null;
+  return asset ? { url: asset.browser_download_url, name: asset.name, size: asset.size, sha256: extractSha256(asset.digest) } : null;
 }
 
 async function fetchLatestRelease() {
@@ -40,4 +51,4 @@ export async function getLatestVersionInfo() {
   return fetchLatestRelease();
 }
 
-export const _internal = { pickAsset };
+export const _internal = { pickAsset, extractSha256 };

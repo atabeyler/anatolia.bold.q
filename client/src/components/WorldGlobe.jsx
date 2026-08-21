@@ -200,7 +200,7 @@ function CityMarker({ city, onSelect }) {
       </mesh>
       {hovered && (
         <Html zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-          <div className="-translate-x-1/2 -translate-y-[220%] whitespace-nowrap text-[11px] font-bold text-white px-2 py-0.5 rounded bg-black/70 border border-gold/40">
+          <div className="-translate-x-1/2 -translate-y-[220%] whitespace-nowrap text-[14px] font-bold text-white px-2 py-0.5 rounded bg-black/70 border border-gold/40">
             {city.name}
           </div>
         </Html>

@@ -86,10 +86,10 @@ export default function AnalysisWizard({
           </div>
           <div className="min-w-0">
             <h2 className="font-display tracking-widest text-cyan-100 text-sm uppercase truncate">{t('wizTitle')}</h2>
-            <p className="text-[9px] text-white/35 tracking-wider">{t('wizSubtitle')}{categoryLabel ? ` · ${categoryLabel}` : ''}</p>
+            <p className="text-[12px] text-white/35 tracking-wider">{t('wizSubtitle')}{categoryLabel ? ` · ${categoryLabel}` : ''}</p>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden sm:flex items-center gap-1.5 text-[9px] tracking-widest text-emerald-400/80">
+            <span className="hidden sm:flex items-center gap-1.5 text-[12px] tracking-widest text-emerald-400/80">
               <motion.span className="w-1.5 h-1.5 rounded-full bg-emerald-400" animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.3, repeat: Infinity }} />
               SECURE SESSION
             </span>
@@ -103,10 +103,10 @@ export default function AnalysisWizard({
             {STEPS.map((s) => (
               <button key={s.id} type="button" onClick={() => setStep(s.id)}
                 className={`flex-shrink-0 flex items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${step === s.id ? 'bg-cyan-400/10 border border-cyan-300/40' : 'border border-transparent hover:bg-white/5'}`}>
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-mono flex-shrink-0 ${step === s.id ? 'bg-cyan-300 text-[#031326]' : step > s.id ? 'bg-emerald-400/80 text-[#031326]' : 'border border-white/20 text-white/40'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-mono flex-shrink-0 ${step === s.id ? 'bg-cyan-300 text-[#031326]' : step > s.id ? 'bg-emerald-400/80 text-[#031326]' : 'border border-white/20 text-white/40'}`}>
                   {step > s.id ? <Check className="w-3 h-3" /> : String(s.id).padStart(2, '0')}
                 </span>
-                <span className={`text-[10px] tracking-wide whitespace-nowrap lg:whitespace-normal ${step === s.id ? 'text-cyan-100' : 'text-white/45'}`}>{s.label}</span>
+                <span className={`text-[13px] tracking-wide whitespace-nowrap lg:whitespace-normal ${step === s.id ? 'text-cyan-100' : 'text-white/45'}`}>{s.label}</span>
               </button>
             ))}
           </nav>
@@ -120,13 +120,13 @@ export default function AnalysisWizard({
                     <div>
                       <FieldLabel>{t('reportTitle')}</FieldLabel>
                       <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={titlePlaceholder}
-                        className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[12px] text-cyan-100 focus:border-cyan-300 focus:outline-none" />
+                        className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[14px] text-cyan-100 focus:border-cyan-300 focus:outline-none" />
                     </div>
                     <div>
                       <FieldLabel>{t('analysisTopic')}</FieldLabel>
                       <div className="relative">
                         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={6} placeholder={t('topicPh')}
-                          className="w-full bg-black/25 border border-cyan-400/20 rounded p-2.5 pr-10 text-[12px] text-cyan-100 focus:border-cyan-300 focus:outline-none" />
+                          className="w-full bg-black/25 border border-cyan-400/20 rounded p-2.5 pr-10 text-[14px] text-cyan-100 focus:border-cyan-300 focus:outline-none" />
                         <div className="absolute bottom-2 right-2"><VoiceButton mode="input" onTranscript={(text) => setPrompt((prev) => (prev ? prev + ' ' + text : text))} size="sm" /></div>
                       </div>
                     </div>
@@ -134,7 +134,7 @@ export default function AnalysisWizard({
                       <div>
                         <FieldLabel>{t('wizCategory')}</FieldLabel>
                         <select value={category} onChange={(e) => setCategory(e.target.value)}
-                          className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[12px] text-cyan-100 focus:border-cyan-300 focus:outline-none">
+                          className="w-full bg-black/25 border border-cyan-400/20 rounded px-2.5 py-2 text-[14px] text-cyan-100 focus:border-cyan-300 focus:outline-none">
                           {CATEGORIES.filter((c) => c.id !== 'danisma').map((c) => <option key={c.id} value={c.id}>{catLabel(c)}</option>)}
                         </select>
                       </div>
@@ -143,14 +143,14 @@ export default function AnalysisWizard({
                         <div className="flex gap-1.5">
                           {PRIORITIES.map((p) => (
                             <button key={p.id} type="button" onClick={() => setPriority(p.id)}
-                              className={`flex-1 py-2 rounded border text-[10px] tracking-wide transition ${priority === p.id ? `${p.cls} bg-white/5` : 'border-white/10 text-white/30 hover:border-white/25'}`}>
+                              className={`flex-1 py-2 rounded border text-[13px] tracking-wide transition ${priority === p.id ? `${p.cls} bg-white/5` : 'border-white/10 text-white/30 hover:border-white/25'}`}>
                               {p.label}
                             </button>
                           ))}
                         </div>
                       </div>
                     </div>
-                    {error && <div className="text-red-300 text-[10px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
+                    {error && <div className="text-red-300 text-[13px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
                   </div>
                 )}
 
@@ -158,20 +158,20 @@ export default function AnalysisWizard({
                   <div className="space-y-4">
                     <SectionLabel>{t('wizStep2')}</SectionLabel>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[9px] text-cyan-300/40 tracking-widest uppercase">{t('wizAddSourceFile')}</span>
+                      <span className="text-[12px] text-cyan-300/40 tracking-widest uppercase">{t('wizAddSourceFile')}</span>
                       <FileAttach onAIFile={handleAIFile} />
                     </div>
                     {quantumMode && (
-                      <p className="text-[10px] text-white/40 leading-relaxed border border-cyan-400/10 rounded p-2.5 bg-black/15">
+                      <p className="text-[13px] text-white/40 leading-relaxed border border-cyan-400/10 rounded p-2.5 bg-black/15">
                         {isFraudCategory ? t('wizFraudUploadNote') : t('wizScenarioUploadNote')}
                       </p>
                     )}
                     <div className="rounded-lg border border-cyan-400/10 bg-black/15">
-                      <div className="px-3 py-2 border-b border-cyan-400/10 text-[10px] text-cyan-200/70 tracking-widest uppercase">{t('wizAddedSources')} ({sources.length})</div>
+                      <div className="px-3 py-2 border-b border-cyan-400/10 text-[13px] text-cyan-200/70 tracking-widest uppercase">{t('wizAddedSources')} ({sources.length})</div>
                       <div className="p-3 space-y-1.5">
-                        {sources.length === 0 && <div className="text-[10px] text-white/25">{t('wizNoSourcesYet')}</div>}
+                        {sources.length === 0 && <div className="text-[13px] text-white/25">{t('wizNoSourcesYet')}</div>}
                         {sources.map((s) => (
-                          <div key={s.key} className="flex items-center gap-2 text-[10px] text-white/60">
+                          <div key={s.key} className="flex items-center gap-2 text-[13px] text-white/60">
                             <s.icon className="w-3 h-3 text-cyan-400/50 flex-shrink-0" />
                             <span className="truncate flex-1">{s.name}</span>
                             <button type="button" onClick={s.onRemove} className="text-red-300/70 hover:text-red-300">×</button>
@@ -191,8 +191,8 @@ export default function AnalysisWizard({
                         {quantumMode && <Check className="w-2.5 h-2.5 text-[#031326]" />}
                       </div>
                       <div>
-                        <div className="flex items-center gap-1.5 mb-0.5"><Atom className="w-3.5 h-3.5 text-cyan-300" /><span className="text-cyan-100 font-display tracking-widest text-[11px]">{t('quantumMode')}</span></div>
-                        <p className="text-[9px] text-white/40 leading-relaxed">{t(isFraudCategory ? 'quantumDescFraud' : 'quantumDesc')}</p>
+                        <div className="flex items-center gap-1.5 mb-0.5"><Atom className="w-3.5 h-3.5 text-cyan-300" /><span className="text-cyan-100 font-display tracking-widest text-[14px]">{t('quantumMode')}</span></div>
+                        <p className="text-[12px] text-white/40 leading-relaxed">{t(isFraudCategory ? 'quantumDescFraud' : 'quantumDesc')}</p>
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -200,10 +200,10 @@ export default function AnalysisWizard({
                         <div key={e.label} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition ${e.on ? 'border-white/10 bg-white/[0.02]' : 'border-white/5'}`}>
                           <EngineIconBadge Icon={e.Icon} color={e.color} on={e.on} />
                           <div className="min-w-0">
-                            <div className={`text-[11px] tracking-wide ${e.on ? 'text-white/85' : 'text-white/30'}`}>{e.label}</div>
-                            <div className="text-[9px] text-white/30">{e.detail}</div>
+                            <div className={`text-[14px] tracking-wide ${e.on ? 'text-white/85' : 'text-white/30'}`}>{e.label}</div>
+                            <div className="text-[12px] text-white/30">{e.detail}</div>
                           </div>
-                          <span className={`ml-auto text-[8px] tracking-widest flex-shrink-0 ${e.on ? 'text-emerald-300/70' : 'text-white/25'}`}>{e.on ? t('wizEngineActive') : t('wizEngineInactive')}</span>
+                          <span className={`ml-auto text-[11px] tracking-widest flex-shrink-0 ${e.on ? 'text-emerald-300/70' : 'text-white/25'}`}>{e.on ? t('wizEngineActive') : t('wizEngineInactive')}</span>
                         </div>
                       ))}
                     </div>
@@ -219,11 +219,11 @@ export default function AnalysisWizard({
                         {DEPTHS.map((d) => (
                           <button key={d.id} type="button" onClick={() => setDepth(d.id)}
                             className={`text-left p-2.5 rounded-lg border transition ${depth === d.id ? 'border-cyan-300/60 bg-cyan-400/10' : 'border-white/10 hover:border-white/25'}`}>
-                            <div className={`text-[10px] tracking-widest font-display ${depth === d.id ? 'text-cyan-100' : 'text-white/50'}`}>{d.label}</div>
+                            <div className={`text-[13px] tracking-widest font-display ${depth === d.id ? 'text-cyan-100' : 'text-white/50'}`}>{d.label}</div>
                           </button>
                         ))}
                       </div>
-                      <p className="text-[9px] text-white/35 mt-2 leading-relaxed">{DEPTHS.find((d) => d.id === depth)?.detail}</p>
+                      <p className="text-[12px] text-white/35 mt-2 leading-relaxed">{DEPTHS.find((d) => d.id === depth)?.detail}</p>
                     </div>
                     <ResourceMeter t={t} quantumMode={quantumMode} depth={depth} />
                   </div>
@@ -240,8 +240,8 @@ export default function AnalysisWizard({
                       <SummaryRow label={t('wizSummaryQuantumMode')} value={quantumMode ? t('wizEnabledShort') : t('wizDisabledShort')} />
                       <SummaryRow label={t('wizSummarySourceCount')} value={String(sources.length)} />
                     </div>
-                    {!hasPrompt && <div className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded p-2">⚠ {t('wizPromptWarningBefore')}{t('wizStep1')}{t('wizPromptWarningAfter')}</div>}
-                    {error && <div className="text-red-300 text-[10px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
+                    {!hasPrompt && <div className="text-[13px] text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded p-2">⚠ {t('wizPromptWarningBefore')}{t('wizStep1')}{t('wizPromptWarningAfter')}</div>}
+                    {error && <div className="text-red-300 text-[13px] bg-red-500/10 border border-red-500/30 rounded p-2">⚠ {error}</div>}
                   </div>
                 )}
             </motion.div>
@@ -252,7 +252,7 @@ export default function AnalysisWizard({
             <HologramSphere className="max-h-40 mx-auto py-2" />
             <InfoPanel title={t('wizSelectedEngines')}>
               {engines.map((e) => (
-                <div key={e.label} className="flex items-center gap-2.5 text-[10px]">
+                <div key={e.label} className="flex items-center gap-2.5 text-[13px]">
                   <EngineIconBadge Icon={e.Icon} color={e.color} on={e.on} size="sm" />
                   <span className={e.on ? 'text-white/70' : 'text-white/25'}>{e.label}</span>
                   {e.on && <Check className="w-3 h-3 text-emerald-400/70 ml-auto flex-shrink-0" />}
@@ -261,10 +261,10 @@ export default function AnalysisWizard({
             </InfoPanel>
             <InfoPanel title={t('wizSystemStatus')}>
               {[['AI Engine', true], ['Quantum Engine', true], ['Data Engine', true], ['Security Layer', true]].map(([l]) => (
-                <div key={l} className="flex items-center text-[10px]">
+                <div key={l} className="flex items-center text-[13px]">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-2 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
                   <span className="text-white/55">{l}</span>
-                  <span className="ml-auto text-emerald-400/80 text-[9px] tracking-wider">ONLINE</span>
+                  <span className="ml-auto text-emerald-400/80 text-[12px] tracking-wider">ONLINE</span>
                 </div>
               ))}
             </InfoPanel>
@@ -273,7 +273,7 @@ export default function AnalysisWizard({
 
         {/* Footer */}
         <div className="border-t border-cyan-400/15 bg-[#031326]/60 px-4 py-3 flex flex-col sm:flex-row items-center gap-2.5">
-          <button type="button" onClick={onClose} className="order-2 sm:order-1 border border-red-400/30 text-red-300 px-4 py-2 rounded text-[10px] tracking-widest hover:bg-red-500/10 flex items-center gap-1.5">
+          <button type="button" onClick={onClose} className="order-2 sm:order-1 border border-red-400/30 text-red-300 px-4 py-2 rounded text-[13px] tracking-widest hover:bg-red-500/10 flex items-center gap-1.5">
             <X className="w-3.5 h-3.5" /> {t('wizCancel')}
           </button>
           <div className="order-3 sm:order-2 flex flex-wrap items-center gap-x-4 gap-y-1 sm:mx-auto">
@@ -283,11 +283,11 @@ export default function AnalysisWizard({
             <SecurityChip Icon={Radio} label={t('wizConnectionChip')} />
           </div>
           {step < 5 ? (
-            <button type="button" onClick={() => setStep((s) => Math.min(5, s + 1))} className="order-1 sm:order-3 w-full sm:w-auto btn-gold px-5 py-2.5 rounded font-display tracking-widest text-[11px] flex items-center justify-center gap-2">
+            <button type="button" onClick={() => setStep((s) => Math.min(5, s + 1))} className="order-1 sm:order-3 w-full sm:w-auto btn-gold px-5 py-2.5 rounded font-display tracking-widest text-[14px] flex items-center justify-center gap-2">
               {t('wizNext')} <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <button type="button" onClick={handleStart} disabled={loading || !hasPrompt} className="order-1 sm:order-3 w-full sm:w-auto btn-gold px-5 py-2.5 rounded font-display tracking-widest text-[11px] disabled:opacity-50 flex items-center justify-center gap-2">
+            <button type="button" onClick={handleStart} disabled={loading || !hasPrompt} className="order-1 sm:order-3 w-full sm:w-auto btn-gold px-5 py-2.5 rounded font-display tracking-widest text-[14px] disabled:opacity-50 flex items-center justify-center gap-2">
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" />{quantumMode ? t('analyzingQuantum') : t('analyzing')}</>
                 : <>{quantumMode ? <Atom className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}{quantumMode ? t('generateQuantum') : t('generateAnalysis')}</>}
@@ -300,14 +300,14 @@ export default function AnalysisWizard({
 }
 
 function SectionLabel({ children }) {
-  return <h3 className="text-[11px] tracking-[0.2em] text-cyan-200 font-display uppercase mb-1">{children}</h3>;
+  return <h3 className="text-[14px] tracking-[0.2em] text-cyan-200 font-display uppercase mb-1">{children}</h3>;
 }
 function FieldLabel({ children }) {
-  return <label className="block text-[9px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{children}</label>;
+  return <label className="block text-[12px] text-cyan-300/50 tracking-widest uppercase mb-1.5">{children}</label>;
 }
 function SummaryRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2 text-[10px]">
+    <div className="flex items-center justify-between px-3 py-2 text-[13px]">
       <span className="text-white/40 tracking-wide">{label}</span>
       <span className="text-cyan-100">{value}</span>
     </div>
@@ -315,7 +315,7 @@ function SummaryRow({ label, value }) {
 }
 function SecurityChip({ Icon, label }) {
   return (
-    <span className="flex items-center gap-1 text-[8px] tracking-wider text-white/35">
+    <span className="flex items-center gap-1 text-[11px] tracking-wider text-white/35">
       <Icon className="w-2.5 h-2.5 text-emerald-400/60" /> {label}
     </span>
   );
@@ -323,7 +323,7 @@ function SecurityChip({ Icon, label }) {
 function InfoPanel({ title, children }) {
   return (
     <div className="rounded-lg border border-cyan-400/15 bg-[#031326]/90 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <div className="text-[9px] tracking-widest text-cyan-300/50 uppercase mb-2">{title}</div>
+      <div className="text-[12px] tracking-widest text-cyan-300/50 uppercase mb-2">{title}</div>
       <div className="space-y-1.5">{children}</div>
     </div>
   );
@@ -359,9 +359,9 @@ function ResourceMeter({ t, quantumMode, depth }) {
         <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden flex gap-0.5">
           {[1, 2, 3].map((i) => <div key={i} className={`flex-1 rounded-full ${i <= level ? (level === 3 ? 'bg-amber-400' : 'bg-cyan-400') : 'bg-transparent'}`} />)}
         </div>
-        <span className="text-[9px] text-white/40 tracking-wide flex-shrink-0">{labels[level - 1]}</span>
+        <span className="text-[12px] text-white/40 tracking-wide flex-shrink-0">{labels[level - 1]}</span>
       </div>
-      <p className="text-[9px] text-white/25 mt-1">{t('wizResourceNote')}</p>
+      <p className="text-[12px] text-white/25 mt-1">{t('wizResourceNote')}</p>
     </div>
   );
 }

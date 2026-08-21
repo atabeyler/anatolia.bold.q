@@ -23,16 +23,16 @@ export default function DecisionTracePanel({ record }) {
       <header className="px-4 py-3 border-b border-cyan-400/10 flex items-center gap-2">
         <ShieldCheck className="w-4 h-4 text-cyan-300" />
         <div>
-          <div className="text-[10px] tracking-[0.18em] text-cyan-100 font-semibold">{t('dtLabel')}</div>
-          <div className="text-[9px] text-white/30 mt-0.5">{t('dtDesc')}</div>
+          <div className="text-[13px] tracking-[0.18em] text-cyan-100 font-semibold">{t('dtLabel')}</div>
+          <div className="text-[12px] text-white/30 mt-0.5">{t('dtDesc')}</div>
         </div>
-        <span className={`ml-auto text-[9px] px-2 py-1 rounded border ${integrityOk === false ? 'border-red-400/30 text-red-300' : 'border-emerald-400/25 text-emerald-300'}`}>
+        <span className={`ml-auto text-[12px] px-2 py-1 rounded border ${integrityOk === false ? 'border-red-400/30 text-red-300' : 'border-emerald-400/25 text-emerald-300'}`}>
           {integrityOk === false ? t('dtIntegrityWarning') : integrityOk === true ? t('dtIntegrityVerified') : t('dtAuditRecord')}
         </span>
       </header>
 
       <div className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-[9px]">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-[12px]">
           <Meta icon={Database} label={t('dtDataSource')} value={record.provenance?.source || record.provenance?.type || '—'} />
           <Meta icon={Sparkles} label={t('dtAiProvider')} value={record.ai_provider || '—'} />
           <Meta icon={Clock3} label={t('dtDuration')} value={record.duration_ms ? `${record.duration_ms} ms` : '—'} />
@@ -51,8 +51,8 @@ export default function DecisionTracePanel({ record }) {
                   <div key={`${stage.stage}-${index}`} className="relative flex gap-3 rounded border border-white/5 bg-black/10 p-2.5">
                     <span className={`relative z-10 w-5 h-5 rounded-full bg-[#031326] flex items-center justify-center ${failed ? 'text-red-300' : completed ? 'text-emerald-300' : 'text-cyan-300'}`}><Icon className="w-4 h-4" /></span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2"><span className="text-[10px] text-white/75 font-medium">{stageLabel(stage.stage, t)}</span><span className="text-[8px] text-white/25">#{String(index + 1).padStart(2, '0')}</span><span className={`ml-auto text-[8px] ${failed ? 'text-red-300' : 'text-emerald-300/70'}`}>{String(stage.status || 'recorded').toUpperCase()}</span></div>
-                      <div className="mt-1 text-[9px] text-white/30 flex flex-wrap gap-x-4 gap-y-1">
+                      <div className="flex items-center gap-2"><span className="text-[13px] text-white/75 font-medium">{stageLabel(stage.stage, t)}</span><span className="text-[11px] text-white/25">#{String(index + 1).padStart(2, '0')}</span><span className={`ml-auto text-[11px] ${failed ? 'text-red-300' : 'text-emerald-300/70'}`}>{String(stage.status || 'recorded').toUpperCase()}</span></div>
+                      <div className="mt-1 text-[12px] text-white/30 flex flex-wrap gap-x-4 gap-y-1">
                         {stage.metadata?.durationMs != null && <span>{stage.metadata.durationMs} ms</span>}
                         {stage.metadata?.provider && <span>Provider: {stage.metadata.provider}</span>}
                         {stage.metadata?.backend && <span>Backend: {stage.metadata.backend}</span>}
@@ -64,9 +64,9 @@ export default function DecisionTracePanel({ record }) {
               })}
             </div>
           </div>
-        ) : <div className="rounded border border-white/5 p-4 text-center text-[10px] text-white/30">{t('dtNoStages')}</div>}
+        ) : <div className="rounded border border-white/5 p-4 text-center text-[13px] text-white/30">{t('dtNoStages')}</div>}
 
-        {hashes.length > 0 && <div className="mt-4 pt-3 border-t border-cyan-400/10 text-[8px] text-white/25 font-mono break-all">RECORD HASH: {record.record_hash || hashes.at(-1)}</div>}
+        {hashes.length > 0 && <div className="mt-4 pt-3 border-t border-cyan-400/10 text-[11px] text-white/25 font-mono break-all">RECORD HASH: {record.record_hash || hashes.at(-1)}</div>}
       </div>
     </section>
   );

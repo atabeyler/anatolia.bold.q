@@ -18,6 +18,7 @@ export {
   getQuantumSystemPrompt,
   getScenarioDeepDivePrompt,
   getConsultationPrompt,
+  wrapUntrustedEvidence,
 } from './aiPrompts.js';
 export type { CategoryGroup } from './aiPrompts.js';
 export {

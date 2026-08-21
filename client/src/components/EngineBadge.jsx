@@ -26,7 +26,7 @@ export default function EngineBadge({ engine, providerLabel, size = 'sm' }) {
   // each other or with cloud (task spec point 8).
   const label = engine === ENGINE.CLOUD ? (providerLabel || t(config.key)) : t(config.key);
   return (
-    <span className={`inline-flex items-center gap-1 font-mono uppercase tracking-wide ${config.className} ${size === 'sm' ? 'text-xs' : 'text-[11px]'}`}>
+    <span className={`inline-flex items-center gap-1 font-mono uppercase tracking-wide ${config.className} ${size === 'sm' ? 'text-xs' : 'text-[14px]'}`}>
       <Icon className={iconSize} />
       {label}
     </span>

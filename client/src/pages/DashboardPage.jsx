@@ -402,7 +402,7 @@ export default function DashboardPage({ user, onLogout }) {
           <QuantumLogo size="sm" />
           <div>
             <h1 className="font-display text-gold text-base sm:text-lg tracking-[0.24em] sm:tracking-[0.3em] whitespace-nowrap">{t('appName')}</h1>
-            <p className="text-[8px] sm:text-[10px] text-gold/60 tracking-[0.16em] sm:tracking-widest uppercase whitespace-nowrap">{t('appSubtitle')}</p>
+            <p className="text-[11px] sm:text-[13px] text-gold/60 tracking-[0.16em] sm:tracking-widest uppercase whitespace-nowrap">{t('appSubtitle')}</p>
           </div>
           <span className="text-xs sm:text-sm font-serif text-cyan-200 hidden sm:inline md:hidden max-w-[130px] lg:max-w-[170px] truncate">{user.isAdmin ? 'BOLD' : (user.nickname || user.userCode || 'BOLD')}</span>
         </div>
@@ -432,7 +432,7 @@ export default function DashboardPage({ user, onLogout }) {
                   <button onClick={() => { const d = new Date(viewMonth); d.setMonth(d.getMonth() + 1); setViewMonth(d); setSelectedDay(null); }} className="text-cyan-300 hover:text-cyan-100 px-2" aria-label={t('nextMonth')}>›</button>
                 </div>
                 <div className="grid grid-cols-7 gap-1 mb-1">{daysShort.map((d) => (<div key={d} className="text-xs text-cyan-300/80 text-center font-serif">{d}</div>))}</div>
-                <div className="grid grid-cols-7 gap-1">{calendarCells.map((day, idx) => { const isToday = day && day === now.getDate() && viewMonth.getMonth() === now.getMonth() && viewMonth.getFullYear() === now.getFullYear(); const key = day ? formatYmd(viewMonth.getFullYear(), viewMonth.getMonth(), day) : null; const hasHoliday = !!(key && holidayMap[key]); const isSelected = day && selectedDay === day; return (<button type="button" key={`${idx}-${day || 'x'}`} onClick={() => day && setSelectedDay(day)} className={`h-7 rounded text-[11px] flex items-center justify-center font-serif relative ${day ? (isSelected ? 'bg-cyan-500/25 text-cyan-100 border border-cyan-300/50' : isToday ? 'bg-gold/30 text-gold border border-gold/40' : 'text-gold/90 bg-white/5') : 'bg-transparent'}`} disabled={!day}>{day || ''}{hasHoliday && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-400" />}</button>); })}</div>
+                <div className="grid grid-cols-7 gap-1">{calendarCells.map((day, idx) => { const isToday = day && day === now.getDate() && viewMonth.getMonth() === now.getMonth() && viewMonth.getFullYear() === now.getFullYear(); const key = day ? formatYmd(viewMonth.getFullYear(), viewMonth.getMonth(), day) : null; const hasHoliday = !!(key && holidayMap[key]); const isSelected = day && selectedDay === day; return (<button type="button" key={`${idx}-${day || 'x'}`} onClick={() => day && setSelectedDay(day)} className={`h-7 rounded text-[14px] flex items-center justify-center font-serif relative ${day ? (isSelected ? 'bg-cyan-500/25 text-cyan-100 border border-cyan-300/50' : isToday ? 'bg-gold/30 text-gold border border-gold/40' : 'text-gold/90 bg-white/5') : 'bg-transparent'}`} disabled={!day}>{day || ''}{hasHoliday && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-400" />}</button>); })}</div>
               </div>
             )}
           </div>
@@ -598,7 +598,7 @@ export default function DashboardPage({ user, onLogout }) {
             />
             <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="fixed top-16 right-3 sm:right-6 z-[70] w-[92vw] sm:w-[420px] max-h-[60vh] overflow-auto border border-cyan-300/30 rounded-lg bg-[#061326]/95 backdrop-blur p-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-2 py-1">
-              <div className="text-[11px] tracking-widest uppercase text-cyan-200">{t('notificationCenterTitle')}</div>
+              <div className="text-[14px] tracking-widest uppercase text-cyan-200">{t('notificationCenterTitle')}</div>
               <button onClick={() => setNotifOpen(false)} className="text-cyan-200/70 hover:text-cyan-100" title={t('closeNotificationsTooltip')}>
                 <X className="w-4 h-4" />
               </button>
@@ -607,13 +607,13 @@ export default function DashboardPage({ user, onLogout }) {
               <p className="text-xs text-gold/60 px-2 py-3">{t('noNotificationsYet')}</p>
             )}
             <div className="flex items-center gap-2 px-2 py-1">
-              <select value={notifFilter} onChange={(e) => setNotifFilter(e.target.value)} className="bg-[#0b1d34] border border-cyan-300/30 text-cyan-100 text-[11px] rounded px-2 py-1">
+              <select value={notifFilter} onChange={(e) => setNotifFilter(e.target.value)} className="bg-[#0b1d34] border border-cyan-300/30 text-cyan-100 text-[14px] rounded px-2 py-1">
                 <option value="all">{t('filterAll')}</option>
                 <option value="chat">{t('filterChat')}</option>
                 <option value="emergency">{t('filterEmergency')}</option>
                 <option value="system">{t('homeSystem')}</option>
               </select>
-              <button onClick={() => setSoundEnabled((v) => !v)} className="text-[11px] border border-cyan-300/30 text-cyan-100 rounded px-2 py-1" title={t('toggleSoundTooltip')}>
+              <button onClick={() => setSoundEnabled((v) => !v)} className="text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2 py-1" title={t('toggleSoundTooltip')}>
                 {soundEnabled ? t('soundOnLabel') : t('soundOffLabel')}
               </button>
               <input type="range" min="0.02" max="0.2" step="0.01" value={soundVolume} onChange={(e) => setSoundVolume(Number(e.target.value))} />
@@ -631,7 +631,7 @@ export default function DashboardPage({ user, onLogout }) {
                   className={`w-full text-left rounded border px-2.5 py-2 ${n.read ? 'border-white/10 bg-white/5' : 'border-cyan-400/40 bg-cyan-500/10'}`}
                 >
                   <div className="text-xs text-cyan-100">{n.title}</div>
-                  <div className="text-[11px] text-gold/80 mt-0.5 line-clamp-2">{n.body}</div>
+                  <div className="text-[14px] text-gold/80 mt-0.5 line-clamp-2">{n.body}</div>
                 </button>
               ))}
             </div>

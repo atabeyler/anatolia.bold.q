@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createDiagnostics } from './diagnostics.js';
 import { openDatabase } from './db/index.js';
+import { createDbKeyStore } from './db/dbKey.js';
 import { listAnalyses, getAnalysis, createAnalysis, updateAnalysis, deleteAnalysis } from './db/analysesRepo.js';
 import { getOrCreateDeviceId } from './auth/deviceId.js';
 import { createSecureStore } from './auth/secureStore.js';
@@ -330,7 +331,7 @@ function registerIpcHandlers() {
     try {
       const destPath = await downloadUpdate(pendingUpdate.url, pendingUpdate.name, app.getPath('temp'), (progress) => {
         mainWindow?.webContents.send('update:progress', progress);
-      }, fetch, pendingUpdate.size);
+      }, fetch, pendingUpdate.size, pendingUpdate.sha256);
       downloadedInstallerPath = destPath;
       diagnostics?.info('update_downloaded', { version: pendingUpdate.version });
       return { ok: true };
@@ -474,7 +475,17 @@ app.whenReady().then(async () => {
     });
   });
 
+  // AQ-002: at-rest encryption for the local analyses cache. dbKeyStore
+  // returns null when safeStorage isn't available on this platform/config
+  // (rare off the primary Windows target) -- openDatabase() then falls back
+  // to the previous unencrypted behavior rather than encrypting with a key
+  // that can't be stored securely. An existing pre-AQ-002 plaintext database
+  // is migrated in place automatically the first time a key is available.
+  const dbKeyStore = createDbKeyStore(app.getPath('userData'), safeStorage);
+  const dbKey = dbKeyStore.getOrCreateKey();
+  if (!dbKey) diagnostics?.warn('db_encryption_unavailable', { reason: 'safeStorage not available on this platform' });
   db = openDatabase(path.join(app.getPath('userData'), 'anatolia-q.db'), {
+    key: dbKey,
     onMigrations: (applied) => diagnostics.info('db_migrated', { applied: applied.length, files: applied }),
   });
   // Points the local-llm provider's Model Manager at this install's real
@@ -499,7 +510,12 @@ app.whenReady().then(async () => {
   // A reconnect (local -> cloud) triggers an immediate sync instead of
   // waiting for the next timer tick -- spec point 3: sync starts
   // automatically the moment connectivity returns, with no user action.
-  connectivity.onChange((state) => { if (state === 'cloud') performSync().catch(() => {}); });
+  // onReconnect() (not the raw onChange()) is required here: it only fires
+  // on a genuine local->cloud transition, not on performSync()'s own
+  // sync->cloud settling step at the end of every sync pass -- see
+  // connectivity.js's onReconnect doc comment for the infinite-loop bug
+  // this previously caused (the sync status badge flickering constantly).
+  connectivity.onReconnect(() => performSync().catch(() => {}));
 
   registerIpcHandlers();
   buildAppMenu();

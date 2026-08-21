@@ -532,7 +532,7 @@ export default function ChatPanel({ user }) {
             <div className="text-xs text-gold/60 mb-1">{t('participantsLabel')}</div>
             <div className="space-y-1">
               {participants.map((p) => (
-                <div key={p.peerId} className="text-[11px] text-gold/90 flex items-center gap-1">
+                <div key={p.peerId} className="text-[14px] text-gold/90 flex items-center gap-1">
                   <span>{p.nickname}</span>
                   <span>{p.micOn ? '🎤' : '🔇'}</span>
                   <span>{p.camOn ? '📷' : '🚫'}</span>
@@ -565,7 +565,7 @@ export default function ChatPanel({ user }) {
             <div className="text-xs text-gold/60 mb-1">{t('meetingLogLabel')}</div>
             <div className="space-y-1">
               {meetingLogs.slice(-6).map((l, i) => (
-                <div key={`${l.ts}-${i}`} className="text-[11px] text-gold/80">{fixMojibake(l.text)}</div>
+                <div key={`${l.ts}-${i}`} className="text-[14px] text-gold/80">{fixMojibake(l.text)}</div>
               ))}
             </div>
           </div>

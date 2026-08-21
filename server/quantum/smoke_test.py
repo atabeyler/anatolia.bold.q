@@ -80,11 +80,32 @@ def check_portfolio_optimizer():
     )
     assert result["environmentFingerprint"]["qiskitVersion"], result
     assert result["reproducibility"]["inputHash"] and result["reproducibility"]["circuitHash"], result
+    # No IBM credentials in this CI environment -- the reported selection
+    # must always come from the simulator (`backend` above), and hardware
+    # verification must be reported as merely "not configured", never
+    # silently substituted for the decision itself. See optimize()'s
+    # docstring in portfolio_optimizer.py.
+    assert result["hardwareVerification"] is None, result
+    assert "not configured" in result["ibmDiagnostic"], result
     print("[smoke] portfolio_optimizer.py OK")
+
+
+def check_portfolio_optimizer_skip_hardware_never_attempts():
+    """Regression test for AQ-006/AQ-011: skipHardware=True (the fast
+    /generate request path, see portfolioOptimizer.js's computeOptimalAllocation)
+    must report the hardware lane as explicitly skipped, never attempted --
+    the simulator selection must never be affected either way."""
+    items = [{"id": "I1", "value": 40, "cost": 30}, {"id": "I2", "value": 35, "cost": 25}]
+    result = run_worker("portfolio_optimizer.py", {"items": items, "budgetPercent": 60, "skipHardware": True})
+    assert result["ibmHardwareAttempted"] is False, result
+    assert result["hardwareVerification"] is None, result
+    assert "skipped" in result["ibmDiagnostic"], result
+    print("[smoke] portfolio_optimizer.py skipHardware OK")
 
 
 if __name__ == "__main__":
     check_scenario_quantum()
     check_fraud_detection()
     check_portfolio_optimizer()
+    check_portfolio_optimizer_skip_hardware_never_attempts()
     print("[smoke] all quantum workers OK")

@@ -37,7 +37,7 @@ function Tooltip({ tip }) {
   if (!tip) return null;
   return (
     <div
-      className="absolute z-10 pointer-events-none bg-navy border border-gold/50 rounded px-2.5 py-1.5 text-[11px] font-mono shadow-lg whitespace-nowrap"
+      className="absolute z-10 pointer-events-none bg-navy border border-gold/50 rounded px-2.5 py-1.5 text-[14px] font-mono shadow-lg whitespace-nowrap"
       style={{ left: tip.x, top: tip.y, transform: 'translate(-50%, -110%)' }}
     >
       {tip.lines.map((l, i) => (
@@ -161,7 +161,7 @@ function ScenarioTable({ data }) {
   const { t } = useLang();
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[11px] font-mono text-gold/70">
+      <table className="w-full text-[14px] font-mono text-gold/70">
         <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">{t('tableScenario')}</th><th className="py-1 pr-3">{t('tableAiEstimate')}</th><th className="py-1 pr-3">{t('tableQuantumResult')}</th><th className="py-1">{t('tableConfidenceInterval')}</th></tr></thead>
         <tbody>
           {data.map((s) => (
@@ -263,7 +263,7 @@ function FraudTable({ data }) {
   const { t: translate } = useLang();
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[11px] font-mono text-gold/70">
+      <table className="w-full text-[14px] font-mono text-gold/70">
         <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">{translate('tableTxnId')}</th><th className="py-1 pr-3">{translate('tableAmount')}</th><th className="py-1 pr-3">{translate('tableRiskScore')}</th><th className="py-1">{translate('tableStatus')}</th></tr></thead>
         <tbody>
           {data.map((row) => (
@@ -346,7 +346,7 @@ function OptimizerTable({ data }) {
   const { t } = useLang();
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[11px] font-mono text-gold/70">
+      <table className="w-full text-[14px] font-mono text-gold/70">
         <thead><tr className="text-gold/40 text-left"><th className="py-1 pr-3">{t('tableItem')}</th><th className="py-1 pr-3">{t('tableValue')}</th><th className="py-1 pr-3">{t('tableCost')}</th><th className="py-1">{t('tableStatus')}</th></tr></thead>
         <tbody>
           {data.map((it) => (

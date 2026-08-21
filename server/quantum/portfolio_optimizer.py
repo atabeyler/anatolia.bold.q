@@ -50,7 +50,7 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from scipy.optimize import minimize
 
-from _ibm_backend import run_on_ibm_hardware, is_ibm_configured
+from _ibm_backend import run_on_ibm_hardware, is_ibm_configured, LAST_IBM_ERROR
 from _reproducibility import environment_fingerprint, reproducibility_block
 
 QAOA_LAYERS = 2
@@ -238,7 +238,27 @@ def classical_optimal(values, costs, budget):
     return best_val, best_cost, selected
 
 
-def optimize(values, costs, budget, seed=None, try_hardware=True):
+def optimize(values, costs, budget, seed=None, skip_hardware=False, attempt_hardware=True):
+    """Runs the QAOA circuit on the local Aer simulator -- always, and only
+    the simulator -- to produce the reported budget-allocation decision
+    (`best`/selected items). Real IBM Quantum hardware, when configured and
+    not skipped, is queried SEPARATELY afterward purely as an independent
+    verification data point (`hardwareVerification`): its outcome is never
+    substituted for the simulator's `best` and never changes `selected`,
+    `totalValue`, or `totalCost` -- mirroring the scenario/fraud engines'
+    simulator-authoritative, hardware-verification-only contract (see
+    scenario_quantum.py's build_distribution and this project's README:
+    "Real quantum hardware serves as an independent verification layer.").
+
+    skip_hardware=True (used on the fast /generate request path -- see
+    portfolioOptimizer.js's computeOptimalAllocation) skips the hardware
+    query entirely; the deferred hardware-verification lane runs it
+    separately afterward (see verifyOptimizerHardwareAsync in
+    portfolioOptimizer.js), exactly like the scenario/fraud engines.
+
+    attempt_hardware lets the hybrid decomposition (hybrid_solve() below)
+    limit the hardware query to only the first partition, so the IBM queue
+    wait isn't multiplied by the partition count."""
     n = len(values)
     lin, quad, num_qubits, slack_bits = build_qubo(values, costs, budget, PENALTY)
     h, J, offset = qubo_to_ising(lin, quad, num_qubits)
@@ -261,17 +281,11 @@ def optimize(values, costs, budget, seed=None, try_hardware=True):
 
     final_circuit = qaoa_circuit(h, J, num_qubits, QAOA_LAYERS, res.x)
 
-    # In the hybrid decomposition (hybrid_solve() below), only the first
-    # partition attempts real IBM hardware -- doing it for every partition
-    # would multiply the IBM queue wait by the partition count.
-    ibm_result = run_on_ibm_hardware(final_circuit, FINAL_SHOTS) if try_hardware else None
-    if ibm_result:
-        counts, backend_name = ibm_result
-    else:
-        tqc = transpile(final_circuit, backend)
-        result = backend.run(tqc, shots=FINAL_SHOTS).result()
-        counts = result.get_counts()
-        backend_name = 'qiskit-aer-simulator'
+    # Authoritative decision: local simulator only, always.
+    tqc = transpile(final_circuit, backend)
+    result = backend.run(tqc, shots=FINAL_SHOTS).result()
+    counts = result.get_counts()
+    backend_name = 'qiskit-aer-simulator'
 
     def pick_best(counts):
         best = None
@@ -290,9 +304,36 @@ def optimize(values, costs, budget, seed=None, try_hardware=True):
     # shots (cheap -- no re-optimization) before giving up. If that still
     # finds nothing feasible, the caller (main()) treats this as a failure,
     # not a result.
-    if best is None and not ibm_result:
+    if best is None:
         retry_result = backend.run(transpile(final_circuit, backend), shots=FINAL_SHOTS * 4).result()
         best = pick_best(retry_result.get_counts())
+
+    # Independent hardware verification lane -- never feeds back into `best`.
+    hardware_verification = None
+    ibm_diagnostic = "not configured (IBM_QUANTUM_TOKEN/IBM_QUANTUM_INSTANCE unset)"
+    if not attempt_hardware:
+        ibm_diagnostic = "skipped (only the first hybrid partition attempts hardware)"
+    elif skip_hardware:
+        ibm_diagnostic = "skipped (fast simulator-only response; hardware verification runs separately)"
+    elif is_ibm_configured():
+        ibm_diagnostic = "configured, attempting hardware run..."
+        ibm_result = run_on_ibm_hardware(final_circuit, FINAL_SHOTS)
+        if ibm_result:
+            hw_counts, hw_backend_name = ibm_result
+            hw_best = pick_best(hw_counts)
+            hardware_verification = {
+                "backend": hw_backend_name,
+                "shots": FINAL_SHOTS,
+                "best": {
+                    "totalValue": hw_best[0],
+                    "totalCost": hw_best[1],
+                    "selectedBits": hw_best[2],
+                } if hw_best else None,
+                "matchesSimulator": bool(best and hw_best and hw_best[2] == best[2]),
+            }
+            ibm_diagnostic = f"succeeded on {hw_backend_name}"
+        else:
+            ibm_diagnostic = f"configured but failed: {LAST_IBM_ERROR['message'] or 'unknown error'}"
 
     diagram = str(final_circuit.draw(output="text", fold=80))
 
@@ -305,10 +346,12 @@ def optimize(values, costs, budget, seed=None, try_hardware=True):
         'best': best,
         'seed': int(seed),
         'qaoaLayers': QAOA_LAYERS,
+        'hardwareVerification': hardware_verification,
+        'ibmDiagnostic': ibm_diagnostic,
     }
 
 
-def hybrid_solve(items, values, costs, budget, seed=None):
+def hybrid_solve(items, values, costs, budget, seed=None, skip_hardware=False):
     """Hybrid quantum-classical decomposition for item counts beyond a
     single QAOA circuit's capacity (MAX_ITEMS). Items are ordered by
     value/cost ratio (a classical greedy heuristic) and split into
@@ -342,8 +385,9 @@ def hybrid_solve(items, values, costs, budget, seed=None):
         result = None
         if p_budget > 0 and len(partition) >= 2:
             # Only the first (highest value/cost) partition attempts real
-            # IBM hardware -- see optimize()'s try_hardware.
-            result = optimize(p_values, p_costs, p_budget, seed=seed, try_hardware=(p_idx == 0))
+            # IBM hardware -- see optimize()'s attempt_hardware.
+            result = optimize(p_values, p_costs, p_budget, seed=seed,
+                               skip_hardware=skip_hardware, attempt_hardware=(p_idx == 0))
             best = result['best']
         if p_idx == 0 and result is not None:
             primary_result = result
@@ -370,6 +414,8 @@ def hybrid_solve(items, values, costs, budget, seed=None):
         'circuit': primary_result['circuit'] if primary_result else None,
         'seed': primary_result['seed'] if primary_result else (seed if seed is not None else 0),
         'qaoaLayers': QAOA_LAYERS,
+        'hardwareVerification': primary_result['hardwareVerification'] if primary_result else None,
+        'ibmDiagnostic': primary_result['ibmDiagnostic'] if primary_result else 'not attempted (no partition ran)',
         'outItems': out_items,
         'totalValue': total_value,
         'totalCost': total_cost,
@@ -384,6 +430,7 @@ def main():
     budget = max(MIN_BUDGET, int(payload.get("budgetPercent") or 60))
     seed = payload.get("seed")
     seed = int(seed) if seed is not None else None
+    skip_hardware = bool(payload.get("skipHardware"))
 
     if len(items) < 2:
         print(json.dumps({
@@ -391,6 +438,7 @@ def main():
             "circuitDiagram": "", "selected": [], "totalValue": 0, "totalCost": 0,
             "budgetPercent": budget, "items": [], "ibmHardwareAttempted": False,
             "hybrid": False, "partitionCount": 1,
+            "hardwareVerification": None, "ibmDiagnostic": "not attempted (fewer than 2 items)",
             "environmentFingerprint": environment_fingerprint(), "reproducibility": None,
         }))
         return
@@ -401,13 +449,13 @@ def main():
     is_hybrid = len(items) > MAX_ITEMS
 
     if is_hybrid:
-        hybrid = hybrid_solve(items, values, costs, budget, seed=seed)
+        hybrid = hybrid_solve(items, values, costs, budget, seed=seed, skip_hardware=skip_hardware)
         out_items = hybrid['outItems']
         total_value = hybrid['totalValue']
         total_cost = hybrid['totalCost']
         meta = hybrid
     else:
-        result = optimize(values, costs, budget, seed=seed)
+        result = optimize(values, costs, budget, seed=seed, skip_hardware=skip_hardware)
         best = result['best']
         if best is None:
             # No sampled outcome satisfied the budget constraint even after
@@ -439,7 +487,9 @@ def main():
         "totalCost": total_cost,
         "budgetPercent": budget,
         "items": out_items,
-        "ibmHardwareAttempted": is_ibm_configured(),
+        "ibmHardwareAttempted": is_ibm_configured() and not skip_hardware,
+        "hardwareVerification": meta.get('hardwareVerification'),
+        "ibmDiagnostic": meta.get('ibmDiagnostic'),
         "seed": meta['seed'],
         "qaoaLayers": meta['qaoaLayers'],
         "hybrid": is_hybrid,

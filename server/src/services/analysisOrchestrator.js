@@ -62,10 +62,10 @@ export const RESULT_SOURCE_TYPES = Object.freeze({
  */
 export function resolveResultSource(computation) {
   if (!computation) return RESULT_SOURCE_TYPES.AI_ESTIMATE;
-  // Scenario/fraud engines report a separate hardwareVerification sub-result
-  // alongside the (always-present) simulator result; the portfolio optimizer
-  // instead swaps its own `backend` field to the IBM backend name when the
-  // final measurement ran there. Both mean "confirmed on real hardware".
+  // All three engines (scenario, fraud, portfolio optimizer) report a
+  // separate hardwareVerification sub-result alongside the always-present,
+  // always-authoritative simulator result -- `backend` itself never swaps to
+  // an IBM backend name, so hardware confirmation is only ever additive.
   if (computation.hardwareVerification) return RESULT_SOURCE_TYPES.IBM_HARDWARE_VERIFIED;
   if (computation.backend && computation.backend !== 'qiskit-aer-simulator') return RESULT_SOURCE_TYPES.IBM_HARDWARE_VERIFIED;
   return RESULT_SOURCE_TYPES.QISKIT_AER_SIMULATION;

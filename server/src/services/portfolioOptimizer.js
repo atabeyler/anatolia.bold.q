@@ -25,24 +25,69 @@ const MAX_TOTAL_ITEMS = 24;
 /**
  * @param {Array<{id:string, value:number, cost:number}>} items
  * @param {number} budgetPercent
+ * @param {{skipHardware?: boolean}} [opts] - skipHardware=true (used on the
+ *        fast /generate request path) returns the simulator-only result
+ *        without querying real IBM hardware at all, so the request isn't
+ *        blocked on the IBM queue wait -- see verifyOptimizerHardwareAsync
+ *        for the deferred hardware-verification lane. The simulator result
+ *        is always the authoritative decision either way (see optimize()'s
+ *        docstring in portfolio_optimizer.py): hardware, when queried, is
+ *        only ever an independent verification data point.
  * @returns {Promise<{backend:string, qubits:number, circuitDepth:number, circuitDiagram:string,
  *          selected:string[], totalValue:number, totalCost:number, items:Array}|null>}
  *          Returns null if the Python process fails — the caller should then
  *          proceed with the LLM's narrative recommendation unscored.
  */
-export function computeOptimalAllocation(items, budgetPercent) {
+export function computeOptimalAllocation(items, budgetPercent, opts = {}) {
   if (!Array.isArray(items) || items.length < 2) return Promise.resolve(null);
 
   const partitionCount = Math.max(1, Math.ceil(Math.min(items.length, MAX_TOTAL_ITEMS) / MAX_ITEMS_PER_PARTITION));
-  const timeoutMs = withIbmTimeout(SINGLE_CIRCUIT_TIMEOUT_MS * partitionCount);
+  // skipHardware requests never wait on the IBM queue, so they only need the
+  // classical/simulator budget, not withIbmTimeout's added hardware-wait margin.
+  const timeoutMs = opts.skipHardware
+    ? SINGLE_CIRCUIT_TIMEOUT_MS * partitionCount
+    : withIbmTimeout(SINGLE_CIRCUIT_TIMEOUT_MS * partitionCount);
 
   return runQuantumWorker({
     mode: 'portfolio',
     scriptPath: SCRIPT_PATH,
-    payload: { items, budgetPercent },
+    payload: { items, budgetPercent, skipHardware: !!opts.skipHardware },
     timeoutMs,
     label: 'PortfolioOptimizer',
   });
+}
+
+/**
+ * Re-runs the optimizer in the background to get the real-hardware
+ * verification lane, without making the original request wait on the IBM
+ * queue (see computeOptimalAllocation's skipHardware option). Mirrors
+ * verifyScenarioHardwareAsync/verifyFraudHardwareAsync in quantum.js /
+ * fraudDetection.js. Only hardwareVerification/ibmDiagnostic from this
+ * second run are used — the simulator decision from the original
+ * (skipHardware) run remains the one already shown to the user.
+ */
+export async function verifyOptimizerHardwareAsync(items, budgetPercent) {
+  const result = await computeOptimalAllocation(items, budgetPercent, { skipHardware: false });
+  return result ? { hardwareVerification: result.hardwareVerification || null, ibmDiagnostic: result.ibmDiagnostic || null } : null;
+}
+
+/**
+ * Builds the "real hardware" markdown section on its own, so a hardware
+ * verification result that arrives later (see verifyOptimizerHardwareAsync)
+ * can be appended to an already-saved report. Never restates or changes the
+ * selection/totals already shown — hardware is a verification data point,
+ * not an alternate decision.
+ */
+export function buildOptimizerHardwareSection(hardwareVerification) {
+  if (!hardwareVerification?.best) return '';
+  const { backend, shots, best, matchesSimulator } = hardwareVerification;
+  const status = matchesSimulator
+    ? '✅ Gerçek donanım ölçümü, simülatör tarafından belirlenen seçimle aynı sonuca ulaştı.'
+    : '⚠️ Gerçek donanım ölçümü farklı bir bitstring öne çıkardı (donanım gürültüsü nedeniyle beklenen bir sapma) — raporlanan seçim yine de simülatör sonucudur, bu satır yalnızca doğrulama amaçlıdır.';
+  return `\n### Gerçek Donanım Doğrulaması\n` +
+    `Aynı devre ayrıca gerçek IBM Quantum donanımında (**${backend}**, ${shots} shot) bir kez daha çalıştırılmıştır ` +
+    `(bu değer raporlanan seçimi değiştirmez — yalnızca bağımsız bir doğrulama ölçümüdür):\n\n` +
+    `Donanım ölçümüne göre toplam değer: ${best.totalValue} · toplam maliyet: %${best.totalCost}\n\n${status}\n`;
 }
 
 /**
