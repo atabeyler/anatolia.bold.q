@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from 'better-sqlite3';
 import { runMigrations } from './db/migrate.js';
 
 // Fresh in-memory SQLite database with the real migrations applied — used

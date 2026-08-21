@@ -17,10 +17,8 @@ Electron main process                    Backend (server/, unchanged for web)
 │ preload.cjs — contextBridge  │            │  GET  /api/sync/status        │
 │  → window.anatoliaDesktop   │            │ routes/devices.js             │
 │                              │            │  POST /api/auth/devices/... (mounted at /api/devices) │
-│ db/ — better-sqlite3-       │            │ analyses table + sync         │
-│  multiple-ciphers, WAL,     │            │  metadata columns, devices,   │
-│  encrypted-at-rest,         │            │                                │
-│  migrations                 │            │                                │
+│ db/ — better-sqlite3, WAL,  │            │ analyses table + sync         │
+│  migrations                 │            │  metadata columns, devices,   │
 │                              │            │  sync_operations tables       │
 │ sync/ — queue, engine,      │            └───────────────────────────────┘
 │  conflict resolution        │
@@ -275,7 +273,7 @@ git tag desktop-v2.2.0
 git push origin desktop-v2.2.0
 ```
 
-`better-sqlite3-multiple-ciphers` and `bcryptjs` are listed under `dependencies`, not
+`better-sqlite3` and `bcryptjs` are listed under `dependencies`, not
 `devDependencies` — the packaged app needs both at runtime (native SQLite
 addon and offline-password hashing respectively), and some CI pipelines run
 `npm ci --omit=dev` before invoking electron-builder, which would silently
@@ -292,29 +290,13 @@ AppImage relaunch) is genuinely different per platform.
 
 ## Native module ABI note
 
-`better-sqlite3-multiple-ciphers` is a native addon and must be built
-against whichever Node ABI will load it — Electron's bundled Node for `npm
-run desktop` / `desktop:dev`, or the system Node for `npm run test:desktop`.
-After `npm install` it's built for the system Node, so tests work
-immediately. Running `npx electron-rebuild -f -w
-better-sqlite3-multiple-ciphers` switches it to Electron's ABI; after that,
-plain-Node commands (`npm run test:desktop`) will fail to load it until you
-run `npm rebuild better-sqlite3-multiple-ciphers` to switch it back. None of
-the `npm run dist:*`/`release:*` scripts have this problem — electron-builder
+`better-sqlite3` is a native addon and must be built against whichever Node
+ABI will load it — Electron's bundled Node for `npm run desktop` /
+`desktop:dev`, or the system Node for `npm run test:desktop`. After `npm
+install` it's built for the system Node, so tests work immediately. Running
+`npx electron-rebuild -f -w better-sqlite3` switches it to Electron's ABI;
+after that, plain-Node commands (`npm run test:desktop`) will fail to load
+it until you run `npm rebuild better-sqlite3` to switch it back. None of the
+`npm run dist:*`/`release:*` scripts have this problem — electron-builder
 rebuilds the native addon for Electron automatically as part of packaging,
 for whichever OS it's running on, regardless of prior state.
-
-## Local database encryption (AQ-002)
-
-`db/index.js` opens the local `anatolia-q.db` cache with SQLCipher-compatible
-at-rest encryption via `better-sqlite3-multiple-ciphers`. The encryption key
-is a random 32-byte value generated once per install and stored only in
-encrypted form (`db.key.enc` in the app's `userData` directory), protected by
-Electron's `safeStorage` (DPAPI on Windows, Keychain on macOS, libsecret on
-Linux) — see `db/dbKey.js`. If `safeStorage` isn't available on a given
-platform/config, the database is opened unencrypted rather than encrypting it
-with a key that can't be stored securely (a `db_encryption_unavailable`
-diagnostic event is logged in that case). An existing pre-encryption
-plaintext database is migrated to an encrypted copy automatically the first
-time a key becomes available; the original plaintext file is kept alongside
-it as `anatolia-q.db.pre-encryption.bak` rather than deleted.

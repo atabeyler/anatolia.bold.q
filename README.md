@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-2.1.259-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-2.1.257-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -199,12 +199,12 @@ Tests: `npm test --prefix server` and `npm test --prefix client`.
 
 ```bash
 npm install
-npx electron-rebuild -f -w better-sqlite3-multiple-ciphers
+npx electron-rebuild -f -w better-sqlite3
 npm run desktop:dev
 npm run dist:win
 npm run dist:mac
 npm run dist:linux
-npm rebuild better-sqlite3-multiple-ciphers
+npm rebuild better-sqlite3
 npm run test:desktop
 ```
 
