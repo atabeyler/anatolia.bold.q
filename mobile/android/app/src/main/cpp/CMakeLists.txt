@@ -1,28 +1,25 @@
 # Builds `libanatolia_llama.so`, the native library LlamaBridge.kt loads
-# (System.loadLibrary("anatolia_llama")). NOT BUILT/VERIFIED IN THIS
-# SANDBOX -- there is no Android NDK here. See the final report's Android
-# follow-up for exact next steps.
+# (System.loadLibrary("anatolia_llama")).
 #
 # ---------------------------------------------------------------------------
-# REQUIRED ONE-TIME SETUP BEFORE THIS BUILDS (Android Studio, on a real
-# machine with the NDK installed):
+# llama.cpp is vendored as a real git submodule at
+# mobile/android/app/src/main/cpp/llama.cpp, pinned to a specific commit
+# (749f688fcaa4c472ec034b08cb8a907c45cfaa02, ggml-org/llama.cpp's default
+# branch tip as of 2026-08-21) rather than a moving branch, so a future
+# `git submodule update --remote` can't silently change the JNI ABI this
+# file's llama-android.cpp was written against. llama.cpp is MIT licensed
+# (github.com/ggml-org/llama.cpp/blob/master/LICENSE) -- compatible with
+# this app's own licensing, no copyleft obligations.
 #
-#   1. Vendor llama.cpp's source as a sibling directory of this file, i.e.
-#      mobile/android/app/src/main/cpp/llama.cpp/ , e.g. as a git submodule:
-#        git submodule add https://github.com/ggml-org/llama.cpp \
-#          mobile/android/app/src/main/cpp/llama.cpp
-#        git -C mobile/android/app/src/main/cpp/llama.cpp checkout <pinned-tag>
-#      Pin to a specific tagged release (not a moving branch) so a future
-#      `git submodule update --remote` can't silently change the JNI ABI
-#      this file's llama-android.cpp was written against. llama.cpp is MIT
-#      licensed (github.com/ggml-org/llama.cpp/blob/master/LICENSE) --
-#      compatible with this app's own licensing, no copyleft obligations.
-#   2. Install the NDK (see mobile/android/app/build.gradle's comment on the
-#      exact version this project's Gradle/AGP combination expects) via
-#      Android Studio's SDK Manager -> SDK Tools -> NDK (side by side).
-#   3. `./gradlew assembleDebug` from mobile/android/ will then invoke this
-#      CMakeLists.txt automatically via the externalNativeBuild block added
-#      to app/build.gradle.
+# A checkout of this repo needs the submodule populated for this to build --
+# `git clone --recurse-submodules ...`, or `git submodule update --init`
+# after a plain clone. android-release.yml's checkout step already passes
+# `submodules: true`. Without it, the else() branch below skips the native
+# target with a warning instead of failing the build (see its comment).
+#
+# The else() branch's graceful skip also still matters locally: a clone
+# without `--recurse-submodules` degrades to extractive Q LOCAL DATA at
+# runtime instead of breaking the build.
 #
 # Why vendor-via-submodule instead of a prebuilt AAR: as of the research
 # behind this change (2026-08-20), there is no actively maintained,
