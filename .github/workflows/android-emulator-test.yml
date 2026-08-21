@@ -118,13 +118,15 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: mobile/android
-          # Scoped to the new instrumented test class specifically, so this
-          # job's job is exactly "does the real JNI/native path work" --
-          # not a general androidTest sweep (LocalLLMPluginDeviceInfoTest
-          # keeps running too, since --tests here targets one class only
-          # and Gradle would otherwise still compile/consider it, but this
-          # keeps the emulator's time budget spent on what this workflow is
-          # actually for).
+          # Scoped to :app only (not a whole-project `connectedDebugAndroidTest`,
+          # which also matches the bundled Capacitor plugin subprojects'
+          # same-named task and, on the first real run of this workflow,
+          # failed there with "Unknown command-line option '--tests'" -- that
+          # option isn't universally supported across every subproject's
+          # instrumentation task). Filtered to the one new test class via
+          # AGP's own instrumentation-runner-argument mechanism instead of
+          # Gradle's generic --tests, which is the documented, always-
+          # supported way to filter an AGP connected-test task by class.
           #
           # logcat is captured for the whole run's duration in the
           # background (a native crash inside the JNI bridge in particular
@@ -139,7 +141,8 @@ jobs:
             adb logcat > logcat.txt &
             LOGCAT_PID=$!
             set +e
-            ./gradlew connectedDebugAndroidTest --tests "com.boldkimya.anatoliaq.localllm.LocalLLMInferenceInstrumentedTest"
+            ./gradlew :app:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.boldkimya.anatoliaq.localllm.LocalLLMInferenceInstrumentedTest
             GRADLE_EXIT_CODE=$?
             set -e
             kill "$LOGCAT_PID" || true
