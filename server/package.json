@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-server",
-  "version": "2.1.263",
+  "version": "2.1.264",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -42,7 +42,6 @@
     "pg": "^8.13.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
-    "rate-limit-redis": "^4.3.1",
     "resend": "^4.0.0",
     "socket.io": "^4.8.0",
     "tsx": "^4.23.1",
