@@ -5,6 +5,7 @@ import { getDb, isDbConfigured } from '../db/client.js';
 import { userProfiles, conversationMemory } from '../db/schema.js';
 import { generateAnalysis } from '../services/ai.js';
 import { classifyData } from '../services/decisionIntelligence.js';
+import { wrapUntrustedEvidence, UNTRUSTED_EVIDENCE_POLICY } from '../services/aiPrompts.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -111,18 +112,27 @@ router.post('/save-conversation', authMiddleware, async (req, res) => {
     let summary = '';
     let keyFacts = '';
     try {
+      // AQ-005 (prompt injection / untrusted evidence): history[].content is
+      // user-authored chat transcript being fed back into a fresh AI call --
+      // wrap it the same way /generate and /chat wrap uploaded documents and
+      // web research, so an earlier turn can't smuggle instructions into the
+      // summarizer/fact-extractor calls below.
+      const wrappedHistoryForSummary = wrapUntrustedEvidence(
+        'KONUŞMA GEÇMİŞİ',
+        history.map(m => `${m.role === 'user' ? 'Kullanıcı' : 'Asistan'}: ${m.content}`).join('\n')
+      );
       const summaryPrompt = `Aşağıdaki danışma konuşmasını özetle:
 1. Konuşulan ana konular (2-3 madde)
 2. Varılan önemli sonuçlar
 3. Hatırlanması gereken kritik bilgiler
 
 Konuşma geçmişi:
-${history.map(m => `${m.role === 'user' ? 'Kullanıcı' : 'Asistan'}: ${m.content}`).join('\n')}
+${wrappedHistoryForSummary}
 
 KISA ve öz yanıt ver — maksimum 300 kelime.`;
 
       const result = await generateAnalysis(
-        'Sen bir konuşma özetleyicisisin. Kısa ve öz özetle.',
+        `Sen bir konuşma özetleyicisisin. Kısa ve öz özetle.\n${UNTRUSTED_EVIDENCE_POLICY}`,
         summaryPrompt,
         {},
         memoryClassification
@@ -130,11 +140,15 @@ KISA ve öz yanıt ver — maksimum 300 kelime.`;
       summary = result.content;
 
       // Extract key facts
+      const wrappedHistoryForFacts = wrapUntrustedEvidence(
+        'KONUŞMA GEÇMİŞİ',
+        history.map(m => `${m.role === 'user' ? 'K' : 'A'}: ${m.content.slice(0, 200)}`).join('\n')
+      );
       const factsPrompt = `Bu konuşmadan ileride hatırlanması gereken en önemli 5 bilgiyi madde madde çıkar:
-${history.map(m => `${m.role === 'user' ? 'K' : 'A'}: ${m.content.slice(0, 200)}`).join('\n')}`;
+${wrappedHistoryForFacts}`;
 
       const factsResult = await generateAnalysis(
-        'Anahtar bilgileri madde madde listele.',
+        `Anahtar bilgileri madde madde listele.\n${UNTRUSTED_EVIDENCE_POLICY}`,
         factsPrompt,
         {},
         memoryClassification

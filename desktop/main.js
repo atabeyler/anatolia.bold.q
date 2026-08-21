@@ -331,7 +331,7 @@ function registerIpcHandlers() {
     try {
       const destPath = await downloadUpdate(pendingUpdate.url, pendingUpdate.name, app.getPath('temp'), (progress) => {
         mainWindow?.webContents.send('update:progress', progress);
-      }, fetch, pendingUpdate.size);
+      }, fetch, pendingUpdate.size, pendingUpdate.sha256);
       downloadedInstallerPath = destPath;
       diagnostics?.info('update_downloaded', { version: pendingUpdate.version });
       return { ok: true };

@@ -10,6 +10,7 @@ import * as onlineState from '../lib/onlineState.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
 import { escapeHtml } from '../lib/escapeHtml.js';
 import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '../lib/loginThrottle.js';
+import { invalidateBlockedCache } from '../lib/blockedUserCache.js';
 import { ROLES } from '../lib/rbac.js';
 import { setAuthCookie, clearAuthCookie } from '../lib/cookies.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
@@ -436,9 +437,18 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
       auditDetails
     );
 
-    // Force out an active session immediately when blocking -- otherwise the
-    // user's existing JWT (up to 4h) would keep working until it expires,
-    // since "blocked" is only checked at login.
+    // authMiddleware now re-checks `blocked` on every request via a
+    // short-TTL cache (see lib/blockedUserCache.js) rather than only at
+    // login, but that cache can still be up to its TTL stale -- update it
+    // here immediately so the change takes effect on this (and, via Redis,
+    // every) instance right away instead of waiting it out.
+    if (blocked !== undefined) {
+      await invalidateBlockedCache(userCode, blocked);
+    }
+
+    // Also force out an active session immediately when blocking -- this
+    // covers realtime (Socket.IO) access, which the blockedUserCache above
+    // doesn't touch.
     if (blocked === true && updated.nickname) {
       const io = req.app.get('io');
       const socketId = await onlineState.getOnlineSocketId(updated.nickname);

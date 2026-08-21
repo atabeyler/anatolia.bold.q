@@ -647,8 +647,12 @@ router.post('/chat', authMiddleware, analysisLimiter, async (req, res) => {
       ? history.map(m => `${m.role === 'user' ? 'Kullanıcı' : 'Asistan'}: ${m.content}`).join('\n') + '\n'
       : '';
 
+    // AQ-005 (prompt injection / untrusted evidence): same wrapping as
+    // /generate above -- documentContext and webContext are externally
+    // sourced (an uploaded file, live web research) and must be delimited
+    // as inert data, never concatenated raw into the prompt the model sees.
     const docPrefix = documentContext
-      ? `[YÜKLENEN KAYNAK BELGE]\n${documentContext}\n\n`
+      ? `${wrapUntrustedEvidence('YÜKLENEN KAYNAK BELGE', documentContext)}\n\n`
       : '';
 
     let webContext = '';
@@ -658,8 +662,9 @@ router.post('/chat', authMiddleware, analysisLimiter, async (req, res) => {
     } catch (e) {
       logger.warn({ err: e }, '[WebResearch] search error');
     }
+    const webContextWrapped = webContext ? wrapUntrustedEvidence('CANLI WEB ARAŞTIRMASI', webContext) : '';
 
-    const userPrompt = `${webContext ? `${webContext}\n` : ''}${docPrefix}${historyStr}Kullanıcı: ${message}\n\nNot: Eğer web araştırması geldiyse önce onu baz al, kaynaklarla tutarlı cevap ver.`;
+    const userPrompt = `${webContextWrapped ? `${webContextWrapped}\n` : ''}${docPrefix}${historyStr}Kullanıcı: ${message}\n\nNot: Eğer web araştırması geldiyse önce onu baz al, kaynaklarla tutarlı cevap ver.`;
 
     // If an image is present, use the existing one-shot (non-streaming) vision path;
     // for text-only chat the reply streams in real time.

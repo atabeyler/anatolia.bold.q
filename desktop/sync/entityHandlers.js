@@ -1,3 +1,6 @@
+import { getEncryptionKey } from '../db/index.js';
+import { encryptField, decryptField } from '../db/fieldCrypto.js';
+
 // Registry of per-entity-type local persistence for sync/engine.js's
 // pushQueue/pullChanges. Those two functions (queueing, backoff, conflict
 // detection, cursor paging) are already entity-agnostic; only "how does
@@ -16,6 +19,20 @@ const handlers = {
         .run({ id: op.entity_id, version: result.serverVersion, ts });
     },
 
+    // sync_queue's payload carries AES-256-GCM ciphertext (AQ-002, see
+    // analysesRepo.js's createAnalysis/updateAnalysis) -- the server side
+    // has no concept of it and expects plaintext, so this is the one place
+    // it's decrypted back, immediately before the network push.
+    preparePushPayload(payload) {
+      if (!payload) return payload;
+      const key = getEncryptionKey();
+      return {
+        ...payload,
+        title: decryptField(payload.title ?? null, key),
+        content: decryptField(payload.content ?? null, key),
+      };
+    },
+
     applyPulled(db, userId, record) {
       const ts = new Date().toISOString();
       const existing = db.prepare(`SELECT id FROM analyses WHERE id = ?`).get(record.entityId);
@@ -28,6 +45,15 @@ const handlers = {
         return;
       }
 
+      // The server stores/returns plaintext title/content (it never sees
+      // ciphertext -- see preparePushPayload above) -- encrypt it with this
+      // device's key before it ever touches local disk, same as
+      // analysesRepo.js's createAnalysis/updateAnalysis do for locally
+      // authored writes.
+      const key = getEncryptionKey();
+      const encryptedTitle = encryptField(record.payload.title, key);
+      const encryptedContent = encryptField(record.payload.content, key);
+
       if (existing) {
         db.prepare(`
           UPDATE analyses SET title = @title, content = @content, category = @category, ai_provider = @aiProvider,
@@ -36,7 +62,7 @@ const handlers = {
           WHERE id = @id
         `).run({
           id: record.entityId, ts, version: record.version, deviceId: record.deviceId,
-          title: record.payload.title, content: record.payload.content, category: record.payload.category,
+          title: encryptedTitle, content: encryptedContent, category: record.payload.category,
           aiProvider: record.payload.aiProvider ?? null,
           fraudTx: record.payload.fraudTransactionCount ?? null, fraudFlag: record.payload.fraudFlaggedCount ?? null,
         });
@@ -47,7 +73,7 @@ const handlers = {
         `).run({
           id: record.entityId, userId, deviceId: record.deviceId, version: record.version,
           createdAt: record.createdAt, updatedAt: record.updatedAt,
-          category: record.payload.category, title: record.payload.title, content: record.payload.content,
+          category: record.payload.category, title: encryptedTitle, content: encryptedContent,
           aiProvider: record.payload.aiProvider ?? null,
           fraudTx: record.payload.fraudTransactionCount ?? null, fraudFlag: record.payload.fraudFlaggedCount ?? null,
         });

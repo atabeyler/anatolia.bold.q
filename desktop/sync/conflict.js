@@ -1,7 +1,37 @@
 import { randomUUID } from 'node:crypto';
 import { cancelQueuedFor } from './queue.js';
+import { getEncryptionKey } from '../db/index.js';
+import { encryptField, decryptField } from '../db/fieldCrypto.js';
 
 const now = () => new Date().toISOString();
+
+// The conflicts table persists both sides of the conflict to disk (AQ-002
+// applies here too, same as the analyses table) -- title/content are
+// encrypted going in and decrypted coming back out. localPayload (built
+// from a sync_queue row) already carries ciphertext by the time it gets
+// here (see analysesRepo.js), and encryptField() no-ops on an
+// already-encrypted value, so encrypting defensively here is always safe.
+// serverPayload arrives plaintext (the server has no concept of this
+// device's key), so this is the point it gets encrypted for the first time.
+function encryptPayload(payload) {
+  if (!payload) return payload;
+  const key = getEncryptionKey();
+  return {
+    ...payload,
+    title: 'title' in payload ? encryptField(payload.title, key) : payload.title,
+    content: 'content' in payload ? encryptField(payload.content, key) : payload.content,
+  };
+}
+
+function decryptPayload(payload) {
+  if (!payload) return payload;
+  const key = getEncryptionKey();
+  return {
+    ...payload,
+    title: 'title' in payload ? decryptField(payload.title, key) : payload.title,
+    content: 'content' in payload ? decryptField(payload.content, key) : payload.content,
+  };
+}
 
 // Records both sides of a conflict and stops the local record from being
 // pushed again until the user (or an automated policy) resolves it — the
@@ -16,9 +46,9 @@ export function recordConflict(db, { entityType, entityId, localPayload, localBa
       id: randomUUID(),
       entityType,
       entityId,
-      localPayload: JSON.stringify(localPayload),
+      localPayload: JSON.stringify(encryptPayload(localPayload)),
       localBaseVersion: localBaseVersion ?? null,
-      serverPayload: serverPayload ? JSON.stringify(serverPayload) : null,
+      serverPayload: serverPayload ? JSON.stringify(encryptPayload(serverPayload)) : null,
       serverVersion: serverVersion ?? null,
       serverDeleted: serverDeleted ? 1 : 0,
       detectedAt: now(),
@@ -35,9 +65,9 @@ export function listUnresolvedConflicts(db) {
     id: row.id,
     entityType: row.entity_type,
     entityId: row.entity_id,
-    localPayload: JSON.parse(row.local_payload),
+    localPayload: decryptPayload(JSON.parse(row.local_payload)),
     localBaseVersion: row.local_base_version,
-    serverPayload: row.server_payload ? JSON.parse(row.server_payload) : null,
+    serverPayload: row.server_payload ? decryptPayload(JSON.parse(row.server_payload)) : null,
     serverVersion: row.server_version,
     serverDeleted: !!row.server_deleted,
     detectedAt: row.detected_at,

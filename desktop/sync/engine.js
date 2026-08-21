@@ -24,14 +24,24 @@ export async function pushQueue(db, { apiBaseUrl, getToken, deviceId, fetchImpl 
 
     for (const op of due) markInFlight(db, op.id);
 
-    const operations = due.map((op) => ({
-      operationId: op.id,
-      entityType: op.entity_type,
-      op: op.op,
-      entityId: op.entity_id,
-      payload: op.payload ? JSON.parse(op.payload) : undefined,
-      baseVersion: op.base_version ?? undefined,
-    }));
+    const operations = due.map((op) => {
+      const parsedPayload = op.payload ? JSON.parse(op.payload) : undefined;
+      // sync_queue stores title/content encrypted at rest (AQ-002); decrypt
+      // back to plaintext only here, right before it goes out over the
+      // network to the server (which stores plaintext).
+      const handler = getEntityHandler(op.entity_type);
+      const payload = parsedPayload && handler.preparePushPayload
+        ? handler.preparePushPayload(parsedPayload)
+        : parsedPayload;
+      return {
+        operationId: op.id,
+        entityType: op.entity_type,
+        op: op.op,
+        entityId: op.entity_id,
+        payload,
+        baseVersion: op.base_version ?? undefined,
+      };
+    });
 
     let response;
     try {

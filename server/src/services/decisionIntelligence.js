@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { query } from './database.js';
 import { logger } from '../lib/logger.js';
+import { CLASSIFICATIONS } from './dataEgressPolicy.js';
 
 export const ANALYSIS_PROMPT_VERSION = '2026-08-12-v1';
 export const DEFAULT_RETENTION_DAYS = Number(process.env.DECISION_RETENTION_DAYS || 365);
@@ -121,11 +122,32 @@ function modelForProvider(provider = '') {
   return null;
 }
 
+// Higher index = more sensitive (see dataEgressPolicy.ts's CLASSIFICATIONS,
+// the single source of truth for this ordering).
+function maxLevel(a, b) {
+  const ai = CLASSIFICATIONS.indexOf(a);
+  const bi = CLASSIFICATIONS.indexOf(b);
+  if (ai === -1) return b;
+  if (bi === -1) return a;
+  return ai >= bi ? a : b;
+}
+
 export function classifyData(category, requested = null) {
-  const allowed = new Set(['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED']);
-  if (requested && allowed.has(String(requested).toUpperCase())) return String(requested).toUpperCase();
-  if (['savunma', 'saldiri', 'bddk', 'btk', 'cok-alanli'].includes(category)) return 'CONFIDENTIAL';
-  return 'INTERNAL';
+  const categoryDefault = ['savunma', 'saldiri', 'bddk', 'btk', 'cok-alanli'].includes(category)
+    ? 'CONFIDENTIAL'
+    : (category ? 'INTERNAL' : null);
+
+  const requestedUpper = requested ? String(requested).toUpperCase() : null;
+  const requestedValid = requestedUpper && CLASSIFICATIONS.includes(requestedUpper) ? requestedUpper : null;
+
+  // No category to derive a floor from -- requested (if valid) is the
+  // legitimate way to set classification explicitly in that case.
+  if (!categoryDefault) return requestedValid || 'INTERNAL';
+
+  // requested may only ever RAISE the classification above the
+  // category-derived default, never downgrade it (e.g. a client can't send
+  // requested=PUBLIC to strip CONFIDENTIAL protection off a "savunma" record).
+  return requestedValid ? maxLevel(categoryDefault, requestedValid) : categoryDefault;
 }
 
 export function publicModelRegistry() {

@@ -65,16 +65,22 @@ export function createAnalysis(db, { userId, deviceId, category, title, content,
   const ts = now();
   const key = getEncryptionKey();
   const create = db.transaction(() => {
+    const encryptedTitle = encryptField(title, key);
+    const encryptedContent = encryptField(content, key);
     db.prepare(`
       INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider)
       VALUES (@id, @userId, NULL, @deviceId, 'analysis', 1, @ts, @ts, 'pending', @category, @title, @content, @aiProvider)
-    `).run({ id, userId, deviceId, ts, category, title: encryptField(title, key), content: encryptField(content, key), aiProvider: aiProvider || null });
+    `).run({ id, userId, deviceId, ts, category, title: encryptedTitle, content: encryptedContent, aiProvider: aiProvider || null });
 
     // A fresh create always lands at server version 1 (routes/sync.js's
     // create path is deterministic on that), so no baseVersion is needed.
+    // The queued payload carries the SAME ciphertext already written above
+    // (AQ-002) -- never the plaintext locals -- so sync_queue is opaque at
+    // rest too. The push path (sync/engine.js) decrypts it back to
+    // plaintext right before the network call, the one place it's needed.
     enqueue(db, {
       entityType: 'analysis', entityId: id, op: 'create',
-      payload: { category, title, content, aiProvider: aiProvider || null },
+      payload: { category, title: encryptedTitle, content: encryptedContent, aiProvider: aiProvider || null },
       deviceId,
     });
   });
@@ -92,6 +98,8 @@ export function updateAnalysis(db, { userId, deviceId, id, title, content }) {
   const previousVersion = current.version;
   const key = getEncryptionKey();
   const update = db.transaction(() => {
+    const encryptedTitle = encryptField(title ?? null, key);
+    const encryptedContent = encryptField(content ?? null, key);
     db.prepare(`
       UPDATE analyses SET
         title = COALESCE(@title, title),
@@ -100,11 +108,13 @@ export function updateAnalysis(db, { userId, deviceId, id, title, content }) {
         updated_at = @ts,
         sync_status = 'pending'
       WHERE id = @id
-    `).run({ id, title: encryptField(title ?? null, key), content: encryptField(content ?? null, key), ts });
+    `).run({ id, title: encryptedTitle, content: encryptedContent, ts });
 
+    // Same as createAnalysis: the queued payload carries the already-
+    // encrypted values, never the plaintext locals.
     enqueue(db, {
       entityType: 'analysis', entityId: id, op: 'update',
-      payload: { title: title ?? null, content: content ?? null },
+      payload: { title: encryptedTitle, content: encryptedContent },
       baseVersion: previousVersion,
       deviceId,
     });
