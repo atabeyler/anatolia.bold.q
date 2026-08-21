@@ -272,17 +272,30 @@ export default function DashboardPage({ user, onLogout }) {
       });
       notifyDevice(t('hardwareVerifiedTitle'), ok ? t('hardwareVerifiedBody') : t('hardwareVerifiedFailedBody'));
     };
+    const onAnalysisCompleted = (data) => {
+      if (!data) return;
+      const { t, pushNotification, notifyDevice } = liveHandlersRef.current;
+      pushNotification({
+        type: 'system',
+        title: t('analysisCompletedTitle'),
+        body: t('analysisCompletedBody'),
+        action: 'history',
+      });
+      notifyDevice(t('analysisCompletedTitle'), t('analysisCompletedBody'));
+    };
     sock.on('emergency:broadcast', onBroadcast);
     sock.on('chat:receive', onChatReceive);
     sock.on('notification:new', onSystemNotification);
     sock.on('auth:blocked', onBlocked);
     sock.on('analysis:hardwareVerified', onHardwareVerified);
+    sock.on('analysis:completed', onAnalysisCompleted);
     return () => {
       sock.off('emergency:broadcast', onBroadcast);
       sock.off('chat:receive', onChatReceive);
       sock.off('notification:new', onSystemNotification);
       sock.off('auth:blocked', onBlocked);
       sock.off('analysis:hardwareVerified', onHardwareVerified);
+      sock.off('analysis:completed', onAnalysisCompleted);
     };
   }, [user.userCode]);
 

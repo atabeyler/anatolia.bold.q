@@ -65,6 +65,22 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const shareRef = useRef(null);
   const resetRef = useRef(null);
 
+  // Generation can run long enough (AI + quantum + docx/pdf, all in one
+  // request) to outlive the user's patience -- if they close the wizard and
+  // pick a new category (or the same one again) before the first request's
+  // fetch finally settles (success or a late network error), that stale
+  // settlement must not clobber whatever the user is looking at *now*.
+  // generationIdRef is bumped on every generate() call (see below) so a late
+  // settlement can recognize it's been superseded; bumping it here too, plus
+  // clearing any leftover error/loading, means re-entering the wizard for a
+  // fresh attempt never opens on a stale error from an abandoned earlier one.
+  const generationIdRef = useRef(0);
+  useEffect(() => {
+    generationIdRef.current++;
+    setError('');
+    setLoading(false);
+  }, [category]);
+
   // Applies category/depth/quantum/prompt/title a voice command (start_analysis)
   // resolved for the wizard. Runs on mount and whenever a fresh voice
   // command produces a new pending object -- this is the fix that actually
@@ -215,6 +231,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   // nothing answers (task spec point 4).
   const generate = async () => {
     if (!prompt.trim() || !category) return;
+    const myGenerationId = ++generationIdRef.current;
     setLoading(true);
     setError('');
     setResult(null);
@@ -232,6 +249,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
         nativeAIQuery: nativeAI.query,
         generateRequest: { category, title: resolvedTitle, prompt, lang },
       });
+      if (generationIdRef.current !== myGenerationId) return; // superseded by a newer request
 
       // Cloud responses keep their full original shape (quantum/fraud/
       // optimizer sections, docx/pdf, ...) via `raw` spread first so
@@ -241,9 +259,10 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
       // extras (docx/pdf buttons already guard on `res?.docxBase64`).
       setResult({ ...(normalized.engine === ENGINE.CLOUD ? normalized.raw : {}), title: normalized.title, content: normalized.content, engine: normalized.engine, providerLabel: normalized.providerLabel, sources: normalized.sources });
     } catch (e) {
+      if (generationIdRef.current !== myGenerationId) return; // superseded by a newer request
       setError(localizedError(e));
     } finally {
-      setLoading(false);
+      if (generationIdRef.current === myGenerationId) setLoading(false);
     }
   };
 

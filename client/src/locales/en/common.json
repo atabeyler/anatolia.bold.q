@@ -83,6 +83,8 @@
   "hardwareVerifiedTitle": "Hardware Verification Complete",
   "hardwareVerifiedBody": "A report's IBM Quantum hardware verification finished and was added to the report.",
   "hardwareVerifiedFailedBody": "IBM Quantum hardware verification was attempted but did not produce a result.",
+  "analysisCompletedTitle": "Analysis Complete",
+  "analysisCompletedBody": "Your requested analysis finished and was saved to history.",
   "calendarTooltip": "Live date/time and calendar",
   "tempTooltip": "Temperature at your current location",
   "prevMonth": "Previous month",

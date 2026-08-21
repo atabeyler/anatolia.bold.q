@@ -83,6 +83,8 @@
   "hardwareVerifiedTitle": "Vérification matérielle terminée",
   "hardwareVerifiedBody": "La vérification matérielle IBM Quantum d'un rapport est terminée et a été ajoutée au rapport.",
   "hardwareVerifiedFailedBody": "La vérification matérielle IBM Quantum a été tentée mais n'a produit aucun résultat.",
+  "analysisCompletedTitle": "Analyse terminée",
+  "analysisCompletedBody": "L'analyse que vous avez demandée est terminée et a été enregistrée dans l'historique.",
   "calendarTooltip": "Date/heure en direct et calendrier",
   "tempTooltip": "Température à votre position actuelle",
   "prevMonth": "Mois précédent",

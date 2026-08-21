@@ -83,6 +83,8 @@
   "hardwareVerifiedTitle": "اكتمل التحقق من الأجهزة",
   "hardwareVerifiedBody": "اكتمل التحقق من أجهزة IBM Quantum لأحد التقارير وتمت إضافته إلى التقرير.",
   "hardwareVerifiedFailedBody": "تمت محاولة التحقق من أجهزة IBM Quantum لكن لم تظهر نتيجة.",
+  "analysisCompletedTitle": "اكتمل التحليل",
+  "analysisCompletedBody": "اكتمل التحليل الذي طلبته وتم حفظه في السجل.",
   "calendarTooltip": "التاريخ/الوقت المباشر والتقويم",
   "tempTooltip": "درجة الحرارة في موقعك الحالي",
   "prevMonth": "الشهر السابق",

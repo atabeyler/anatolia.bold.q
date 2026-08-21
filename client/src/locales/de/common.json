@@ -83,6 +83,8 @@
   "hardwareVerifiedTitle": "Hardware-Verifizierung abgeschlossen",
   "hardwareVerifiedBody": "Die IBM-Quantum-Hardware-Verifizierung eines Berichts wurde abgeschlossen und dem Bericht hinzugefügt.",
   "hardwareVerifiedFailedBody": "Die IBM-Quantum-Hardware-Verifizierung wurde versucht, lieferte aber kein Ergebnis.",
+  "analysisCompletedTitle": "Analyse abgeschlossen",
+  "analysisCompletedBody": "Die von Ihnen angeforderte Analyse ist abgeschlossen und wurde im Verlauf gespeichert.",
   "calendarTooltip": "Live-Datum/Uhrzeit und Kalender",
   "tempTooltip": "Temperatur an Ihrem aktuellen Standort",
   "prevMonth": "Vorheriger Monat",

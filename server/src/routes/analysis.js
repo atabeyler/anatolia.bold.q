@@ -36,6 +36,7 @@ import { resolveResultSource } from '../services/analysisOrchestrator.js';
 import { buildEvidenceItems } from '../services/evidence.js';
 import { fuseDecision } from '../services/decisionFusion.js';
 import { runQuantumEngines, isHardwareVerificationPending, scheduleHardwareVerification } from '../services/analysisQuantumEngines.js';
+import { broadcastToUser } from '../services/socket.js';
 import { isRealTransactionArray, isRealScenarioArray, isRealOptimizationProblem } from '../services/analysisParsers.js';
 import { classifyData } from '../services/decisionIntelligence.js';
 import { canAccessClassification } from '../lib/rbac.js';
@@ -404,6 +405,14 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
 
     sendAnalysisReport(userCode, category, title || prompt.slice(0, 80), docxBuffer)
       .catch(e => logger.error({ err: e }, 'Mail error'));
+
+    // In-app/device notification for the requesting user, sent independently
+    // of the res.json() below -- generation can run long enough that a
+    // client-side timeout (browser/proxy) drops the original request before
+    // the response arrives, in which case this socket event is the only
+    // signal (besides the email above) that the report actually finished.
+    broadcastToUser(req.app.get('io'), userCode, 'analysis:completed', { analysisId, category, title: title || prompt.slice(0, 80) })
+      .catch(() => {});
 
     const hardwarePending = isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions, hardwareOptimization });
 

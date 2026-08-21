@@ -83,6 +83,8 @@
   "hardwareVerifiedTitle": "Donanım Doğrulaması Tamamlandı",
   "hardwareVerifiedBody": "Bir raporun IBM Quantum donanım doğrulaması tamamlandı, sonuç rapora eklendi.",
   "hardwareVerifiedFailedBody": "IBM Quantum donanım doğrulaması denendi ancak sonuç alınamadı.",
+  "analysisCompletedTitle": "Analiz Tamamlandı",
+  "analysisCompletedBody": "İstediğiniz analiz tamamlandı ve geçmişe kaydedildi.",
   "calendarTooltip": "Canlı tarih/saat ve takvim",
   "tempTooltip": "Bulunduğun konumun anlık sıcaklığı",
   "prevMonth": "Önceki ay",
