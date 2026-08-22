@@ -286,6 +286,7 @@ Production runs on Northflank, which builds the repo's `Dockerfile` and deploys 
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
+| `.github/workflows/codeql.yml` | Push / pull request / weekly schedule | Static analysis (SAST); findings are published as code-scanning alerts |
 | `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases |
 | `.github/workflows/desktop-release.yml` | Push to `main`, `desktop-v*` tag / manual dispatch | Builds Windows/macOS/Linux installers and publishes them to GitHub Releases |
 
@@ -311,20 +312,6 @@ A deployment should be treated as live only after CI completes successfully and 
 ANATOLIA-Q currently combines provider-independent multi-provider AI decision-support reporting, deterministic quantum analysis with optional real IBM hardware verification, decision provenance/quality/evidence/trace foundations, model and prompt audit metadata, an archived-report Analysis Audit UI, scenario replay/outcome APIs, an institutional connector framework, operational/readiness/connector/risk platform APIs, a versioned `/api/v1/platform` interface with OpenAPI specification, emergency communication/situational-awareness features, and persistent Dark/Light/System appearance modes.
 
 The next institution-specific connector should be implemented only when a real authorized API/data specification is available; the platform does not fabricate institution endpoints or claim integrations that have not been configured and tested.
-
----
-
-## Citation
-
-```bibtex
-@software{anatoliaq2026,
-  title        = {ANATOLIA-Q: A Quantum-Verified National Decision Support System},
-  author       = {{Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.}},
-  year         = {2026},
-  url          = {https://github.com/atabeyler/anatolia.bold.q},
-  note         = {Provider-independent AI decision support cross-checked by deterministic quantum-circuit computation with optional real IBM Quantum hardware verification}
-}
-```
 
 ---
 

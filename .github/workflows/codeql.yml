@@ -6,7 +6,7 @@ name: CodeQL
 # blocks a push/PR the way ci.yml's required checks do. Scans server/ and
 # client/ (both plain JS/TS, one CodeQL language covers both) on every push
 # to any branch (matching ci.yml's own push trigger, since this repo's
-# normal workflow is a direct push rather than a PR -- see CLAUDE.md) and
+# normal workflow is a direct push rather than a PR) and
 # weekly on a schedule, so drift between dependency updates still gets
 # re-scanned even with no code changes.
 on:

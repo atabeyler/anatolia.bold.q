@@ -13,7 +13,7 @@ name: Android Release
 # The APK is attached to the SAME versioned GitHub Release as the Windows
 # installer (tag v<version>, read from the root package.json -- kept in
 # sync across package.json/client/server by scripts/bump-version.js on
-# every commit, see CLAUDE.md) rather than a separate tag, so both
+# every commit) rather than a separate tag, so both
 # installers for a given app version live in one place. Whichever workflow
 # (this one or desktop-release.yml) runs first for a given version creates
 # that draft release; the other one finds it by tag and adds its asset.

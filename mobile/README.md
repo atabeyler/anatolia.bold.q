@@ -123,7 +123,7 @@ Release.
 The APK is attached to the **same versioned release as the Windows
 installer** — tag `v<version>`, read from the root `package.json` (kept in
 sync across `package.json`/`client`/`server` by `scripts/bump-version.js`
-on every commit, see `CLAUDE.md`) — rather than a separate tag, so both
+on every commit) — rather than a separate tag, so both
 installers for a given app version live in one place. Whichever release
 workflow (this one, or `desktop-release.yml`) runs first for a given
 version creates that release (published immediately, not a draft — a
