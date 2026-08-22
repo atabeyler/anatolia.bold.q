@@ -112,6 +112,15 @@ describe('with GITHUB_TOKEN set (private repo)', () => {
     expect(res.body.assets.androidApk.name).toBe(releaseInfo().assets.androidApk.name);
   });
 
+  it('defaults a schemeless APP_URL to https instead of producing a relative link', async () => {
+    process.env.APP_URL = 'site--anatoliaboldq--6ftfc8q7458m.code.run/';
+    getLatestVersionInfoMock.mockResolvedValue(releaseInfo());
+
+    const res = await request(buildApp()).get('/api/version/latest');
+
+    expect(res.body.assets.androidApk.url).toBe('https://site--anatoliaboldq--6ftfc8q7458m.code.run/api/version/download/android');
+  });
+
   it('/download/:platform streams the asset bytes instead of redirecting', async () => {
     getLatestVersionInfoMock.mockResolvedValue({
       ...releaseInfo(),

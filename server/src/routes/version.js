@@ -13,6 +13,19 @@ const PLATFORM_ASSET_KEY = {
   linux: 'desktopLinux',
 };
 
+// APP_URL is meant to be a full origin (e.g. "https://app.example.com"),
+// but has repeatedly been misconfigured as a bare host with no scheme --
+// a schemeless URL handed to a native client's fetch() gets silently
+// resolved as *relative* to whatever origin the app's WebView happens to
+// be on, downloading the wrong thing entirely (the SPA's own index.html,
+// not the binary) with no error until the OS fails to install/open it.
+// Defaulting the scheme here turns that failure mode into a working link
+// instead of a silent wrong-content download.
+function resolvedAppUrl() {
+  const raw = (process.env.APP_URL || 'http://localhost:10000').trim().replace(/\/+$/, '');
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
 // While this repo is public, a release asset's plain browser_download_url
 // works for anyone -- handing it straight to the client avoids re-streaming
 // NSIS/DMG/APK/AppImage bytes through this server. Once the repo goes
@@ -25,7 +38,7 @@ router.get('/latest', async (_req, res) => {
     const info = await getLatestVersionInfo();
     const assets = { ...info.assets };
     if (process.env.GITHUB_TOKEN) {
-      const appUrl = process.env.APP_URL || 'http://localhost:10000';
+      const appUrl = resolvedAppUrl();
       for (const [platform, key] of Object.entries(PLATFORM_ASSET_KEY)) {
         if (assets[key]) assets[key] = { ...assets[key], url: `${appUrl}/api/version/download/${platform}` };
       }
