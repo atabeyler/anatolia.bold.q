@@ -6,8 +6,6 @@ import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
-const APP_URL = process.env.APP_URL || 'http://localhost:10000';
-
 const PLATFORM_ASSET_KEY = {
   android: 'androidApk',
   windows: 'desktopWin',
@@ -27,8 +25,9 @@ router.get('/latest', async (_req, res) => {
     const info = await getLatestVersionInfo();
     const assets = { ...info.assets };
     if (process.env.GITHUB_TOKEN) {
+      const appUrl = process.env.APP_URL || 'http://localhost:10000';
       for (const [platform, key] of Object.entries(PLATFORM_ASSET_KEY)) {
-        if (assets[key]) assets[key] = { ...assets[key], url: `${APP_URL}/api/version/download/${platform}` };
+        if (assets[key]) assets[key] = { ...assets[key], url: `${appUrl}/api/version/download/${platform}` };
       }
     }
     res.json({ version: info.version, publishedAt: info.publishedAt, notes: info.notes, assets });
