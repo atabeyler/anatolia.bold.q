@@ -249,6 +249,7 @@ cd android && ./gradlew assembleDebug
 | `REDIS_URL` | Optional Redis-backed active-user/location state |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION` | Optional persistent object storage |
 | `SENTRY_DSN` | Optional server error reporting |
+| `GITHUB_TOKEN` | Optional read-only PAT; keeps the Android/desktop update check working when this repo is private |
 | `VITE_ICE_SERVERS` | Optional client-side TURN/ICE configuration for emergency video |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Optional Web Push configuration |
 | `NEWS_RSS_SOURCES` | Optional override for morning-brief sources |

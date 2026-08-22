@@ -25,8 +25,12 @@ function pickAsset(assets, suffix) {
 }
 
 async function fetchLatestRelease() {
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'anatolia-q-server' };
+  // Unauthenticated GitHub API calls only see releases on a public repo --
+  // this lets the lookup keep working if the repo is ever made private.
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const r = await fetch(RELEASES_URL, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'anatolia-q-server' },
+    headers,
     signal: AbortSignal.timeout(8000),
   });
   if (!r.ok) throw new Error(`GitHub releases lookup failed (HTTP ${r.status})`);

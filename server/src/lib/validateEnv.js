@@ -15,6 +15,7 @@ const RECOMMENDED_VARS = [
   { name: 'GEMINI_API_KEY', note: 'Gemini AI provider unavailable' },
   { name: 'OPENAI_API_KEY', note: 'GPT AI provider unavailable' },
   { name: 'SHARED_PASSWORD', note: 'legacy user seed skipped on first boot' },
+  { name: 'GITHUB_TOKEN', note: 'Android/desktop update check will fail if the repo is private' },
 ];
 
 export function logEnvValidationWarnings() {
