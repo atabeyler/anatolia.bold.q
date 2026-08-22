@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
 const getLatestVersionInfoMock = vi.fn();
-vi.mock('../services/releaseVersion.js', () => ({ getLatestVersionInfo: (...args) => getLatestVersionInfoMock(...args) }));
+const fetchAssetBinaryMock = vi.fn();
+vi.mock('../services/releaseVersion.js', () => ({
+  getLatestVersionInfo: (...args) => getLatestVersionInfoMock(...args),
+  fetchAssetBinary: (...args) => fetchAssetBinaryMock(...args),
+}));
 
 const { default: versionRouter } = await import('./version.js');
 
@@ -15,6 +19,7 @@ function buildApp() {
 
 beforeEach(() => {
   getLatestVersionInfoMock.mockReset();
+  fetchAssetBinaryMock.mockReset();
 });
 
 function releaseInfo() {
@@ -78,5 +83,49 @@ describe('GET /api/version/download/:platform', () => {
   it('rejects an unknown platform', async () => {
     const res = await request(buildApp()).get('/api/version/download/ios');
     expect(res.status).toBe(404);
+  });
+});
+
+describe('with GITHUB_TOKEN set (private repo)', () => {
+  const originalToken = process.env.GITHUB_TOKEN;
+  const originalAppUrl = process.env.APP_URL;
+
+  beforeEach(() => {
+    process.env.GITHUB_TOKEN = 'test-token';
+    process.env.APP_URL = 'https://app.example.com';
+  });
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env.GITHUB_TOKEN; else process.env.GITHUB_TOKEN = originalToken;
+    if (originalAppUrl === undefined) delete process.env.APP_URL; else process.env.APP_URL = originalAppUrl;
+  });
+
+  it('/latest points clients at this server instead of the raw GitHub URL', async () => {
+    getLatestVersionInfoMock.mockResolvedValue(releaseInfo());
+
+    const res = await request(buildApp()).get('/api/version/latest');
+
+    expect(res.status).toBe(200);
+    expect(res.body.assets.androidApk.url).toBe('https://app.example.com/api/version/download/android');
+    expect(res.body.assets.desktopWin.url).toBe('https://app.example.com/api/version/download/windows');
+    // Non-URL asset fields (name/size/sha256) are preserved.
+    expect(res.body.assets.androidApk.name).toBe(releaseInfo().assets.androidApk.name);
+  });
+
+  it('/download/:platform streams the asset bytes instead of redirecting', async () => {
+    getLatestVersionInfoMock.mockResolvedValue({
+      ...releaseInfo(),
+      assets: { ...releaseInfo().assets, androidApk: { ...releaseInfo().assets.androidApk, id: 42 } },
+    });
+    fetchAssetBinaryMock.mockResolvedValue({
+      headers: new Map([['content-length', '4']]),
+      body: new Response(new Uint8Array([1, 2, 3, 4])).body,
+    });
+
+    const res = await request(buildApp()).get('/api/version/download/android');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(42);
   });
 });

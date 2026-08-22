@@ -21,7 +21,7 @@ function extractSha256(digest) {
 
 function pickAsset(assets, suffix) {
   const asset = (assets || []).find((a) => a.name?.endsWith(suffix));
-  return asset ? { url: asset.browser_download_url, name: asset.name, size: asset.size, sha256: extractSha256(asset.digest) } : null;
+  return asset ? { id: asset.id, url: asset.browser_download_url, name: asset.name, size: asset.size, sha256: extractSha256(asset.digest) } : null;
 }
 
 async function fetchLatestRelease() {
@@ -61,6 +61,20 @@ async function fetchLatestRelease() {
 
 export async function getLatestVersionInfo() {
   return fetchLatestRelease();
+}
+
+// A release asset's plain browser_download_url 404s unauthenticated once
+// this repo is private -- GitHub only honors auth on the asset *API*
+// endpoint (and only when it's asked for raw bytes via this Accept
+// header), not on the public-facing download URL. Used by
+// routes/version.js's /download/:platform to proxy the bytes through this
+// server instead of ever handing a client a github.com URL directly.
+export async function fetchAssetBinary(assetId) {
+  const headers = { Accept: 'application/octet-stream', 'User-Agent': 'anatolia-q-server' };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/assets/${assetId}`, { headers });
+  if (!r.ok) throw new Error(`GitHub asset download failed (HTTP ${r.status})`);
+  return r;
 }
 
 export const _internal = { pickAsset, extractSha256 };
