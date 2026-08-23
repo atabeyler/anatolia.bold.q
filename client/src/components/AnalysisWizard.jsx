@@ -70,7 +70,14 @@ export default function AnalysisWizard({
     { label: t('wizEngineIbmLabel'), detail: t('wizEngineIbmDetail'), on: quantumMode, Icon: ShieldCheck, color: '#56e6b3' },
   ];
 
-  const handleStart = () => { generate(); onClose(); };
+  // Do NOT call onClose() here: it resets the selected category, and
+  // AnalysisView bails out to <CategoryPicker> whenever category is falsy
+  // -- so an immediate onClose() would swap this wizard for the category
+  // grid before generate()'s async request ever resolves, hiding the
+  // loading spinner and the eventual result or error. The wizard already
+  // closes itself once a result lands (AnalysisView renders it only while
+  // `!result && !scenarioResult`), and shows failures inline via `error`.
+  const handleStart = () => { generate(); };
 
   return (
     <div className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" role="dialog" aria-modal="true" aria-label={t('wizModalAria')}>
