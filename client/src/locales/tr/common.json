@@ -274,5 +274,9 @@
   "voiceContextAck": "Tamam.",
   "voiceConfirmLogout": "Çıkış yapmak istediğinizden emin misiniz? Onaylamak için \"evet\" deyin.",
   "voiceConfirmed": "Onaylandı, çıkış yapılıyor.",
-  "voiceCancelled": "İptal edildi."
+  "voiceCancelled": "İptal edildi.",
+  "errPushUnsupported": "Bu tarayıcı push bildirimlerini desteklemiyor",
+  "errPushNotConfigured": "Sunucuda push bildirimleri yapılandırılmamış",
+  "errPushPermissionNotGranted": "Bildirim izni verilmedi",
+  "errPushPermissionDenied": "Bildirim izni engellenmiş — tarayıcı ayarlarından etkinleştirin"
 }

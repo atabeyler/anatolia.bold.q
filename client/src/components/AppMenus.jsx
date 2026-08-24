@@ -320,7 +320,13 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
         setPushState('subscribed');
       }
     } catch (e) {
-      setPushError(e.message);
+      // push.js throws machine-readable codes ('push_unsupported', ...), not
+      // human text -- t() falls back to the raw key if a code has no match,
+      // so an unrecognized future code still shows something rather than
+      // crashing. err${PascalCase(code)} mirrors LoginPage.jsx's identical
+      // localizedAuthError() mapping for the auth-error codes.
+      const key = `err${String(e.message || '').replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase())}`;
+      setPushError(t(key) || e.message);
       setPushState(await getPushSubscriptionState().catch(() => 'unsubscribed'));
     }
   };

@@ -30,5 +30,13 @@
   "passwordLoginToggle": "رمز المستخدم + كلمة المرور",
   "passkeyVerificationRequired": "التحقق بمفتاح المرور",
   "passkeyLoginBtn": "الدخول باستخدام Face ID / بصمة الإصبع / مفتاح المرور",
-  "passkeyLoginFailed": "فشل تسجيل الدخول باستخدام مفتاح المرور."
+  "passkeyLoginFailed": "فشل تسجيل الدخول باستخدام مفتاح المرور.",
+  "errInvalidSessionToken": "رمز الجلسة غير صالح",
+  "errDeviceRegistrationFailed": "فشل تسجيل الجهاز (HTTP {{status}})",
+  "errDeviceNotAuthorizedOffline": "لم يتم تفويض هذا الجهاز عبر الإنترنت لهذا الحساب من قبل.",
+  "errNoOfflineSession": "لم يتم العثور على جلسة غير متصلة — يرجى تسجيل الدخول عبر الإنترنت أولاً.",
+  "errTooManyOfflineAttempts": "عدد كبير جداً من المحاولات الفاشلة. يرجى المحاولة لاحقاً أو تسجيل الدخول عبر الإنترنت.",
+  "errOfflineSessionExpired": "انتهت صلاحية الجلسة غير المتصلة — يرجى تسجيل الدخول عبر الإنترنت أولاً.",
+  "errInvalidCredentials": "رمز المستخدم أو كلمة المرور غير صحيحة.",
+  "errOfflineLoginFailed": "فشل تسجيل الدخول دون اتصال."
 }

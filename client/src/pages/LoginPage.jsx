@@ -181,6 +181,22 @@ export default function LoginPage({ onLogin }) {
   // cached at the last successful online login, see desktop/auth/session.js)
   // instead of hitting the network — only succeeds for an account that has
   // actually authorized this exact device online before (spec point 5).
+  // verifyOfflineLogin/establishOnlineSession (client/src/mobile/auth/
+  // session.js, desktop/auth/session.js) throw/return machine-readable
+  // codes ('invalid_credentials', 'device_not_authorized_offline', ...),
+  // not human text -- they can't localize themselves (plain modules, no
+  // React/useLang access). t() already falls back to returning the key
+  // unchanged if no translation matches, so an unrecognized code (or a
+  // real English exception message, e.g. a network error) still degrades
+  // to *something* readable instead of throwing.
+  const localizedAuthError = (code) => {
+    if (!code) return t('errOfflineLoginFailed');
+    if (code.startsWith('device_registration_failed:')) {
+      return t('errDeviceRegistrationFailed', { status: code.split(':')[1] });
+    }
+    return t(`err${code.replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase())}`) || code;
+  };
+
   const attemptOfflineLogin = async () => {
     // handleLogin's catch block calls this without its own try/catch (it's
     // already inside a catch), so an exception here -- rather than
@@ -193,13 +209,13 @@ export default function LoginPage({ onLogin }) {
     try {
       const result = await nativeAuth.verifyOfflineLogin(userCode.trim(), password);
       if (!result?.ok) {
-        setError(result?.error || 'Çevrimdışı giriş başarısız.');
+        setError(localizedAuthError(result?.error));
         return;
       }
       setJWT(result.jwt);
       onLogin({ userCode: result.userCode, isAdmin: result.isAdmin });
     } catch (e) {
-      setError(e?.message || 'Çevrimdışı giriş başarısız.');
+      setError(localizedAuthError(e?.message));
     }
   };
 

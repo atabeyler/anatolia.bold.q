@@ -49,12 +49,12 @@ export function decryptField(value, hexKey) {
     // after the data was encrypted, e.g. a headless Linux box with no
     // secret-service). Fail closed on the field rather than returning
     // ciphertext as if it were readable text.
-    throw new Error('Şifreli alan okunamadı: OS anahtar deposu kullanılamıyor');
+    throw new Error('field_crypto_keystore_unavailable');
   }
 
   const rest = value.slice(PREFIX.length);
   const [ivHex, tagHex, dataHex] = rest.split(':');
-  if (!ivHex || !tagHex || !dataHex) throw new Error('Şifreli alan bozuk (format hatası)');
+  if (!ivHex || !tagHex || !dataHex) throw new Error('field_crypto_corrupt');
 
   const decipher = crypto.createDecipheriv(ALGO, keyBuffer(hexKey), Buffer.from(ivHex, 'hex'));
   decipher.setAuthTag(Buffer.from(tagHex, 'hex'));

@@ -65,7 +65,14 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // needing the plaintext again.
   async function establishOnlineSession(jwt, password) {
     const payload = decodeJwtPayload(jwt);
-    if (!payload?.userCode) throw new Error('Geçersiz oturum belirteci');
+    // Machine-readable codes (not Turkish prose) below, matching this
+    // codebase's own 'local_llm_unavailable'-style convention -- errors
+    // from this module previously leaked raw Turkish sentences straight
+    // into a session an English/German/French/Arabic-language user set
+    // up, bypassing the i18n system entirely (LoginPage.jsx's
+    // attemptOfflineLogin() shows result.error/e.message verbatim). The UI
+    // layer maps these codes through t() instead.
+    if (!payload?.userCode) throw new Error('invalid_session_token');
 
     const res = await fetchImpl(`${apiBaseUrl}/api/devices/register`, {
       method: 'POST',
@@ -74,7 +81,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Cihaz kaydı başarısız (HTTP ${res.status})`);
+      throw new Error(body.error || `device_registration_failed:${res.status}`);
     }
 
     const offlinePasswordHash = password ? bcrypt.hashSync(password, 12) : undefined;
@@ -99,21 +106,21 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // server to rate-limit an offline guess, so this device has to.
   async function verifyOfflineLogin(userCode, password) {
     if (!(await isOfflineLoginAllowed(userCode))) {
-      return { ok: false, error: 'Bu cihaz bu hesap için daha önce çevrimiçi yetkilendirilmemiş.' };
+      return { ok: false, error: 'device_not_authorized_offline' };
     }
     const cached = await secureStore.load();
     if (!cached || cached.userCode !== userCode || !cached.offlinePasswordHash) {
-      return { ok: false, error: 'Çevrimdışı oturum bilgisi bulunamadı — lütfen önce çevrimiçi giriş yapın.' };
+      return { ok: false, error: 'no_offline_session' };
     }
 
     const meta = await dbGet(db, 'SELECT last_authorized_at, failed_offline_attempts, offline_locked_until FROM device_meta WHERE device_id = ?', [deviceId]);
     const now = Date.now();
 
     if (meta?.offline_locked_until && new Date(meta.offline_locked_until).getTime() > now) {
-      return { ok: false, error: 'Çok fazla hatalı deneme. Lütfen daha sonra tekrar deneyin veya çevrimiçi giriş yapın.' };
+      return { ok: false, error: 'too_many_offline_attempts' };
     }
     if (meta?.last_authorized_at && now - new Date(meta.last_authorized_at).getTime() > OFFLINE_SESSION_TTL_MS) {
-      return { ok: false, error: 'Çevrimdışı oturum süresi doldu — lütfen önce çevrimiçi giriş yapın.' };
+      return { ok: false, error: 'offline_session_expired' };
     }
 
     if (!bcrypt.compareSync(password || '', cached.offlinePasswordHash)) {
@@ -121,8 +128,8 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       const lockedUntil = attempts >= MAX_OFFLINE_ATTEMPTS ? new Date(now + OFFLINE_LOCKOUT_MS).toISOString() : null;
       await dbRun(db, 'UPDATE device_meta SET failed_offline_attempts = ?, offline_locked_until = ? WHERE device_id = ?', [attempts, lockedUntil, deviceId]);
       return lockedUntil
-        ? { ok: false, error: 'Çok fazla hatalı deneme. Lütfen daha sonra tekrar deneyin veya çevrimiçi giriş yapın.' }
-        : { ok: false, error: 'Kullanıcı kodu veya şifre hatalı.' };
+        ? { ok: false, error: 'too_many_offline_attempts' }
+        : { ok: false, error: 'invalid_credentials' };
     }
 
     await dbRun(db, 'UPDATE device_meta SET failed_offline_attempts = 0, offline_locked_until = NULL WHERE device_id = ?', [deviceId]);

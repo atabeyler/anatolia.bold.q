@@ -274,5 +274,9 @@
   "voiceContextAck": "D'accord.",
   "voiceConfirmLogout": "Voulez-vous vraiment vous déconnecter ? Dites « oui » pour confirmer.",
   "voiceConfirmed": "Confirmé, déconnexion en cours.",
-  "voiceCancelled": "Annulé."
+  "voiceCancelled": "Annulé.",
+  "errPushUnsupported": "Ce navigateur ne prend pas en charge les notifications push",
+  "errPushNotConfigured": "Les notifications push ne sont pas configurées sur le serveur",
+  "errPushPermissionNotGranted": "L'autorisation de notification n'a pas été accordée",
+  "errPushPermissionDenied": "L'autorisation de notification est bloquée — activez-la dans les paramètres du navigateur"
 }

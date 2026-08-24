@@ -53,10 +53,10 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
             continue;
           }
           diagnostics?.error('local_ai_failure', { message: err.message, capability: current.capability });
-          return { ok: false, error: 'Yerel AI kullanılamıyor', detail: err.message, capability: current.capability };
+          return { ok: false, error: 'local_ai_unavailable', detail: err.message, capability: current.capability };
         }
       }
-      return { ok: false, error: 'Yerel AI kullanılamıyor', detail: 'no_provider_available' };
+      return { ok: false, error: 'local_ai_unavailable', detail: 'no_provider_available' };
     },
   };
 }

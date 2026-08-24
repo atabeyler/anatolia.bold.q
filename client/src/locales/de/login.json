@@ -30,5 +30,13 @@
   "passwordLoginToggle": "Benutzercode + Passwort",
   "passkeyVerificationRequired": "PASSKEY-VERIFIZIERUNG",
   "passkeyLoginBtn": "Mit Face ID / Fingerabdruck / Passkey anmelden",
-  "passkeyLoginFailed": "Anmeldung mit Passkey fehlgeschlagen."
+  "passkeyLoginFailed": "Anmeldung mit Passkey fehlgeschlagen.",
+  "errInvalidSessionToken": "Ungültiges Sitzungstoken",
+  "errDeviceRegistrationFailed": "Geräteregistrierung fehlgeschlagen (HTTP {{status}})",
+  "errDeviceNotAuthorizedOffline": "Dieses Gerät wurde für dieses Konto bisher nicht online autorisiert.",
+  "errNoOfflineSession": "Keine Offline-Sitzung gefunden — bitte zuerst online anmelden.",
+  "errTooManyOfflineAttempts": "Zu viele fehlgeschlagene Versuche. Bitte später erneut versuchen oder online anmelden.",
+  "errOfflineSessionExpired": "Offline-Sitzung abgelaufen — bitte zuerst online anmelden.",
+  "errInvalidCredentials": "Benutzercode oder Passwort falsch.",
+  "errOfflineLoginFailed": "Offline-Anmeldung fehlgeschlagen."
 }

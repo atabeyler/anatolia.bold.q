@@ -51,7 +51,14 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // is.
   async function establishOnlineSession(jwt, password) {
     const payload = decodeJwtPayload(jwt);
-    if (!payload?.userCode) throw new Error('Geçersiz oturum belirteci');
+    // Machine-readable codes (not Turkish prose) below, matching this
+    // codebase's own 'local_llm_unavailable'-style convention -- errors
+    // from this module previously leaked raw Turkish sentences straight
+    // into a session an English/German/French/Arabic-language user set
+    // up, bypassing the i18n system entirely (LoginPage.jsx's
+    // attemptOfflineLogin() shows result.error/e.message verbatim). The UI
+    // layer maps these codes through t() instead.
+    if (!payload?.userCode) throw new Error('invalid_session_token');
 
     const res = await fetchImpl(`${apiBaseUrl}/api/devices/register`, {
       method: 'POST',
@@ -60,7 +67,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Cihaz kaydı başarısız (HTTP ${res.status})`);
+      throw new Error(body.error || `device_registration_failed:${res.status}`);
     }
 
     const offlinePasswordHash = password ? bcrypt.hashSync(password, 12) : undefined;
@@ -83,14 +90,14 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // verified locally, never against plaintext, never over the network.
   function verifyOfflineLogin(userCode, password) {
     if (!isOfflineLoginAllowed(userCode)) {
-      return { ok: false, error: 'Bu cihaz bu hesap için daha önce çevrimiçi yetkilendirilmemiş.' };
+      return { ok: false, error: 'device_not_authorized_offline' };
     }
     const cached = secureStore.load();
     if (!cached || cached.userCode !== userCode || !cached.offlinePasswordHash) {
-      return { ok: false, error: 'Çevrimdışı oturum bilgisi bulunamadı — lütfen önce çevrimiçi giriş yapın.' };
+      return { ok: false, error: 'no_offline_session' };
     }
     if (!bcrypt.compareSync(password || '', cached.offlinePasswordHash)) {
-      return { ok: false, error: 'Kullanıcı kodu veya şifre hatalı.' };
+      return { ok: false, error: 'invalid_credentials' };
     }
     return { ok: true, jwt: cached.jwt, userCode: cached.userCode, nickname: cached.nickname, isAdmin: cached.isAdmin };
   }

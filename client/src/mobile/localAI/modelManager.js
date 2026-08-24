@@ -86,7 +86,7 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
     let offset = 0;
     for (const chunk of chunks) { full.set(chunk, offset); offset += chunk.length; }
 
-    if (!subtleCrypto) throw new Error('SHA-256 doğrulaması için Web Crypto kullanılamıyor');
+    if (!subtleCrypto) throw new Error('web_crypto_unavailable');
     const digest = await subtleCrypto.digest('SHA-256', full.buffer);
     const actual = bufferToHex(digest);
 

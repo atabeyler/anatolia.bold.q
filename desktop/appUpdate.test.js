@@ -118,7 +118,7 @@ describe('downloadUpdate', () => {
 
     await expect(
       downloadUpdate('https://x/api/version/download/desktop', 'ANATOLIA-Q-Setup-2.1.140.exe', dir, undefined, fetchImplFor(body), body.length, wrongSha256)
-    ).rejects.toThrow('bütünlük doğrulaması (SHA-256) başarısız');
+    ).rejects.toThrow('update_checksum_mismatch');
 
     expect(fs.existsSync(path.join(dir, 'ANATOLIA-Q-Setup-2.1.140.exe'))).toBe(false);
   });
@@ -129,7 +129,7 @@ describe('downloadUpdate', () => {
 
     await expect(
       downloadUpdate('https://x/api/version/download/desktop', 'ANATOLIA-Q-Setup-2.1.140.exe', dir, undefined, fetchImplFor(body), body.length, null)
-    ).rejects.toThrow('bütünlük doğrulaması (SHA-256) alınamadı');
+    ).rejects.toThrow('update_checksum_missing');
 
     expect(fs.existsSync(path.join(dir, 'ANATOLIA-Q-Setup-2.1.140.exe'))).toBe(false);
   });
@@ -140,7 +140,7 @@ describe('downloadUpdate', () => {
 
     await expect(
       downloadUpdate('https://x/api/version/download/desktop', 'ANATOLIA-Q-Setup-2.1.140.exe', dir, undefined, fetchImplFor(body), body.length, 'not-a-hash')
-    ).rejects.toThrow('bütünlük doğrulaması (SHA-256) alınamadı');
+    ).rejects.toThrow('update_checksum_missing');
   });
 
   it('throws when the download request itself fails', async () => {

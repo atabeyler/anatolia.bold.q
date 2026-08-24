@@ -274,5 +274,9 @@
   "voiceContextAck": "Okay.",
   "voiceConfirmLogout": "Are you sure you want to log out? Say \"yes\" to confirm.",
   "voiceConfirmed": "Confirmed, logging out.",
-  "voiceCancelled": "Cancelled."
+  "voiceCancelled": "Cancelled.",
+  "errPushUnsupported": "This browser does not support push notifications",
+  "errPushNotConfigured": "Push notifications are not configured on the server",
+  "errPushPermissionNotGranted": "Notification permission was not granted",
+  "errPushPermissionDenied": "Notification permission is blocked — enable it in your browser settings"
 }

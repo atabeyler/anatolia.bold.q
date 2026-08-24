@@ -274,5 +274,9 @@
   "voiceContextAck": "حسنًا.",
   "voiceConfirmLogout": "هل أنت متأكد من رغبتك في تسجيل الخروج؟ قل \"نعم\" للتأكيد.",
   "voiceConfirmed": "تم التأكيد، جارٍ تسجيل الخروج.",
-  "voiceCancelled": "تم الإلغاء."
+  "voiceCancelled": "تم الإلغاء.",
+  "errPushUnsupported": "هذا المتصفح لا يدعم إشعارات الدفع",
+  "errPushNotConfigured": "إشعارات الدفع غير مُهيأة على الخادم",
+  "errPushPermissionNotGranted": "لم يتم منح إذن الإشعارات",
+  "errPushPermissionDenied": "إذن الإشعارات محظور — يرجى تفعيله من إعدادات المتصفح"
 }

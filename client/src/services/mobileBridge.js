@@ -195,7 +195,7 @@ export const mobileAnalyses = {
   }),
   create: guard(async (data) => {
     const userId = await currentUserId();
-    if (!userId) throw new Error('Oturum açılmamış');
+    if (!userId) throw new Error('not_logged_in');
     // userId/deviceId are session-derived and must win over any same-named
     // key in the caller's data object -- spreading data first (not last)
     // is what makes that override impossible. Matches desktop/main.js's
@@ -207,14 +207,14 @@ export const mobileAnalyses = {
   }),
   update: guard(async (id, data) => {
     const userId = await currentUserId();
-    if (!userId) throw new Error('Oturum açılmamış');
+    if (!userId) throw new Error('not_logged_in');
     const row = await updateAnalysis(await getDb(), { ...data, userId, deviceId, id });
     performSync().catch(() => {});
     return row;
   }),
   remove: guard(async (id) => {
     const userId = await currentUserId();
-    if (!userId) throw new Error('Oturum açılmamış');
+    if (!userId) throw new Error('not_logged_in');
     const removed = await deleteAnalysis(await getDb(), { userId, deviceId, id });
     performSync().catch(() => {});
     return removed;
@@ -235,7 +235,7 @@ export const mobileSync = {
 export const mobileAI = {
   query: guard(async (request) => {
     const userId = await currentUserId();
-    if (!userId) return { ok: false, error: 'Oturum açılmamış' };
+    if (!userId) return { ok: false, error: 'not_logged_in' };
     return createLocalAIProvider({ db: await getDb(), userId, diagnostics: await getDiagnostics() }).query(request);
   }),
   // Model Manager surface -- mirrors desktopAI's, and is wired into the

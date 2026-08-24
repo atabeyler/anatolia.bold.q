@@ -274,5 +274,9 @@
   "voiceContextAck": "Okay.",
   "voiceConfirmLogout": "Möchten Sie sich wirklich abmelden? Sagen Sie „ja“, um zu bestätigen.",
   "voiceConfirmed": "Bestätigt, Abmeldung läuft.",
-  "voiceCancelled": "Abgebrochen."
+  "voiceCancelled": "Abgebrochen.",
+  "errPushUnsupported": "Dieser Browser unterstützt keine Push-Benachrichtigungen",
+  "errPushNotConfigured": "Push-Benachrichtigungen sind auf dem Server nicht konfiguriert",
+  "errPushPermissionNotGranted": "Benachrichtigungsberechtigung wurde nicht erteilt",
+  "errPushPermissionDenied": "Benachrichtigungsberechtigung ist blockiert — aktivieren Sie sie in den Browsereinstellungen"
 }

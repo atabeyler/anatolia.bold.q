@@ -22,16 +22,19 @@ export async function getPushSubscriptionState() {
 }
 
 export async function subscribeToPush() {
-  if (!isPushSupported()) throw new Error('Bu tarayıcı push bildirimlerini desteklemiyor');
+  // Machine-readable codes (not Turkish prose) -- AppMenus.jsx's togglePush()
+  // shows e.message directly to the user, which previously leaked raw
+  // Turkish text regardless of the app's selected language.
+  if (!isPushSupported()) throw new Error('push_unsupported');
 
   const { publicKey } = await api.pushVapidPublicKey();
-  if (!publicKey) throw new Error('Sunucuda push bildirimleri yapılandırılmamış');
+  if (!publicKey) throw new Error('push_not_configured');
 
   if (Notification.permission === 'default') {
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') throw new Error('Bildirim izni verilmedi');
+    if (perm !== 'granted') throw new Error('push_permission_not_granted');
   } else if (Notification.permission === 'denied') {
-    throw new Error('Bildirim izni engellenmiş — tarayıcı ayarlarından etkinleştirin');
+    throw new Error('push_permission_denied');
   }
 
   const reg = await navigator.serviceWorker.register('/sw.js');

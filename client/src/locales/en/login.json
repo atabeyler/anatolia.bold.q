@@ -30,5 +30,13 @@
   "passwordLoginToggle": "User Code + Password",
   "passkeyVerificationRequired": "PASSKEY VERIFICATION",
   "passkeyLoginBtn": "Sign in with Face ID / Fingerprint / Passkey",
-  "passkeyLoginFailed": "Passkey sign-in failed."
+  "passkeyLoginFailed": "Passkey sign-in failed.",
+  "errInvalidSessionToken": "Invalid session token",
+  "errDeviceRegistrationFailed": "Device registration failed (HTTP {{status}})",
+  "errDeviceNotAuthorizedOffline": "This device has not previously been authorized online for this account.",
+  "errNoOfflineSession": "No offline session found — please log in online first.",
+  "errTooManyOfflineAttempts": "Too many failed attempts. Please try again later or log in online.",
+  "errOfflineSessionExpired": "Offline session expired — please log in online first.",
+  "errInvalidCredentials": "Incorrect user code or password.",
+  "errOfflineLoginFailed": "Offline login failed."
 }

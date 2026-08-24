@@ -257,7 +257,7 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('analyses:create', (_e, data) => {
     const userId = currentUserCode();
-    if (!userId) throw new Error('Oturum açılmamış');
+    if (!userId) throw new Error('not_logged_in');
     // userId/deviceId are session-derived and must win over any same-named
     // key the renderer's data object happens to carry -- spreading data
     // first (not last) is what makes that override impossible.
@@ -267,14 +267,14 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('analyses:update', (_e, id, data) => {
     const userId = currentUserCode();
-    if (!userId) throw new Error('Oturum açılmamış');
+    if (!userId) throw new Error('not_logged_in');
     const row = updateAnalysis(db, { ...data, userId, deviceId, id });
     performSync().catch(() => {});
     return row;
   });
   ipcMain.handle('analyses:remove', (_e, id) => {
     const userId = currentUserCode();
-    if (!userId) throw new Error('Oturum açılmamış');
+    if (!userId) throw new Error('not_logged_in');
     const removed = deleteAnalysis(db, { userId, deviceId, id });
     performSync().catch(() => {});
     return removed;
@@ -291,7 +291,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('ai:query', (_e, request) => {
     const userId = currentUserCode();
-    if (!userId) return { ok: false, error: 'Oturum açılmamış' };
+    if (!userId) return { ok: false, error: 'not_logged_in' };
     return createLocalAIProvider({ db, userId, diagnostics }).query(request);
   });
 
@@ -327,7 +327,7 @@ function registerIpcHandlers() {
   // comment for why this doesn't go through electron-updater's own
   // GitHub-facing check.
   ipcMain.handle('update:approve', async () => {
-    if (!pendingUpdate) return { ok: false, error: 'Güncelleme bulunamadı' };
+    if (!pendingUpdate) return { ok: false, error: 'update_not_found' };
     try {
       const destPath = await downloadUpdate(pendingUpdate.url, pendingUpdate.name, app.getPath('temp'), (progress) => {
         mainWindow?.webContents.send('update:progress', progress);
@@ -342,7 +342,7 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('update:getAvailable', () => pendingUpdate);
   ipcMain.handle('update:install', async () => {
-    if (!downloadedInstallerPath) return { ok: false, error: 'İndirilen kurulum dosyası yok' };
+    if (!downloadedInstallerPath) return { ok: false, error: 'installer_missing' };
     if (process.platform === 'linux') {
       // AppImages aren't downloaded with the executable bit set -- without
       // this, openPath below just opens an "Open With..." file-type prompt

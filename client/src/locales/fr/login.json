@@ -30,5 +30,13 @@
   "passwordLoginToggle": "Code utilisateur + Mot de passe",
   "passkeyVerificationRequired": "VÉRIFICATION PAR PASSKEY",
   "passkeyLoginBtn": "Se connecter avec Face ID / Empreinte digitale / Passkey",
-  "passkeyLoginFailed": "La connexion par Passkey a échoué."
+  "passkeyLoginFailed": "La connexion par Passkey a échoué.",
+  "errInvalidSessionToken": "Jeton de session invalide",
+  "errDeviceRegistrationFailed": "Échec de l'enregistrement de l'appareil (HTTP {{status}})",
+  "errDeviceNotAuthorizedOffline": "Cet appareil n'a pas été autorisé en ligne pour ce compte auparavant.",
+  "errNoOfflineSession": "Aucune session hors ligne trouvée — veuillez d'abord vous connecter en ligne.",
+  "errTooManyOfflineAttempts": "Trop de tentatives échouées. Veuillez réessayer plus tard ou vous connecter en ligne.",
+  "errOfflineSessionExpired": "Session hors ligne expirée — veuillez d'abord vous connecter en ligne.",
+  "errInvalidCredentials": "Code utilisateur ou mot de passe incorrect.",
+  "errOfflineLoginFailed": "Échec de la connexion hors ligne."
 }

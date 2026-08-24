@@ -30,5 +30,13 @@
   "passwordLoginToggle": "Kullanıcı Kodu + Şifre",
   "passkeyVerificationRequired": "PASSKEY DOĞRULAMASI",
   "passkeyLoginBtn": "Face ID / Parmak İzi / Passkey ile Giriş",
-  "passkeyLoginFailed": "Passkey ile giriş başarısız oldu."
+  "passkeyLoginFailed": "Passkey ile giriş başarısız oldu.",
+  "errInvalidSessionToken": "Geçersiz oturum belirteci",
+  "errDeviceRegistrationFailed": "Cihaz kaydı başarısız (HTTP {{status}})",
+  "errDeviceNotAuthorizedOffline": "Bu cihaz bu hesap için daha önce çevrimiçi yetkilendirilmemiş.",
+  "errNoOfflineSession": "Çevrimdışı oturum bilgisi bulunamadı — lütfen önce çevrimiçi giriş yapın.",
+  "errTooManyOfflineAttempts": "Çok fazla hatalı deneme. Lütfen daha sonra tekrar deneyin veya çevrimiçi giriş yapın.",
+  "errOfflineSessionExpired": "Çevrimdışı oturum süresi doldu — lütfen önce çevrimiçi giriş yapın.",
+  "errInvalidCredentials": "Kullanıcı kodu veya şifre hatalı.",
+  "errOfflineLoginFailed": "Çevrimdışı giriş başarısız."
 }

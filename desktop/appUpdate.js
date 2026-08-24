@@ -91,11 +91,11 @@ export async function downloadUpdate(url, fileName, destDir, onProgress, fetchIm
   const actualSha256 = hash.digest('hex');
   if (!expectedSha256 || !SHA256_RE.test(expectedSha256)) {
     try { fs.unlinkSync(destPath); } catch { /* best-effort */ }
-    throw new Error('Güncelleme dosyası için bütünlük doğrulaması (SHA-256) alınamadı — güvenlik nedeniyle kurulum reddedildi.');
+    throw new Error('update_checksum_missing');
   }
   if (actualSha256.toLowerCase() !== expectedSha256.toLowerCase()) {
     try { fs.unlinkSync(destPath); } catch { /* best-effort */ }
-    throw new Error('İndirilen güncelleme dosyasının bütünlük doğrulaması (SHA-256) başarısız oldu — dosya bozulmuş veya değiştirilmiş olabilir, kurulum reddedildi.');
+    throw new Error('update_checksum_mismatch');
   }
 
   return destPath;
