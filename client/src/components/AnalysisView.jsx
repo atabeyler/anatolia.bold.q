@@ -11,6 +11,7 @@ import { api } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 import { reportTitleExamples } from '../services/i18n.js';
 import { base64ToBlob, shareOrDownloadBlob } from '../services/shareFile.js';
+import { buildLocalDocxBlob, buildLocalPdfBlob } from '../services/localExport.js';
 import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
 import FileAttach from './FileAttach.jsx';
@@ -306,20 +307,19 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   };
 
   // Local engines (local-llm, local-data) never have docxBase64/pdfBase64 --
-  // those are only produced by the cloud's server-side docx/pdf export step,
-  // which an offline device never talks to. Silently no-op'ing on a missing
-  // field (the previous behavior) left the download/share buttons looking
-  // broken with zero feedback. Every local result still has plain text
-  // (res.content), so falling back to a .txt export keeps the buttons
-  // actually doing something offline instead of nothing at all.
-  const textFallbackBlob = (res) => new Blob([`${res?.title || 'ANATOLIA-Q Raporu'}\n\n${res?.content || ''}`], { type: 'text/plain' });
-
-  const downloadDocx = (res = result) => {
+  // those are only produced by the cloud's server-side docx/pdf export step
+  // (server/src/services/docx.js / pdf.js), which an offline device never
+  // talks to. Silently no-op'ing on a missing field (the previous behavior)
+  // left the download/share buttons looking broken with zero feedback.
+  // localExport.js builds a real, openable docx/pdf client-side from the
+  // same res.title/res.content every local result already has.
+  const downloadDocx = async (res = result) => {
     if (!res?.docxBase64) {
-      const url = URL.createObjectURL(textFallbackBlob(res));
+      const blob = await buildLocalDocxBlob(res || {});
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ANATOLIA-Q_${category}_${Date.now()}.txt`;
+      a.download = `ANATOLIA-Q_${category}_${Date.now()}.docx`;
       a.click();
       URL.revokeObjectURL(url);
       return;
@@ -335,10 +335,11 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   const downloadPdf = (res = result) => {
     if (!res?.pdfBase64) {
-      const url = URL.createObjectURL(textFallbackBlob(res));
+      const blob = buildLocalPdfBlob(res || {});
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ANATOLIA-Q_${category}_${Date.now()}.txt`;
+      a.download = `ANATOLIA-Q_${category}_${Date.now()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       return;
@@ -354,7 +355,8 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   const shareReport = (res = result) => {
     if (!res?.pdfBase64) {
-      shareOrDownloadBlob(textFallbackBlob(res), `ANATOLIA-Q_${category}_${Date.now()}.txt`, 'text/plain', res?.title || 'ANATOLIA-Q Raporu');
+      const blob = buildLocalPdfBlob(res || {});
+      shareOrDownloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf', res?.title || 'ANATOLIA-Q Raporu');
       return;
     }
     const blob = base64ToBlob(res.pdfBase64, 'application/pdf');

@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-client",
-  "version": "3.0.24",
+  "version": "3.0.26",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,8 +23,10 @@
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^2.4.3",
+    "docx": "^9.7.1",
     "framer-motion": "^11.11.0",
     "i18next": "^26.4.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.451.0",
     "postcss": "^8.4.47",
     "react": "^18.3.1",
