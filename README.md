@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-3.0.34-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-3.0.36-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -131,6 +131,7 @@ These controls are system-level traceability features. Users are not expected to
 
 ### Administration & Operations
 
+- **Passkey / WebAuthn Login** — optional hardware-backed passkey (FIDO2/WebAuthn) registration and login from the account's Security settings, as an alternative to password login; a passkey login mints a session JWT directly and skips the central-mail approval step non-admin password logins otherwise require
 - User management and admin audit log
 - History archive with DOCX/PDF access and Analysis Audit metadata
 - BDDK/BTK fraud trend endpoint
@@ -275,6 +276,14 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
 | `CONVERSATION_MEMORY_TTL_DAYS` | Consultation-memory retention window |
 | `ANATOLIA_CLOUD_URL` | Desktop-only deployed API/web origin |
 | `VITE_MOBILE_CLOUD_URL` | Mobile-only build-time deployed API/web origin |
+| `DATABASE_CA_CERT` | PEM CA certificate enabling verified Postgres TLS in production; unset connections stay encrypted but unverified (MITM risk) |
+| `DECISION_RETENTION_DAYS` | Retention window (days) for decision-intelligence records; defaults to 365 |
+| `FILE_SCAN_WEBHOOK_URL` | Malware/CDR scan webhook for uploaded files; unconfigured leaves scanning a no-op |
+| `APPROVED_CLOUD_PROVIDERS` | Comma-separated allowlist narrowing which cloud AI providers may receive INTERNAL/CONFIDENTIAL-classified analysis data; unset allows every configured provider (existing behavior) |
+| `UPLOAD_MAX_CONCURRENCY` | Max concurrent file uploads server-wide; defaults to 8 |
+| `QUANTUM_MAX_CONCURRENCY` | Max concurrent quantum worker subprocesses; defaults to 4 |
+| `QUANTUM_JOB_POLL_MS` | Quantum job-queue poll interval in ms; defaults to 5000 |
+| `WEBAUTHN_RP_NAME`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGINS` | Optional passkey/WebAuthn Relying Party overrides; all default from `APP_URL` and only need setting when the public origin differs from it |
 
 ### Quantum
 
@@ -289,7 +298,7 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
 
 ## How It Works
 
-**Login:** credentials are checked against `auth_users`. After successful password validation, admin accounts receive a JWT immediately with a 4-hour lifetime. Non-admin accounts enter the central-mail approval flow: the approval token expires after 10 minutes and, after approval, the client receives a 2-hour JWT.
+**Login:** credentials are checked against `auth_users`. After successful password validation, admin accounts receive a JWT immediately with a 4-hour lifetime. Non-admin accounts enter the central-mail approval flow: the approval token expires after 10 minutes and, after approval, the client receives a 2-hour JWT. A user who has registered a passkey can instead complete a WebAuthn ceremony, which mints the same-lifetime JWT immediately and skips the approval step.
 
 **Analysis:** the user selects a category and supplies the brief/data → the provider-independent AI layer generates the structured report → supported quantum modules independently recompute relevant scenario, optimization, or anomaly structures → the authoritative local result is merged into the report → optional IBM hardware verification can run as a separate verification lane → the report is persisted and exported.
 
@@ -305,7 +314,7 @@ Production runs on Northflank, which builds the repo's `Dockerfile` and deploys 
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
+| `.github/workflows/ci.yml` | Push / pull request | Version/i18n/locale consistency checks; server + client typecheck, lint and tests; quantum Python syntax + worker smoke test; security scans (gitleaks secret scan, npm audit, CycloneDX SBOM); desktop test suite; a branch-gated Elliptic AML benchmark job (`experiment/*` branches only, same purpose as the standalone workflow below) |
 | `.github/workflows/codeql.yml` | Push / pull request / weekly schedule | Static analysis (SAST); findings are published as code-scanning alerts |
 | `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases |
 | `.github/workflows/android-emulator-test.yml` | Push to `main` / manual dispatch | Informational only, never gates the release pipeline: runs the real on-device instrumented test against an Android emulator, verifying the native `llama.cpp` JNI bridge actually loads a model and generates text, not just that it compiles |
@@ -318,7 +327,7 @@ A deployment should be treated as live only after CI completes successfully and 
 
 ## Security Notes
 
-- Passwords are bcrypt-hashed in `auth_users` (bcrypt cost factor 10)
+- Passwords are bcrypt-hashed in `auth_users` (bcrypt cost factor 12)
 - Admin JWTs expire after 4 hours; non-admin JWTs issued after central approval expire after 2 hours
 - Non-admin approval tokens expire after 10 minutes; approval is performed by POST after an explicit confirmation page
 - Blocking a user disconnects the active socket session
