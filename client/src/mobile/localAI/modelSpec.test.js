@@ -34,7 +34,13 @@ describe('selectTierForDevice', () => {
     expect(selectTierForDevice({ totalMemBytes: 7 * 1024 ** 3 })).toBe(MODEL_TIERS.mid);
   });
 
-  it('caps an 8 GB+ device at MID -- HIGH is disabled pending real-hardware validation', () => {
-    expect(selectTierForDevice({ totalMemBytes: 12 * 1024 ** 3 })).toBe(MODEL_TIERS.mid);
+  it('still caps an 8-12 GB device at MID -- below HIGH’s own 12 GB floor', () => {
+    expect(selectTierForDevice({ totalMemBytes: 8 * 1024 ** 3 })).toBe(MODEL_TIERS.mid);
+    expect(selectTierForDevice({ totalMemBytes: 11 * 1024 ** 3 })).toBe(MODEL_TIERS.mid);
+  });
+
+  it('selects HIGH for a 12 GB+ device', () => {
+    expect(selectTierForDevice({ totalMemBytes: 12 * 1024 ** 3 })).toBe(MODEL_TIERS.high);
+    expect(selectTierForDevice({ totalMemBytes: 16 * 1024 ** 3 })).toBe(MODEL_TIERS.high);
   });
 });

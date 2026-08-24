@@ -227,13 +227,19 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     // whole app process was killed by the OS (thermal/OOM watchdog) with no
     // JS-visible error at all -- LocalLLMPlugin.kt's try/catch can't save a
     // process that's already gone. maxNewTokens alone is not a safety bound
-    // on a slow/throttling device; wall-clock time is. Capped generously
-    // above what even a slow device should need for a normal reply, but far
-    // below the ~10 minutes that reproduced the crash -- breaking here
-    // returns whatever text was generated so far (same graceful partial-
-    // output pattern as the llama_decode-failure break below) instead of
-    // running the device into the same failure again.
-    constexpr auto kGenerationDeadline = std::chrono::seconds(90);
+    // on a slow/throttling device; wall-clock time is.
+    //
+    // Raised from 90s to 240s at the owner's explicit request, targeting a
+    // "very powerful" device that should comfortably finish well inside
+    // this window -- 240s is still a real ceiling, not removed entirely:
+    // this is a blocking JNI call the JS side awaits with no timeout of its
+    // own (llmProvider.js), so if this genuinely never returned, the
+    // "Yeni Analiz" request would hang forever with zero feedback rather
+    // than degrading into the offline-extractive fallback the way every
+    // other local-llm failure mode already does. 240s is comfortably past
+    // the ~90s a HIGH/3B-tier device should need, while still nowhere near
+    // the ~10 minutes that reproduced the original OS-kill crash.
+    constexpr auto kGenerationDeadline = std::chrono::seconds(240);
     const auto startTime = std::chrono::steady_clock::now();
 
     // Nothing below enforced a *minimum* length -- the model is free to
@@ -246,7 +252,10 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     // logit to -inf for the first kMinNewTokens steps makes early
     // termination *impossible* during that window, rather than just
     // unlikely, without needing a separate resample-and-retry path.
-    constexpr int32_t kMinNewTokens = 48;
+    // Raised from 48 alongside the loosened deadline/token budget above --
+    // GENERATE_INSTRUCTION now asks for a couple of headed sections, which
+    // needs more guaranteed runway than a bare few-sentence answer did.
+    constexpr int32_t kMinNewTokens = 96;
     const llama_token eosToken = llama_vocab_eos(session->vocab);
     const llama_token eotToken = llama_vocab_eot(session->vocab);
     const int32_t nVocab = llama_vocab_n_tokens(session->vocab);

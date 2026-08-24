@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-3.0.30-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-3.0.32-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -235,8 +235,8 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
   | Tier | Model | Size | Min. RAM | Status |
   |---|---|---|---|---|
   | LOW | Qwen2.5-0.5B-Instruct (Q4_K_M, GGUF) | ~490 MB | 3 GB | Available |
-  | MID | Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF) — same model the desktop client pins | ~1.1 GB | 6 GB | Available (default for 6 GB+ devices) |
-  | HIGH | Qwen2.5-3B-Instruct (Q4_K_M, GGUF) | ~2.1 GB | 8 GB | Disabled — caused a real-device crash mid-generation during field testing; every device is currently capped at MID until HIGH is proven stable on real hardware |
+  | MID | Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF) — same model the desktop client pins | ~1.1 GB | 6 GB | Available (default for 6-12 GB devices) |
+  | HIGH | Qwen2.5-7B-Instruct (Q4_K_M, GGUF) | ~4.7 GB | 12 GB | Available for 12 GB+ devices — an earlier 3B HIGH tier caused a real-device crash mid-generation; the native generation loop now enforces a wall-clock deadline and a minimum output length, the two safety nets that were missing when that crash happened |
 
   A device below the LOW floor, or with no RAM signal at all, fails safe into the same archived-report matching used before this feature existed rather than attempting generation.
 - **Offline device login** follows the same "authorize once online, then works offline" model as desktop: the first login on a given device for a given account must succeed online (it registers the device and caches a locally-verifiable credential); every login after that on that device can succeed fully offline.

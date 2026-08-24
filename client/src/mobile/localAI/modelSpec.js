@@ -48,22 +48,33 @@ const MID = Object.freeze({
 });
 
 // High-end tier -- optional per the task spec ("a larger model, optional").
-// Still a 4-bit quant, still realistic to run (slowly) on an 8 GB+ phone's
-// CPU via llama.cpp's Android NEON kernels, but this is the tier most
-// likely to feel sluggish on real hardware -- flagged honestly in the
-// final report as the least field-tested choice of the three.
+// Upgraded from 3B to 7B at the owner's explicit request for a "very
+// powerful" device. Qwen's own GGUF repo only ships this quant as a
+// 2-shard split file (qwen2.5-7b-instruct-q4_k_m-0000{1,2}-of-00002.gguf),
+// which llama_model_load_from_file() (a single-path API -- see
+// llama-android.cpp's nativeLoad) can't load directly; bartowski's
+// community requant (same Apache-2.0 source model, same Q4_K_M quant
+// method) ships the identical model as one file instead, so that's what's
+// pinned here. sha256/sizeBytes read the same way every other entry in
+// this file was (X-Linked-ETag/X-Linked-Size on the HF CDN redirect),
+// verified via a real HTTPS HEAD request on 2026-08-24 -- re-verify before
+// release, same caveat as the other tiers.
 const HIGH = Object.freeze({
-  id: 'qwen2.5-3b-instruct-q4_k_m',
+  id: 'qwen2.5-7b-instruct-q4_k_m',
   tier: 'high',
-  label: 'Qwen2.5-3B-Instruct (Q4_K_M, GGUF)',
-  filename: 'qwen2.5-3b-instruct-q4_k_m.gguf',
-  url: 'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf',
-  sha256: '626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d',
-  sizeBytes: 2104932768,
+  label: 'Qwen2.5-7B-Instruct (Q4_K_M, GGUF)',
+  filename: 'qwen2.5-7b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
+  sha256: '65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423',
+  sizeBytes: 4683074240,
   license: 'Apache-2.0',
   contextSize: 2048,
-  recommendedMinRamBytes: 8 * 1024 * 1024 * 1024,
-  recommendedMinFreeDiskBytes: 4 * 1024 * 1024 * 1024,
+  // A 4.68GB model file alone needs real headroom above the MID tier's
+  // floor -- 12GB matches the actual device this was validated against
+  // (see selectTierForDevice's comment) rather than a lower, untested
+  // number.
+  recommendedMinRamBytes: 12 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 6 * 1024 * 1024 * 1024,
 });
 
 export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH });
@@ -82,22 +93,23 @@ export const MODEL_SPEC = MID;
 // undefined/null) -- the same native-device-info shape llmRuntime.js's
 // getNativeDeviceInfo() returns from the Capacitor plugin.
 //
-// HIGH is intentionally never returned here for now: a real 12GB-RAM
-// device (a flagship, comfortably above HIGH.recommendedMinRamBytes)
-// generating with the 3B model got killed by Android mid-generation with
-// the app in the foreground the whole time -- a native OOM kill (or an
-// OEM-level "unresponsive foreground app" kill during the long CPU-bound
-// generate() call) neither JS nor the Kotlin plugin's try/catch can
-// observe or recover from, since the whole process is torn down
-// externally. HIGH was already flagged as "the least field-tested choice
-// of the three" when it was added; capping every device at MID -- the
-// exact model desktop's already-validated path uses -- until HIGH has
-// actually been proven stable on real hardware is the safer default.
-// Re-enable by restoring `if (ram >= HIGH.recommendedMinRamBytes) return
-// HIGH;` once that validation has happened.
+// HIGH was disabled for a while after a real 12GB-RAM device generating
+// with the 3B model got killed by Android mid-generation (a native OOM
+// kill or OEM "unresponsive foreground app" kill neither JS nor the Kotlin
+// plugin's try/catch can observe, since the whole process is torn down
+// externally). Re-enabled at the same 8GB+ floor now that
+// llama-android.cpp's generation loop has real safety nets that didn't
+// exist at the time of that crash: a generous-but-real wall-clock deadline
+// (so a slow/throttled device can't run unbounded into the same failure)
+// and a forced minimum output length (so a HIGH-tier run that does finish
+// quickly still produces a real answer, not a one-word non-answer). Still
+// the least field-tested of the three tiers -- a genuinely underpowered
+// "8GB RAM" device (e.g. heavy background load, thermal throttling) can
+// still be slow enough to hit the deadline before finishing.
 export function selectTierForDevice(deviceInfo) {
   const ram = deviceInfo?.totalMemBytes;
   if (typeof ram !== 'number' || ram <= 0) return null;
+  if (ram >= HIGH.recommendedMinRamBytes) return HIGH;
   if (ram >= MID.recommendedMinRamBytes) return MID;
   if (ram >= LOW.recommendedMinRamBytes) return LOW;
   return null;

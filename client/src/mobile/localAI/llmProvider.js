@@ -5,23 +5,22 @@ const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
   'Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma.';
 
-// Kept short (3-4 sentences, not a long structured report): on-device
-// generation speed varies wildly by phone, and an ambitious long-report
-// instruction meant the native 90s wall-clock generation deadline
-// (llama-android.cpp) always ran out mid-sentence/mid-item on a slow
-// device, producing an incoherent, truncated answer. An earlier version of
-// this instruction asked for "at most 2-3 items" -- on a real device the
-// model took that as license to answer in 3-5 words and stop (a small
-// instruct model reads "short" as "shortest possible" unless told
-// otherwise), producing a near-empty, useless result. llama-android.cpp's
-// generation loop now also enforces a hard minimum (kMinNewTokens, forcing
-// eos/eot's logits to -inf) so the model literally cannot stop that early
-// regardless of how this instruction is worded -- this text asks for
-// something the model can naturally reach that floor with, rather than
-// fighting a hard token-count wall it has no way to satisfy gracefully.
+// Owner explicitly opted into a much larger budget for this instruction
+// (HIGH tier upgraded to 7B, generation deadline raised to 240s in
+// llama-android.cpp, targeting "a very powerful device") -- this replaces
+// the earlier, deliberately tiny "3-4 sentences" version that was sized
+// for a 1.5B model with a 90s ceiling. A structured, headed skeleton (not
+// category-specific -- one generic shape shared by every analysis
+// category, savunma/ekonomi/bddk/... alike, rather than 9 separately
+// tuned prompts nobody can field-test individually) mirrors the shape of
+// the cloud's report output (server/src/services/aiPrompts.ts's own
+// "## basliklar" convention) without that prompt's full institutional
+// knowledge base, which is many times larger than this model's entire
+// 2048-token context window.
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak kısa ama TAM bir analiz taslağı yaz (en az 3-4 dolu cümle). ' +
-  'Yarım bırakma, tek kelimeyle cevap verme. Kesin veri yoksa varsayım olduğunu belirt. ' +
+  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak yapılandırılmış bir analiz raporu yaz. ' +
+  'Şu başlıkları kullan (## ile): "## Değerlendirme" (durumun özeti), "## Etki ve Riskler", "## Öneriler". ' +
+  'Her başlık altında en az 2-3 dolu cümle yaz; yarım bırakma, tek kelimeyle cevap verme. Kesin veri yoksa varsayım olduğunu belirt. ' +
   // A small on-device model's failure mode observed firsthand: instead of
   // writing new prose, it echoed the context block's own "[1] "Başlık"
   // (kategori, tarih)" labels back verbatim as fragmented, ungrammatical
@@ -76,12 +75,12 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
       const queryText = `${category} ${title} ${prompt}`.trim();
       const contextDocs = await retrieveContext(db, userId, queryText);
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText: prompt || title, lang });
-      // 220, not 600: matches GENERATE_INSTRUCTION's new "short, 2-3 item"
-      // ask, and stays reachable within the native 90s generation deadline
-      // even on a slow device (~1 tok/sec was observed on a real phone) --
-      // a maxTokens budget the device can't realistically reach before the
-      // deadline just gets cut off mid-sentence regardless of this cap.
-      const content = await runtime.generate(fullPrompt, { maxTokens: 220, temperature: 0.4 });
+      // Raised from 220 alongside GENERATE_INSTRUCTION's 3-section format
+      // and llama-android.cpp's 240s deadline -- a 3-heading report needs
+      // real room. Still well short of contextSize (2048): MAX_INPUT_CHARS
+      // (2000 chars, ~500 tokens) + the RAG context block + this
+      // instruction leaves comfortable headroom for a 700-token reply.
+      const content = await runtime.generate(fullPrompt, { maxTokens: 700, temperature: 0.4 });
       return {
         type: 'analysis',
         result: { title: title || `${category} analizi`, content, sources: contextDocs.map((d) => ({ id: d.id, title: d.title })) },
