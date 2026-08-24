@@ -58,7 +58,7 @@ export function useVoice() {
         return;
       }
 
-      if (ev.error !== 'aborted') setError('Hata: ' + ev.error);
+      if (ev.error !== 'aborted') setError('speech_recognition_error: ' + ev.error);
       cbRef.current    = null;
       stoppedRef.current = false;
       setRecording(false);
@@ -73,7 +73,7 @@ export function useVoice() {
     try {
       rec.start();
     } catch (e) {
-      setError('Mikrofon hatası: ' + e.message);
+      setError('microphone_error: ' + e.message);
       stoppedRef.current = false;
       setRecording(false);
       window.dispatchEvent(new CustomEvent('aq:resume'));
@@ -87,7 +87,7 @@ export function useVoice() {
     continuousRef.current = continuous;
     langRef.current     = (lang || 'tr-TR').startsWith('en') ? 'en-US' : 'tr-TR';
 
-    if (!SR) { setError('Tarayıcı desteklemiyor. Chrome kullanın.'); return; }
+    if (!SR) { setError('browser_unsupported_use_chrome'); return; }
 
     window.dispatchEvent(new CustomEvent('aq:pause'));
     setRecording(true);
