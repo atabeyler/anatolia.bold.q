@@ -225,6 +225,23 @@ cd android && ./gradlew assembleDebug
 ./gradlew assembleRelease
 ```
 
+### On-Device Local AI (Android)
+
+When the device has no network connectivity, ANATOLIA-Q can still generate a full analysis report entirely on-device, via a real generative LLM running through `llama.cpp` (native NDK/JNI, `mobile/android/app/src/main/cpp/`) instead of falling back to matching archived reports.
+
+- **Not installed by default.** The model is not bundled with the APK. Before offline generation can work, the user must open **Settings → Local AI** while online and tap **Download** to fetch and verify the model once; it is then stored on-device and reused across sessions.
+- **Device-tiered model selection** — the app reads the device's real RAM (`getDeviceInfo`) and picks the richest tier it can run:
+
+  | Tier | Model | Size | Min. RAM | Status |
+  |---|---|---|---|---|
+  | LOW | Qwen2.5-0.5B-Instruct (Q4_K_M, GGUF) | ~490 MB | 3 GB | Available |
+  | MID | Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF) — same model the desktop client pins | ~1.1 GB | 6 GB | Available (default for 6 GB+ devices) |
+  | HIGH | Qwen2.5-3B-Instruct (Q4_K_M, GGUF) | ~2.1 GB | 8 GB | Disabled — caused a real-device crash mid-generation during field testing; every device is currently capped at MID until HIGH is proven stable on real hardware |
+
+  A device below the LOW floor, or with no RAM signal at all, fails safe into the same archived-report matching used before this feature existed rather than attempting generation.
+- **Offline device login** follows the same "authorize once online, then works offline" model as desktop: the first login on a given device for a given account must succeed online (it registers the device and caches a locally-verifiable credential); every login after that on that device can succeed fully offline.
+- Generation runs off the UI thread via a Capacitor plugin (`LocalLLMPlugin.kt`) and can take from several seconds to a few minutes depending on the selected tier and device CPU; keep the app in the foreground until it completes.
+
 ---
 
 ## Environment Variables
@@ -289,7 +306,9 @@ Production runs on Northflank, which builds the repo's `Dockerfile` and deploys 
 | `.github/workflows/ci.yml` | Push / pull request | Server/client typecheck, lint and tests plus quantum Python syntax validation |
 | `.github/workflows/codeql.yml` | Push / pull request / weekly schedule | Static analysis (SAST); findings are published as code-scanning alerts |
 | `.github/workflows/android-release.yml` | Push to `main` / manual dispatch | Builds the sideload APK and publishes it to GitHub Releases |
+| `.github/workflows/android-emulator-test.yml` | Push to `main` / manual dispatch | Informational only, never gates the release pipeline: runs the real on-device instrumented test against an Android emulator, verifying the native `llama.cpp` JNI bridge actually loads a model and generates text, not just that it compiles |
 | `.github/workflows/desktop-release.yml` | Push to `main`, `desktop-v*` tag / manual dispatch | Builds Windows/macOS/Linux installers and publishes them to GitHub Releases |
+| `.github/workflows/elliptic-benchmark.yml` | Push to experiment branches / manual dispatch | Runs the real Elliptic AML fraud-detection benchmark; not part of the main release pipeline |
 
 A deployment should be treated as live only after CI completes successfully and the Northflank build/deploy finishes.
 
