@@ -3,6 +3,7 @@ import path from 'node:path';
 import { queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
 import { createModelManager } from './modelManager.js';
 import { createLLMQuery } from './llmProvider.js';
+import { selectTierForDevice } from './modelSpec.js';
 
 // Ordered by preference:
 //   1. local-llm    -- real generative inference (Qwen2.5-1.5B-Instruct,
@@ -24,7 +25,12 @@ import { createLLMQuery } from './llmProvider.js';
 // file is the only thing that needs a new entry, per the original seam
 // design (see the comment history in provider.js).
 let modelsDir = path.join(os.homedir(), '.anatolia-q', 'models');
-let modelManager = createModelManager({ modelsDir });
+// Device-tiered model selection (mirrors client/src/mobile/localAI/
+// registry.js's own tiering, minus the async native-plugin round-trip --
+// os.totalmem() is synchronous and cheap, so there's no equivalent of
+// mobile's "starts on a default tier, re-reads real RAM later" two-step;
+// the real tier is known immediately at construction time).
+let modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem()) });
 
 // Called once from desktop/main.js's startup sequence with Electron's real
 // app.getPath('userData')-based path, so the model lives next to the rest
@@ -34,7 +40,7 @@ let modelManager = createModelManager({ modelsDir });
 export function configureLocalLLM({ modelsDir: dir } = {}) {
   if (dir && dir !== modelsDir) {
     modelsDir = dir;
-    modelManager = createModelManager({ modelsDir });
+    modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem()) });
   }
   return modelManager;
 }

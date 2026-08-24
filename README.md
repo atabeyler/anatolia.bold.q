@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-3.0.32-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-3.0.34-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -239,6 +239,8 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
   | HIGH | Qwen2.5-7B-Instruct (Q4_K_M, GGUF) | ~4.7 GB | 12 GB | Available for 12 GB+ devices — an earlier 3B HIGH tier caused a real-device crash mid-generation; the native generation loop now enforces a wall-clock deadline and a minimum output length, the two safety nets that were missing when that crash happened |
 
   A device below the LOW floor, or with no RAM signal at all, fails safe into the same archived-report matching used before this feature existed rather than attempting generation.
+
+  Desktop (`desktop/localAI/`) tiers the same way, minus the LOW tier — a real desktop/laptop's realistic floor is already the MID tier's own 4 GB minimum: MID (1.5B) by default, HIGH (7B) automatically on a 12 GB+ machine.
 - **Offline device login** follows the same "authorize once online, then works offline" model as desktop: the first login on a given device for a given account must succeed online (it registers the device and caches a locally-verifiable credential); every login after that on that device can succeed fully offline.
 - Generation runs off the UI thread via a Capacitor plugin (`LocalLLMPlugin.kt`) and can take from several seconds to a few minutes depending on the selected tier and device CPU; keep the app in the foreground until it completes.
 
