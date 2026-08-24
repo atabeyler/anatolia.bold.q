@@ -5,9 +5,17 @@ const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
   'Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma.';
 
+// Kept deliberately short (2-3 madde, not a long structured report):
+// on-device generation speed varies wildly by phone -- a real device was
+// observed producing well under 100 tokens within the native 90s wall-clock
+// generation deadline (llama-android.cpp), and an ambitious long-report
+// instruction meant that budget always ran out mid-sentence/mid-item,
+// producing an incoherent, truncated answer. Asking for a short answer the
+// model can actually finish (hit its own end-of-turn token) within budget
+// produces a shorter but complete and coherent result instead.
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak yapılandırılmış, başlıklı bir analiz taslağı yaz. ' +
-  'Kesin veri yoksa varsayım olduğunu belirt.';
+  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak KISA (en fazla 2-3 madde) bir analiz taslağı yaz. ' +
+  'Her maddeyi tek cümlede tamamla, madde başına dönme. Kesin veri yoksa varsayım olduğunu belirt.';
 
 // Resource-safety context cap (task spec point 8). Phone-class contextSize
 // is 1536-2048 tokens (modelSpec.js); roughly budgeting ~4 chars/token for
@@ -56,7 +64,12 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
       const queryText = `${category} ${title} ${prompt}`.trim();
       const contextDocs = await retrieveContext(db, userId, queryText);
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText: prompt || title, lang });
-      const content = await runtime.generate(fullPrompt, { maxTokens: 600, temperature: 0.4 });
+      // 220, not 600: matches GENERATE_INSTRUCTION's new "short, 2-3 item"
+      // ask, and stays reachable within the native 90s generation deadline
+      // even on a slow device (~1 tok/sec was observed on a real phone) --
+      // a maxTokens budget the device can't realistically reach before the
+      // deadline just gets cut off mid-sentence regardless of this cap.
+      const content = await runtime.generate(fullPrompt, { maxTokens: 220, temperature: 0.4 });
       return {
         type: 'analysis',
         result: { title: title || `${category} analizi`, content, sources: contextDocs.map((d) => ({ id: d.id, title: d.title })) },

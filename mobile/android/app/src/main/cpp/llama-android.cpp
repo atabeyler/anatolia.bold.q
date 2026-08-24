@@ -200,6 +200,17 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     llama_sampler *sampler = llama_sampler_chain_init(samplerParams);
     llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
     llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9f, 1));
+    // Repetition penalty -- observed firsthand on a real device: without
+    // this, the small MID-tier model repeated an entire phrase back to back
+    // ("Sıper/GÖKDENİZ Katmanlı Savunma" twice in a row) in real output.
+    // Added after top_k/top_p per llama_sampler_init_penalties' own doc
+    // comment (applying it against the full vocabulary first is slow --
+    // narrow the candidate set with top_k/top_p first). penalty_last_n=64
+    // covers recent repetition without being expensive to scan on a slow
+    // CPU; penalty_repeat=1.15 is llama.cpp's own commonly-used default.
+    llama_sampler_chain_add(sampler, llama_sampler_init_penalties(
+            llama_vocab_n_tokens(session->vocab), /* penalty_last_n */ 64,
+            /* penalty_repeat */ 1.15f, /* penalty_freq */ 0.0f, /* penalty_present */ 0.0f));
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(jTemperature > 0.0f ? jTemperature : 0.1f));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 

@@ -19,7 +19,7 @@ import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipeline
 import AnalysisWizard from './AnalysisWizard.jsx';
 import EngineBadge from './EngineBadge.jsx';
 import { DEPTH_IDS } from '../services/voiceIntentSchema.js';
-import { isNativeApp, nativeAI, nativeConnectivity } from '../services/nativeBridge.js';
+import { isNativeApp, nativeAI, nativeAnalyses, nativeConnectivity } from '../services/nativeBridge.js';
 import { routeAnalysisGeneration, AllEnginesUnavailableError } from '../services/analysisRouter.js';
 import { ENGINE } from '../services/aiContract.js';
 
@@ -271,6 +271,19 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
       // indicator, and local engines simply don't have the cloud-only
       // extras (docx/pdf buttons already guard on `res?.docxBase64`).
       setResult({ ...(normalized.engine === ENGINE.CLOUD ? normalized.raw : {}), title: normalized.title, content: normalized.content, engine: normalized.engine, providerLabel: normalized.providerLabel, sources: normalized.sources });
+
+      // Cloud-generated reports are persisted server-side by api.generateAnalysis
+      // itself and reach this device's local History via the next sync --
+      // a local-LLM report is genuinely new content that only ever existed
+      // in this one response, with no server round-trip to persist it, so
+      // without this call it would render once and then be gone the moment
+      // the wizard resets ("geçmiş bölümüne kaydetmiyor"). Local-data
+      // (archive-synthesis) results are deliberately NOT saved here -- they
+      // already just resurface existing History rows, so re-saving them
+      // would create a duplicate.
+      if (normalized.engine === ENGINE.LOCAL_LLM && nativeAnalyses) {
+        nativeAnalyses.create({ category, title: normalized.title, content: normalized.content, aiProvider: normalized.providerLabel }).catch(() => {});
+      }
     } catch (e) {
       if (generationIdRef.current !== myGenerationId) return; // superseded by a newer request
       setError(localizedError(e));
@@ -292,8 +305,25 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
     }
   };
 
+  // Local engines (local-llm, local-data) never have docxBase64/pdfBase64 --
+  // those are only produced by the cloud's server-side docx/pdf export step,
+  // which an offline device never talks to. Silently no-op'ing on a missing
+  // field (the previous behavior) left the download/share buttons looking
+  // broken with zero feedback. Every local result still has plain text
+  // (res.content), so falling back to a .txt export keeps the buttons
+  // actually doing something offline instead of nothing at all.
+  const textFallbackBlob = (res) => new Blob([`${res?.title || 'ANATOLIA-Q Raporu'}\n\n${res?.content || ''}`], { type: 'text/plain' });
+
   const downloadDocx = (res = result) => {
-    if (!res?.docxBase64) return;
+    if (!res?.docxBase64) {
+      const url = URL.createObjectURL(textFallbackBlob(res));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ANATOLIA-Q_${category}_${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     const blob = base64ToBlob(res.docxBase64, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -304,7 +334,15 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   };
 
   const downloadPdf = (res = result) => {
-    if (!res?.pdfBase64) return;
+    if (!res?.pdfBase64) {
+      const url = URL.createObjectURL(textFallbackBlob(res));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ANATOLIA-Q_${category}_${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     const blob = base64ToBlob(res.pdfBase64, 'application/pdf');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -315,7 +353,10 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   };
 
   const shareReport = (res = result) => {
-    if (!res?.pdfBase64) return;
+    if (!res?.pdfBase64) {
+      shareOrDownloadBlob(textFallbackBlob(res), `ANATOLIA-Q_${category}_${Date.now()}.txt`, 'text/plain', res?.title || 'ANATOLIA-Q Raporu');
+      return;
+    }
     const blob = base64ToBlob(res.pdfBase64, 'application/pdf');
     shareOrDownloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf', res.title || 'ANATOLIA-Q Raporu');
   };
