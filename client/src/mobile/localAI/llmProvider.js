@@ -15,7 +15,13 @@ const CHAT_INSTRUCTION =
 // produces a shorter but complete and coherent result instead.
 const GENERATE_INSTRUCTION =
   'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak KISA (en fazla 2-3 madde) bir analiz taslağı yaz. ' +
-  'Her maddeyi tek cümlede tamamla, madde başına dönme. Kesin veri yoksa varsayım olduğunu belirt.';
+  'Her maddeyi tek cümlede tamamla, madde başına dönme. Kesin veri yoksa varsayım olduğunu belirt. ' +
+  // A small on-device model's failure mode observed firsthand: instead of
+  // writing new prose, it echoed the context block's own "[1] "Başlık"
+  // (kategori, tarih)" labels back verbatim as fragmented, ungrammatical
+  // output. Explicit against that -- the model otherwise defaults to the
+  // easiest continuation, which is copying nearby text.
+  'Bağlamdaki başlık, kategori veya tarih etiketlerini olduğu gibi kopyalama; kendi cümlelerinle, tam ve anlamlı şekilde yaz.';
 
 // Resource-safety context cap (task spec point 8). Phone-class contextSize
 // is 1536-2048 tokens (modelSpec.js); roughly budgeting ~4 chars/token for

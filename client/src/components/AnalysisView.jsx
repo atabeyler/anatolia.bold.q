@@ -10,7 +10,7 @@ import { CATEGORIES } from './CategorySidebar.jsx';
 import { api } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 import { reportTitleExamples } from '../services/i18n.js';
-import { base64ToBlob, shareOrDownloadBlob } from '../services/shareFile.js';
+import { base64ToBlob, downloadBlob, shareOrDownloadBlob } from '../services/shareFile.js';
 import { buildLocalDocxBlob, buildLocalPdfBlob } from '../services/localExport.js';
 import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
@@ -314,43 +314,15 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   // localExport.js builds a real, openable docx/pdf client-side from the
   // same res.title/res.content every local result already has.
   const downloadDocx = async (res = result) => {
-    if (!res?.docxBase64) {
-      const blob = await buildLocalDocxBlob(res || {});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ANATOLIA-Q_${category}_${Date.now()}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-    const blob = base64ToBlob(res.docxBase64, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ANATOLIA-Q_${category}_${Date.now()}.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const blob = res?.docxBase64
+      ? base64ToBlob(res.docxBase64, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+      : await buildLocalDocxBlob(res || {});
+    await downloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   };
 
-  const downloadPdf = (res = result) => {
-    if (!res?.pdfBase64) {
-      const blob = buildLocalPdfBlob(res || {});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ANATOLIA-Q_${category}_${Date.now()}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-    const blob = base64ToBlob(res.pdfBase64, 'application/pdf');
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ANATOLIA-Q_${category}_${Date.now()}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadPdf = async (res = result) => {
+    const blob = res?.pdfBase64 ? base64ToBlob(res.pdfBase64, 'application/pdf') : buildLocalPdfBlob(res || {});
+    await downloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf');
   };
 
   const shareReport = (res = result) => {
