@@ -236,10 +236,33 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     constexpr auto kGenerationDeadline = std::chrono::seconds(90);
     const auto startTime = std::chrono::steady_clock::now();
 
+    // Nothing below enforced a *minimum* length -- the model is free to
+    // sample its own end-of-turn token on the very first step, and the loop
+    // just accepted that as "normal completion". Observed firsthand on a
+    // real device: a few-word non-answer ("Özcevap: Sınır hareketi,
+    // 08.08.2026") saved as the entire report. llama_sampler_sample() reads
+    // logits fresh via llama_get_logits_ith() on every call (see
+    // llama-sampler.cpp's llama_sampler_sample) -- forcing eos/eot's own
+    // logit to -inf for the first kMinNewTokens steps makes early
+    // termination *impossible* during that window, rather than just
+    // unlikely, without needing a separate resample-and-retry path.
+    constexpr int32_t kMinNewTokens = 48;
+    const llama_token eosToken = llama_vocab_eos(session->vocab);
+    const llama_token eotToken = llama_vocab_eot(session->vocab);
+    const int32_t nVocab = llama_vocab_n_tokens(session->vocab);
+
     for (int32_t i = 0; i < maxNewTokens; i++) {
         if (std::chrono::steady_clock::now() - startTime > kGenerationDeadline) {
             LOGE("generation deadline exceeded at token %d, returning partial output", i);
             break;
+        }
+
+        if (i < kMinNewTokens) {
+            float *logits = llama_get_logits_ith(session->ctx, -1);
+            if (logits != nullptr) {
+                if (eosToken >= 0 && eosToken < nVocab) logits[eosToken] = -INFINITY;
+                if (eotToken >= 0 && eotToken < nVocab) logits[eotToken] = -INFINITY;
+            }
         }
 
         llama_token newToken = llama_sampler_sample(sampler, session->ctx, -1);

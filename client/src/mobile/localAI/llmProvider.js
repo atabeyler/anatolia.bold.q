@@ -5,17 +5,23 @@ const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
   'Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma.';
 
-// Kept deliberately short (2-3 madde, not a long structured report):
-// on-device generation speed varies wildly by phone -- a real device was
-// observed producing well under 100 tokens within the native 90s wall-clock
-// generation deadline (llama-android.cpp), and an ambitious long-report
-// instruction meant that budget always ran out mid-sentence/mid-item,
-// producing an incoherent, truncated answer. Asking for a short answer the
-// model can actually finish (hit its own end-of-turn token) within budget
-// produces a shorter but complete and coherent result instead.
+// Kept short (3-4 sentences, not a long structured report): on-device
+// generation speed varies wildly by phone, and an ambitious long-report
+// instruction meant the native 90s wall-clock generation deadline
+// (llama-android.cpp) always ran out mid-sentence/mid-item on a slow
+// device, producing an incoherent, truncated answer. An earlier version of
+// this instruction asked for "at most 2-3 items" -- on a real device the
+// model took that as license to answer in 3-5 words and stop (a small
+// instruct model reads "short" as "shortest possible" unless told
+// otherwise), producing a near-empty, useless result. llama-android.cpp's
+// generation loop now also enforces a hard minimum (kMinNewTokens, forcing
+// eos/eot's logits to -inf) so the model literally cannot stop that early
+// regardless of how this instruction is worded -- this text asks for
+// something the model can naturally reach that floor with, rather than
+// fighting a hard token-count wall it has no way to satisfy gracefully.
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak KISA (en fazla 2-3 madde) bir analiz taslağı yaz. ' +
-  'Her maddeyi tek cümlede tamamla, madde başına dönme. Kesin veri yoksa varsayım olduğunu belirt. ' +
+  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak kısa ama TAM bir analiz taslağı yaz (en az 3-4 dolu cümle). ' +
+  'Yarım bırakma, tek kelimeyle cevap verme. Kesin veri yoksa varsayım olduğunu belirt. ' +
   // A small on-device model's failure mode observed firsthand: instead of
   // writing new prose, it echoed the context block's own "[1] "Başlık"
   // (kategori, tarih)" labels back verbatim as fragmented, ungrammatical
