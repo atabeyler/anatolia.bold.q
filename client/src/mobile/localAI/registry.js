@@ -37,9 +37,17 @@ let deviceInfoCache = null;
 export async function refreshInstalledState() {
   deviceInfoCache = await getNativeDeviceInfo();
   const tierSpec = selectTierForDevice(deviceInfoCache) || MODEL_TIERS.mid;
-  if (tierSpec.id !== modelManager.spec.id) {
-    modelManager = createModelManager({ spec: tierSpec, deviceInfo: { nativeDeviceInfo: deviceInfoCache } });
-  }
+  // Always rebuild against the freshly-read deviceInfo, not only when the
+  // tier changes -- the starting modelManager (line 33) is already pinned
+  // to the MID tier, and selectTierForDevice() now also always returns MID
+  // (HIGH permanently disabled, see modelSpec.js), so tierSpec.id ===
+  // modelManager.spec.id on effectively every call. Gating the rebuild on
+  // a tier change meant the real native RAM reading (deviceInfoCache) was
+  // NEVER attached to modelManager after the very first construction --
+  // checkCapability() always ran with deviceInfo: undefined, which is why
+  // Settings > Local AI's device-capacity/RAM field stayed "—" even once
+  // getDeviceInfo() itself was working correctly on the native side.
+  modelManager = createModelManager({ spec: tierSpec, deviceInfo: { nativeDeviceInfo: deviceInfoCache } });
   installedCache = await modelManager.isModelInstalled();
   return installedCache;
 }
