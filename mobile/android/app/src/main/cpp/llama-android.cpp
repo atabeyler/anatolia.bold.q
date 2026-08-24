@@ -20,6 +20,7 @@
 
 #include <android/log.h>
 #include <jni.h>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -208,7 +209,28 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     int32_t nCur = nPromptTokens;
     char pieceBuf[256];
 
+    // Wall-clock generation budget -- observed firsthand on a real device
+    // (12GB RAM, MID/1.5B tier): a slow/thermal-throttled CPU generating at
+    // well under 1 token/sec ran the full maxNewTokens=600 budget for
+    // ~10 minutes of sustained max-thread native compute, after which the
+    // whole app process was killed by the OS (thermal/OOM watchdog) with no
+    // JS-visible error at all -- LocalLLMPlugin.kt's try/catch can't save a
+    // process that's already gone. maxNewTokens alone is not a safety bound
+    // on a slow/throttling device; wall-clock time is. Capped generously
+    // above what even a slow device should need for a normal reply, but far
+    // below the ~10 minutes that reproduced the crash -- breaking here
+    // returns whatever text was generated so far (same graceful partial-
+    // output pattern as the llama_decode-failure break below) instead of
+    // running the device into the same failure again.
+    constexpr auto kGenerationDeadline = std::chrono::seconds(90);
+    const auto startTime = std::chrono::steady_clock::now();
+
     for (int32_t i = 0; i < maxNewTokens; i++) {
+        if (std::chrono::steady_clock::now() - startTime > kGenerationDeadline) {
+            LOGE("generation deadline exceeded at token %d, returning partial output", i);
+            break;
+        }
+
         llama_token newToken = llama_sampler_sample(sampler, session->ctx, -1);
         if (llama_vocab_is_eog(session->vocab, newToken)) {
             break; // model signaled end-of-turn -- normal completion, not an error
