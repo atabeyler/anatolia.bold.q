@@ -9,17 +9,26 @@ import { selectProvider, _internal } from './registry.js';
 // bug in the local-llm path stays visible instead of being hidden behind
 // a degraded archive answer.
 //
-// 'local_llm_unavailable' is llmProvider.js's own per-request capability
-// check. 'android_native_llm_plugin_missing' is llmRuntime.js's -- it's
-// what actually fires on a real device where the native LocalLLM
-// Capacitor plugin isn't reachable from JS (observed firsthand: Settings
-// > Local AI showed the RAM/disk capacity fields empty too, both reading
-// through the same plugin call, on a device where "Yeni Analiz" then
-// failed with no fallback at all). Both are expected, recoverable
-// environment states, not bugs -- treating only the first one as
-// recoverable, as before, silently broke the archive fallback whenever
-// the plugin itself was the actual problem.
-const RECOVERABLE_LOCAL_LLM_ERRORS = new Set(['local_llm_unavailable', 'android_native_llm_plugin_missing']);
+// Every 'local_llm_*'-prefixed sentinel (llmProvider.js's own
+// 'local_llm_unavailable' capability check, and LocalLLMPlugin.kt's own
+// PluginCall.reject() strings -- 'local_llm_model_file_missing: ...',
+// 'local_llm_native_load_failed'[': <native message>'],
+// 'local_llm_generate_failed: ...') plus llmRuntime.js's
+// 'android_native_llm_plugin_missing' are all expected, recoverable "the
+// local LLM isn't usable right now" states, not bugs -- matched by prefix
+// rather than an exact-string Set so a reject() message with an appended
+// native detail (the ": <message>" suffix above) still recognizes as
+// recoverable. Observed firsthand on a real device that a plugin call
+// genuinely reaching the native side and failing there
+// ('local_llm_native_load_failed', llama.cpp itself refusing the
+// downloaded model) was NOT in an earlier version of this list -- so
+// "Yeni Analiz" failed with no archive fallback at all despite the
+// archive path being fully available. Anything NOT matching this prefix
+// (a real JS bug, a malformed request, ...) still surfaces as ok:false
+// rather than being silently masked.
+function isRecoverableLocalLLMError(message) {
+  return typeof message === 'string' && (message.startsWith('local_llm_') || message === 'android_native_llm_plugin_missing');
+}
 
 export function createLocalAIProvider({ db, userId, diagnostics }) {
   const provider = selectProvider();
@@ -38,7 +47,7 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           const result = await runQuery(request);
           return { ok: true, capability: current.capability, ...result };
         } catch (err) {
-          const isRecoverableLLMFailure = current.capability === 'local-llm' && RECOVERABLE_LOCAL_LLM_ERRORS.has(err.message);
+          const isRecoverableLLMFailure = current.capability === 'local-llm' && isRecoverableLocalLLMError(err.message);
           if (isRecoverableLLMFailure && !isLast) {
             diagnostics?.warn?.('local_llm_fallback', { message: err.message });
             continue;

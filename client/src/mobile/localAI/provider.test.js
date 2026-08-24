@@ -74,6 +74,38 @@ describe('createLocalAIProvider local-llm -> offline-extractive fallback', () =>
     expect(result.capability).toBe('offline-extractive');
   });
 
+  it('falls through to offline-extractive when the native model load fails (observed real-device error)', async () => {
+    Object.assign(PROVIDERS[0], {
+      isAvailable: () => true,
+      createQuery: () => async () => { throw new Error('local_llm_native_load_failed'); },
+    });
+
+    const db = await createTestMobileDb();
+    await dbRun(db, `
+      INSERT INTO analyses (id, user_id, device_id, version, created_at, updated_at, sync_status, category, title, content)
+      VALUES ('a', 'BOLD-001', 'AQ-AND-TEST', 1, datetime('now'), datetime('now'), 'synced', 'x', 'Rapor', 'içerik')
+    `);
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ text: 'rapor' });
+    expect(result.ok).toBe(true);
+    expect(result.capability).toBe('offline-extractive');
+  });
+
+  it('falls through to offline-extractive when the native load fails with an appended detail suffix', async () => {
+    Object.assign(PROVIDERS[0], {
+      isAvailable: () => true,
+      createQuery: () => async () => { throw new Error('local_llm_native_load_failed: UnsatisfiedLinkError'); },
+    });
+
+    const db = await createTestMobileDb();
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ text: 'rapor' });
+    expect(result.ok).toBe(true);
+    expect(result.capability).toBe('offline-extractive');
+  });
+
   it('does NOT fall through for a non-recoverable local-llm error', async () => {
     Object.assign(PROVIDERS[0], {
       isAvailable: () => true,
