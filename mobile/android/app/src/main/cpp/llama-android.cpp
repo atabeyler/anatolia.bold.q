@@ -73,6 +73,15 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeLoad(
     llama_model *model = llama_model_load_from_file(modelPath.c_str(), modelParams);
     if (model == nullptr) {
         LOGE("llama_model_load_from_file failed for %s", modelPath.c_str());
+        // Thrown (not just a 0 return) so LocalLLMPlugin.kt's surrounding
+        // try/catch(Throwable) folds this specific reason into its
+        // "local_llm_native_load_failed: <message>" rejection instead of
+        // the previous bare "local_llm_native_load_failed" -- collapsing
+        // "model file rejected by llama.cpp" and "context alloc failed"
+        // (below) into one indistinguishable outcome was the last blocker
+        // to diagnosing a real on-device load failure any further than
+        // "it failed somewhere in native code".
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "llama_model_load_from_file returned null (bad/unsupported GGUF, or out of memory)");
         return 0;
     }
 
@@ -86,6 +95,7 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeLoad(
     if (ctx == nullptr) {
         LOGE("llama_init_from_model failed");
         llama_model_free(model);
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "llama_init_from_model returned null (KV-cache/context allocation failed, likely out of memory)");
         return 0;
     }
 
