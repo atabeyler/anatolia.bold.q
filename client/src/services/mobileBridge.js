@@ -14,6 +14,7 @@ import { listUnresolvedConflicts, resolveConflict } from '../mobile/sync/conflic
 import { createLocalAIProvider } from '../mobile/localAI/provider.js';
 import { getModelManager, refreshInstalledState } from '../mobile/localAI/registry.js';
 import { createDiagnostics } from '../mobile/diagnostics.js';
+import { getCurrentUser } from './api.js';
 
 // Android (Capacitor) equivalent of desktopBridge.js -- same exported API
 // shape (auth/analyses/sync/ai/connectivity) so the UI layer can treat both
@@ -75,7 +76,19 @@ async function getSessionManager() {
 
 async function currentUserId() {
   const session = await (await getSessionManager()).getSession();
-  return session?.userCode || null;
+  if (session?.userCode) return session.userCode;
+  // Falls back to decoding the app's own JWT (already in localStorage
+  // once logged in via the normal LoginPage flow) when nativeAuth's
+  // separate secure-store session was never established -- e.g.
+  // registerNativeSession()'s background /api/devices/register call
+  // failed silently (LoginPage.jsx only warns to console; it never blocks
+  // login). Without this fallback, a genuinely logged-in user (JWT
+  // present, dashboard/wizard fully working) could still see every local
+  // AI query -- including the always-available offline-extractive
+  // fallback -- fail with "Oturum açılmamış", masked upstream by
+  // analysisRouter.js's AllEnginesUnavailableError as a generic "no
+  // engine available" message with no visible explanation.
+  return getCurrentUser()?.userCode || null;
 }
 
 function setConnectivity(state) {
