@@ -81,10 +81,23 @@ export const MODEL_SPEC = MID;
 // fail-safe. `deviceInfo` is `{ totalMemBytes, freeDiskBytes }` (or
 // undefined/null) -- the same native-device-info shape llmRuntime.js's
 // getNativeDeviceInfo() returns from the Capacitor plugin.
+//
+// HIGH is intentionally never returned here for now: a real 12GB-RAM
+// device (a flagship, comfortably above HIGH.recommendedMinRamBytes)
+// generating with the 3B model got killed by Android mid-generation with
+// the app in the foreground the whole time -- a native OOM kill (or an
+// OEM-level "unresponsive foreground app" kill during the long CPU-bound
+// generate() call) neither JS nor the Kotlin plugin's try/catch can
+// observe or recover from, since the whole process is torn down
+// externally. HIGH was already flagged as "the least field-tested choice
+// of the three" when it was added; capping every device at MID -- the
+// exact model desktop's already-validated path uses -- until HIGH has
+// actually been proven stable on real hardware is the safer default.
+// Re-enable by restoring `if (ram >= HIGH.recommendedMinRamBytes) return
+// HIGH;` once that validation has happened.
 export function selectTierForDevice(deviceInfo) {
   const ram = deviceInfo?.totalMemBytes;
   if (typeof ram !== 'number' || ram <= 0) return null;
-  if (ram >= HIGH.recommendedMinRamBytes) return HIGH;
   if (ram >= MID.recommendedMinRamBytes) return MID;
   if (ram >= LOW.recommendedMinRamBytes) return LOW;
   return null;
