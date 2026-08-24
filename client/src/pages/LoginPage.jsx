@@ -210,13 +210,16 @@ export default function LoginPage({ onLogin }) {
       setToken(r.token);
       setStage(STAGES.AWAITING_APPROVAL);
     } catch (err) {
-      // Only a genuine network-level failure (fetch() itself rejecting,
-      // surfaced as a TypeError -- e.g. "Failed to fetch") falls back to
-      // offline verification, in case the connectivity monitor's cached
-      // state was stale. A rejection the server actually sent back (wrong
-      // password, blocked account, ...) is a real answer and must be shown
-      // as-is, not masked by an unrelated offline-login error.
-      if (isNativeApp && err instanceof TypeError) {
+      // Only a genuine network-level failure falls back to offline
+      // verification, in case the connectivity monitor's cached state was
+      // stale -- either fetch() itself rejecting (surfaced as a TypeError,
+      // e.g. "Failed to fetch") or the request's own timeout firing
+      // (AbortError, see api.js's loginRequest) when the device is offline
+      // but didn't reject promptly. A rejection the server actually sent
+      // back (wrong password, blocked account, ...) is a real answer and
+      // must be shown as-is, not masked by an unrelated offline-login
+      // error.
+      if (isNativeApp && (err instanceof TypeError || err.name === 'AbortError')) {
         await attemptOfflineLogin();
         return;
       }

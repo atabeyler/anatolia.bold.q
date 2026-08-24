@@ -40,22 +40,44 @@ function getJWT() { return isNativeShell() ? localStorage.getItem('anatolia_jwt'
 
 export function getToken() { return getJWT(); }
 
+// `timeoutMs` is opt-in per call (only loginRequest sets it below) --
+// without it a plain fetch() has no ceiling and stays exactly as it was for
+// every other call, including long-running cloud analysis generation. It
+// exists because a native device with no network doesn't always reject
+// fetch() promptly: depending on Android's radio/DNS state, an unreachable
+// origin can hang far longer than a user will wait before giving up,
+// leaving the login button spinning with neither a result nor an error --
+// and, critically, never reaching the offline-login fallback in
+// LoginPage.jsx, which only runs once this call's promise actually
+// rejects. AbortController turns that open-ended hang into a deterministic
+// rejection so the offline path is reached every time, not just when the
+// network happens to fail fast.
 async function req(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const { timeoutMs, ...fetchOptions } = options;
+  const headers = { 'Content-Type': 'application/json', ...(fetchOptions.headers || {}) };
   const jwt = getJWT();
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
 
-  const res = await fetch(baseFor(path) + path, { ...options, headers, credentials: 'include' });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    const e = new Error(err.error || 'API hatası');
-    // Some server errors carry a machine-readable code (e.g.
-    // ALL_AI_PROVIDERS_FAILED) so UI code can show a localized message
-    // instead of the raw server-side (Turkish-only) error text.
-    if (err.code) e.code = err.code;
-    throw e;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(baseFor(path) + path, {
+      ...fetchOptions, headers, credentials: 'include',
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      const e = new Error(err.error || 'API hatası');
+      // Some server errors carry a machine-readable code (e.g.
+      // ALL_AI_PROVIDERS_FAILED) so UI code can show a localized message
+      // instead of the raw server-side (Turkish-only) error text.
+      if (err.code) e.code = err.code;
+      throw e;
+    }
+    return res.json();
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 async function reqBlob(path) {
@@ -72,7 +94,7 @@ async function reqBlob(path) {
 
 export const api = {
   loginRequest: (userCode, password) =>
-    req('/api/auth/login-request', { method: 'POST', body: JSON.stringify({ userCode, password }) }),
+    req('/api/auth/login-request', { method: 'POST', body: JSON.stringify({ userCode, password }), timeoutMs: 8000 }),
 
   checkApproval: (token) => req(`/api/auth/check/${token}`),
 
