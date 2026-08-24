@@ -218,10 +218,23 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   // i18n) except for a few with a machine-readable `code`, which map to a
   // properly localized message here instead of leaking raw Turkish into a
   // UI the user may have set to another language.
-  const localizedError = (e) => (
-    e instanceof AllEnginesUnavailableError || e.code === 'ALL_ENGINES_UNAVAILABLE' ? t('errAllEnginesUnavailable') :
-    e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message
-  );
+  //
+  // AllEnginesUnavailableError's own message (routeAnalysisGeneration's
+  // 3 call sites in analysisRouter.js each pass a different specific
+  // reason -- "Oturum açılmamış", a provider's own error/detail, or
+  // nothing) used to be discarded entirely in favor of the generic
+  // localized string, making every local-AI failure mode show identical,
+  // undiagnosable text. Appending it (when present and not the class's
+  // own generic default) costs nothing for the common cloud-unreachable
+  // case and turns every future local-AI report into an actionable one.
+  const localizedError = (e) => {
+    if (e instanceof AllEnginesUnavailableError || e.code === 'ALL_ENGINES_UNAVAILABLE') {
+      const base = t('errAllEnginesUnavailable');
+      const detail = e.message && e.message !== 'Hiçbir AI motoru şu anda kullanılamıyor.' ? e.message : null;
+      return detail ? `${base} (${detail})` : base;
+    }
+    return e.code === 'ALL_AI_PROVIDERS_FAILED' ? t('errAllProvidersFailed') : e.message;
+  };
 
   // Routes through the Analysis Router (client/src/services/
   // analysisRouter.js) instead of calling api.generateAnalysis directly:

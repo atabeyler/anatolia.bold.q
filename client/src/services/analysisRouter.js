@@ -35,14 +35,21 @@ export async function routeAnalysisGeneration({ isOffline, cloudCall, nativeAIQu
     return normalizeCloudAnalysis(cloudResult);
   }
 
-  if (!nativeAIQuery) throw new AllEnginesUnavailableError();
+  if (!nativeAIQuery) throw new AllEnginesUnavailableError('nativeAIQuery_missing');
 
   const response = await nativeAIQuery({ mode: 'generate', ...generateRequest });
-  if (!response?.ok) throw new AllEnginesUnavailableError(response?.error || undefined);
+  // provider.js's `detail` (the underlying provider's own err.message, e.g.
+  // 'no_provider_available' or a real native exception) is far more
+  // specific than `error` (always one of two fixed strings) -- surfacing
+  // it here is what actually made this failure mode diagnosable instead
+  // of every local-AI failure showing identical, undiagnosable text.
+  if (!response?.ok) {
+    throw new AllEnginesUnavailableError([response?.error, response?.detail].filter(Boolean).join(': ') || undefined);
+  }
 
   if (response.capability === 'local-llm') return normalizeLocalLLMAnalysis(response);
   if (response.capability === 'offline-extractive') return normalizeLocalDataAnalysis(response);
-  throw new AllEnginesUnavailableError();
+  throw new AllEnginesUnavailableError(`unexpected_capability:${response.capability}`);
 }
 
 // Chat/consult variant: cloud path is the caller's existing streaming
@@ -53,7 +60,7 @@ export async function routeConsultChat({ isOffline, cloudCall, nativeAIQuery, ch
     const r = await cloudCall();
     return { engine: ENGINE.CLOUD, ok: true, content: r.content, providerLabel: r.provider, raw: r };
   }
-  if (!nativeAIQuery) throw new AllEnginesUnavailableError();
+  if (!nativeAIQuery) throw new AllEnginesUnavailableError('nativeAIQuery_missing');
   const response = await nativeAIQuery({ mode: 'chat', text: chatText });
   const normalized = normalizeLocalChat(response);
   if (!normalized.ok) throw new AllEnginesUnavailableError(normalized.error);
