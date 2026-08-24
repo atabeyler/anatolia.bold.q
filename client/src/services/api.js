@@ -93,8 +93,14 @@ async function reqBlob(path) {
 }
 
 export const api = {
+  // 25s, not a snappier few seconds: this endpoint's own bcrypt.compare()
+  // has been observed taking 7-12s under real server load, and a timeout
+  // that fires while a normal online login is still legitimately in
+  // flight is worse than one that waits a bit longer -- it wrongly routes
+  // an online device into the offline-login fallback (see LoginPage.jsx),
+  // which then fails for a device that was never meant to need it.
   loginRequest: (userCode, password) =>
-    req('/api/auth/login-request', { method: 'POST', body: JSON.stringify({ userCode, password }), timeoutMs: 8000 }),
+    req('/api/auth/login-request', { method: 'POST', body: JSON.stringify({ userCode, password }), timeoutMs: 25000 }),
 
   checkApproval: (token) => req(`/api/auth/check/${token}`),
 

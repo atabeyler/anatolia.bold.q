@@ -182,13 +182,25 @@ export default function LoginPage({ onLogin }) {
   // instead of hitting the network — only succeeds for an account that has
   // actually authorized this exact device online before (spec point 5).
   const attemptOfflineLogin = async () => {
-    const result = await nativeAuth.verifyOfflineLogin(userCode.trim(), password);
-    if (!result?.ok) {
-      setError(result?.error || 'Çevrimdışı giriş başarısız.');
-      return;
+    // handleLogin's catch block calls this without its own try/catch (it's
+    // already inside a catch), so an exception here -- rather than
+    // verifyOfflineLogin's normal {ok:false, error} rejection shape --
+    // would otherwise become an unhandled rejection: setLoading(false)
+    // still runs (handleLogin's finally), but no message ever reaches the
+    // user, so the button just silently goes back to normal with zero
+    // visible feedback. Catching it here and showing it as a real error
+    // guarantees this path always resolves into user-visible feedback.
+    try {
+      const result = await nativeAuth.verifyOfflineLogin(userCode.trim(), password);
+      if (!result?.ok) {
+        setError(result?.error || 'Çevrimdışı giriş başarısız.');
+        return;
+      }
+      setJWT(result.jwt);
+      onLogin({ userCode: result.userCode, isAdmin: result.isAdmin });
+    } catch (e) {
+      setError(e?.message || 'Çevrimdışı giriş başarısız.');
     }
-    setJWT(result.jwt);
-    onLogin({ userCode: result.userCode, isAdmin: result.isAdmin });
   };
 
   const handleLogin = async (e) => {
