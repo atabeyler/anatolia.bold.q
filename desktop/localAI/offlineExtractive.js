@@ -34,7 +34,7 @@ function stemTurkish(token) {
     'larim', 'lerim', 'lari', 'leri', 'lar', 'ler',
     'imizin', 'imizin', 'inizin', 'unuzun', 'umuzun',
     'dan', 'den', 'dir', 'dir', 'lik', 'lik', 'luk', 'luk',
-    'in', 'un', 'im', 'um', 'i', 'u',
+    'in', 'un', 'im', 'um',
   ];
   for (const suffix of suffixes) {
     if (token.length >= suffix.length + 3 && token.endsWith(suffix)) return token.slice(0, -suffix.length);
