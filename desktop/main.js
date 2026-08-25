@@ -467,7 +467,17 @@ function registerIpcHandlers() {
     // place) -- unlike the old shell.openPath flow, there's no separate
     // "did the OS actually manage to open this file" failure mode to
     // report back, and no manual app.quit() needed alongside it.
-    autoUpdater.quitAndInstall();
+    //
+    // isSilent must be true: quitAndInstall()'s default (false) runs the
+    // NSIS installer interactively, and since package.json's build.nsis
+    // sets oneClick:false (an "assisted" installer, needed for the
+    // install-dir/shortcut options on a first-time install), an unsilenced
+    // update re-shows that entire first-run wizard ("Yükleme Ayarlarını
+    // Seçin" -- pick per-user/per-machine, install dir, etc.) on every
+    // update instead of just relaunching with the new version. isForceRunAfter
+    // relaunches the app once the silent install finishes, matching what a
+    // user expects from "Install and Restart".
+    autoUpdater.quitAndInstall(true, true);
     return { ok: true };
   });
 }

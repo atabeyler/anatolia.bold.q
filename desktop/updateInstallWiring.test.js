@@ -249,6 +249,11 @@ describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
 
     expect(result).toEqual({ ok: true });
     expect(fakeAutoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
+    // Must run silently: the NSIS config is oneClick:false (an assisted
+    // installer with an install-dir picker etc.), and quitAndInstall()'s
+    // default (isSilent: false) would re-show that entire first-run wizard
+    // on every update instead of a silent in-place upgrade + relaunch.
+    expect(fakeAutoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true);
   });
 
   it('a fresh approve() after a prior successful install cycle requires a new update-downloaded before installing again', async () => {
