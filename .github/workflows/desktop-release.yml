@@ -186,9 +186,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare-release.outputs.tag }}
-          GLOB: ${{ matrix.platform == 'win' && 'release/*.exe' || matrix.platform == 'mac' && 'release/*.dmg' || 'release/*.AppImage' }}
+          # Also grabs each installer's differential-update companions --
+          # electron-builder writes both of these into release/ regardless
+          # of --publish never (confirmed from a real build log: "building
+          # block map blockMapFile=release\...exe.blockmap"), but the old
+          # glob here only ever matched the installer itself, so
+          # electron-updater's generic feed (server/src/routes/version.js's
+          # /generic/*) had nothing to serve and every update check failed
+          # silently. latest.yml only exists on the win job (electron-
+          # builder writes latest-mac.yml/latest-linux.yml for the other
+          # two); nullglob below means a pattern that matches nothing on a
+          # given platform is simply skipped, not an error.
+          GLOB: ${{ matrix.platform == 'win' && 'release/*.exe release/*.exe.blockmap release/latest.yml' || matrix.platform == 'mac' && 'release/*.dmg release/*.dmg.blockmap release/latest-mac.yml' || 'release/*.AppImage release/*.AppImage.blockmap release/latest-linux.yml' }}
         run: |
           set -euo pipefail
+
+          echo "Contents of release/ after build:"
+          ls -la release/ || true
 
           HTTP_CODE=$(curl -s -o release.json -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
