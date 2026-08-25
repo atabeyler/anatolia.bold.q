@@ -130,6 +130,11 @@ export default function UpdateBanner() {
                   Install and Restart
                 </button>
               )}
+              {stage === 'error' && (
+                <button onClick={approve} className="border border-cyan-400/50 px-4 py-2 rounded-lg text-sm text-cyan-50 hover:bg-cyan-400/10 shrink-0">
+                  Try Again
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -157,7 +162,14 @@ export default function UpdateBanner() {
           </button>
         </>
       )}
-      {stage === 'error' && <span>Download failed.</span>}
+      {stage === 'error' && (
+        <>
+          <span>Download failed.</span>
+          <button onClick={approve} className="border border-cyan-400/50 px-3 py-1 rounded hover:bg-cyan-400/10 shrink-0">
+            Try Again
+          </button>
+        </>
+      )}
         <button onClick={() => { setDismissedVersion(info.version); setStage('dismissed'); }} className="ml-2 shrink-0" aria-label="Close">
           <X className="w-3.5 h-3.5" />
         </button>

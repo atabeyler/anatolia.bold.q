@@ -168,6 +168,31 @@ describe('downloadUpdate', () => {
     expect(fs.existsSync(path.join(dir, 'ANATOLIA-Q-Setup-2.1.140.exe'))).toBe(false);
   });
 
+  it('deletes the partial file and rejects when the connection drops mid-download', async () => {
+    const dir = tmpDir();
+    // A body stream that errors partway through, simulating a dropped
+    // connection -- pipeline() throws before the size/hash checks below it
+    // ever run, so cleanup has to happen in the catch around pipeline
+    // itself, not in those later checks.
+    const flakyBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('partial-bytes'));
+        controller.error(new Error('socket hang up'));
+      },
+    });
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      body: flakyBody,
+      headers: new Map([['content-length', '1000']]),
+    }));
+
+    await expect(
+      downloadUpdate('https://x/api/version/download/desktop', 'ANATOLIA-Q-Setup-2.1.140.exe', dir, undefined, fetchImpl, 1000, 'a'.repeat(64))
+    ).rejects.toThrow('bağlantı kesildi');
+
+    expect(fs.existsSync(path.join(dir, 'ANATOLIA-Q-Setup-2.1.140.exe'))).toBe(false);
+  });
+
   it('sanitizes the file name to prevent writing outside the destination directory (path traversal)', async () => {
     const body = Buffer.from('a'.repeat(10));
     const sha256 = crypto.createHash('sha256').update(body).digest('hex');

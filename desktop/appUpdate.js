@@ -80,7 +80,20 @@ export async function downloadUpdate(url, fileName, destDir, onProgress, fetchIm
     hash.update(chunk);
     onProgress?.({ received, total });
   });
-  await pipeline(nodeStream, fs.createWriteStream(destPath));
+  try {
+    await pipeline(nodeStream, fs.createWriteStream(destPath));
+  } catch (err) {
+    // A dropped connection or interrupted stream throws out of pipeline()
+    // before any of the completeness checks below run, which would
+    // otherwise leave a truncated installer sitting at destPath -- a fixed
+    // path (basename of the asset name) that the *next* update attempt
+    // would immediately overwrite anyway, but that a crash or an early
+    // return in between could leave on disk as a corrupt leftover. Always
+    // clean it up here so a failed download never lingers as installable
+    // bytes.
+    try { fs.unlinkSync(destPath); } catch { /* best-effort */ }
+    throw new Error(`İndirme sırasında bağlantı kesildi: ${err.message}`);
+  }
 
   const expectedBytes = Number(expectedSize) || total;
   if (expectedBytes > 0 && received !== expectedBytes) {

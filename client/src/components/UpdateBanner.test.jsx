@@ -74,6 +74,29 @@ describe('UpdateBanner (desktop)', () => {
     await waitFor(() => expect(screen.getByText('Download failed.')).toBeInTheDocument());
   });
 
+  it('lets the user retry the download after a failure', async () => {
+    let pushAvailable;
+    const approve = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: 'boom' })
+      .mockResolvedValueOnce({ ok: true });
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      update: { onAvailable: (cb) => { pushAvailable = cb; return () => {}; }, onProgress: () => () => {}, approve, install: vi.fn() },
+    };
+    vi.resetModules();
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    render(<UpdateBanner />);
+
+    act(() => { pushAvailable({ available: true, version: '2.1.140' }); });
+    await waitFor(() => expect(screen.getByText('Update')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Update'));
+    await waitFor(() => expect(screen.getByText('Download failed.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Try Again'));
+    expect(approve).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.getByText('Install and Restart')).toBeInTheDocument());
+  });
+
   it('dismissing the banner hides it', async () => {
     let pushAvailable;
     window.anatoliaDesktop = {

@@ -328,6 +328,14 @@ function registerIpcHandlers() {
   // GitHub-facing check.
   ipcMain.handle('update:approve', async () => {
     if (!pendingUpdate) return { ok: false, error: 'update_not_found' };
+    // Clear any installer path left over from an earlier approve() -- e.g.
+    // a prior version's download that completed successfully before a
+    // newer pendingUpdate replaced it, or this same attempt about to
+    // re-download. Without this, a failure below would leave
+    // downloadedInstallerPath pointing at stale (older, or no longer
+    // verified against the *current* pendingUpdate) bytes, and
+    // update:install would happily launch those instead of failing closed.
+    downloadedInstallerPath = null;
     try {
       const destPath = await downloadUpdate(pendingUpdate.url, pendingUpdate.name, app.getPath('temp'), (progress) => {
         mainWindow?.webContents.send('update:progress', progress);
