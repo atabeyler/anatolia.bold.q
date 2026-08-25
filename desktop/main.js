@@ -25,6 +25,7 @@ import { serveStaticDir } from './staticServer.js';
 // Importing the default and destructuring is what Node itself suggests as
 // the fix, and works in both packaged and unpackaged runs.
 import electronUpdaterPkg from 'electron-updater';
+import { CancellationToken } from 'builder-util-runtime';
 const { autoUpdater } = electronUpdaterPkg;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,10 @@ let pendingUpdate = null;
 let updateReadyToInstall = false;
 let splashShownAt = 0;
 let updateCheckInFlight = false;
+// Timestamp of the last 'download-progress' event, used by update:approve's
+// stall watchdog below to detect a download that has silently frozen (see
+// that handler for why this is needed).
+let lastDownloadProgressAt = 0;
 
 // electron-updater's own UpdateInfo carries more than the renderer needs
 // (and releaseNotes can be a per-version array instead of a string,
@@ -136,6 +141,7 @@ function configureAutoUpdater() {
     updateReadyToInstall = true;
   });
   autoUpdater.on('download-progress', (progress) => {
+    lastDownloadProgressAt = Date.now();
     mainWindow?.webContents.send('update:progress', { received: Math.round(progress.transferred), total: Math.round(progress.total) });
   });
   autoUpdater.on('error', (err) => {
@@ -425,13 +431,31 @@ function registerIpcHandlers() {
   ipcMain.handle('update:approve', async () => {
     if (!pendingUpdate) return { ok: false, error: 'update_not_found' };
     updateReadyToInstall = false;
+    // A stalled connection (dropped wifi, a rate-limited/half-open proxy)
+    // leaves Node's http request neither erroring nor completing -- the
+    // symptom users report as the progress bar freezing at some percentage
+    // forever, since electron-updater has no built-in timeout of its own.
+    // This watchdog cancels the download if no download-progress event has
+    // fired for a while, which turns that silent hang into a real rejection
+    // the renderer's "Try Again" button can act on.
+    const DOWNLOAD_STALL_TIMEOUT_MS = 60_000;
+    lastDownloadProgressAt = Date.now();
+    const cancellationToken = new CancellationToken();
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastDownloadProgressAt > DOWNLOAD_STALL_TIMEOUT_MS) {
+        diagnostics?.warn('update_download_stalled', { version: pendingUpdate?.version });
+        cancellationToken.cancel();
+      }
+    }, 10_000);
     try {
-      await autoUpdater.downloadUpdate();
+      await autoUpdater.downloadUpdate(cancellationToken);
       diagnostics?.info('update_downloaded', { version: pendingUpdate.version });
       return { ok: true };
     } catch (err) {
       diagnostics?.error('update_download_failed', { message: err?.message });
       return { ok: false, error: err?.message || 'İndirme başarısız' };
+    } finally {
+      clearInterval(watchdog);
     }
   });
   ipcMain.handle('update:getAvailable', () => pendingUpdate);

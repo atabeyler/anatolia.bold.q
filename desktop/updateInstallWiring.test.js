@@ -171,6 +171,34 @@ describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
     expect(fakeAutoUpdater.downloadUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it('update:approve cancels and rejects a download that stalls (no download-progress for 60s), instead of hanging forever', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.resetModules();
+      fakeAutoUpdater.downloadUpdate.mockImplementationOnce(
+        (token) => new Promise((_resolve, reject) => {
+          token.onCancel(() => reject(new Error('cancelled')));
+        }),
+      );
+      await import('./main.js');
+      await vi.advanceTimersByTimeAsync(50);
+
+      emit('update-available', { version: '9.9.9', releaseNotes: '' });
+      const approve = ipcHandlers.get('update:approve');
+      const resultPromise = approve();
+
+      // No download-progress event ever fires; advance past the 60s stall
+      // threshold (in 10s watchdog-tick increments) and the download must
+      // be cancelled rather than left hanging.
+      await vi.advanceTimersByTimeAsync(70_000);
+
+      const result = await resultPromise;
+      expect(result).toEqual({ ok: false, error: 'cancelled' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('update:approve fails closed when no update was ever announced', async () => {
     vi.resetModules();
     await import('./main.js');

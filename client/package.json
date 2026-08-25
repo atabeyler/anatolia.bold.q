@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q-client",
-  "version": "3.0.58",
+  "version": "3.0.59",
   "type": "module",
   "scripts": {
     "dev": "vite",
