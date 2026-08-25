@@ -216,7 +216,14 @@ function hideSplashThenShowMain() {
   const remaining = Math.max(0, minSplashMs - (Date.now() - splashShownAt));
   setTimeout(() => {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Opens filling the screen (not OS-level kiosk fullscreen, which would
+      // also hide the title bar/window controls) -- maximize() keeps those
+      // while using the full work area, and still lets the user restore
+      // down to the 1400x900 default afterwards.
+      mainWindow.maximize();
+      mainWindow.show();
+    }
   }, remaining);
 }
 

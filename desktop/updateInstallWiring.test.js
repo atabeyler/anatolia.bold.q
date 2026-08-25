@@ -24,6 +24,7 @@ const { ipcHandlers, makeWindow, fakeAutoUpdater, emit } = vi.hoisted(() => {
       on: () => {},
       once: () => {},
       show: () => {},
+      maximize: () => {},
       loadURL: async () => {},
       isDestroyed: () => false,
       close: () => {},
