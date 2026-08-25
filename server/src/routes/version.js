@@ -26,22 +26,20 @@ function resolvedAppUrl() {
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
-// While this repo is public, a release asset's plain browser_download_url
-// works for anyone -- handing it straight to the client avoids re-streaming
-// NSIS/DMG/APK/AppImage bytes through this server. Once the repo goes
-// private, that same URL 404s unauthenticated (GitHub only honors the
-// GITHUB_TOKEN on the asset *API*, not on the public download link) -- so
-// in that case /latest instead points clients at our own /download/:platform
-// below, which proxies the bytes through with that token attached.
+// Always rewritten to this server's own /download/:platform, never GitHub's
+// browser_download_url -- this repo being public would otherwise make it
+// tempting to hand that URL straight to the client (see git history), but
+// that leaks github.com/objects.githubusercontent.com straight into the
+// client's network traffic and any download manager, which the product
+// deliberately doesn't want end users to see. The one-time proxy bandwidth
+// cost of always streaming through here (below) buys that opacity.
 router.get('/latest', async (_req, res) => {
   try {
     const info = await getLatestVersionInfo();
+    const appUrl = resolvedAppUrl();
     const assets = { ...info.assets };
-    if (process.env.GITHUB_TOKEN) {
-      const appUrl = resolvedAppUrl();
-      for (const [platform, key] of Object.entries(PLATFORM_ASSET_KEY)) {
-        if (assets[key]) assets[key] = { ...assets[key], url: `${appUrl}/api/version/download/${platform}` };
-      }
+    for (const [platform, key] of Object.entries(PLATFORM_ASSET_KEY)) {
+      if (assets[key]) assets[key] = { ...assets[key], url: `${appUrl}/api/version/download/${platform}` };
     }
     res.json({ version: info.version, publishedAt: info.publishedAt, notes: info.notes, assets });
   } catch (err) {
@@ -50,10 +48,16 @@ router.get('/latest', async (_req, res) => {
   }
 });
 
-// Proxies the actual installer/APK bytes when this repo is private (see
-// /latest above); also kept for compatibility with older installed clients
-// that were shipped with /api/version/download/:platform URLs regardless of
-// repo visibility.
+// Always streams the actual installer/APK bytes through this server --
+// never redirects to GitHub (see /latest above for why). GitHub's asset API
+// (fetchAssetBinary) serves public-repo assets unauthenticated the same way
+// it serves private ones with GITHUB_TOKEN, so this one code path covers
+// both. This used to redirect for a public repo instead, on the theory that
+// piping the bytes through Node risked NSIS integrity failures on the
+// client -- that risk is now covered by the client's own fail-closed
+// SHA-256 check (desktop/appUpdate.js), which deletes and forces a re-download
+// of anything that doesn't match, so a corrupted proxy pass can no longer
+// result in a broken install, only a retry.
 router.get('/download/:platform', async (req, res) => {
   const assetKey = PLATFORM_ASSET_KEY[req.params.platform];
   if (!assetKey) return res.status(404).json({ error: 'Bilinmeyen platform' });
@@ -63,17 +67,6 @@ router.get('/download/:platform', async (req, res) => {
     const asset = info.assets[assetKey];
     if (!asset) return res.status(404).json({ error: 'İndirilecek dosya bulunamadı' });
 
-    if (!process.env.GITHUB_TOKEN) {
-      // Public repo: redirect rather than piping the installer through
-      // Node/hosting. This preserves the exact GitHub Release binary and
-      // fixes NSIS integrity failures caused on the proxy path. 307
-      // preserves request semantics.
-      return res.redirect(307, asset.url);
-    }
-
-    // Private repo: stream the bytes from GitHub's authenticated asset
-    // endpoint through to the client, since the plain download URL 404s
-    // unauthenticated.
     const upstream = await fetchAssetBinary(asset.id);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${asset.name}"`);
