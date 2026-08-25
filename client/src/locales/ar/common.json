@@ -66,6 +66,8 @@
   "localAICpuLabel": "أنوية المعالج",
   "localAINotCapable": "هذا الجهاز لا يستوفي الحد الأدنى الموصى به لتشغيل النموذج بشكل موثوق؛ قد يعمل ببطء أو لا يعمل على الإطلاق.",
   "localAIDownloadButton": "تنزيل النموذج",
+  "localAIResumeButton": "متابعة التنزيل",
+  "localAIPartialDownload": "تنزيل جزئي",
   "localAIDownloading": "جارٍ التنزيل...",
   "localAIRemoveButton": "إزالة النموذج",
   "localAIRemoving": "جارٍ الإزالة...",

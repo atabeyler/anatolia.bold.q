@@ -48,7 +48,10 @@ export async function createLlamaRuntime({ modelPath, contextSize = 4096, system
   const { getLlama, LlamaChatSession } = await loadNodeLlamaCpp();
   const llama = await getLlama();
   const model = await llama.loadModel({ modelPath });
-  const context = await model.createContext({ contextSize });
+  // 0 asks llama.cpp to use the maximum evaluation threads supported by
+  // the machine. The default can be limited to physical math cores and was
+  // needlessly slow on 4-logical-core laptops during the real smoke test.
+  const context = await model.createContext({ contextSize, threads: 0 });
   // Passing the instruction as the chat session's systemPrompt (rather
   // than concatenating it into the user-turn text) was verified in this
   // sandbox to matter a lot for a chat-tuned model like Qwen2.5-Instruct --
@@ -59,8 +62,26 @@ export async function createLlamaRuntime({ modelPath, contextSize = 4096, system
   const session = new LlamaChatSession({ contextSequence: context.getSequence(), systemPrompt });
 
   return {
-    async generate(prompt, { maxTokens = 512, temperature = 0.3 } = {}) {
-      return session.prompt(prompt, { maxTokens, temperature });
+    async generate(prompt, { maxTokens = 512, temperature = 0.3, timeoutMs = 60_000 } = {}) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await session.prompt(prompt, {
+          maxTokens,
+          temperature,
+          signal: controller.signal,
+          stopOnAbortSignal: true,
+        });
+      } catch (err) {
+        if (controller.signal.aborted) {
+          const timeoutError = new Error('local_llm_timeout');
+          timeoutError.cause = err;
+          throw timeoutError;
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
     },
     async dispose() {
       await context.dispose?.();

@@ -19,6 +19,20 @@
 //     budget alongside the rest of the Electron app.
 //   - Runtime: node-llama-cpp (MIT), which ships prebuilt llama.cpp
 //     bindings for Windows/macOS/Linux -- see llmRuntime.js.
+const LOW = Object.freeze({
+  id: 'qwen2.5-0.5b-instruct-q4_k_m',
+  tier: 'low',
+  label: 'Qwen2.5-0.5B-Instruct (Q4_K_M, GGUF)',
+  filename: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
+  sha256: '74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db',
+  sizeBytes: 491400032,
+  license: 'Apache-2.0',
+  contextSize: 1536,
+  recommendedMinRamBytes: 3 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 1 * 1024 * 1024 * 1024,
+});
+
 const MID = Object.freeze({
   id: 'qwen2.5-1.5b-instruct-q4_k_m',
   tier: 'mid',
@@ -69,7 +83,7 @@ const HIGH = Object.freeze({
   recommendedMinFreeDiskBytes: 6 * 1024 * 1024 * 1024,
 });
 
-export const MODEL_TIERS = Object.freeze({ mid: MID, high: HIGH });
+export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH });
 
 // Backward-compatible single-spec export -- the MID tier, i.e. exactly what
 // this file exported before tiering existed. Any caller that hasn't opted
@@ -77,14 +91,18 @@ export const MODEL_TIERS = Object.freeze({ mid: MID, high: HIGH });
 // unchanged.
 export const MODEL_SPEC = MID;
 
-// `totalMemBytes` is a plain number (os.totalmem()'s own return shape,
+// `totalMemBytes` and `cpuCount` are plain numbers from os.totalmem()/os.cpus(),
 // unlike Android's `{ totalMemBytes }` native-plugin object -- registry.js
 // unwraps it before calling this) since desktop reads it synchronously
 // with no native round-trip involved. Falls back to MID (never null) --
 // unlike mobile's fail-safe-to-null-if-underpowered gate, a real
 // desktop/laptop's realistic floor is already MID's own 4 GB minimum, so
 // there's no meaningfully weaker tier to offer below it.
-export function selectTierForDevice(totalMemBytes) {
-  if (typeof totalMemBytes === 'number' && totalMemBytes >= HIGH.recommendedMinRamBytes) return HIGH;
+export function selectTierForDevice(totalMemBytes, cpuCount = Number.POSITIVE_INFINITY) {
+  // The 7B quant fits in 12+ GB RAM, but on low-core CPUs it can take
+  // several minutes for even a short answer. Require both memory and CPU
+  // capacity so ordinary laptops receive the responsive 1.5B tier.
+  if (typeof totalMemBytes === 'number' && totalMemBytes >= HIGH.recommendedMinRamBytes && cpuCount >= 8) return HIGH;
+  if (cpuCount < 8) return LOW;
   return MID;
 }

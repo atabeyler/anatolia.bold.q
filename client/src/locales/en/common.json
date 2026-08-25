@@ -66,6 +66,8 @@
   "localAICpuLabel": "CPU cores",
   "localAINotCapable": "This device does not meet the recommended minimum to run the model reliably; it may run slowly or not at all.",
   "localAIDownloadButton": "Download Model",
+  "localAIResumeButton": "Resume Download",
+  "localAIPartialDownload": "Partial download",
   "localAIDownloading": "Downloading...",
   "localAIRemoveButton": "Remove Model",
   "localAIRemoving": "Removing...",

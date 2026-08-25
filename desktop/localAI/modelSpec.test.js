@@ -27,8 +27,13 @@ describe('selectTierForDevice', () => {
     expect(selectTierForDevice(11 * 1024 ** 3)).toBe(MODEL_TIERS.mid);
   });
 
-  it('selects HIGH for a 12 GB+ desktop', () => {
-    expect(selectTierForDevice(12 * 1024 ** 3)).toBe(MODEL_TIERS.high);
-    expect(selectTierForDevice(32 * 1024 ** 3)).toBe(MODEL_TIERS.high);
+  it('selects HIGH only when a 12 GB+ desktop also has enough CPU cores', () => {
+    expect(selectTierForDevice(12 * 1024 ** 3, 8)).toBe(MODEL_TIERS.high);
+    expect(selectTierForDevice(32 * 1024 ** 3, 16)).toBe(MODEL_TIERS.high);
+    expect(selectTierForDevice(16 * 1024 ** 3, 4)).toBe(MODEL_TIERS.low);
+  });
+
+  it('selects LOW on a low-core desktop so generation remains responsive', () => {
+    expect(selectTierForDevice(16 * 1024 ** 3, 4)).toBe(MODEL_TIERS.low);
   });
 });

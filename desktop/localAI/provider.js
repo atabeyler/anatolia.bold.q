@@ -35,7 +35,10 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           const result = await runQuery(request);
           return { ok: true, capability: current.capability, ...result };
         } catch (err) {
-          const isRecoverableLLMFailure = current.capability === 'local-llm' && err.message === 'local_llm_unavailable';
+          // Any local-model failure is recoverable here. Integrity errors,
+          // missing native bindings and load failures must not disable the
+          // model-free archive engine that can still answer safely.
+          const isRecoverableLLMFailure = current.capability === 'local-llm';
           if (isRecoverableLLMFailure && !isLast) {
             diagnostics?.warn?.('local_llm_fallback', { message: err.message });
             continue; // try the next provider (offline-extractive)

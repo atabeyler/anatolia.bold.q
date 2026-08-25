@@ -6,9 +6,10 @@ const CHAT_INSTRUCTION =
   'Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma.';
 
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak yapılandırılmış, başlıklı bir analiz taslağı yaz. ' +
-  'Bu taslağın çevrimdışı bir yerel model tarafından üretildiğini ima eden ifadeler kullanma; sadece içeriğe odaklan. ' +
-  'Kesin veri yoksa varsayım olduğunu belirt.';
+  'Kullanıcı için istenen konuda profesyonel, yapılandırılmış ve başlıklı bir karar destek analizi yaz. ' +
+  'Sırasıyla yönetici özeti, temel bulgular, riskler, fırsatlar, seçenekler, önerilen eylemler ve sonuç bölümlerini kullan. ' +
+  'Verilen yerel dosya/verileri öncelikli kaynak, geçmiş raporları destekleyici bağlam olarak kullan. ' +
+  'Kaynakta bulunmayan sayı, olay veya sonuç uydurma. Kesin veri yoksa varsayımı açıkça etiketle.';
 
 // Real generative local-LLM query, registered ahead of offline-extractive
 // in registry.js. `runtimeFactory` defaults to the real node-llama-cpp
@@ -53,7 +54,7 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
   }
 
   async function run(request = {}) {
-    const { mode = 'chat', text = '', entityIds = [], category = '', title = '', prompt = '', lang = 'tr' } = request;
+    const { mode = 'chat', text = '', entityIds = [], category = '', title = '', prompt = '', attachmentContext = '', priority = 'normal', depth = 'standart', quantumRequested = false, lang = 'tr' } = request;
 
     // Re-check per-request, not just at selectProvider() time: a model can
     // be uninstalled/removed by the user between selection and this call
@@ -71,14 +72,26 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     if (mode === 'generate') {
       const queryText = `${category} ${title} ${prompt}`.trim();
       const contextDocs = retrieveContext(db, userId, queryText);
-      const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText: prompt || title, lang });
-      const content = await runtime.generate(fullPrompt, { maxTokens: 900, temperature: 0.4 });
+      const options = `Öncelik: ${priority}\nAnaliz derinliği: ${depth}` +
+        (quantumRequested ? '\nKuantum modu istendi; çevrimdışı kuantum doğrulaması yapılamadığı için yalnızca veriye dayalı klasik analiz üret.' : '');
+      const boundedAttachment = String(attachmentContext || '').slice(0, 8000);
+      const userText = boundedAttachment
+        ? `${prompt || title}\n\n${options}\n\nAnalizde kullanılacak yerel dosya/veri içeriği:\n${boundedAttachment}`
+        : `${prompt || title}\n\n${options}`;
+      const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
+      const isLowTier = modelManager.spec.tier === 'low';
+      const maxTokens = isLowTier
+        ? (depth === 'derin' ? 650 : depth === 'hizli' ? 300 : 500)
+        : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
+      const content = await runtime.generate(fullPrompt, { maxTokens, temperature: 0.35 });
       return {
         type: 'analysis',
         result: {
           title: title || `${category} analizi`,
           content,
           sources: contextDocs.map((d) => ({ id: d.id, title: d.title })),
+          quantumRequested,
+          quantumVerified: false,
         },
       };
     }
@@ -90,8 +103,10 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     // either shape.
     const queryText = text || (entityIds.length ? `Rapor ${entityIds.join(', ')} hakkında` : '');
     const contextDocs = retrieveContext(db, userId, queryText);
-    const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText: text, lang });
-    const answer = await runtime.generate(fullPrompt, { maxTokens: 500, temperature: 0.3 });
+    const boundedAttachment = String(attachmentContext || '').slice(0, 8000);
+    const userText = boundedAttachment ? `${text}\n\nKullanıcının eklediği yerel dosya içeriği:\n${boundedAttachment}` : text;
+    const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText, lang });
+    const answer = await runtime.generate(fullPrompt, { maxTokens: modelManager.spec.tier === 'low' ? 250 : 500, temperature: 0.3 });
     return {
       type: 'generated',
       text: answer,

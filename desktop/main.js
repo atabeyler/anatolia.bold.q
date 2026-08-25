@@ -431,7 +431,7 @@ function registerIpcHandlers() {
   // Face URL pinned in modelSpec.js -- never anything else (spec point 9).
   ipcMain.handle('ai:modelStatus', () => {
     const mm = getModelManager();
-    return { installed: mm.isModelInstalled(), available: mm.isAvailable(), capability: mm.checkCapability(), spec: mm.spec };
+    return { installed: mm.isModelInstalled(), partialBytes: mm.getPartialBytes(), available: mm.isAvailable(), capability: mm.checkCapability(), spec: mm.spec };
   });
   ipcMain.handle('ai:modelDownload', async (event) => {
     const mm = getModelManager();

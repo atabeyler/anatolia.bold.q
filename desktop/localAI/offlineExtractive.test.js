@@ -89,6 +89,28 @@ describe('queryOffline dispatch', () => {
     const res = queryOffline(db, USER, { text: 'raporlarımı bul' });
     expect(res.type).toBe('find');
   });
+
+  it('infers summary intent and resolves the best matching report', () => {
+    insertAnalysis('a', { title: 'Bütçe Raporu', content: 'Giderler arttı. Personel maliyeti yükseldi. Tasarruf planı hazırlandı.' });
+    const res = queryOffline(db, USER, { text: 'bütçe raporunu özetle' });
+    expect(res.type).toBe('summary');
+    expect(res.result.id).toBe('a');
+  });
+
+  it('infers comparison intent and resolves the two best reports', () => {
+    insertAnalysis('a', { title: 'Risk Raporu A', content: 'kredi riski arttı' });
+    insertAnalysis('b', { title: 'Risk Raporu B', content: 'kredi riski azaldı' });
+    const res = queryOffline(db, USER, { text: 'risk raporlarını karşılaştır' });
+    expect(res.type).toBe('compare');
+    expect([res.result.a.id, res.result.b.id]).toEqual(expect.arrayContaining(['a', 'b']));
+  });
+});
+
+describe('Turkish token normalization', () => {
+  it('matches common plural and possessive suffix variants', () => {
+    insertAnalysis('a', { title: 'Risk değerlendirmesi', content: 'Operasyon riskleri incelendi' });
+    expect(findReports(db, USER, 'risklerin durumu')[0].id).toBe('a');
+  });
 });
 
 // The Analysis Router's step-3 fallback for a "generate a new analysis"

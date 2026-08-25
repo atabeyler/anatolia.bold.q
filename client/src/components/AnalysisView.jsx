@@ -14,7 +14,7 @@ import { base64ToBlob, downloadBlob, shareOrDownloadBlob } from '../services/sha
 import { buildLocalDocxBlob, buildLocalPdfBlob } from '../services/localExport.js';
 import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
-import FileAttach from './FileAttach.jsx';
+import FileAttach, { describeStructuredUpload } from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
 import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
 import AnalysisWizard from './AnalysisWizard.jsx';
@@ -254,14 +254,20 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
     try {
       const aiImageData = imageFiles[0] ? { base64: imageFiles[0].base64, mimetype: imageFiles[0].mimetype } : null;
       const mergedContext = documentContexts.length ? documentContexts.map((d) => d.text).join('\n\n') : null;
+      const structuredLocalContext = [
+        realTransactions && describeStructuredUpload({ type: 'transactions', ...realTransactions }),
+        realScenarios && describeStructuredUpload({ type: 'scenarios', ...realScenarios }),
+        realOptimization && describeStructuredUpload({ type: 'optimization', ...realOptimization }),
+      ].filter(Boolean).join('\n\n');
+      const allLocalContext = [mergedContext, structuredLocalContext].filter(Boolean).join('\n\n');
       const realOptimizationPayload = realOptimization ? { items: realOptimization.items, budgetPercent: realOptimization.budgetPercent } : null;
       const resolvedTitle = title || prompt.slice(0, 80);
 
       const normalized = await routeAnalysisGeneration({
         isOffline,
         cloudCall: () => api.generateAnalysis(category, resolvedTitle, prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang, priority, depth),
-        nativeAIQuery: nativeAI.query,
-        generateRequest: { category, title: resolvedTitle, prompt, lang },
+        nativeAIQuery: isNativeApp ? nativeAI.query : undefined,
+        generateRequest: { category, title: resolvedTitle, prompt, attachmentContext: allLocalContext, priority, depth, quantumRequested: quantumMode, lang },
       });
       if (generationIdRef.current !== myGenerationId) return; // superseded by a newer request
 
@@ -271,7 +277,16 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
       // regresses; `engine`/`providerLabel` are added on top for the new
       // indicator, and local engines simply don't have the cloud-only
       // extras (docx/pdf buttons already guard on `res?.docxBase64`).
-      setResult({ ...(normalized.engine === ENGINE.CLOUD ? normalized.raw : {}), title: normalized.title, content: normalized.content, engine: normalized.engine, providerLabel: normalized.providerLabel, sources: normalized.sources });
+      const localResult = normalized.engine === ENGINE.LOCAL_LLM ? normalized.raw?.result : null;
+      setResult({
+        ...(normalized.engine === ENGINE.CLOUD ? normalized.raw : {}),
+        title: normalized.title,
+        content: normalized.content,
+        engine: normalized.engine,
+        providerLabel: normalized.providerLabel,
+        sources: normalized.sources,
+        ...(localResult?.quantumRequested ? { quantumWarning: 'Çevrimdışı analiz yerel modelle üretildi; kuantum devresi çalıştırılmadı ve kuantum doğrulaması yapılmadı.' } : {}),
+      });
 
       // Cloud-generated reports are persisted server-side by api.generateAnalysis
       // itself and reach this device's local History via the next sync --

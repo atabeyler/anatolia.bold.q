@@ -57,7 +57,7 @@ export function describeStructuredUpload(file) {
     return `[Yüklenen gerçek optimizasyon verisi: ${file.filename}, bütçe %${file.budgetPercent}]\n` +
       file.items.map((it) => `${it.id}: değer ${it.value}, maliyet ${it.cost}`).join('\n');
   }
-  return `[Eklenen dosya: ${file.filename}]\n${window.location.origin}${file.url}`;
+  return `[Eklenen dosya: ${file.filename}]\n${globalThis.location?.origin || ''}${file.url}`;
 }
 
 function readBase64(file) {
@@ -89,7 +89,17 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         const isImage = file.type.startsWith('image/');
 
         if (isDoc) {
-          const result = await api.uploadForAI(file);
+          let result;
+          try {
+            result = await api.uploadForAI(file);
+          } catch (uploadError) {
+            // Plain-text formats can still be consumed entirely on-device
+            // when the upload/parser service is unreachable. Binary Office
+            // and PDF formats keep their original error because decoding
+            // them as text would produce misleading garbage.
+            if (!/\.(txt|csv)$/i.test(file.name)) throw uploadError;
+            result = { type: 'text', filename: file.name, text: await file.text() };
+          }
           setFilename(file.name);
           onAIFile(result);
         } else if (isImage) {

@@ -20,7 +20,26 @@ function normalize(text) {
 const STOPWORDS = new Set(['bir', 've', 'ile', 'bu', 'da', 'de', 'için', 'the', 'and', 'a', 'to', 'of', 'in']);
 
 function tokenize(text) {
-  return normalize(text).split(/\s+/).filter((t) => t.length > 1 && !STOPWORDS.has(t));
+  return normalize(text).split(/\s+/).filter((t) => t.length > 1 && !STOPWORDS.has(t)).map(stemTurkish);
+}
+
+// Lightweight Turkish suffix folding. This is deliberately conservative:
+// it improves common archive queries (risk/riskler/risklerin) without a
+// heavyweight dictionary or network-backed language service.
+function stemTurkish(token) {
+  const suffixes = [
+    'larimizdan', 'lerimizden', 'larinizdan', 'lerinizden',
+    'larimizin', 'lerimizin', 'larinizin', 'lerinizin',
+    'larinda', 'lerinde', 'lardan', 'lerden', 'larin', 'lerin',
+    'larim', 'lerim', 'lari', 'leri', 'lar', 'ler',
+    'imizin', 'imizin', 'inizin', 'unuzun', 'umuzun',
+    'dan', 'den', 'dir', 'dir', 'lik', 'lik', 'luk', 'luk',
+    'in', 'un', 'im', 'um', 'i', 'u',
+  ];
+  for (const suffix of suffixes) {
+    if (token.length >= suffix.length + 3 && token.endsWith(suffix)) return token.slice(0, -suffix.length);
+  }
+  return token;
 }
 
 function scoreDoc(row, terms) {
@@ -171,6 +190,15 @@ export function queryOffline(db, userId, { text = '', entityIds = [] } = {}) {
   if (entityIds.length === 1) {
     return { type: 'summary', result: summarizeReport(db, userId, entityIds[0]) };
   }
+  const normalizedText = normalize(text);
+  if (/\b(karsilastir|kiyasla|farklari)\b/.test(normalizedText)) {
+    const matches = findReports(db, userId, text, { limit: 2 });
+    if (matches.length === 2) return { type: 'compare', result: compareReports(db, userId, matches[0].id, matches[1].id) };
+  }
+  if (/\b(ozetle|ozet|ozetini)\b/.test(normalizedText)) {
+    const [match] = findReports(db, userId, text, { limit: 1 });
+    if (match) return { type: 'summary', result: summarizeReport(db, userId, match.id) };
+  }
   return { type: 'find', result: findReports(db, userId, text) };
 }
 
@@ -198,4 +226,4 @@ export function synthesizeFromArchive(db, userId, { category = '', prompt = '' }
   };
 }
 
-export const _internal = { tokenize, parseDateRange, scoreDoc };
+export const _internal = { tokenize, stemTurkish, parseDateRange, scoreDoc };

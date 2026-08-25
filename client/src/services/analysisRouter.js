@@ -27,12 +27,17 @@ export class AllEnginesUnavailableError extends Error {
 // for what that request shape supports.
 export async function routeAnalysisGeneration({ isOffline, cloudCall, nativeAIQuery, generateRequest }) {
   if (!isOffline) {
-    // Cloud is the default path and unchanged -- any cloud failure here
-    // (network blip, server error) is surfaced as-is to preserve today's
-    // error messages/behavior for the by-far-most-common path, rather than
-    // silently retrying against local engines the user didn't ask for.
-    const cloudResult = await cloudCall();
-    return normalizeCloudAnalysis(cloudResult);
+    // Cloud remains the default path. If it fails while the health monitor
+    // still says online, continue locally so a freshly dropped connection
+    // does not lose the user's completed analysis form.
+    try {
+      const cloudResult = await cloudCall();
+      return normalizeCloudAnalysis(cloudResult);
+    } catch (cloudError) {
+      if (!nativeAIQuery) throw cloudError;
+      // The health state may be stale; continue through the same local
+      // chain so a dropped connection does not discard the user's form.
+    }
   }
 
   if (!nativeAIQuery) throw new AllEnginesUnavailableError('nativeAIQuery_missing');
@@ -55,13 +60,19 @@ export async function routeAnalysisGeneration({ isOffline, cloudCall, nativeAIQu
 // Chat/consult variant: cloud path is the caller's existing streaming
 // chatConsult() call (kept exactly as-is, including streaming callbacks);
 // the offline path goes through the same local provider chain.
-export async function routeConsultChat({ isOffline, cloudCall, nativeAIQuery, chatText }) {
+export async function routeConsultChat({ isOffline, cloudCall, nativeAIQuery, chatText, attachmentContext = '' }) {
   if (!isOffline) {
-    const r = await cloudCall();
-    return { engine: ENGINE.CLOUD, ok: true, content: r.content, providerLabel: r.provider, raw: r };
+    try {
+      const r = await cloudCall();
+      return { engine: ENGINE.CLOUD, ok: true, content: r.content, providerLabel: r.provider, raw: r };
+    } catch (cloudError) {
+      if (!nativeAIQuery) throw cloudError;
+      // Connectivity can change between the 30-second health checks. Retry
+      // the same request locally instead of making the user submit twice.
+    }
   }
   if (!nativeAIQuery) throw new AllEnginesUnavailableError('nativeAIQuery_missing');
-  const response = await nativeAIQuery({ mode: 'chat', text: chatText });
+  const response = await nativeAIQuery({ mode: 'chat', text: chatText, attachmentContext });
   const normalized = normalizeLocalChat(response);
   if (!normalized.ok) throw new AllEnginesUnavailableError(normalized.error);
   return normalized;

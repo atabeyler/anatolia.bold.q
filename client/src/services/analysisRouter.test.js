@@ -57,10 +57,11 @@ describe('routeAnalysisGeneration', () => {
       .rejects.toBeInstanceOf(AllEnginesUnavailableError);
   });
 
-  it('propagates a real cloud error unchanged when online (no silent local fallback for a cloud-side failure)', async () => {
+  it('falls back locally when the connectivity state is stale and the cloud call fails', async () => {
     const cloudCall = vi.fn(async () => { throw new Error('cloud boom'); });
-    await expect(routeAnalysisGeneration({ isOffline: false, cloudCall, nativeAIQuery: vi.fn(), generateRequest: {} }))
-      .rejects.toThrow('cloud boom');
+    const nativeAIQuery = vi.fn(async () => ({ ok: true, capability: 'offline-extractive', type: 'archive-synthesis', result: { matches: [], note: 'yerel' } }));
+    const result = await routeAnalysisGeneration({ isOffline: false, cloudCall, nativeAIQuery, generateRequest: {} });
+    expect(result.engine).toBe(ENGINE.LOCAL_DATA);
   });
 });
 

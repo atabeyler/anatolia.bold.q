@@ -53,7 +53,7 @@ describe('ConsultChat offline/local AI routing', () => {
     fireEvent.change(textarea, { target: { value: 'ekonomi raporlarım' } });
     fireEvent.click(screen.getByLabelText('Gönder'));
 
-    await waitFor(() => expect(nativeAI.query).toHaveBeenCalledWith({ mode: 'chat', text: 'ekonomi raporlarım' }));
+    await waitFor(() => expect(nativeAI.query).toHaveBeenCalledWith({ mode: 'chat', text: 'ekonomi raporlarım', attachmentContext: '' }));
     expect(api.chatConsult).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText(/Ekonomi Raporu/)).toBeTruthy());
     // Q LOCAL DATA, not a generic "local AI" label -- the offline-extractive

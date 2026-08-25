@@ -67,6 +67,28 @@ describe('LocalAIPanel (desktop)', () => {
     expect(screen.queryByText('localAIDownloadButton')).not.toBeInTheDocument();
   });
 
+  it('shows a resumable partial download instead of presenting it as a fresh download', async () => {
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      ai: {
+        modelStatus: async () => ({
+          installed: false,
+          partialBytes: 500 * 1024 * 1024,
+          capability: { capable: true, totalMemBytes: 16 * 1024 * 1024 * 1024, cpuCount: 4 },
+          spec: { label: 'Qwen2.5-7B-Instruct', sizeBytes: 4683074240 },
+        }),
+        onModelDownloadProgress: () => () => {},
+      },
+    };
+    vi.resetModules();
+    const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
+    render(<LocalAIPanel t={t} />);
+
+    await waitFor(() => expect(screen.getByText('localAIResumeButton')).toBeInTheDocument());
+    expect(screen.getByText(/500 MB \/ 4.4 GB/)).toBeInTheDocument();
+    expect(screen.getByText(/localAIPartialDownload/)).toBeInTheDocument();
+  });
+
   it('flags a device below the recommended capability', async () => {
     window.anatoliaDesktop = {
       isDesktop: true,

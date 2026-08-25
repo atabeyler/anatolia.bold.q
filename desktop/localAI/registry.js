@@ -26,11 +26,10 @@ import { selectTierForDevice } from './modelSpec.js';
 // design (see the comment history in provider.js).
 let modelsDir = path.join(os.homedir(), '.anatolia-q', 'models');
 // Device-tiered model selection (mirrors client/src/mobile/localAI/
-// registry.js's own tiering, minus the async native-plugin round-trip --
-// os.totalmem() is synchronous and cheap, so there's no equivalent of
-// mobile's "starts on a default tier, re-reads real RAM later" two-step;
-// the real tier is known immediately at construction time).
-let modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem()) });
+// registry.js's own tiering, minus the async native-plugin round-trip).
+// Desktop uses both RAM and logical CPU count: fitting 7B in memory is not
+// enough if generation would be unusably slow on a low-core machine.
+let modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem(), os.cpus().length) });
 
 // Called once from desktop/main.js's startup sequence with Electron's real
 // app.getPath('userData')-based path, so the model lives next to the rest
@@ -40,7 +39,7 @@ let modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.
 export function configureLocalLLM({ modelsDir: dir } = {}) {
   if (dir && dir !== modelsDir) {
     modelsDir = dir;
-    modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem()) });
+    modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem(), os.cpus().length) });
   }
   return modelManager;
 }

@@ -66,6 +66,8 @@
   "localAICpuLabel": "Cœurs de processeur",
   "localAINotCapable": "Cet appareil n'atteint pas le minimum recommandé pour exécuter le modèle de manière fiable ; il peut être lent ou ne pas fonctionner du tout.",
   "localAIDownloadButton": "Télécharger le Modèle",
+  "localAIResumeButton": "Reprendre le téléchargement",
+  "localAIPartialDownload": "Téléchargement partiel",
   "localAIDownloading": "Téléchargement en cours...",
   "localAIRemoveButton": "Supprimer le Modèle",
   "localAIRemoving": "Suppression en cours...",

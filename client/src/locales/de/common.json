@@ -66,6 +66,8 @@
   "localAICpuLabel": "CPU-Kerne",
   "localAINotCapable": "Dieses Gerät erfüllt nicht das empfohlene Minimum, um das Modell zuverlässig auszuführen; es kann langsam oder gar nicht laufen.",
   "localAIDownloadButton": "Modell herunterladen",
+  "localAIResumeButton": "Download fortsetzen",
+  "localAIPartialDownload": "Teilweiser Download",
   "localAIDownloading": "Wird heruntergeladen...",
   "localAIRemoveButton": "Modell entfernen",
   "localAIRemoving": "Wird entfernt...",

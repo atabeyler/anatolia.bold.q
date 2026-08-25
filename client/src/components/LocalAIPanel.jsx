@@ -93,6 +93,7 @@ export default function LocalAIPanel({ t }) {
   const installed = !!status?.installed;
   const capability = status?.capability;
   const capable = capability ? capability.capable !== false : null;
+  const partialBytes = Number(status?.partialBytes) || 0;
 
   return (
     <div>
@@ -107,6 +108,9 @@ export default function LocalAIPanel({ t }) {
             <span className="text-xs text-cyan-100">{installed ? t('localAIInstalled') : t('localAINotInstalled')}</span>
           </div>
           {spec && <div className="text-[14px] text-cyan-300/50 pl-6 mt-0.5">{spec.label} · {formatBytes(spec.sizeBytes)}</div>}
+          {!installed && partialBytes > 0 && spec && (
+            <div className="text-[14px] text-amber-300/70 pl-6 mt-1">{t('localAIPartialDownload')}: {formatBytes(partialBytes)} / {formatBytes(spec.sizeBytes)}</div>
+          )}
         </div>
       )}
 
@@ -140,7 +144,7 @@ export default function LocalAIPanel({ t }) {
             className="w-full flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
           >
             <Download className="w-4 h-4" />
-            {downloading ? t('localAIDownloading') : t('localAIDownloadButton')}
+            {downloading ? t('localAIDownloading') : partialBytes > 0 ? t('localAIResumeButton') : t('localAIDownloadButton')}
           </button>
         )}
         {installed && (

@@ -103,10 +103,16 @@ export default function ConsultChat() {
 
     if (isOffline) {
       try {
+        const attachmentContext = currentFiles
+          .filter((f) => f.type !== 'image')
+          .map(describeStructuredUpload)
+          .filter(Boolean)
+          .join('\n\n');
         const normalized = await routeConsultChat({
           isOffline: true,
           nativeAIQuery: nativeAI.query,
           chatText: text,
+          attachmentContext,
         });
         const content = normalized.structured ? formatLocalAIResult(t, normalized.structured) : normalized.content;
         setMessages(prev => [...prev, { role: 'assistant', content, engine: normalized.engine }]);

@@ -72,6 +72,20 @@ describe('modelManager', () => {
     expect(fs.readFileSync(mm.modelPath, 'utf8')).toBe(FAKE_CONTENT);
   });
 
+  it('resumes an interrupted partial download when the server accepts Range', async () => {
+    const partial = path.join(tmpDir, `${TEST_SPEC.filename}.download`);
+    fs.writeFileSync(partial, FAKE_CONTENT.slice(0, 6));
+    const mm = createModelManager({
+      modelsDir: tmpDir,
+      spec: TEST_SPEC,
+      fetchImpl: fakeFetchImpl({ statusCode: 206, body: FAKE_CONTENT.slice(6) }),
+    });
+    const progress = [];
+    await mm.downloadModel({ onProgress: (p) => progress.push(p) });
+    expect(fs.readFileSync(mm.modelPath, 'utf8')).toBe(FAKE_CONTENT);
+    expect(progress[0].received).toBe(6);
+  });
+
   it('follows an HTTP redirect before downloading', async () => {
     const fetchImpl = (url, cb) => {
       if (url === 'https://example.test/fake-model.gguf') {
@@ -96,6 +110,14 @@ describe('modelManager', () => {
   it('rejects on a non-200 HTTP response', async () => {
     const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl: fakeFetchImpl({ statusCode: 404 }) });
     await expect(mm.downloadModel()).rejects.toThrow(/404/);
+  });
+
+  it('preserves partial bytes after a network failure for the next resume', async () => {
+    const partial = path.join(tmpDir, `${TEST_SPEC.filename}.download`);
+    fs.writeFileSync(partial, 'partial');
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl: fakeFetchImpl({ statusCode: 503 }) });
+    await expect(mm.downloadModel()).rejects.toThrow(/503/);
+    expect(fs.readFileSync(partial, 'utf8')).toBe('partial');
   });
 
   it('removeModel deletes an installed model', async () => {

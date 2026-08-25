@@ -66,7 +66,7 @@ describe('createLocalAIProvider local-llm -> offline-extractive fallback', () =>
     expect(result.type).toBe('find');
   });
 
-  it('does NOT fall through for a non-recoverable local-llm error -- surfaces ok:false instead', async () => {
+  it('falls through to the archive engine for any local runtime failure', async () => {
     Object.assign(PROVIDERS[0], {
       isAvailable: () => true,
       createQuery: () => async () => { throw new Error('unexpected_crash'); },
@@ -76,7 +76,7 @@ describe('createLocalAIProvider local-llm -> offline-extractive fallback', () =>
     const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
 
     const result = await provider.query({ text: 'rapor' });
-    expect(result.ok).toBe(false);
-    expect(result.capability).toBe('local-llm');
+    expect(result.ok).toBe(true);
+    expect(result.capability).toBe('offline-extractive');
   });
 });

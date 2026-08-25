@@ -27,6 +27,10 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
     return fs.existsSync(modelPath);
   }
 
+  function getPartialBytes() {
+    return fs.existsSync(tmpPath) ? fs.statSync(tmpPath).size : 0;
+  }
+
   async function sha256File(filePath) {
     return new Promise((resolve, reject) => {
       const hash = crypto.createHash('sha256');
@@ -47,39 +51,43 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
   // resolve/ URLs 302 to a signed CDN URL. Streams straight to a .download
   // temp file so a crash/interrupt mid-download never leaves a file at the
   // real modelPath that isModelInstalled() would wrongly treat as ready.
-  function httpGetFollowingRedirects(url, onResponse, redirectsLeft = 5) {
+  function httpGetFollowingRedirects(url, onResponse, redirectsLeft = 5, headers = {}) {
     const getFn = fetchImpl || https.get;
-    getFn(url, (res) => {
+    const callback = (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
         res.resume();
-        httpGetFollowingRedirects(res.headers.location, onResponse, redirectsLeft - 1);
+        httpGetFollowingRedirects(res.headers.location, onResponse, redirectsLeft - 1, headers);
         return;
       }
       onResponse(res);
-    }).on('error', (err) => onResponse(null, err));
+    };
+    const request = fetchImpl ? getFn(url, callback) : getFn(url, { headers }, callback);
+    request.on('error', (err) => onResponse(null, err));
   }
 
   async function downloadModel({ onProgress } = {}) {
     await fsPromises.mkdir(modelsDir, { recursive: true });
 
     await new Promise((resolve, reject) => {
-      const out = fs.createWriteStream(tmpPath);
-      let received = 0;
-      // Always attached, from creation, so an early-return path
-      // (out.destroy() below) never leaves the stream's own internal
-      // 'error' event with zero listeners -- an unhandled 'error' on a
-      // stream crashes the process in Node, which a failed/aborted
-      // download must never do.
-      out.on('error', () => {});
+      const existingBytes = fs.existsSync(tmpPath) ? fs.statSync(tmpPath).size : 0;
+      const headers = existingBytes ? { Range: `bytes=${existingBytes}-` } : {};
 
       httpGetFollowingRedirects(spec.url, (res, err) => {
-        if (err) { out.destroy(); reject(err); return; }
-        if (res.statusCode !== 200) {
-          out.destroy();
+        if (err) { reject(err); return; }
+        if (![200, 206].includes(res.statusCode)) {
           reject(new Error(`Model indirilemedi (HTTP ${res.statusCode})`));
           return;
         }
-        const total = Number(res.headers['content-length']) || spec.sizeBytes || 0;
+        // A compliant server answers a resumed request with 206. If it
+        // ignores Range and returns 200, restart safely instead of appending
+        // a second full model to the partial file.
+        const resumeAccepted = existingBytes > 0 && res.statusCode === 206;
+        const offset = resumeAccepted ? existingBytes : 0;
+        const out = fs.createWriteStream(tmpPath, { flags: resumeAccepted ? 'a' : 'w' });
+        out.on('error', reject);
+        let received = offset;
+        const total = offset + (Number(res.headers['content-length']) || (spec.sizeBytes - offset) || 0);
+        onProgress?.({ received, total });
         res.on('data', (chunk) => {
           received += chunk.length;
           onProgress?.({ received, total });
@@ -87,12 +95,11 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
         res.pipe(out);
         out.on('finish', resolve);
         res.on('error', reject);
-      });
-    }).catch(async (err) => {
-      // Clean up a partial/empty .download file on any failure (network
-      // error, non-200, ...) so it never lingers and gets mistaken for a
-      // real in-progress download by a later isModelInstalled() check.
-      await fsPromises.rm(tmpPath, { force: true });
+      }, 5, headers);
+    }).catch((err) => {
+      // Preserve partial bytes after a network/server failure. The file has
+      // the explicit .download suffix and is never considered installed;
+      // the next attempt resumes it with HTTP Range.
       throw err;
     });
 
@@ -131,6 +138,7 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
     spec,
     modelPath,
     isModelInstalled,
+    getPartialBytes,
     verifyChecksum,
     downloadModel,
     removeModel,

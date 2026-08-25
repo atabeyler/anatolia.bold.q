@@ -66,6 +66,8 @@
   "localAICpuLabel": "İşlemci çekirdeği",
   "localAINotCapable": "Bu cihaz, modeli güvenilir şekilde çalıştırmak için önerilen asgari değerleri karşılamıyor; yavaş çalışabilir veya hiç çalışmayabilir.",
   "localAIDownloadButton": "Modeli İndir",
+  "localAIResumeButton": "İndirmeye Devam Et",
+  "localAIPartialDownload": "Yarım kalan indirme",
   "localAIDownloading": "İndiriliyor...",
   "localAIRemoveButton": "Modeli Kaldır",
   "localAIRemoving": "Kaldırılıyor...",
