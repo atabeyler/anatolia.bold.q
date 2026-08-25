@@ -437,6 +437,10 @@ function registerIpcHandlers() {
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
+    // Includes the running version so the taskbar/title bar itself
+    // confirms which build is active -- handy for confirming an update
+    // actually landed without opening Settings -> About.
+    title: `ANATOLIA-Q v${app.getVersion()}`,
     width: 1400,
     height: 900,
     minWidth: 1024,
@@ -451,6 +455,12 @@ async function createWindow() {
       webSecurity: true,
     },
   });
+
+  // Electron re-syncs the window title to the page's own <title> on every
+  // navigation by default, which would immediately overwrite the
+  // version-carrying title set above -- keep the OS-level title pinned to
+  // it regardless of what the page sets.
+  mainWindow.on('page-title-updated', (event) => { event.preventDefault(); });
 
   // No external navigation and no new windows out of the app shell — any
   // http(s) link opens in the OS browser instead of inside this window.
