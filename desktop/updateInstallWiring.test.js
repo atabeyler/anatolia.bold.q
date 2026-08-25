@@ -1,33 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// This test proves the *real* production call site -- main.js's
-// 'update:approve' IPC handler, registered via registerIpcHandlers() as
-// part of the normal app.whenReady() startup flow -- forwards
-// pendingUpdate.sha256 through to downloadUpdate() as the 7th positional
-// argument.
+// This test proves the *real* production call sites in main.js -- the
+// electron-updater feed configuration and the update:approve/update:install/
+// update:getAvailable IPC handlers registered via registerIpcHandlers() as
+// part of the normal app.whenReady() startup flow.
 //
-// Regression covered: the handler used to call
-//   downloadUpdate(url, name, destDir, onProgress, fetch, size)
-// -- six args, silently dropping expectedSha256 (the 7th parameter in
-// appUpdate.js's signature). downloadUpdate() correctly fails closed when
-// expectedSha256 is missing (see appUpdate.js), so every real update
-// download in a packaged app failed regardless of whether the server
-// reported a correct hash. This test exercises main.js's actual ipcMain
-// registration (not just downloadUpdate() in isolation, which is already
-// covered by appUpdate.test.js) so a future refactor of the call site
-// can't silently reintroduce the same argument-count bug.
-//
-// electron and every other module main.js imports are mocked below so the
-// module can be loaded under plain Node (vitest's `node` environment) --
-// none of electron's native bindings exist there.
-const { ipcHandlers, makeWindow, checkForUpdateSpy, downloadUpdateSpy } = vi.hoisted(() => {
+// electron-updater itself, electron, and every other module main.js imports
+// are mocked below so the module can be loaded under plain Node (vitest's
+// `node` environment) -- none of electron's native bindings (or a real
+// update feed) exist there.
+const { ipcHandlers, makeWindow, fakeAutoUpdater, emit } = vi.hoisted(() => {
   const ipcHandlers = new Map();
+  const listeners = new Map();
 
   function makeWindow() {
     return {
       webContents: {
         setWindowOpenHandler: () => {},
         on: () => {},
+        send: () => {},
         getURL: () => 'http://localhost:57813/',
       },
       on: () => {},
@@ -42,22 +33,21 @@ const { ipcHandlers, makeWindow, checkForUpdateSpy, downloadUpdateSpy } = vi.hoi
     };
   }
 
-  const checkForUpdateSpy = vi.fn(async () => ({
-    available: true,
-    version: '9.9.9',
-    notes: 'test release',
-    url: 'https://example.com/update.exe',
-    name: 'update.exe',
-    size: 1000,
-    // The field pendingUpdate actually carries (see appUpdate.js's
-    // checkForUpdate: `sha256: asset.sha256 || null`).
-    sha256: 'a'.repeat(64),
-    platform: 'linux',
-  }));
+  const fakeAutoUpdater = {
+    autoDownload: true,
+    autoInstallOnAppQuit: true,
+    setFeedURL: vi.fn(),
+    checkForUpdates: vi.fn(async () => {}),
+    downloadUpdate: vi.fn(async () => []),
+    quitAndInstall: vi.fn(),
+    on: vi.fn((event, cb) => listeners.set(event, cb)),
+  };
 
-  const downloadUpdateSpy = vi.fn(async () => '/tmp/anatolia-test-download/update.exe');
+  function emit(event, payload) {
+    listeners.get(event)?.(payload);
+  }
 
-  return { ipcHandlers, makeWindow, checkForUpdateSpy, downloadUpdateSpy };
+  return { ipcHandlers, makeWindow, fakeAutoUpdater, emit };
 });
 
 vi.mock('electron', () => {
@@ -87,6 +77,8 @@ vi.mock('electron', () => {
     session: { defaultSession: { webRequest: { onHeadersReceived: () => {} } } },
   };
 });
+
+vi.mock('electron-updater', () => ({ autoUpdater: fakeAutoUpdater }));
 
 vi.mock('./diagnostics.js', () => ({
   createDiagnostics: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
@@ -120,54 +112,128 @@ vi.mock('./connectivity.js', () => ({
   }),
 }));
 vi.mock('./staticServer.js', () => ({ serveStaticDir: () => Promise.resolve({ url: 'http://localhost:57813' }) }));
-vi.mock('./appUpdate.js', () => ({
-  checkForUpdate: checkForUpdateSpy,
-  downloadUpdate: downloadUpdateSpy,
-}));
 
-describe('update:approve production wiring (desktop/main.js)', () => {
+describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
   beforeEach(() => {
     ipcHandlers.clear();
-    checkForUpdateSpy.mockClear();
-    downloadUpdateSpy.mockClear();
+    fakeAutoUpdater.setFeedURL.mockClear();
+    fakeAutoUpdater.checkForUpdates.mockClear();
+    fakeAutoUpdater.downloadUpdate.mockClear();
+    fakeAutoUpdater.quitAndInstall.mockClear();
     delete process.env.ANATOLIA_DESKTOP_DEV;
     delete process.env.ANATOLIA_DESKTOP_FORCE_PROD;
+    delete process.env.ANATOLIA_CLOUD_URL;
   });
 
-  it('forwards pendingUpdate.sha256 to downloadUpdate as the 7th argument', async () => {
+  it('points the generic update feed at this app\'s own server, never at GitHub', async () => {
     vi.resetModules();
-
-    // Loading main.js runs its module-level side effects, including
-    // app.whenReady().then(...) which calls registerIpcHandlers() (wiring
-    // up 'update:approve') and, since app.isPackaged is true here, the
-    // fire-and-forget checkAndBroadcastUpdate() that populates
-    // pendingUpdate from checkForUpdate()'s result.
     await import('./main.js');
-
-    // Let the async whenReady callback chain (registerIpcHandlers ->
-    // createWindow -> checkAndBroadcastUpdate -> checkForUpdate) settle.
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(checkForUpdateSpy).toHaveBeenCalled();
+    expect(fakeAutoUpdater.setFeedURL).toHaveBeenCalledTimes(1);
+    const feedConfig = fakeAutoUpdater.setFeedURL.mock.calls[0][0];
+    expect(feedConfig.provider).toBe('generic');
+    expect(feedConfig.url).toContain('/api/version/generic');
+    expect(feedConfig.url).not.toContain('github');
+    // Gated behind explicit user approval (update:approve), same contract
+    // the old custom flow had -- electron-updater must not download on its
+    // own the moment a version check finds something newer.
+    expect(fakeAutoUpdater.autoDownload).toBe(false);
+  });
 
-    const approveHandler = ipcHandlers.get('update:approve');
-    expect(approveHandler).toBeTypeOf('function');
+  it('runs a check on startup via autoUpdater.checkForUpdates, not a direct GitHub/API call', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const result = await approveHandler();
+    expect(fakeAutoUpdater.checkForUpdates).toHaveBeenCalled();
+  });
+
+  it('update-available populates pendingUpdate; update:approve forwards to autoUpdater.downloadUpdate', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    emit('update-available', { version: '9.9.9', releaseNotes: 'test release' });
+
+    const getAvailable = ipcHandlers.get('update:getAvailable');
+    expect(getAvailable()).toEqual({ available: true, version: '9.9.9', notes: 'test release' });
+
+    const approve = ipcHandlers.get('update:approve');
+    const result = await approve();
 
     expect(result).toEqual({ ok: true });
-    expect(downloadUpdateSpy).toHaveBeenCalledTimes(1);
+    expect(fakeAutoUpdater.downloadUpdate).toHaveBeenCalledTimes(1);
+  });
 
-    const args = downloadUpdateSpy.mock.calls[0];
-    // downloadUpdate's real signature (appUpdate.js):
-    // (url, fileName, destDir, onProgress, fetchImpl, expectedSize, expectedSha256)
-    expect(args).toHaveLength(7);
-    expect(args[0]).toBe('https://example.com/update.exe');
-    expect(args[1]).toBe('update.exe');
-    expect(args[5]).toBe(1000);
-    // This is the field the P1 bug dropped: expectedSha256 must be the
-    // truthy value pendingUpdate actually carries, not undefined/null.
-    expect(args[6]).toBe('a'.repeat(64));
-    expect(args[6]).toBeTruthy();
+  it('update:approve fails closed when no update was ever announced', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const approve = ipcHandlers.get('update:approve');
+    const result = await approve();
+
+    expect(result).toEqual({ ok: false, error: 'update_not_found' });
+    expect(fakeAutoUpdater.downloadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('update:approve surfaces a failed differential/full download instead of silently succeeding', async () => {
+    vi.resetModules();
+    fakeAutoUpdater.downloadUpdate.mockRejectedValueOnce(new Error('sha512 checksum mismatch'));
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    emit('update-available', { version: '9.9.9', releaseNotes: '' });
+    const approve = ipcHandlers.get('update:approve');
+    const result = await approve();
+
+    expect(result).toEqual({ ok: false, error: 'sha512 checksum mismatch' });
+  });
+
+  it('update:install refuses to run until update-downloaded has actually fired (never installs a partial/unverified download)', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    emit('update-available', { version: '9.9.9', releaseNotes: '' });
+    const install = ipcHandlers.get('update:install');
+    const result = await install();
+
+    expect(result).toEqual({ ok: false, error: 'installer_missing' });
+    expect(fakeAutoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('update:install calls autoUpdater.quitAndInstall once the download has completed', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    emit('update-available', { version: '9.9.9', releaseNotes: '' });
+    emit('update-downloaded', {});
+    const install = ipcHandlers.get('update:install');
+    const result = await install();
+
+    expect(result).toEqual({ ok: true });
+    expect(fakeAutoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+
+  it('a fresh approve() after a prior successful install cycle requires a new update-downloaded before installing again', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    emit('update-available', { version: '9.9.9', releaseNotes: '' });
+    emit('update-downloaded', {});
+    await ipcHandlers.get('update:install')();
+
+    // A newer version replacing pendingUpdate resets the "ready" flag --
+    // re-approving must download again before install can run, rather than
+    // reusing the previous version's already-installed state.
+    emit('update-available', { version: '10.0.0', releaseNotes: '' });
+    const install = ipcHandlers.get('update:install');
+    const result = await install();
+
+    expect(result).toEqual({ ok: false, error: 'installer_missing' });
   });
 });

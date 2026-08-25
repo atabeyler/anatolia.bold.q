@@ -6,8 +6,9 @@ import { isMobileApp, mobileUpdate } from '../services/mobileBridge.js';
 // Native-app-only (desktop + Android): checks this app's own server for a
 // newer published version (never GitHub directly, see
 // server/src/routes/version.js) and asks the user before doing anything.
-// Desktop drives the whole download/install itself via IPC
-// (desktop/appUpdate.js); Android downloads the APK itself and hands it to
+// Desktop drives the whole download/install itself via IPC, backed by
+// electron-updater (desktop/main.js's configureAutoUpdater); Android
+// downloads the APK itself and hands it to
 // the system package installer via a FileProvider intent (see
 // mobileBridge.js's mobileUpdate.approve) rather than routing the download
 // through Chrome. Renders nothing on the web build or once dismissed/no

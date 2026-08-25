@@ -4,9 +4,11 @@ import request from 'supertest';
 
 const getLatestVersionInfoMock = vi.fn();
 const fetchAssetBinaryMock = vi.fn();
+const getLatestReleaseAssetsMock = vi.fn();
 vi.mock('../services/releaseVersion.js', () => ({
   getLatestVersionInfo: (...args) => getLatestVersionInfoMock(...args),
   fetchAssetBinary: (...args) => fetchAssetBinaryMock(...args),
+  getLatestReleaseAssets: (...args) => getLatestReleaseAssetsMock(...args),
 }));
 
 const { default: versionRouter } = await import('./version.js');
@@ -20,6 +22,7 @@ function buildApp() {
 beforeEach(() => {
   getLatestVersionInfoMock.mockReset();
   fetchAssetBinaryMock.mockReset();
+  getLatestReleaseAssetsMock.mockReset();
 });
 
 function releaseInfo() {
@@ -125,5 +128,97 @@ describe('GET /api/version/download/:platform', () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBeTruthy();
+  });
+});
+
+describe('GET /api/version/generic/:feedFile (electron-updater differential feed)', () => {
+  const originalAppUrl = process.env.APP_URL;
+
+  beforeEach(() => {
+    process.env.APP_URL = 'https://app.example.com';
+  });
+
+  afterEach(() => {
+    if (originalAppUrl === undefined) delete process.env.APP_URL; else process.env.APP_URL = originalAppUrl;
+  });
+
+  function rawAssets() {
+    return [
+      { id: 10, name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 },
+      { id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe.blockmap', size: 5 },
+      { id: 12, name: 'latest.yml', size: 1 },
+    ];
+  }
+
+  function ymlText() {
+    return [
+      'version: 2.1.140',
+      'files:',
+      '  - url: ANATOLIA-Q-Setup-2.1.140.exe',
+      '    sha512: abc123',
+      '    size: 200',
+      'path: ANATOLIA-Q-Setup-2.1.140.exe',
+      'sha512: abc123',
+      'releaseDate: 2026-08-14T00:00:00.000Z',
+      '',
+    ].join('\n');
+  }
+
+  it('rewrites the files[].url and path fields to point at our own /generic/download, never GitHub', async () => {
+    getLatestReleaseAssetsMock.mockResolvedValue(rawAssets());
+    fetchAssetBinaryMock.mockResolvedValue({ text: async () => ymlText() });
+
+    const res = await request(buildApp()).get('/api/version/generic/latest.yml');
+
+    expect(res.status).toBe(200);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(12);
+    expect(res.text).not.toContain('github');
+    expect(res.text).toContain('https://app.example.com/api/version/generic/download/ANATOLIA-Q-Setup-2.1.140.exe');
+    // version/sha512 pass through untouched -- only the URL fields are rewritten.
+    expect(res.text).toContain('version: 2.1.140');
+    expect(res.text).toContain('sha512: abc123');
+  });
+
+  it('404s for a feed filename that is not one of the three electron-updater expects', async () => {
+    const res = await request(buildApp()).get('/api/version/generic/some-other-file.yml');
+    expect(res.status).toBe(404);
+  });
+
+  it('404s when the requested feed file was not published on the latest release', async () => {
+    getLatestReleaseAssetsMock.mockResolvedValue(rawAssets().filter((a) => a.name !== 'latest.yml'));
+
+    const res = await request(buildApp()).get('/api/version/generic/latest.yml');
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/version/generic/download/:filename (differential blockmap/installer proxy)', () => {
+  it('forwards a Range header to the upstream fetch and relays a 206 partial response', async () => {
+    getLatestReleaseAssetsMock.mockResolvedValue([
+      { id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe.blockmap', size: 5 },
+    ]);
+    fetchAssetBinaryMock.mockResolvedValue({
+      status: 206,
+      headers: new Map([['content-length', '2'], ['content-range', 'bytes 0-1/5']]),
+      body: new Response(new Uint8Array([1, 2])).body,
+    });
+
+    const res = await request(buildApp())
+      .get('/api/version/generic/download/ANATOLIA-Q-Setup-2.1.140.exe.blockmap')
+      .set('Range', 'bytes=0-1');
+
+    expect(res.status).toBe(206);
+    expect(res.headers['content-range']).toBe('bytes 0-1/5');
+    expect(res.headers['accept-ranges']).toBe('bytes');
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(11, 'bytes=0-1');
+  });
+
+  it('404s for a filename that does not match any published asset (no path traversal)', async () => {
+    getLatestReleaseAssetsMock.mockResolvedValue([{ id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 }]);
+
+    const res = await request(buildApp()).get('/api/version/generic/download/..%2F..%2Fetc%2Fpasswd');
+
+    expect(res.status).toBe(404);
   });
 });

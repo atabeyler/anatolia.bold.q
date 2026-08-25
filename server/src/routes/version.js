@@ -1,7 +1,9 @@
 import express from 'express';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { getLatestVersionInfo, fetchAssetBinary } from '../services/releaseVersion.js';
+import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
+import { getLatestVersionInfo, getLatestReleaseAssets, fetchAssetBinary } from '../services/releaseVersion.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -52,12 +54,12 @@ router.get('/latest', async (_req, res) => {
 // never redirects to GitHub (see /latest above for why). GitHub's asset API
 // (fetchAssetBinary) serves public-repo assets unauthenticated the same way
 // it serves private ones with GITHUB_TOKEN, so this one code path covers
-// both. This used to redirect for a public repo instead, on the theory that
-// piping the bytes through Node risked NSIS integrity failures on the
-// client -- that risk is now covered by the client's own fail-closed
-// SHA-256 check (desktop/appUpdate.js), which deletes and forces a re-download
-// of anything that doesn't match, so a corrupted proxy pass can no longer
-// result in a broken install, only a retry.
+// both. Kept for Android (which still downloads its APK from the URL
+// /latest above returns) and for any older installed desktop client that
+// predates the /generic/* differential feed below; a corrupted proxy pass
+// here is still safe for both -- Android's OS-level APK signature check
+// rejects a tampered/truncated file, and this route was never the one
+// desktop's NSIS installer trusted blindly.
 router.get('/download/:platform', async (req, res) => {
   const assetKey = PLATFORM_ASSET_KEY[req.params.platform];
   if (!assetKey) return res.status(404).json({ error: 'Bilinmeyen platform' });
@@ -75,6 +77,72 @@ router.get('/download/:platform', async (req, res) => {
     await pipeline(Readable.fromWeb(upstream.body), res);
   } catch (err) {
     logger.warn({ err }, '[Version] download failed');
+    if (!res.headersSent) res.status(502).json({ error: 'Dosya indirilemedi' });
+  }
+});
+
+// electron-updater's "generic" provider feed for the desktop differential
+// (blockmap) update path -- see desktop/main.js's autoUpdater.setFeedURL().
+// electron-builder's GitHub publish step already uploads latest.yml (win),
+// latest-mac.yml, latest-linux.yml, and a .blockmap next to each installer
+// on every release; electron-updater fetches the platform-appropriate yml
+// file from the feed's base URL, so all this route has to do is find that
+// exact-named asset, rewrite the URL(s) inside it to point back at
+// /generic/download/:filename below, and hand back the edited YAML --
+// never GitHub's own asset URLs (same reasoning as /latest above).
+const FEED_FILES = new Set(['latest.yml', 'latest-mac.yml', 'latest-linux.yml']);
+
+router.get('/generic/:feedFile', async (req, res) => {
+  if (!FEED_FILES.has(req.params.feedFile)) return res.status(404).json({ error: 'Bilinmeyen feed dosyası' });
+
+  try {
+    const assets = await getLatestReleaseAssets();
+    const feedAsset = assets.find((a) => a.name === req.params.feedFile);
+    if (!feedAsset) return res.status(404).json({ error: 'Güncelleme feed dosyası bulunamadı' });
+
+    const upstream = await fetchAssetBinary(feedAsset.id);
+    const text = await upstream.text();
+    const doc = loadYaml(text);
+    const appUrl = resolvedAppUrl();
+    const toOwnUrl = (name) => `${appUrl}/api/version/generic/download/${encodeURIComponent(path.basename(name))}`;
+
+    if (Array.isArray(doc?.files)) {
+      doc.files = doc.files.map((f) => ({ ...f, url: toOwnUrl(f.url) }));
+    }
+    // Legacy top-level fields electron-updater also reads on some versions.
+    if (doc?.path) doc.path = toOwnUrl(doc.path);
+
+    res.type('text/yaml').send(dumpYaml(doc));
+  } catch (err) {
+    logger.warn({ err }, '[Version] generic feed lookup failed');
+    res.status(502).json({ error: 'Güncelleme bilgisi alınamadı' });
+  }
+});
+
+// Streams an installer/blockmap by its exact published filename, forwarding
+// any Range header so electron-updater's differential downloader can pull
+// just the byte ranges it needs instead of the whole file (see
+// fetchAssetBinary's comment). filename is matched only against this
+// release's own published asset names -- never used to build a path on
+// disk -- so there's no traversal surface despite taking it verbatim from
+// the URL.
+router.get('/generic/download/:filename', async (req, res) => {
+  try {
+    const assets = await getLatestReleaseAssets();
+    const asset = assets.find((a) => a.name === path.basename(req.params.filename));
+    if (!asset) return res.status(404).json({ error: 'Dosya bulunamadı' });
+
+    const upstream = await fetchAssetBinary(asset.id, req.headers.range || null);
+    res.status(upstream.status === 206 ? 206 : 200);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Accept-Ranges', 'bytes');
+    const contentRange = upstream.headers.get('content-range');
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+    const length = upstream.headers.get('content-length');
+    if (length) res.setHeader('Content-Length', length);
+    await pipeline(Readable.fromWeb(upstream.body), res);
+  } catch (err) {
+    logger.warn({ err }, '[Version] generic download failed');
     if (!res.headersSent) res.status(502).json({ error: 'Dosya indirilemedi' });
   }
 });

@@ -85,6 +85,23 @@ describe('getLatestVersionInfo', () => {
     await expect(getLatestVersionInfo()).rejects.toThrow('HTTP 403');
   });
 
+  it('getLatestReleaseAssets returns the raw asset list, including blockmap/yml (unlike getLatestVersionInfo)', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [fakeRelease()] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { getLatestReleaseAssets } = await import('./releaseVersion.js');
+
+    const assets = await getLatestReleaseAssets();
+
+    expect(assets.map((a) => a.name)).toEqual([
+      'ANATOLIA-Q-2.1.140.apk',
+      'ANATOLIA-Q-Setup-2.1.140.exe',
+      'ANATOLIA-Q-Setup-2.1.140.exe.blockmap',
+      'ANATOLIA-Q-2.1.140.dmg',
+      'ANATOLIA-Q-2.1.140.AppImage',
+      'latest.yml',
+    ]);
+  });
+
   it('skips drafts and uses the newest published release', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -100,5 +117,31 @@ describe('getLatestVersionInfo', () => {
 
     expect(info.version).toBe('2.1.206');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fetchAssetBinary', () => {
+  it('forwards a client Range header to GitHub so differential downloads get partial content', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 206, headers: new Map(), body: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { fetchAssetBinary } = await import('./releaseVersion.js');
+
+    await fetchAssetBinary(42, 'bytes=100-199');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/atabeyler/anatolia.bold.q/releases/assets/42',
+      expect.objectContaining({ headers: expect.objectContaining({ Range: 'bytes=100-199' }) }),
+    );
+  });
+
+  it('omits the Range header entirely when none is given (full download)', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, headers: new Map(), body: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { fetchAssetBinary } = await import('./releaseVersion.js');
+
+    await fetchAssetBinary(42);
+
+    const headers = fetchMock.mock.calls[0][1].headers;
+    expect(headers.Range).toBeUndefined();
   });
 });

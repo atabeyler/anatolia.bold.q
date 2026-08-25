@@ -240,13 +240,21 @@ Windows CI runner, which is exactly what the release workflow below uses.
 
 ## Releases & auto-update
 
-Update checking/installing does **not** go through `electron-updater`'s own
-GitHub-facing auto-updater — it's a custom flow (`appUpdate.js` +
-`main.js`'s `update:*` IPC handlers) that only ever talks to this app's own
-server (`GET /api/version/latest`, see `server/src/routes/version.js`),
-which itself proxies GitHub Releases so no installed client ever calls
-github.com directly. `checkForUpdate()` picks the right asset for the
-running OS (`desktopWin`/`desktopMac`/`desktopLinux`) from that response.
+Update checking/installing goes through `electron-updater`'s `autoUpdater`
+(configured in `main.js`'s `configureAutoUpdater()`, driven by the
+`update:*` IPC handlers), but pointed at a **generic** feed served by this
+app's own server instead of GitHub's own release-facing endpoints —
+`GET /api/version/generic/latest.yml` (and `latest-mac.yml`/
+`latest-linux.yml`), see `server/src/routes/version.js`. That route fetches
+electron-builder's published feed file from the GitHub Release and rewrites
+every URL inside it to point back at `/api/version/generic/download/:filename`
+(also proxied there), so no installed client ever calls github.com
+directly, same as the `/api/version/latest`+`/download/:platform` pair
+Android still uses. Because the feed is a real electron-updater generic
+provider, differential (blockmap) downloads work the same as they would
+against GitHub directly: a client that already has a previous installer
+cached only downloads the byte ranges that changed, via `Range` requests
+this server forwards straight through to GitHub's asset API.
 
 `.github/workflows/desktop-release.yml` fires automatically on every push to
 `main` — unfiltered by path, since every commit bumps the app version via
@@ -260,11 +268,11 @@ Actions-provided `GITHUB_TOKEN` — no manually-managed secret required
 (except `CSC_LINK`/`CSC_KEY_PASSWORD` for the Windows job's code signing,
 see above). Once a release exists, every previously-installed copy of the
 app — on any of the three OSes — picks it up automatically the next time
-it's online. On the client side, installing an update is handled
-differently per OS once downloaded (`main.js`'s `update:install` handler):
-the Windows NSIS installer runs and replaces the app in place; the macOS
-`.dmg` is mounted for the user to drag to Applications; the Linux AppImage
-is marked executable and launched as a new instance. Cutting a release
+it's online. On the client side, `main.js`'s `update:install` handler calls
+`autoUpdater.quitAndInstall()`, which handles the quit-then-relaunch dance
+per platform itself: the Windows NSIS installer runs and replaces the app
+in place; on macOS the `.app` bundle is swapped; the Linux AppImage is
+replaced and relaunched. Cutting a release
 explicitly (e.g. to rebuild an older commit) still works the same way,
 across all three platforms at once:
 

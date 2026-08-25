@@ -267,9 +267,10 @@ export const mobileAI = {
 };
 
 // Numeric dotted-version compare (2.1.9 < 2.1.10) -- lexical comparison
-// would get that wrong. Mirrors desktop/appUpdate.js's isNewer; duplicated
-// rather than imported since that's a Node/Electron-main file and this one
-// ships in the browser/WebView bundle.
+// would get that wrong. Android still compares versions itself against
+// GET /api/version/latest (desktop's equivalent check now goes through
+// electron-updater's own feed instead, see desktop/main.js), so this has
+// no Node/Electron-main counterpart to import from anymore.
 function isNewerVersion(latestVersion, currentVersion) {
   const a = latestVersion.split('.').map(Number);
   const b = currentVersion.split('.').map(Number);

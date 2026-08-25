@@ -16,7 +16,7 @@ import { createLocalAIProvider } from './localAI/provider.js';
 import { configureLocalLLM, getModelManager } from './localAI/registry.js';
 import { createConnectivityMonitor } from './connectivity.js';
 import { serveStaticDir } from './staticServer.js';
-import { checkForUpdate, downloadUpdate } from './appUpdate.js';
+import { autoUpdater } from 'electron-updater';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -52,12 +52,58 @@ let updateTimer = null;
 // below even before that assignment runs (only during the brief window
 // before whenReady resolves, which none of this code executes in).
 let diagnostics = null;
-// Set once checkAppUpdate() finds a newer version, read by the
-// update:approve/update:install IPC handlers below.
+// Set once electron-updater's 'update-available' event fires (see
+// configureAutoUpdater below), read by the update:approve/update:install/
+// update:getAvailable IPC handlers.
 let pendingUpdate = null;
-let downloadedInstallerPath = null;
+let updateReadyToInstall = false;
 let splashShownAt = 0;
 let updateCheckInFlight = false;
+
+// electron-updater's own UpdateInfo carries more than the renderer needs
+// (and releaseNotes can be a per-version array instead of a string,
+// depending on how many versions were skipped) -- narrow it down to the
+// {available, version, notes} shape the renderer's UpdateBanner already
+// expects from the old custom update flow.
+function toRendererUpdateInfo(info) {
+  return {
+    available: true,
+    version: info.version,
+    notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : '',
+  };
+}
+
+// electron-updater's own "generic" provider feed, served by this app's own
+// server (see server/src/routes/version.js's /generic/*) instead of ever
+// pointing at GitHub -- that route proxies electron-builder's published
+// latest.yml/latest-mac.yml/latest-linux.yml and each installer's
+// .blockmap through, rewriting every URL inside to itself first, so
+// nothing in the update flow (metadata *or* the differential download
+// requests) ever names github.com to the client. Configured lazily so
+// tests that stub electron-updater don't need CLOUD_URL to resolve to
+// anything real.
+function configureAutoUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic` });
+
+  autoUpdater.on('update-available', (info) => {
+    if (pendingUpdate?.version === info.version) return;
+    pendingUpdate = toRendererUpdateInfo(info);
+    updateReadyToInstall = false;
+    diagnostics?.info('update_available', { version: info.version });
+    mainWindow?.webContents.send('update:available', pendingUpdate);
+  });
+  autoUpdater.on('update-downloaded', () => {
+    updateReadyToInstall = true;
+  });
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update:progress', { received: Math.round(progress.transferred), total: Math.round(progress.total) });
+  });
+  autoUpdater.on('error', (err) => {
+    diagnostics?.error('update_error', { message: err?.message });
+  });
+}
 
 function createSplashWindow() {
   const iconData = fs.readFileSync(path.join(__dirname, 'build', 'icon.png')).toString('base64');
@@ -220,12 +266,12 @@ async function checkAndBroadcastUpdate() {
   if (isDev || !app.isPackaged || updateCheckInFlight) return;
   updateCheckInFlight = true;
   try {
-    const result = await checkForUpdate(CLOUD_URL, app.getVersion(), process.platform);
-    if (!result.available) return;
-    if (pendingUpdate?.version === result.version) return;
-    pendingUpdate = result;
-    diagnostics?.info('update_available', { version: result.version });
-    mainWindow?.webContents.send('update:available', result);
+    // Resolves once electron-updater has fetched and compared the feed;
+    // pendingUpdate/the 'update:available' push happen from the
+    // 'update-available' listener registered in configureAutoUpdater, not
+    // here, since that's also how a version found by a *later* check (the
+    // 5-minute interval below) reaches the renderer.
+    await autoUpdater.checkForUpdates();
   } catch (err) {
     console.warn('[AppUpdate] check failed:', err?.message || err);
     diagnostics?.error('update_check_failed', { message: err?.message });
@@ -321,26 +367,21 @@ function registerIpcHandlers() {
 
   ipcMain.handle('connectivity:getState', () => connectivity.getState());
 
-  // The renderer's update banner (see ReauthBanner-style UI) calls these
-  // once the user has explicitly approved installing the version reported
-  // by the 'update:available' event below. See appUpdate.js's header
-  // comment for why this doesn't go through electron-updater's own
-  // GitHub-facing check.
+  // The renderer's update banner calls these once the user has explicitly
+  // approved installing the version reported by the 'update:available'
+  // event (see configureAutoUpdater above). electron-updater's own
+  // differential (blockmap) downloader and per-file sha512 verification
+  // (against the values in the generic feed's latest.yml, itself proxied
+  // through this app's own server -- see server/src/routes/version.js)
+  // replace the previous hand-rolled download+SHA-256-check flow: a
+  // failing verification rejects downloadUpdate() below the same way a
+  // checksum mismatch used to, so nothing partially-downloaded or
+  // tampered-with ever reaches quitAndInstall().
   ipcMain.handle('update:approve', async () => {
     if (!pendingUpdate) return { ok: false, error: 'update_not_found' };
-    // Clear any installer path left over from an earlier approve() -- e.g.
-    // a prior version's download that completed successfully before a
-    // newer pendingUpdate replaced it, or this same attempt about to
-    // re-download. Without this, a failure below would leave
-    // downloadedInstallerPath pointing at stale (older, or no longer
-    // verified against the *current* pendingUpdate) bytes, and
-    // update:install would happily launch those instead of failing closed.
-    downloadedInstallerPath = null;
+    updateReadyToInstall = false;
     try {
-      const destPath = await downloadUpdate(pendingUpdate.url, pendingUpdate.name, app.getPath('temp'), (progress) => {
-        mainWindow?.webContents.send('update:progress', progress);
-      }, fetch, pendingUpdate.size, pendingUpdate.sha256);
-      downloadedInstallerPath = destPath;
+      await autoUpdater.downloadUpdate();
       diagnostics?.info('update_downloaded', { version: pendingUpdate.version });
       return { ok: true };
     } catch (err) {
@@ -349,32 +390,15 @@ function registerIpcHandlers() {
     }
   });
   ipcMain.handle('update:getAvailable', () => pendingUpdate);
-  ipcMain.handle('update:install', async () => {
-    if (!downloadedInstallerPath) return { ok: false, error: 'installer_missing' };
-    if (process.platform === 'linux') {
-      // AppImages aren't downloaded with the executable bit set -- without
-      // this, openPath below just opens an "Open With..." file-type prompt
-      // instead of running it.
-      try { fs.chmodSync(downloadedInstallerPath, 0o755); } catch { /* best-effort */ }
-    }
-    // shell.openPath resolves to an empty string on success, or a
-    // human-readable error message on failure -- it never rejects, so a
-    // failure (e.g. no handler registered for the installer's file type)
-    // used to go unnoticed and the app would quit anyway, leaving the user
-    // with no update installed and no error shown.
-    const openError = await shell.openPath(downloadedInstallerPath);
-    if (openError) {
-      diagnostics?.error('update_install_open_failed', { message: openError });
-      return { ok: false, error: openError };
-    }
-    // Windows: the NSIS installer needs this process to exit so it can
-    // replace the running app's files. macOS: opening the .dmg only mounts
-    // it in Finder -- quitting first means the currently-running .app isn't
-    // locked when the user drags the new one over it. Linux: openPath
-    // launches the downloaded AppImage as a separate process, so quitting
-    // avoids two copies of the app running side by side. A short delay so
-    // openPath's spawn has actually started before this process disappears.
-    setTimeout(() => app.quit(), 500);
+  ipcMain.handle('update:install', () => {
+    if (!updateReadyToInstall) return { ok: false, error: 'installer_missing' };
+    // quitAndInstall handles the quit-then-relaunch-installer dance itself
+    // per platform (Windows: runs the NSIS installer and quits; macOS:
+    // swaps the .app bundle; Linux: replaces the running AppImage in
+    // place) -- unlike the old shell.openPath flow, there's no separate
+    // "did the OS actually manage to open this file" failure mode to
+    // report back, and no manual app.quit() needed alongside it.
+    autoUpdater.quitAndInstall();
     return { ok: true };
   });
 }
@@ -565,12 +589,12 @@ app.whenReady().then(async () => {
     syncTimer.unref?.();
 
     if (!isDev && app.isPackaged) {
-      // Checked via this app's own server (appUpdate.js / server/src/routes/
-      // version.js), never GitHub's API directly. Only surfaces a banner for
-      // the renderer to show -- nothing downloads until the user approves it
-      // via the update:approve IPC handler above. Failure here (no releases
-      // published yet, machine offline, ...) is never fatal -- the app just
-      // runs the version it already has.
+      // Checked via this app's own server (server/src/routes/version.js's
+      // /generic/* feed), never GitHub directly -- see configureAutoUpdater.
+      // Only surfaces a banner for the renderer to show -- nothing downloads
+      // until the user approves it via the update:approve IPC handler above.
+      // Failure here (no releases published yet, machine offline, ...) is
+      // never fatal -- the app just runs the version it already has.
       checkAndBroadcastUpdate().catch(() => {});
       updateTimer = setInterval(() => checkAndBroadcastUpdate().catch(() => {}), 5 * 60 * 1000);
       updateTimer.unref?.();
@@ -586,6 +610,7 @@ app.whenReady().then(async () => {
     connectivity = null;
   }
 
+  configureAutoUpdater();
   registerIpcHandlers();
   buildAppMenu();
   createSplashWindow();

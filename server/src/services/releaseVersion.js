@@ -10,9 +10,13 @@ const RELEASES_URL = `https://api.github.com/repos/${REPO}/releases?per_page=20`
 
 // GitHub computes and serves a SHA-256 digest for every release asset
 // itself (the `digest` field, e.g. "sha256:abcd...") -- surfacing it here
-// lets desktop/appUpdate.js verify the downloaded installer's integrity
-// before ever executing it (see AQ-003 hardening), without this server or
-// the release workflow having to separately generate/publish checksums.
+// in /api/version/latest lets a client verify a downloaded asset's
+// integrity before executing it, without this server or the release
+// workflow having to separately generate/publish checksums. The desktop
+// installer no longer needs this (electron-updater verifies its own
+// generic-feed downloads against the sha512 in latest.yml instead -- see
+// routes/version.js's /generic/* endpoints), but this stays for Android,
+// which still downloads its APK straight from this endpoint's response.
 function extractSha256(digest) {
   if (!digest) return null;
   const m = /^sha256:([0-9a-f]{64})$/i.exec(digest);
@@ -24,7 +28,7 @@ function pickAsset(assets, suffix) {
   return asset ? { id: asset.id, url: asset.browser_download_url, name: asset.name, size: asset.size, sha256: extractSha256(asset.digest) } : null;
 }
 
-async function fetchLatestRelease() {
+async function fetchLatestReleaseRaw() {
   const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'anatolia-q-server' };
   // Unauthenticated GitHub API calls only see releases on a public repo --
   // this lets the lookup keep working if the repo is ever made private.
@@ -45,7 +49,11 @@ async function fetchLatestRelease() {
     (a, b) => new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
   )[0];
   if (!release) throw new Error('GitHub releases lookup returned no published release');
+  return release;
+}
 
+async function fetchLatestRelease() {
+  const release = await fetchLatestReleaseRaw();
   return {
     version: (release.tag_name || '').replace(/^v/, ''),
     publishedAt: release.published_at,
@@ -63,15 +71,33 @@ export async function getLatestVersionInfo() {
   return fetchLatestRelease();
 }
 
+// Raw GitHub asset list (id/name/size, not the picked-by-suffix subset
+// getLatestVersionInfo returns) -- used by the /generic/* differential
+// update feed (routes/version.js) to look up exact-name assets that
+// electron-builder publishes alongside the installer: latest.yml,
+// latest-mac.yml, latest-linux.yml, and each installer's .blockmap.
+export async function getLatestReleaseAssets() {
+  const release = await fetchLatestReleaseRaw();
+  return release.assets || [];
+}
+
 // A release asset's plain browser_download_url 404s unauthenticated once
 // this repo is private -- GitHub only honors auth on the asset *API*
 // endpoint (and only when it's asked for raw bytes via this Accept
 // header), not on the public-facing download URL. Used by
-// routes/version.js's /download/:platform to proxy the bytes through this
-// server instead of ever handing a client a github.com URL directly.
-export async function fetchAssetBinary(assetId) {
+// routes/version.js's /download/:platform (and /generic/*) to proxy the
+// bytes through this server instead of ever handing a client a github.com
+// URL directly.
+//
+// rangeHeader (optional) is forwarded as-is to GitHub's asset API so a
+// client's own Range request -- electron-updater's differential update
+// downloader issues these to fetch only the byte ranges that changed
+// between the previously-installed installer and the new one -- reaches
+// GitHub's storage instead of silently downgrading to a full download.
+export async function fetchAssetBinary(assetId, rangeHeader = null) {
   const headers = { Accept: 'application/octet-stream', 'User-Agent': 'anatolia-q-server' };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (rangeHeader) headers.Range = rangeHeader;
   const r = await fetch(`https://api.github.com/repos/${REPO}/releases/assets/${assetId}`, { headers });
   if (!r.ok) throw new Error(`GitHub asset download failed (HTTP ${r.status})`);
   return r;
