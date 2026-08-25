@@ -96,6 +96,22 @@ function configureAutoUpdater() {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic` });
 
+  // NsisUpdater's default post-download check shells out to PowerShell's
+  // Get-AuthenticodeSignature and requires it to report the installer's
+  // signature as fully chain-trusted (Status: Valid) -- which a
+  // self-signed certificate (see desktop/README.md's "Code signing"
+  // section on why this repo doesn't use a paid CA-issued one) never is,
+  // on any machine that hasn't manually imported it. Every real download
+  // was failing this check and surfacing as an opaque "Download failed"
+  // in the renderer, even though the bytes downloaded fine. Overriding it
+  // to a no-op doesn't weaken integrity: electron-updater's sha512 check
+  // against latest.yml (fetched over HTTPS from this app's own server,
+  // itself proxying GitHub's asset digest) already runs unconditionally
+  // and independently of this signature step, and a self-signed cert's
+  // "chain of trust" wasn't establishing real publisher identity anyway --
+  // anyone can mint one with the same subject name.
+  autoUpdater.verifyUpdateCodeSignature = () => Promise.resolve(null);
+
   autoUpdater.on('update-available', (info) => {
     if (pendingUpdate?.version === info.version) return;
     pendingUpdate = toRendererUpdateInfo(info);
