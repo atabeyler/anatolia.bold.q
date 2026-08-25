@@ -99,16 +99,13 @@ function toRendererUpdateInfo(info) {
 function configureAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
-  // useMultipleRangeRequest:false forces one HTTP Range request per changed
-  // block instead of electron-updater's default of combining all of them
-  // into a single "Range: bytes=a-b, c-d, ..." request. Our own /generic/
-  // download/:filename route forwards Range verbatim to GitHub's asset API,
-  // which doesn't understand multi-range requests and errors -- surfacing
-  // to the client as an opaque 502 that aborts the *entire* differential
-  // download and falls back to a full one, even though the server proxies
-  // an ordinary single-range request (what this setting produces) just
-  // fine (see routes/version.js's /generic/download/:filename).
-  autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic`, useMultipleRangeRequest: false });
+  // Keep electron-updater's multi-range mode enabled. The update proxy
+  // splits that request into bounded concurrent single-range requests for
+  // GitHub (whose asset CDN rejects multi-range directly) and assembles a
+  // standards-compliant multipart response. Sending one request per block
+  // from the desktop made even a ~4 MB patch take minutes because every
+  // changed block paid a full network round-trip.
+  autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic`, useMultipleRangeRequest: true });
   // electron-builder's NSIS target here produces a single self-contained
   // installer, never a separate "web installer" stub + downloaded package
   // -- explicitly declaring that stops electron-updater's own logger from

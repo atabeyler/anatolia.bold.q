@@ -197,6 +197,42 @@ describe('GET /api/version/generic/:feedFile (electron-updater differential feed
 });
 
 describe('GET /api/version/generic/download/:filename (differential blockmap/installer proxy)', () => {
+  it('splits a multi-range request upstream and returns multipart/byteranges', async () => {
+    findReleaseAssetByFilenameMock.mockResolvedValue({ id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 });
+    fetchAssetBinaryMock.mockImplementation(async (_id, range) => {
+      const match = /bytes=(\d+)-(\d+)/.exec(range);
+      const start = Number(match[1]);
+      const end = Number(match[2]);
+      return {
+        status: 206,
+        headers: new Map([
+          ['content-length', String(end - start + 1)],
+          ['content-range', `bytes ${start}-${end}/200`],
+        ]),
+        arrayBuffer: async () => Uint8Array.from({ length: end - start + 1 }, (_, i) => start + i).buffer,
+      };
+    });
+
+    const res = await request(buildApp())
+      .get('/api/version/generic/download/ANATOLIA-Q-Setup-2.1.140.exe')
+      .set('Range', 'bytes=0-1,10-12')
+      .buffer(true)
+      .parse((response, callback) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => callback(null, Buffer.concat(chunks)));
+      });
+
+    expect(res.status).toBe(206);
+    expect(res.headers['content-type']).toMatch(/^multipart\/byteranges; boundary=/);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledTimes(2);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(11, 'bytes=0-1');
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(11, 'bytes=10-12');
+    const body = res.body.toString('latin1');
+    expect(body).toContain('Content-Range: bytes 0-1/200');
+    expect(body).toContain('Content-Range: bytes 10-12/200');
+  });
+
   it('forwards a Range header to the upstream fetch and relays a 206 partial response', async () => {
     findReleaseAssetByFilenameMock.mockResolvedValue({ id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe.blockmap', size: 5 });
     fetchAssetBinaryMock.mockResolvedValue({
@@ -215,6 +251,24 @@ describe('GET /api/version/generic/download/:filename (differential blockmap/ins
     expect(fetchAssetBinaryMock).toHaveBeenCalledWith(11, 'bytes=0-1');
   });
 
+  it('retries when upstream ignores a single Range request and returns the full file', async () => {
+    findReleaseAssetByFilenameMock.mockResolvedValue({ id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 });
+    fetchAssetBinaryMock
+      .mockResolvedValueOnce({ status: 200, headers: new Map(), body: null })
+      .mockResolvedValueOnce({
+        status: 206,
+        headers: new Map([['content-length', '2'], ['content-range', 'bytes 0-1/200']]),
+        body: new Response(new Uint8Array([1, 2])).body,
+      });
+
+    const res = await request(buildApp())
+      .get('/api/version/generic/download/ANATOLIA-Q-Setup-2.1.140.exe')
+      .set('Range', 'bytes=0-1');
+
+    expect(res.status).toBe(206);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledTimes(2);
+  });
+
   // The whole point of findReleaseAssetByFilename: a differential update
   // needs the *previous* version's blockmap/exe, which only exists in an
   // older GitHub release, not the latest one -- this route must be able to
@@ -230,7 +284,7 @@ describe('GET /api/version/generic/download/:filename (differential blockmap/ins
     const res = await request(buildApp()).get('/api/version/generic/download/ANATOLIA-Q-Setup-2.1.139.exe.blockmap');
 
     expect(res.status).toBe(200);
-    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(9, null);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(9);
   });
 
   it('404s for a filename that does not match any published asset across recent releases (no path traversal)', async () => {

@@ -91,6 +91,81 @@ router.get('/download/:platform', async (req, res) => {
 // /generic/download/:filename below, and hand back the edited YAML --
 // never GitHub's own asset URLs (same reasoning as /latest above).
 const FEED_FILES = new Set(['latest.yml', 'latest-mac.yml', 'latest-linux.yml']);
+const MAX_MULTI_RANGES = 512;
+const MAX_MULTI_RANGE_BYTES = 64 * 1024 * 1024;
+const RANGE_FETCH_CONCURRENCY = 12;
+
+function parseMultiRangeHeader(header) {
+  if (typeof header !== 'string' || !header.startsWith('bytes=') || !header.includes(',')) return null;
+  const ranges = header.slice(6).split(',').map((part) => {
+    const match = /^\s*(\d+)-(\d+)\s*$/.exec(part);
+    if (!match) throw new Error('invalid_multi_range');
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start) throw new Error('invalid_multi_range');
+    return { start, end, length: end - start + 1 };
+  });
+  const requestedBytes = ranges.reduce((sum, item) => sum + item.length, 0);
+  if (ranges.length > MAX_MULTI_RANGES || requestedBytes > MAX_MULTI_RANGE_BYTES) throw new Error('multi_range_too_large');
+  return ranges;
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function fetchVerifiedRange(assetId, start, end, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const upstream = await fetchAssetBinary(assetId, `bytes=${start}-${end}`);
+      const contentRange = upstream.headers.get('content-range');
+      const match = /^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i.exec(contentRange || '');
+      if (upstream.status !== 206 || !match || Number(match[1]) !== start || Number(match[2]) !== end) {
+        throw new Error(`invalid_range_response_${upstream.status}`);
+      }
+      return { upstream, total: match[3] };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+async function sendMultipartRanges(res, asset, ranges) {
+  const parts = await mapWithConcurrency(ranges, RANGE_FETCH_CONCURRENCY, async ({ start, end }) => {
+    const { upstream, total } = await fetchVerifiedRange(asset.id, start, end);
+    const body = Buffer.from(await upstream.arrayBuffer());
+    if (body.length !== end - start + 1) throw new Error('invalid_upstream_range_length');
+    return { start, end, total, body };
+  });
+
+  const boundary = `anatolia-update-${Date.now().toString(16)}`;
+  const chunks = [];
+  for (const part of parts) {
+    chunks.push(Buffer.from(
+      `--${boundary}\r\nContent-Type: application/octet-stream\r\nContent-Range: bytes ${part.start}-${part.end}/${part.total}\r\n\r\n`,
+      'ascii'
+    ));
+    chunks.push(part.body, Buffer.from('\r\n', 'ascii'));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`, 'ascii'));
+  const body = Buffer.concat(chunks);
+  res.status(206);
+  res.setHeader('Content-Type', `multipart/byteranges; boundary=${boundary}`);
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Content-Length', body.length);
+  res.end(body);
+}
 
 router.get('/generic/:feedFile', async (req, res) => {
   if (!FEED_FILES.has(req.params.feedFile)) return res.status(404).json({ error: 'Bilinmeyen feed dosyası' });
@@ -135,7 +210,18 @@ router.get('/generic/download/:filename', async (req, res) => {
     const asset = await findReleaseAssetByFilename(path.basename(req.params.filename));
     if (!asset) return res.status(404).json({ error: 'Dosya bulunamadı' });
 
-    const upstream = await fetchAssetBinary(asset.id, req.headers.range || null);
+    const multiRanges = parseMultiRangeHeader(req.headers.range);
+    if (multiRanges) {
+      await sendMultipartRanges(res, asset, multiRanges);
+      return;
+    }
+
+    const singleRangeMatch = typeof req.headers.range === 'string'
+      ? /^bytes=(\d+)-(\d+)$/.exec(req.headers.range)
+      : null;
+    const upstream = singleRangeMatch
+      ? (await fetchVerifiedRange(asset.id, Number(singleRangeMatch[1]), Number(singleRangeMatch[2]))).upstream
+      : await fetchAssetBinary(asset.id);
     res.status(upstream.status === 206 ? 206 : 200);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Accept-Ranges', 'bytes');
@@ -151,3 +237,5 @@ router.get('/generic/download/:filename', async (req, res) => {
 });
 
 export default router;
+
+export const _internal = { parseMultiRangeHeader, mapWithConcurrency, fetchVerifiedRange };
