@@ -120,6 +120,38 @@ describe('getLatestVersionInfo', () => {
   });
 });
 
+describe('findReleaseAssetByFilename', () => {
+  it('finds an asset that only exists on an older release, not just the latest one', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => [
+        fakeRelease({ tag_name: 'v2.1.140' }),
+        fakeRelease({
+          tag_name: 'v2.1.139',
+          published_at: '2026-08-10T00:00:00Z',
+          assets: [{ name: 'ANATOLIA-Q-Setup-2.1.139.exe.blockmap', browser_download_url: 'https://x/old-blockmap', size: 5 }],
+        }),
+      ],
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { findReleaseAssetByFilename } = await import('./releaseVersion.js');
+
+    const asset = await findReleaseAssetByFilename('ANATOLIA-Q-Setup-2.1.139.exe.blockmap');
+
+    expect(asset).toEqual(expect.objectContaining({ name: 'ANATOLIA-Q-Setup-2.1.139.exe.blockmap' }));
+  });
+
+  it('returns null when no recent release published that filename', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [fakeRelease()] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { findReleaseAssetByFilename } = await import('./releaseVersion.js');
+
+    const asset = await findReleaseAssetByFilename('does-not-exist.exe');
+
+    expect(asset).toBeNull();
+  });
+});
+
 describe('fetchAssetBinary', () => {
   it('forwards a client Range header to GitHub so differential downloads get partial content', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 206, headers: new Map(), body: null }));

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
-import { getLatestVersionInfo, getLatestReleaseAssets, fetchAssetBinary } from '../services/releaseVersion.js';
+import { getLatestVersionInfo, getLatestReleaseAssets, findReleaseAssetByFilename, fetchAssetBinary } from '../services/releaseVersion.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -122,14 +122,17 @@ router.get('/generic/:feedFile', async (req, res) => {
 // Streams an installer/blockmap by its exact published filename, forwarding
 // any Range header so electron-updater's differential downloader can pull
 // just the byte ranges it needs instead of the whole file (see
-// fetchAssetBinary's comment). filename is matched only against this
-// release's own published asset names -- never used to build a path on
-// disk -- so there's no traversal surface despite taking it verbatim from
-// the URL.
+// fetchAssetBinary's comment). filename is matched only against published
+// asset names -- never used to build a path on disk -- so there's no
+// traversal surface despite taking it verbatim from the URL.
+//
+// Searches recent releases, not just the latest one: differential updates
+// need the *previous* version's blockmap/exe too (see
+// findReleaseAssetByFilename's comment), and that file only exists in an
+// older release.
 router.get('/generic/download/:filename', async (req, res) => {
   try {
-    const assets = await getLatestReleaseAssets();
-    const asset = assets.find((a) => a.name === path.basename(req.params.filename));
+    const asset = await findReleaseAssetByFilename(path.basename(req.params.filename));
     if (!asset) return res.status(404).json({ error: 'Dosya bulunamadı' });
 
     const upstream = await fetchAssetBinary(asset.id, req.headers.range || null);

@@ -28,7 +28,10 @@ function pickAsset(assets, suffix) {
   return asset ? { id: asset.id, url: asset.browser_download_url, name: asset.name, size: asset.size, sha256: extractSha256(asset.digest) } : null;
 }
 
-async function fetchLatestReleaseRaw() {
+// Newest-published-first, drafts excluded. Shared by fetchLatestReleaseRaw
+// (which just takes [0]) and findReleaseAssetByFilename below, which needs
+// to look past the latest release too -- see that function's comment.
+async function fetchPublishedReleases() {
   const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'anatolia-q-server' };
   // Unauthenticated GitHub API calls only see releases on a public repo --
   // this lets the lookup keep working if the repo is ever made private.
@@ -45,9 +48,13 @@ async function fetchLatestReleaseRaw() {
   // GitHub's own API behavior) can't silently pick a stale release as
   // "latest".
   const candidates = Array.isArray(releases) ? releases.filter((item) => item && !item.draft) : (releases ? [releases] : []);
-  const release = candidates.sort(
+  return candidates.sort(
     (a, b) => new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime()
-  )[0];
+  );
+}
+
+async function fetchLatestReleaseRaw() {
+  const [release] = await fetchPublishedReleases();
   if (!release) throw new Error('GitHub releases lookup returned no published release');
   return release;
 }
@@ -79,6 +86,28 @@ export async function getLatestVersionInfo() {
 export async function getLatestReleaseAssets() {
   const release = await fetchLatestReleaseRaw();
   return release.assets || [];
+}
+
+// electron-updater's differential downloader diffs the new installer
+// against the *previous* version's blockmap/exe, by substituting the
+// running app's own version into the feed URL -- so it requests a
+// filename (e.g. "ANATOLIA-Q-Setup-3.0.59.exe.blockmap") that belongs to
+// an OLDER GitHub release, not the latest one. getLatestReleaseAssets()
+// above only ever sees the newest release, so that request 404's and
+// electron-updater falls back to a full download -- every single time,
+// permanently, regardless of how many versions have shipped. Searching a
+// handful of recent releases (newest first, so the common "just one
+// version behind" case costs a single extra lookup) is what makes
+// differential updates actually reachable.
+const RELEASES_TO_SEARCH_FOR_ASSET = 10;
+
+export async function findReleaseAssetByFilename(filename) {
+  const releases = await fetchPublishedReleases();
+  for (const release of releases.slice(0, RELEASES_TO_SEARCH_FOR_ASSET)) {
+    const asset = (release.assets || []).find((a) => a.name === filename);
+    if (asset) return asset;
+  }
+  return null;
 }
 
 // A release asset's plain browser_download_url 404s unauthenticated once

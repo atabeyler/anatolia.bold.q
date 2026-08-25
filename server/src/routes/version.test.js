@@ -5,10 +5,12 @@ import request from 'supertest';
 const getLatestVersionInfoMock = vi.fn();
 const fetchAssetBinaryMock = vi.fn();
 const getLatestReleaseAssetsMock = vi.fn();
+const findReleaseAssetByFilenameMock = vi.fn();
 vi.mock('../services/releaseVersion.js', () => ({
   getLatestVersionInfo: (...args) => getLatestVersionInfoMock(...args),
   fetchAssetBinary: (...args) => fetchAssetBinaryMock(...args),
   getLatestReleaseAssets: (...args) => getLatestReleaseAssetsMock(...args),
+  findReleaseAssetByFilename: (...args) => findReleaseAssetByFilenameMock(...args),
 }));
 
 const { default: versionRouter } = await import('./version.js');
@@ -23,6 +25,7 @@ beforeEach(() => {
   getLatestVersionInfoMock.mockReset();
   fetchAssetBinaryMock.mockReset();
   getLatestReleaseAssetsMock.mockReset();
+  findReleaseAssetByFilenameMock.mockReset();
 });
 
 function releaseInfo() {
@@ -195,9 +198,7 @@ describe('GET /api/version/generic/:feedFile (electron-updater differential feed
 
 describe('GET /api/version/generic/download/:filename (differential blockmap/installer proxy)', () => {
   it('forwards a Range header to the upstream fetch and relays a 206 partial response', async () => {
-    getLatestReleaseAssetsMock.mockResolvedValue([
-      { id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe.blockmap', size: 5 },
-    ]);
+    findReleaseAssetByFilenameMock.mockResolvedValue({ id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe.blockmap', size: 5 });
     fetchAssetBinaryMock.mockResolvedValue({
       status: 206,
       headers: new Map([['content-length', '2'], ['content-range', 'bytes 0-1/5']]),
@@ -214,11 +215,30 @@ describe('GET /api/version/generic/download/:filename (differential blockmap/ins
     expect(fetchAssetBinaryMock).toHaveBeenCalledWith(11, 'bytes=0-1');
   });
 
-  it('404s for a filename that does not match any published asset (no path traversal)', async () => {
-    getLatestReleaseAssetsMock.mockResolvedValue([{ id: 11, name: 'ANATOLIA-Q-Setup-2.1.140.exe', size: 200 }]);
+  // The whole point of findReleaseAssetByFilename: a differential update
+  // needs the *previous* version's blockmap/exe, which only exists in an
+  // older GitHub release, not the latest one -- this route must be able to
+  // find it there instead of only checking the newest release's assets.
+  it('finds an asset that only exists in an older release (previous-version blockmap for a differential update)', async () => {
+    findReleaseAssetByFilenameMock.mockResolvedValue({ id: 9, name: 'ANATOLIA-Q-Setup-2.1.139.exe.blockmap', size: 5 });
+    fetchAssetBinaryMock.mockResolvedValue({
+      status: 200,
+      headers: new Map([['content-length', '5']]),
+      body: new Response(new Uint8Array([1, 2, 3, 4, 5])).body,
+    });
+
+    const res = await request(buildApp()).get('/api/version/generic/download/ANATOLIA-Q-Setup-2.1.139.exe.blockmap');
+
+    expect(res.status).toBe(200);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(9, null);
+  });
+
+  it('404s for a filename that does not match any published asset across recent releases (no path traversal)', async () => {
+    findReleaseAssetByFilenameMock.mockResolvedValue(null);
 
     const res = await request(buildApp()).get('/api/version/generic/download/..%2F..%2Fetc%2Fpasswd');
 
     expect(res.status).toBe(404);
+    expect(findReleaseAssetByFilenameMock).toHaveBeenCalledWith('passwd');
   });
 });
