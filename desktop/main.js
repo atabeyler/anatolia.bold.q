@@ -99,7 +99,16 @@ function toRendererUpdateInfo(info) {
 function configureAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
-  autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic` });
+  // useMultipleRangeRequest:false forces one HTTP Range request per changed
+  // block instead of electron-updater's default of combining all of them
+  // into a single "Range: bytes=a-b, c-d, ..." request. Our own /generic/
+  // download/:filename route forwards Range verbatim to GitHub's asset API,
+  // which doesn't understand multi-range requests and errors -- surfacing
+  // to the client as an opaque 502 that aborts the *entire* differential
+  // download and falls back to a full one, even though the server proxies
+  // an ordinary single-range request (what this setting produces) just
+  // fine (see routes/version.js's /generic/download/:filename).
+  autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic`, useMultipleRangeRequest: false });
 
   // NsisUpdater's default post-download check shells out to PowerShell's
   // Get-AuthenticodeSignature and requires it to report the installer's

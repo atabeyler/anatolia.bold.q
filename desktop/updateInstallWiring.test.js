@@ -144,6 +144,13 @@ describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
     // the old custom flow had -- electron-updater must not download on its
     // own the moment a version check finds something newer.
     expect(fakeAutoUpdater.autoDownload).toBe(false);
+    // Our own /generic/download/:filename route forwards Range verbatim to
+    // GitHub's asset API, which rejects the combined multi-range request
+    // electron-updater sends by default -- that surfaces as a 502 that
+    // aborts the whole differential download. false forces one
+    // single-range request per changed block instead, which the server
+    // already proxies correctly.
+    expect(feedConfig.useMultipleRangeRequest).toBe(false);
   });
 
   it('runs a check on startup via autoUpdater.checkForUpdates, not a direct GitHub/API call', async () => {
