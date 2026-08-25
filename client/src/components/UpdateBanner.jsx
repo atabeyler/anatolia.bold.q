@@ -118,7 +118,7 @@ export default function UpdateBanner() {
               {stage === 'idle' && 'The update can be downloaded in the background and prepared for install.'}
               {stage === 'downloading' && 'Please wait until the download completes.'}
               {stage === 'ready' && 'Restart is required to start the installer.'}
-              {stage === 'error' && 'The download failed. You can try again.'}
+              {stage === 'error' && 'The download failed. Use the button below to retry.'}
             </div>
             <div className="flex items-center gap-2 justify-end">
               {stage === 'idle' && (
