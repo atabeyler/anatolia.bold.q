@@ -73,6 +73,7 @@ let updateCheckInFlight = false;
 // stall watchdog below to detect a download that has silently frozen (see
 // that handler for why this is needed).
 let lastDownloadProgressAt = 0;
+const UPDATER_CACHE_DIR_NAME = 'anatolia-q-updater';
 
 // electron-updater's own UpdateInfo carries more than the renderer needs
 // (and releaseNotes can be a per-version array instead of a string,
@@ -85,6 +86,25 @@ function toRendererUpdateInfo(info) {
     version: info.version,
     notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : '',
   };
+}
+
+function removeCachedBlockmapBeforeUpdate() {
+  // electron-updater prefers <cache>/current.blockmap over downloading the
+  // previous release's blockmap. That cache can survive a manual installer
+  // upgrade or an interrupted update while installer.exe is replaced,
+  // leaving the two files from different versions. The resulting patch is
+  // assembled from valid bytes using the wrong copy plan and only fails at
+  // the final SHA-512 check, after which electron-updater downloads the full
+  // installer. Removing this small derived file forces a fresh, matching
+  // blockmap from the signed release assets; installer and user data remain
+  // untouched.
+  const blockmapPath = path.join(app.getPath('cache'), UPDATER_CACHE_DIR_NAME, 'current.blockmap');
+  try {
+    fs.rmSync(blockmapPath, { force: true });
+    diagnostics?.info('update_blockmap_cache_cleared', {});
+  } catch (err) {
+    diagnostics?.warn('update_blockmap_cache_clear_failed', { message: err?.message });
+  }
 }
 
 // electron-updater's own "generic" provider feed, served by this app's own
@@ -460,6 +480,7 @@ function registerIpcHandlers() {
       }
     }, 10_000);
     try {
+      removeCachedBlockmapBeforeUpdate();
       await autoUpdater.downloadUpdate(cancellationToken);
       diagnostics?.info('update_downloaded', { version: pendingUpdate.version });
       return { ok: true };

@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // are mocked below so the module can be loaded under plain Node (vitest's
 // `node` environment) -- none of electron's native bindings (or a real
 // update feed) exist there.
-const { ipcHandlers, makeWindow, fakeAutoUpdater, emit } = vi.hoisted(() => {
+const { ipcHandlers, makeWindow, fakeAutoUpdater, fakeRmSync, emit } = vi.hoisted(() => {
   const ipcHandlers = new Map();
   const listeners = new Map();
 
@@ -48,7 +48,12 @@ const { ipcHandlers, makeWindow, fakeAutoUpdater, emit } = vi.hoisted(() => {
     listeners.get(event)?.(payload);
   }
 
-  return { ipcHandlers, makeWindow, fakeAutoUpdater, emit };
+  return { ipcHandlers, makeWindow, fakeAutoUpdater, fakeRmSync: vi.fn(), emit };
+});
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, default: { ...actual, rmSync: fakeRmSync } };
 });
 
 vi.mock('electron', () => {
@@ -125,9 +130,24 @@ describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
     fakeAutoUpdater.checkForUpdates.mockClear();
     fakeAutoUpdater.downloadUpdate.mockClear();
     fakeAutoUpdater.quitAndInstall.mockClear();
+    fakeRmSync.mockClear();
     delete process.env.ANATOLIA_DESKTOP_DEV;
     delete process.env.ANATOLIA_DESKTOP_FORCE_PROD;
     delete process.env.ANATOLIA_CLOUD_URL;
+  });
+
+  it('clears a potentially stale cached blockmap before downloading', async () => {
+    vi.resetModules();
+    await import('./main.js');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    emit('update-available', { version: '9.9.9', releaseNotes: '' });
+    await ipcHandlers.get('update:approve')();
+
+    expect(fakeRmSync).toHaveBeenCalledWith(
+      expect.stringMatching(/anatolia-q-updater[\\/]current\.blockmap$/),
+      { force: true },
+    );
   });
 
   it('points the generic update feed at this app\'s own server, never at GitHub', async () => {
