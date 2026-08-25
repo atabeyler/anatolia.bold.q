@@ -109,6 +109,12 @@ function configureAutoUpdater() {
   // an ordinary single-range request (what this setting produces) just
   // fine (see routes/version.js's /generic/download/:filename).
   autoUpdater.setFeedURL({ provider: 'generic', url: `${CLOUD_URL}/api/version/generic`, useMultipleRangeRequest: false });
+  // electron-builder's NSIS target here produces a single self-contained
+  // installer, never a separate "web installer" stub + downloaded package
+  // -- explicitly declaring that stops electron-updater's own logger from
+  // warning on every single update check that this should be set (it also
+  // says the default flips to true in a future version anyway).
+  autoUpdater.disableWebInstaller = true;
 
   // NsisUpdater's default post-download check shells out to PowerShell's
   // Get-AuthenticodeSignature and requires it to report the installer's
