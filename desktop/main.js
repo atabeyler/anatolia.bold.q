@@ -16,7 +16,16 @@ import { createLocalAIProvider } from './localAI/provider.js';
 import { configureLocalLLM, getModelManager } from './localAI/registry.js';
 import { createConnectivityMonitor } from './connectivity.js';
 import { serveStaticDir } from './staticServer.js';
-import { autoUpdater } from 'electron-updater';
+// electron-updater is a CommonJS package with no "exports" map telling
+// Node's ESM interop which of its properties are safe to statically
+// detect as named exports -- `import { autoUpdater } from 'electron-updater'`
+// throws "Named export 'autoUpdater' not found" in a packaged app (this
+// only surfaced after shipping; the dev/test runs here all went through a
+// mocked module, which bypasses Node's real CJS/ESM interop entirely).
+// Importing the default and destructuring is what Node itself suggests as
+// the fix, and works in both packaged and unpackaged runs.
+import electronUpdaterPkg from 'electron-updater';
+const { autoUpdater } = electronUpdaterPkg;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

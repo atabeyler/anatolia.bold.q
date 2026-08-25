@@ -78,7 +78,11 @@ vi.mock('electron', () => {
   };
 });
 
-vi.mock('electron-updater', () => ({ autoUpdater: fakeAutoUpdater }));
+// Mirrors main.js's actual import shape (`import pkg from 'electron-updater';
+// const { autoUpdater } = pkg;`) rather than a named export, so this test
+// would have caught the real "Named export 'autoUpdater' not found"
+// packaged-app crash if it had been in place before that shipped.
+vi.mock('electron-updater', () => ({ default: { autoUpdater: fakeAutoUpdater } }));
 
 vi.mock('./diagnostics.js', () => ({
   createDiagnostics: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
