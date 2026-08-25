@@ -115,7 +115,7 @@ export default function UpdateBanner() {
           </div>
           <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div className="text-xs text-cyan-100/70 leading-5">
-              {stage === 'idle' && 'The update can be downloaded in the background and prepared for install.'}
+              {stage === 'idle' && 'The update downloads in the background -- you can keep working while it prepares to install.'}
               {stage === 'downloading' && 'Please wait until the download completes.'}
               {stage === 'ready' && 'Restart is required to start the installer.'}
               {stage === 'error' && 'The download failed. Use the button below to retry.'}
