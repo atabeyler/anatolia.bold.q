@@ -112,6 +112,19 @@ function configureAutoUpdater() {
   // anyone can mint one with the same subject name.
   autoUpdater.verifyUpdateCodeSignature = () => Promise.resolve(null);
 
+  // electron-updater logs its own reasoning (differential-vs-full download
+  // decisions, why a diff attempt fell back, signature/hash mismatches) via
+  // this logger interface -- without wiring it up those messages just go to
+  // an unattached console in a packaged app and are lost. Routing them into
+  // the same desktop.log diagnostics already write to is the only way to
+  // find out *why* a given update went one path or the other after the
+  // fact, e.g. from a user-submitted log.
+  autoUpdater.logger = {
+    info: (message) => diagnostics?.info('autoupdater', { message }),
+    warn: (message) => diagnostics?.warn('autoupdater', { message }),
+    error: (message) => diagnostics?.error('autoupdater', { message }),
+  };
+
   autoUpdater.on('update-available', (info) => {
     if (pendingUpdate?.version === info.version) return;
     pendingUpdate = toRendererUpdateInfo(info);
