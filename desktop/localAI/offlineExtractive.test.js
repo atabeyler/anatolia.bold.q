@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb } from '../testHelpers.js';
+import { encryptField } from '../db/fieldCrypto.js';
 import { findReports, summarizeReport, compareReports, queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
 
 let db;
 const USER = 'BOLD-001';
+const TEST_KEY = '11'.repeat(32);
 
 function insertAnalysis(id, { title, content, category = 'bddk', createdAt }) {
   const ts = createdAt || new Date().toISOString();
@@ -22,6 +24,23 @@ describe('findReports', () => {
 
     const results = findReports(db, USER, 'dolandırıcılık sahtekarlık');
     expect(results[0].id).toBe('r1');
+  });
+
+  it('decrypts encrypted desktop analyses before keyword scoring', () => {
+    insertAnalysis('encrypted', {
+      title: encryptField('Deniz sınırı çatışma analizi', TEST_KEY),
+      content: encryptField('Deniz sınırında gerilim ve çatışma riski değerlendirildi.', TEST_KEY),
+      category: 'jeopolitik',
+    });
+
+    const raw = db.prepare('SELECT title, content FROM analyses WHERE id = ?').get('encrypted');
+    expect(raw.title).toMatch(/^aqenc:v1:/);
+    expect(raw.content).toMatch(/^aqenc:v1:/);
+
+    const results = findReports(db, USER, 'deniz sınırı çatışma', { encryptionKey: TEST_KEY });
+    expect(results[0].id).toBe('encrypted');
+    expect(results[0].title).toBe('Deniz sınırı çatışma analizi');
+    expect(results[0].preview).toContain('çatışma riski');
   });
 
   it('filters by a Turkish relative date phrase ("geçen ay")', () => {

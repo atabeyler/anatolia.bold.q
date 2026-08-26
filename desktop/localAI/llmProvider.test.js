@@ -49,6 +49,35 @@ describe('createLLMQuery', () => {
     expect(result.result.content).toContain('İçerik burada');
   });
 
+  it('still generates a fresh analysis when there is no matching archive context', async () => {
+    const db = createTestDb();
+    let systemPromptSeen = '';
+    const generate = vi.fn(async (fullPrompt) => {
+      expect(fullPrompt).toContain('ilgili geçmiş rapor bulunamadı');
+      expect(fullPrompt).toContain('deniz sınırında çatışma');
+      return '# Yeni Analiz\n\nGeçmiş rapor olmadan yeni taslak üretildi.';
+    });
+    const runtimeFactory = vi.fn(async ({ systemPrompt }) => {
+      systemPromptSeen = systemPrompt;
+      return { generate };
+    });
+
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory });
+    const result = await run({
+      mode: 'generate',
+      category: 'jeopolitik',
+      title: 'Deniz Sınırı Çatışma Analizi',
+      prompt: 'deniz sınırında çatışma',
+    });
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(result.type).toBe('analysis');
+    expect(result.result.sources).toEqual([]);
+    expect(result.result.content).toContain('yeni taslak');
+    expect(systemPromptSeen).toContain('yerel bağlam boş olsa bile');
+    expect(systemPromptSeen).not.toContain('Yalnızca sana verilen bağlama dayan');
+  });
+
   it('reuses one loaded runtime across multiple calls instead of reloading the model each time', async () => {
     const db = createTestDb();
     const generate = vi.fn(async () => 'ok');

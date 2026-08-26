@@ -8,12 +8,9 @@ import { findReports, summarizeReport } from './offlineExtractive.js';
 // costs generation time on CPU).
 //
 // Deliberately NOT a vector DB / embedding index: this codebase has no
-// lightweight local embedding model already wired up, and fabricating a
-// vector store here (per the task's own instruction) would be exactly the
-// kind of dependency that can't actually be exercised in this sandbox.
-// BM25-adjacent keyword scoring over a per-user table that's realistically
-// tens to low-hundreds of rows is a reasonable, honest substitute -- see
-// the final report for the tradeoff.
+// lightweight local embedding model already wired up. BM25-adjacent keyword
+// scoring over a per-user table that's realistically tens to low-hundreds
+// of rows is a reasonable fully-offline substitute.
 export function retrieveContext(db, userId, queryText, { limit = 4, maxCharsPerDoc = 500 } = {}) {
   const matches = findReports(db, userId, queryText, { limit });
   return matches.map((m) => {
@@ -25,21 +22,30 @@ export function retrieveContext(db, userId, queryText, { limit = 4, maxCharsPerD
 
 // Fixed identity/rules system prompt, kept separate from the per-request
 // instruction+context+question below (which go in the user turn).
-// Verified in this sandbox with a real node-llama-cpp + Qwen2.5-1.5B-
-// Instruct smoke test that this split matters: concatenating everything
-// into one user message made the model narrate about the prompt instead
-// of answering it, while a real systemPrompt (passed to LlamaChatSession,
-// see llmRuntime.js) gave a direct, correctly-grounded answer -- see the
-// final report.
+//
+// A local model has two distinct jobs in ANATOLIA-Q:
+//   - archive chat: answer from supplied local evidence and say when that
+//     evidence is insufficient;
+//   - new-analysis generation: create a fresh analytical draft even when no
+//     matching local report exists, using the model's built-in general
+//     knowledge while being explicit that it has no live internet access.
+//
+// The previous wording said "yalnızca sana verilen bağlama dayan" for BOTH
+// jobs. With an empty RAG result that effectively instructed the model not
+// to generate the new analysis the user had explicitly requested. The
+// request-specific CHAT/GENERATE instructions now provide the stricter
+// grounding rule where it actually belongs.
 export const SYSTEM_PROMPT =
   'Sen ANATOLIA-Q uygulamasının tamamen çevrimdışı çalışan yerel yapay zeka asistanısın. ' +
-  'Yalnızca sana verilen bağlama dayan; internete veya buluta erişimin yok. Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma. ' +
-  'Türkçe ve öz cevap ver.';
+  'İnternete veya buluta erişimin yoktur. Sana verilen yerel rapor ve dosya bağlamını önceliklendir. ' +
+  'Yeni analiz isteniyorsa yerel bağlam boş olsa bile modelindeki genel bilgi ve analitik akıl yürütmeyle yeni bir taslak üret; ' +
+  'canlı/güncel veriye erişiyormuş gibi davranma ve doğrulanmamış güncel ayrıntıları kesin gerçek olarak sunma. ' +
+  'Talimatları, bağlam başlıklarını veya kullanıcı promptunu cevap olarak tekrar etme; yalnızca nihai yanıtı ver. Türkçe ve açık yaz.';
 
-export function buildPrompt({ instruction, contextDocs, userText, lang = 'tr' }) {
+export function buildPrompt({ instruction, contextDocs, userText, lang = 'tr', noContextText = '(kullanıcının cihazında ilgili geçmiş rapor bulunamadı)' }) {
   const contextBlock = contextDocs.length
     ? contextDocs.map((d, i) => `[${i + 1}] "${d.title}" (${d.category}, ${new Date(d.createdAt).toLocaleDateString()})\n${d.snippet}`).join('\n\n')
-    : '(kullanıcının cihazında ilgili geçmiş rapor bulunamadı)';
+    : noContextText;
 
   return [
     instruction,
