@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestMobileDb } from '../testHelpers.js';
 import { dbAll } from './index.js';
 import { listAnalyses, getAnalysis, createAnalysis, updateAnalysis, deleteAnalysis } from './analysesRepo.js';
+import { isEncrypted } from './fieldCrypto.js';
 
 let db;
 beforeEach(async () => { db = await createTestMobileDb(); });
@@ -20,6 +21,10 @@ describe('createAnalysis', () => {
     expect(queued[0].op).toBe('create');
     expect(queued[0].entity_id).toBe(row.id);
     expect(queued[0].base_version).toBeNull();
+
+    const [rawRow] = await dbAll(db, 'SELECT title, content FROM analyses WHERE id = ?', [row.id]);
+    expect(isEncrypted(rawRow.title)).toBe(true);
+    expect(isEncrypted(rawRow.content)).toBe(true);
   });
 
   it('is immediately visible offline via listAnalyses/getAnalysis', async () => {

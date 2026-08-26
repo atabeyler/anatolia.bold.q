@@ -47,6 +47,23 @@ import { uploadConcurrencyGate } from '../middleware/uploadConcurrency.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
+
+function artifactLinksFor(analysisId) {
+  return analysisId
+    ? {
+        docxUrl: `/api/history/${analysisId}/download`,
+        pdfUrl: `/api/history/${analysisId}/download-pdf`,
+      }
+    : null;
+}
+
+function sendReportEmailInBackground({ userCode, category, title, content, aiProvider }) {
+  setImmediate(() => {
+    generateReportDocx({ category, title, content, userCode, aiProvider })
+      .then((docxBuffer) => sendAnalysisReport(userCode, category, title, docxBuffer))
+      .catch((err) => logger.error({ err }, 'Mail report generation error'));
+  });
+}
 // S-04 (technical audit): the incoming file used to be buffered entirely in
 // RAM as it streamed in (multer memoryStorage) -- uploadConcurrencyGate
 // bounds how many uploads are in flight at once, but each one still spent
@@ -367,6 +384,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       hasRealOptimization, realOptimization,
     });
 
+    const responseTitle = title || prompt.slice(0, 80);
     let analysisId = null;
     if (isDbConfigured()) {
       const [row] = await getDb()
@@ -374,7 +392,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
         .values({
           userCode,
           category,
-          title: title || prompt.slice(0, 80),
+          title: responseTitle,
           content: finalContent,
           aiProvider: result.provider,
           priority,
@@ -388,30 +406,37 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       analysisId = row.id;
     }
 
-    const docxBuffer = await generateReportDocx({
-      category,
-      title: title || prompt.slice(0, 80),
-      content: finalContent,
-      userCode,
-      aiProvider: result.provider
-    });
-    const pdfBuffer = await generateReportPdf({
-      category,
-      title: title || prompt.slice(0, 80),
-      content: finalContent,
-      userCode,
-      aiProvider: result.provider
-    });
-
-    sendAnalysisReport(userCode, category, title || prompt.slice(0, 80), docxBuffer)
-      .catch(e => logger.error({ err: e }, 'Mail error'));
+    const includeArtifacts = req.body.includeArtifacts === true;
+    let artifactPayload = {};
+    if (includeArtifacts) {
+      const [docxBuffer, pdfBuffer] = await Promise.all([
+        generateReportDocx({
+          category,
+          title: responseTitle,
+          content: finalContent,
+          userCode,
+          aiProvider: result.provider
+        }),
+        generateReportPdf({
+          category,
+          title: responseTitle,
+          content: finalContent,
+          userCode,
+          aiProvider: result.provider
+        }),
+      ]);
+      artifactPayload = {
+        docxBase64: docxBuffer.toString('base64'),
+        pdfBase64: pdfBuffer.toString('base64'),
+      };
+    }
 
     // In-app/device notification for the requesting user, sent independently
     // of the res.json() below -- generation can run long enough that a
     // client-side timeout (browser/proxy) drops the original request before
     // the response arrives, in which case this socket event is the only
     // signal (besides the email above) that the report actually finished.
-    broadcastToUser(req.app.get('io'), userCode, 'analysis:completed', { analysisId, category, title: title || prompt.slice(0, 80) })
+    broadcastToUser(req.app.get('io'), userCode, 'analysis:completed', { analysisId, category, title: responseTitle })
       .catch(() => {});
 
     const hardwarePending = isHardwareVerificationPending({ hardwareScenarios, hardwareTransactions, hardwareOptimization });
@@ -450,14 +475,15 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       success: true,
       analysisId,
       provider: result.provider,
+      title: responseTitle,
       content: finalContent,
       priority,
       depth,
       evidence,
       decisionFusion,
       redTeamReview,
-      docxBase64: docxBuffer.toString('base64'),
-      pdfBase64: pdfBuffer.toString('base64'),
+      artifacts: artifactLinksFor(analysisId),
+      ...artifactPayload,
       quantumMode,
       quantumWarning,
       scenarios,
@@ -526,6 +552,16 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
         : null
     });
 
+    if (req.body.emailReport === true) {
+      sendReportEmailInBackground({
+        userCode,
+        category,
+        title: responseTitle,
+        content: finalContent,
+        aiProvider: result.provider,
+      });
+    }
+
     if (hardwarePending) {
       scheduleHardwareVerification({
         io: req.app.get('io'), analysisId, userCode, hardwareScenarios, hardwareTransactions, hardwareOptimization, finalContent,
@@ -572,28 +608,40 @@ router.post('/scenario-deep-dive', authMiddleware, analysisLimiter, async (req, 
       analysisId = row.id;
     }
 
-    const docxBuffer = await generateReportDocx({
-      category,
-      title: `ALTERNATİF SENARYO: ${scenarioId}`,
-      content: result.content,
-      userCode,
-      aiProvider: result.provider
-    });
-    const pdfBuffer = await generateReportPdf({
-      category,
-      title: `ALTERNATİF SENARYO: ${scenarioId}`,
-      content: result.content,
-      userCode,
-      aiProvider: result.provider
-    });
+    const responseTitle = `ALTERNATİF SENARYO: ${scenarioId}`;
+    const includeArtifacts = req.body.includeArtifacts === true;
+    let artifactPayload = {};
+    if (includeArtifacts) {
+      const [docxBuffer, pdfBuffer] = await Promise.all([
+        generateReportDocx({
+          category,
+          title: responseTitle,
+          content: result.content,
+          userCode,
+          aiProvider: result.provider
+        }),
+        generateReportPdf({
+          category,
+          title: responseTitle,
+          content: result.content,
+          userCode,
+          aiProvider: result.provider
+        }),
+      ]);
+      artifactPayload = {
+        docxBase64: docxBuffer.toString('base64'),
+        pdfBase64: pdfBuffer.toString('base64'),
+      };
+    }
 
     res.json({
       success: true,
       analysisId,
       provider: result.provider,
+      title: responseTitle,
       content: result.content,
-      docxBase64: docxBuffer.toString('base64'),
-      pdfBase64: pdfBuffer.toString('base64'),
+      artifacts: artifactLinksFor(analysisId),
+      ...artifactPayload,
       scenarioId
     });
   } catch (err) {

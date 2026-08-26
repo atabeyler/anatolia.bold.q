@@ -61,9 +61,22 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
   }
 
   async function run(request = {}) {
-    const { mode = 'chat', text: rawText = '', entityIds = [], category = '', title = '', prompt: rawPrompt = '', lang = 'tr' } = request;
+    const {
+      mode = 'chat',
+      text: rawText = '',
+      entityIds = [],
+      category = '',
+      title = '',
+      prompt: rawPrompt = '',
+      attachmentContext = '',
+      priority = 'normal',
+      depth = 'standart',
+      quantumRequested = false,
+      lang = 'tr',
+    } = request;
     const text = capInput(rawText);
     const prompt = capInput(rawPrompt);
+    const boundedAttachment = String(attachmentContext || '').slice(0, 4000);
 
     if (!modelManager.isAvailableSync(isInstalled)) {
       throw new Error('local_llm_unavailable');
@@ -74,7 +87,12 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
     if (mode === 'generate') {
       const queryText = `${category} ${title} ${prompt}`.trim();
       const contextDocs = await retrieveContext(db, userId, queryText);
-      const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText: prompt || title, lang });
+      const options = `Öncelik: ${priority}\nAnaliz derinliği: ${depth}` +
+        (quantumRequested ? '\nKuantum modu istendi; çevrimdışı kuantum doğrulaması yapılamadığı için yalnızca veriye dayalı klasik analiz üret.' : '');
+      const userText = boundedAttachment
+        ? `${prompt || title}\n\n${options}\n\nAnalizde kullanılacak yerel dosya/veri içeriği:\n${boundedAttachment}`
+        : `${prompt || title}\n\n${options}`;
+      const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
       // Raised from 220 alongside GENERATE_INSTRUCTION's 3-section format
       // and llama-android.cpp's 240s deadline -- a 3-heading report needs
       // real room. Still well short of contextSize (2048): MAX_INPUT_CHARS
@@ -83,13 +101,20 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
       const content = await runtime.generate(fullPrompt, { maxTokens: 700, temperature: 0.4 });
       return {
         type: 'analysis',
-        result: { title: title || `${category} analizi`, content, sources: contextDocs.map((d) => ({ id: d.id, title: d.title })) },
+        result: {
+          title: title || `${category} analizi`,
+          content,
+          sources: contextDocs.map((d) => ({ id: d.id, title: d.title })),
+          quantumRequested,
+          quantumVerified: false,
+        },
       };
     }
 
     const queryText = text || (entityIds.length ? `Rapor ${entityIds.join(', ')} hakkında` : '');
     const contextDocs = await retrieveContext(db, userId, queryText);
-    const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText: text, lang });
+    const chatText = boundedAttachment ? `${text}\n\nKullanıcının eklediği yerel dosya içeriği:\n${boundedAttachment}` : text;
+    const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText: chatText, lang });
     const answer = await runtime.generate(fullPrompt, { maxTokens: 350, temperature: 0.3 });
     return { type: 'generated', text: answer, sources: contextDocs.map((d) => ({ id: d.id, title: d.title })) };
   }

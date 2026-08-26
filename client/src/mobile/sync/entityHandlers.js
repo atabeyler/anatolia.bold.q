@@ -1,4 +1,5 @@
 import { dbGet, dbRun } from '../db/index.js';
+import { encryptField, decryptField } from '../db/fieldCrypto.js';
 
 // Registry of per-entity-type local persistence for sync/engine.js's
 // pushQueue/pullChanges. Those two functions (queueing, backoff, conflict
@@ -15,6 +16,15 @@ const handlers = {
     async applyApplied(db, op, result) {
       const ts = new Date().toISOString();
       await dbRun(db, `UPDATE analyses SET version = ?, sync_status = 'synced', updated_at = ? WHERE id = ?`, [result.serverVersion, ts, op.entity_id]);
+    },
+
+    async preparePushPayload(payload) {
+      if (!payload) return payload;
+      return {
+        ...payload,
+        title: await decryptField(payload.title ?? null),
+        content: await decryptField(payload.content ?? null),
+      };
     },
 
     // Builds the statement for one pulled record (or null to skip it) --
@@ -41,7 +51,7 @@ const handlers = {
             WHERE id = ?
           `,
           values: [
-            record.payload.title, record.payload.content, record.payload.category, record.payload.aiProvider ?? null,
+            await encryptField(record.payload.title), await encryptField(record.payload.content), record.payload.category, record.payload.aiProvider ?? null,
             record.payload.fraudTransactionCount ?? null, record.payload.fraudFlaggedCount ?? null,
             record.version, ts, record.deviceId, record.entityId,
           ],
@@ -55,7 +65,7 @@ const handlers = {
         `,
         values: [
           record.entityId, userId, record.deviceId, record.version, record.createdAt, record.updatedAt,
-          record.payload.category, record.payload.title, record.payload.content, record.payload.aiProvider ?? null,
+          record.payload.category, await encryptField(record.payload.title), await encryptField(record.payload.content), record.payload.aiProvider ?? null,
           record.payload.fraudTransactionCount ?? null, record.payload.fraudFlaggedCount ?? null,
         ],
       };

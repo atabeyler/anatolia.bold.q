@@ -328,25 +328,34 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   // left the download/share buttons looking broken with zero feedback.
   // localExport.js builds a real, openable docx/pdf client-side from the
   // same res.title/res.content every local result already has.
+  const canFetchServerArtifact = (res) => res?.analysisId && res?.engine !== ENGINE.LOCAL_LLM && res?.engine !== ENGINE.LOCAL_DATA;
+  const fetchServerDocxBlob = async (analysisId) => (await api.historyDownloadBlob(analysisId)).blob;
+  const fetchServerPdfBlob = async (analysisId) => (await api.historyDownloadPdfBlob(analysisId)).blob;
+
   const downloadDocx = async (res = result) => {
     const blob = res?.docxBase64
       ? base64ToBlob(res.docxBase64, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-      : await buildLocalDocxBlob(res || {});
+      : canFetchServerArtifact(res)
+        ? await fetchServerDocxBlob(res.analysisId)
+        : await buildLocalDocxBlob(res || {});
     await downloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   };
 
   const downloadPdf = async (res = result) => {
-    const blob = res?.pdfBase64 ? base64ToBlob(res.pdfBase64, 'application/pdf') : buildLocalPdfBlob(res || {});
+    const blob = res?.pdfBase64
+      ? base64ToBlob(res.pdfBase64, 'application/pdf')
+      : canFetchServerArtifact(res)
+        ? await fetchServerPdfBlob(res.analysisId)
+        : buildLocalPdfBlob(res || {});
     await downloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf');
   };
 
-  const shareReport = (res = result) => {
-    if (!res?.pdfBase64) {
-      const blob = buildLocalPdfBlob(res || {});
-      shareOrDownloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf', res?.title || 'ANATOLIA-Q Raporu');
-      return;
-    }
-    const blob = base64ToBlob(res.pdfBase64, 'application/pdf');
+  const shareReport = async (res = result) => {
+    const blob = res?.pdfBase64
+      ? base64ToBlob(res.pdfBase64, 'application/pdf')
+      : canFetchServerArtifact(res)
+        ? await fetchServerPdfBlob(res.analysisId)
+        : buildLocalPdfBlob(res || {});
     shareOrDownloadBlob(blob, `ANATOLIA-Q_${category}_${Date.now()}.pdf`, 'application/pdf', res.title || 'ANATOLIA-Q Raporu');
   };
 

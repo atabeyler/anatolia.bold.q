@@ -11,6 +11,7 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * Capacitor plugin backing `window.Capacitor.Plugins.LocalLLM`, the exact
@@ -199,6 +200,35 @@ class LocalLLMPlugin : Plugin() {
             call.resolve(ret)
         } catch (t: Throwable) {
             call.reject("local_llm_device_info_failed: ${t.message}", t.toString())
+        }
+    }
+
+    @PluginMethod
+    fun sha256File(call: PluginCall) {
+        val modelPath = call.getString("modelPath")
+        if (modelPath.isNullOrBlank()) {
+            call.reject("modelPath is required")
+            return
+        }
+        val file = File(context.filesDir, modelPath)
+        if (!file.exists()) {
+            call.reject("local_llm_model_file_missing: ${file.absolutePath}")
+            return
+        }
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(1 shl 16)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            val ret = JSObject()
+            ret.put("sha256", digest.digest().joinToString("") { "%02x".format(it) })
+            call.resolve(ret)
+        } catch (t: Throwable) {
+            call.reject("local_llm_sha256_failed: ${t.message}", t.toString())
         }
     }
 

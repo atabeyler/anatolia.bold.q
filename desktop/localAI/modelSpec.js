@@ -23,6 +23,7 @@ const LOW = Object.freeze({
   id: 'qwen2.5-0.5b-instruct-q4_k_m',
   tier: 'low',
   label: 'Qwen2.5-0.5B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Hafif Model',
   filename: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
   sha256: '74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db',
@@ -37,6 +38,7 @@ const MID = Object.freeze({
   id: 'qwen2.5-1.5b-instruct-q4_k_m',
   tier: 'mid',
   label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Standart Model',
   filename: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
   // Hugging Face resolve URL for the pinned file/revision. Points at
   // `main` (not a pinned commit) intentionally -- Qwen's GGUF repo does
@@ -73,6 +75,7 @@ const HIGH = Object.freeze({
   id: 'qwen2.5-7b-instruct-q4_k_m',
   tier: 'high',
   label: 'Qwen2.5-7B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Güçlü Model',
   filename: 'qwen2.5-7b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
   sha256: '65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423',

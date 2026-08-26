@@ -3,9 +3,9 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
+  { ignores: ['dist/**', 'node_modules/**'] },
   js.configs.recommended,
   {
-    files: ['src/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -38,6 +38,7 @@ export default [
         alert: 'readonly',
         confirm: 'readonly',
         TextDecoder: 'readonly',
+        TextEncoder: 'readonly',
         __APP_VERSION__: 'readonly',
         URLSearchParams: 'readonly',
         sessionStorage: 'readonly',
@@ -47,6 +48,8 @@ export default [
         AbortController: 'readonly',
         AbortSignal: 'readonly',
         BroadcastChannel: 'readonly',
+        self: 'readonly',
+        caches: 'readonly',
       },
     },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
@@ -72,8 +75,11 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'script',
-      globals: { self: 'readonly' },
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        fetch: 'readonly',
+      },
     },
   },
-  { ignores: ['dist/**', 'node_modules/**'] },
 ];

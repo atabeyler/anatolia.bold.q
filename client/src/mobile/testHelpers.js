@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { openDatabase } from './db/index.js';
+import { setEncryptionKey } from './db/fieldCrypto.js';
 
 // A fake @capacitor-community/sqlite connection backed by a REAL in-memory
 // better-sqlite3 database, so mobile/**/*.test.js exercises actual SQL
@@ -60,5 +61,6 @@ export function createFakeSqliteConnection() {
 // Fresh, migrated database for a single test -- mirrors
 // desktop/testHelpers.js's createTestDb().
 export async function createTestMobileDb() {
+  setEncryptionKey('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
   return openDatabase(createFakeSqliteConnection());
 }
