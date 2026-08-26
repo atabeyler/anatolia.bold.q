@@ -10,6 +10,7 @@ import { classifyData } from '../services/decisionIntelligence.js';
 import { canAccessClassification } from '../lib/rbac.js';
 
 const router = express.Router();
+const PUBLIC_CLOUD_PROVIDER_LABEL = 'Q CLOUD';
 
 // The frontend still expects snake_case field names (HistoryView.jsx, HomeView.jsx) —
 // Drizzle results (camelCase) are mapped through this to preserve the old API contract.
@@ -19,7 +20,7 @@ const toAnalysisJson = (row) => ({
   category: row.category,
   title: row.title,
   content: row.content,
-  ai_provider: row.aiProvider,
+  ai_provider: row.aiProvider ? PUBLIC_CLOUD_PROVIDER_LABEL : null,
   priority: row.priority,
   depth: row.depth,
   created_at: row.createdAt,
@@ -220,7 +221,7 @@ router.get('/:id/download', authMiddleware, async (req, res) => {
       title: row.title,
       content: row.content,
       userCode: row.userCode,
-      aiProvider: row.aiProvider
+      aiProvider: row.aiProvider ? PUBLIC_CLOUD_PROVIDER_LABEL : null
     });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -249,7 +250,7 @@ router.get('/:id/download-pdf', authMiddleware, async (req, res) => {
       title: row.title,
       content: row.content,
       userCode: row.userCode,
-      aiProvider: row.aiProvider
+      aiProvider: row.aiProvider ? PUBLIC_CLOUD_PROVIDER_LABEL : null
     });
 
     res.setHeader('Content-Type', 'application/pdf');

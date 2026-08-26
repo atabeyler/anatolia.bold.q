@@ -101,7 +101,7 @@ describe('AQ-001/AQ-014: other classifications still reach the provider (policy 
   it('PUBLIC: generateAnalysis calls the first (Claude) provider factory', async () => {
     const result = await generateAnalysis('sys', 'user prompt', {}, 'PUBLIC');
     expect(claudeModelFactory).toHaveBeenCalledTimes(1);
-    expect(result.provider).toBe('Claude (Anthropic)');
+    expect(result.provider).toBe('Q CLOUD');
   });
 
   it('INTERNAL: generateAnalysis calls the first approved provider factory', async () => {
@@ -114,7 +114,7 @@ describe('AQ-001/AQ-014: other classifications still reach the provider (policy 
     const result = await generateAnalysis('sys', 'user prompt', {}, 'INTERNAL');
     expect(claudeModelFactory).not.toHaveBeenCalled();
     expect(geminiModelFactory).toHaveBeenCalledTimes(1);
-    expect(result.provider).toBe('Gemini (Google)');
+    expect(result.provider).toBe('Q CLOUD');
   });
 
   it('CONFIDENTIAL: generateAnalysis calls the first approved provider factory, same as INTERNAL', async () => {

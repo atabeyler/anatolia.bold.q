@@ -5,6 +5,8 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 
 import { openDatabase } from '../mobile/db/index.js';
+import { createDbKeyStore } from '../mobile/db/dbKey.js';
+import { setEncryptionKey } from '../mobile/db/fieldCrypto.js';
 import { listAnalyses, getAnalysis, createAnalysis, updateAnalysis, deleteAnalysis } from '../mobile/db/analysesRepo.js';
 import { getOrCreateDeviceId } from '../mobile/auth/deviceId.js';
 import { createSecureStore } from '../mobile/auth/secureStore.js';
@@ -46,7 +48,11 @@ const reauthListeners = new Set();
 function getDb() {
   if (!dbPromise) {
     const sqlite = new SQLiteConnection(CapacitorSQLite);
-    dbPromise = openDatabase(sqlite);
+    dbPromise = (async () => {
+      const key = await createDbKeyStore(SecureStorage).getOrCreateKey();
+      setEncryptionKey(key);
+      return openDatabase(sqlite);
+    })();
   }
   return dbPromise;
 }

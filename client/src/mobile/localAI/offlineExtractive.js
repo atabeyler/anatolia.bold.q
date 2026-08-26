@@ -1,4 +1,5 @@
 import { dbAll, dbGet } from '../db/index.js';
+import { decryptField } from '../db/fieldCrypto.js';
 
 // Fully offline "local AI" backend: keyword search, extractive
 // summarization, and a bag-of-words comparison, all running directly
@@ -39,6 +40,19 @@ function scoreDoc(row, terms) {
   return score;
 }
 
+async function decryptAnalysisRow(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    title: await decryptField(row.title),
+    content: await decryptField(row.content),
+  };
+}
+
+async function decryptAnalysisRows(rows) {
+  return Promise.all(rows.map(decryptAnalysisRow));
+}
+
 // Recognizes a small set of Turkish relative-date phrases and returns a
 // [since, until) window, or null if the query doesn't reference a date range.
 function parseDateRange(text, now = new Date()) {
@@ -77,7 +91,7 @@ function parseDateRange(text, now = new Date()) {
 }
 
 export async function findReports(db, userId, queryText, { limit = 10 } = {}) {
-  const rows = await dbAll(db, `SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL`, [userId]);
+  const rows = await decryptAnalysisRows(await dbAll(db, `SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL`, [userId]));
   const terms = tokenize(queryText);
   const range = parseDateRange(queryText);
 
@@ -114,7 +128,7 @@ export async function findReports(db, userId, queryText, { limit = 10 } = {}) {
 // top N, and re-emits them in original order so the summary still reads
 // coherently.
 export async function summarizeReport(db, userId, id, { maxSentences = 3 } = {}) {
-  const row = await dbGet(db, `SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]);
+  const row = await decryptAnalysisRow(await dbGet(db, `SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [id, userId]));
   if (!row) return null;
 
   const sentences = (row.content || '')
@@ -147,8 +161,8 @@ export async function summarizeReport(db, userId, id, { maxSentences = 3 } = {})
 // unique to each, and the raw length delta. Not a semantic diff, but a real
 // offline signal a user can act on ("bu iki rapor ne kadar örtüşüyor").
 export async function compareReports(db, userId, idA, idB) {
-  const rowA = await dbGet(db, `SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [idA, userId]);
-  const rowB = await dbGet(db, `SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [idB, userId]);
+  const rowA = await decryptAnalysisRow(await dbGet(db, `SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [idA, userId]));
+  const rowB = await decryptAnalysisRow(await dbGet(db, `SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, [idB, userId]));
   if (!rowA || !rowB) return null;
 
   const termsA = new Set(tokenize(rowA.content));

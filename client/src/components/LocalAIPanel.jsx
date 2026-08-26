@@ -107,7 +107,7 @@ export default function LocalAIPanel({ t }) {
             {installed ? <CircleCheck className="w-4 h-4 text-emerald-300/80 shrink-0" /> : <CircleAlert className="w-4 h-4 text-amber-300/80 shrink-0" />}
             <span className="text-xs text-cyan-100">{installed ? t('localAIInstalled') : t('localAINotInstalled')}</span>
           </div>
-          {spec && <div className="text-[14px] text-cyan-300/50 pl-6 mt-0.5">{spec.label} · {formatBytes(spec.sizeBytes)}</div>}
+          {spec && <div className="text-[14px] text-cyan-300/50 pl-6 mt-0.5">{spec.displayLabel || spec.label} · {formatBytes(spec.sizeBytes)}</div>}
           {!installed && partialBytes > 0 && spec && (
             <div className="text-[14px] text-amber-300/70 pl-6 mt-1">{t('localAIPartialDownload')}: {formatBytes(partialBytes)} / {formatBytes(spec.sizeBytes)}</div>
           )}

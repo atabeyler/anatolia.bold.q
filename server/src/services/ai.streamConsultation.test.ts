@@ -64,7 +64,7 @@ describe('streamConsultationText', () => {
     streamTextMock.mockReturnValueOnce(chunkedStream(['Merhaba']));
     const res = fakeRes();
     const result = await streamConsultationText('sys', 'user', res as never);
-    expect(result).toEqual({ provider: 'Claude (Anthropic)', content: 'Merhaba' });
+    expect(result).toEqual({ provider: 'Q CLOUD', content: 'Merhaba' });
     expect(res.writeHead).toHaveBeenCalledTimes(1);
     expect(res.end).toHaveBeenCalledTimes(1);
   });
@@ -75,7 +75,7 @@ describe('streamConsultationText', () => {
       .mockReturnValueOnce(chunkedStream(['Merhaba', ' dünya']));
     const res = fakeRes();
     const result = await streamConsultationText('sys', 'user', res as never);
-    expect(result).toEqual({ provider: 'Gemini (Google)', content: 'Merhaba dünya' });
+    expect(result).toEqual({ provider: 'Q CLOUD', content: 'Merhaba dünya' });
     // Only one writeHead call -- Claude's empty attempt must never have
     // started a response, or the client would see a truncated/empty body
     // before Gemini's real content.
@@ -88,7 +88,7 @@ describe('streamConsultationText', () => {
       .mockReturnValueOnce(chunkedStream(['Ok']));
     const res = fakeRes();
     const result = await streamConsultationText('sys', 'user', res as never);
-    expect(result).toEqual({ provider: 'Gemini (Google)', content: 'Ok' });
+    expect(result).toEqual({ provider: 'Q CLOUD', content: 'Ok' });
   });
 
   it('throws when every provider fails or produces no output', async () => {

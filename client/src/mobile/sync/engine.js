@@ -25,13 +25,20 @@ export async function pushQueue(db, { apiBaseUrl, getToken, deviceId, fetchImpl 
 
     for (const op of due) await markInFlight(db, op.id);
 
-    const operations = due.map((op) => ({
-      operationId: op.id,
-      entityType: op.entity_type,
-      op: op.op,
-      entityId: op.entity_id,
-      payload: op.payload ? JSON.parse(op.payload) : undefined,
-      baseVersion: op.base_version ?? undefined,
+    const operations = await Promise.all(due.map(async (op) => {
+      const parsedPayload = op.payload ? JSON.parse(op.payload) : undefined;
+      const handler = getEntityHandler(op.entity_type);
+      const payload = parsedPayload && handler.preparePushPayload
+        ? await handler.preparePushPayload(parsedPayload)
+        : parsedPayload;
+      return {
+        operationId: op.id,
+        entityType: op.entity_type,
+        op: op.op,
+        entityId: op.entity_id,
+        payload,
+        baseVersion: op.base_version ?? undefined,
+      };
     }));
 
     let response;

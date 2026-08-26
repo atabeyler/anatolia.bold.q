@@ -70,7 +70,7 @@ describe('routeConsultChat', () => {
     const cloudCall = vi.fn(async () => ({ content: 'cevap', provider: 'Claude (Anthropic)' }));
     const result = await routeConsultChat({ isOffline: false, cloudCall, nativeAIQuery: vi.fn(), chatText: 'soru' });
     expect(result.engine).toBe(ENGINE.CLOUD);
-    expect(result.providerLabel).toBe('Claude (Anthropic)');
+    expect(result.providerLabel).toBe('Q CLOUD');
   });
 
   it('offline generative answer is tagged ENGINE.LOCAL_LLM', async () => {

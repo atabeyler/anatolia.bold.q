@@ -1,8 +1,9 @@
 import { dbAll, dbGet, dbTransaction } from './index.js';
+import { encryptField, decryptField } from './fieldCrypto.js';
 
 const now = () => new Date().toISOString();
 
-const rowToRecord = (row) => ({
+const rowToRecord = async (row) => ({
   id: row.id,
   userId: row.user_id,
   organizationId: row.organization_id,
@@ -14,8 +15,8 @@ const rowToRecord = (row) => ({
   deletedAt: row.deleted_at,
   syncStatus: row.sync_status,
   category: row.category,
-  title: row.title,
-  content: row.content,
+  title: await decryptField(row.title),
+  content: await decryptField(row.content),
   aiProvider: row.ai_provider,
   fraudTransactionCount: row.fraud_transaction_count,
   fraudFlaggedCount: row.fraud_flagged_count,
@@ -37,7 +38,7 @@ function enqueueStatement({ entityType, entityId, op, payload, baseVersion, devi
 // ── List / read (never returns tombstoned rows) ────────────────────────────
 export async function listAnalyses(db, userId) {
   const rows = await dbAll(db, `SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC`, [userId]);
-  return rows.map(rowToRecord);
+  return Promise.all(rows.map(rowToRecord));
 }
 
 export async function getAnalysis(db, userId, id) {
@@ -50,6 +51,8 @@ export async function getAnalysis(db, userId, id) {
 export async function createAnalysis(db, { userId, deviceId, category, title, content, aiProvider }) {
   const id = crypto.randomUUID();
   const ts = now();
+  const encryptedTitle = await encryptField(title);
+  const encryptedContent = await encryptField(content);
 
   await dbTransaction(db, [
     {
@@ -57,13 +60,13 @@ export async function createAnalysis(db, { userId, deviceId, category, title, co
         INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider)
         VALUES (?, ?, NULL, ?, 'analysis', 1, ?, ?, 'pending', ?, ?, ?, ?)
       `,
-      values: [id, userId, deviceId, ts, ts, category, title, content, aiProvider || null],
+      values: [id, userId, deviceId, ts, ts, category, encryptedTitle, encryptedContent, aiProvider || null],
     },
     // A fresh create always lands at server version 1 (routes/sync.js's
     // create path is deterministic on that), so no baseVersion is needed.
     enqueueStatement({
       entityType: 'analysis', entityId: id, op: 'create',
-      payload: { category, title, content, aiProvider: aiProvider || null },
+      payload: { category, title: encryptedTitle, content: encryptedContent, aiProvider: aiProvider || null },
       deviceId,
     }),
   ]);
@@ -79,6 +82,8 @@ export async function updateAnalysis(db, { userId, deviceId, id, title, content 
 
   const ts = now();
   const previousVersion = current.version;
+  const encryptedTitle = title === undefined ? null : await encryptField(title);
+  const encryptedContent = content === undefined ? null : await encryptField(content);
 
   await dbTransaction(db, [
     {
@@ -91,11 +96,11 @@ export async function updateAnalysis(db, { userId, deviceId, id, title, content 
           sync_status = 'pending'
         WHERE id = ?
       `,
-      values: [title ?? null, content ?? null, ts, id],
+      values: [encryptedTitle, encryptedContent, ts, id],
     },
     enqueueStatement({
       entityType: 'analysis', entityId: id, op: 'update',
-      payload: { title: title ?? null, content: content ?? null },
+      payload: { title: encryptedTitle, content: encryptedContent },
       baseVersion: previousVersion,
       deviceId,
     }),

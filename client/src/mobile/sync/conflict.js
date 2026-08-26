@@ -1,4 +1,5 @@
 import { dbAll, dbGet, dbTransaction } from '../db/index.js';
+import { encryptField, decryptField } from '../db/fieldCrypto.js';
 import { cancelQueuedFor } from './queue.js';
 
 const now = () => new Date().toISOString();
@@ -26,16 +27,30 @@ export async function recordConflict(db, { entityType, entityId, localPayload, l
 
 export async function listUnresolvedConflicts(db) {
   const rows = await dbAll(db, `SELECT * FROM conflicts WHERE resolved_at IS NULL ORDER BY detected_at DESC`);
-  return rows.map((row) => ({
-    id: row.id,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    localPayload: JSON.parse(row.local_payload),
-    localBaseVersion: row.local_base_version,
-    serverPayload: row.server_payload ? JSON.parse(row.server_payload) : null,
-    serverVersion: row.server_version,
-    serverDeleted: !!row.server_deleted,
-    detectedAt: row.detected_at,
+  return Promise.all(rows.map(async (row) => {
+    const localPayload = JSON.parse(row.local_payload);
+    const serverPayload = row.server_payload ? JSON.parse(row.server_payload) : null;
+    return {
+      id: row.id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      localPayload: {
+        ...localPayload,
+        title: await decryptField(localPayload.title ?? null),
+        content: await decryptField(localPayload.content ?? null),
+      },
+      localBaseVersion: row.local_base_version,
+      serverPayload: serverPayload
+        ? {
+            ...serverPayload,
+            title: await decryptField(serverPayload.title ?? null),
+            content: await decryptField(serverPayload.content ?? null),
+          }
+        : null,
+      serverVersion: row.server_version,
+      serverDeleted: !!row.server_deleted,
+      detectedAt: row.detected_at,
+    };
   }));
 }
 
@@ -57,13 +72,15 @@ export async function resolveConflict(db, { conflictId, deviceId, resolution }) 
       });
     } else {
       const payload = JSON.parse(conflict.server_payload);
+      const encryptedTitle = await encryptField(payload.title ?? '');
+      const encryptedContent = await encryptField(payload.content ?? '');
       statements.push({
         statement: `
           UPDATE analyses SET title = ?, content = ?, category = ?, ai_provider = ?,
             version = ?, updated_at = ?, deleted_at = NULL, sync_status = 'synced'
           WHERE id = ?
         `,
-        values: [payload.title, payload.content, payload.category, payload.aiProvider ?? null, conflict.server_version, ts, conflict.entity_id],
+        values: [encryptedTitle, encryptedContent, payload.category, payload.aiProvider ?? null, conflict.server_version, ts, conflict.entity_id],
       });
     }
   } else if (resolution === 'kept_local') {

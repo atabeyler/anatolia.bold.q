@@ -15,6 +15,8 @@ import { filterAllowedProviders, isCloudProviderAllowed, PolicyDenialError } fro
 
 export { PolicyDenialError };
 
+export const PUBLIC_CLOUD_PROVIDER_LABEL = 'Q CLOUD';
+
 // Records latency + success/failure for one provider attempt, keyed
 // `ai.<provider>` -- see getMetricsSnapshot()/the /api/platform/metrics
 // endpoint. Comparing call counts across providers over time surfaces the
@@ -70,7 +72,7 @@ export async function generateAnalysisWithVision(
           ],
           maxOutputTokens: 8000,
         });
-        return { provider: 'Claude Vision (Anthropic)', content: text, usage };
+        return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: text, usage };
       } catch (err) {
         logger.warn({ err }, 'Claude Vision failed -> falling back to text');
       }
@@ -129,7 +131,7 @@ export async function generateAnalysis(
         ...(maxOutputTokens ? { maxOutputTokens } : {}),
       });
       recordAiAttempt(key, startedAt, true);
-      return { provider: name, content: text, usage: usage ?? null };
+      return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: text, usage: usage ?? null };
     } catch (err) {
       recordAiAttempt(key, startedAt, false);
       logger.warn({ err, provider: name }, 'AI provider failed, trying next by policy order');
@@ -179,7 +181,7 @@ export async function streamConsultationText(
 
   for (const attempt of attempts) {
     const startedAt = Date.now();
-    const metricKey = attempt.name.startsWith('Claude') ? 'claude' : attempt.name.startsWith('Gemini') ? 'gemini' : 'openai';
+    const metricKey = attempt.key;
     let startedSending = false;
     let full = '';
     try {
@@ -188,7 +190,7 @@ export async function streamConsultationText(
         if (!startedSending) {
           res.writeHead(200, {
             'Content-Type': 'text/plain; charset=utf-8',
-            'X-AI-Provider': encodeURIComponent(attempt.name),
+            'X-AI-Provider': encodeURIComponent(PUBLIC_CLOUD_PROVIDER_LABEL),
             'Cache-Control': 'no-cache',
           });
           startedSending = true;
@@ -209,14 +211,14 @@ export async function streamConsultationText(
       }
       recordAiAttempt(metricKey, startedAt, true);
       res.end();
-      return { provider: attempt.name, content: full };
+      return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: full };
     } catch (err) {
       recordAiAttempt(metricKey, startedAt, false);
       if (startedSending) {
         // Data has already been sent to the client — no choice but to end the stream here.
         logger.warn({ err, provider: attempt.name }, 'Streaming cut short');
         res.end();
-        return { provider: attempt.name, content: full };
+        return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: full };
       }
       logger.warn({ err, provider: attempt.name }, 'Failed to start streaming, trying next provider');
     }

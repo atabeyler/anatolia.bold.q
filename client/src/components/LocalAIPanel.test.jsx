@@ -30,7 +30,7 @@ describe('LocalAIPanel (desktop)', () => {
           installed: false,
           available: false,
           capability: { capable: true, totalMemBytes: 8 * 1024 * 1024 * 1024, freeDiskBytes: 10 * 1024 * 1024 * 1024, cpuCount: 8 },
-          spec: { label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)', sizeBytes: 1117320736 },
+          spec: { label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)', displayLabel: 'Q LOCAL Standart Model', sizeBytes: 1117320736 },
         }),
         onModelDownloadProgress: () => () => {},
       },
@@ -40,7 +40,7 @@ describe('LocalAIPanel (desktop)', () => {
     render(<LocalAIPanel t={t} />);
 
     await waitFor(() => expect(screen.getByText('localAINotInstalled')).toBeInTheDocument());
-    expect(screen.getByText(/Qwen2.5-1.5B-Instruct/)).toBeInTheDocument();
+    expect(screen.getByText(/Q LOCAL Standart Model/)).toBeInTheDocument();
     expect(screen.getByText(/8.0 GB/)).toBeInTheDocument();
     expect(screen.getByText('localAIDownloadButton')).toBeInTheDocument();
   });

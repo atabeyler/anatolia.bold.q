@@ -17,7 +17,7 @@ export const ENGINE = Object.freeze({
 // engines cite -- cloud responses don't carry this since server-side RAG
 // isn't in scope here.
 // `raw` keeps the original provider-specific response around (docx/pdf
-// base64, quantum/fraud/optimizer sections, provider name, ...) so
+// base64, quantum/fraud/optimizer sections, public engine label, ...) so
 // nothing that already worked for the cloud path is lost -- callers that
 // need those extras (downloadDocx, ResultSourceBadge, ...) read `raw`,
 // while the parts every engine needs to render generically stay top-level.
@@ -27,7 +27,7 @@ export function normalizeCloudAnalysis(cloudResult) {
     title: cloudResult?.title,
     content: cloudResult?.content,
     sources: [],
-    providerLabel: cloudResult?.provider,
+    providerLabel: 'Q CLOUD',
     raw: cloudResult,
   };
 }
@@ -39,7 +39,7 @@ export function normalizeLocalLLMAnalysis(localResponse) {
     title: result.title,
     content: result.content,
     sources: result.sources || [],
-    providerLabel: 'Qwen2.5-1.5B (yerel)',
+    providerLabel: 'Q LOCAL',
     raw: localResponse,
   };
 }

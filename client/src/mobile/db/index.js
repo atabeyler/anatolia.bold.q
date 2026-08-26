@@ -1,6 +1,7 @@
 import migration001 from './migrations/001_init.sql?raw';
 import migration002 from './migrations/002_diagnostics.sql?raw';
 import migration003 from './migrations/003_offline_lockout.sql?raw';
+import { migrateExistingRows } from './fieldCrypto.js';
 
 const DB_NAME = 'anatoliaq';
 const MIGRATIONS = [
@@ -22,6 +23,7 @@ export async function openDatabase(sqlite) {
 
   await db.open();
   await runMigrations(db);
+  await migrateExistingRows(db, { dbAll, dbTransaction });
   return db;
 }
 
