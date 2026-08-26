@@ -40,7 +40,7 @@ describe('findReports', () => {
     const results = findReports(db, USER, 'deniz sınırı çatışma', { encryptionKey: TEST_KEY });
     expect(results[0].id).toBe('encrypted');
     expect(results[0].title).toBe('Deniz sınırı çatışma analizi');
-    expect(results[0].content).toContain('çatışma riski');
+    expect(results[0].preview).toContain('çatışma riski');
   });
 
   it('filters by a Turkish relative date phrase ("geçen ay")', () => {
