@@ -54,9 +54,6 @@ async function seedLegacyUsersIfEmpty() {
   if (seeded || !process.env.DATABASE_URL) return;
   seeded = true;
   try {
-    const { rows } = await query('SELECT COUNT(*)::int AS count FROM auth_users');
-    if (rows[0].count > 0) return;
-
     if (!LEGACY_SEED_PASSWORD) {
       console.error('auth_users seed skipped: SHARED_PASSWORD env var is not set');
       return;
@@ -101,7 +98,7 @@ async function seedLegacyUsersIfEmpty() {
         [u.userCode, u.isAdmin ? adminPasswordHash : analystPasswordHash, u.nickname, u.isAdmin]
       );
     }
-    console.log('auth_users seeded from legacy user list (one-time migration)');
+    console.log('auth_users legacy seed checked; missing bootstrap users inserted without overwriting existing accounts');
   } catch (err) {
     console.error('auth_users seed error:', err);
   }
