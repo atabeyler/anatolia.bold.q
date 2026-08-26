@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-3.0.75-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-3.0.76-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -265,7 +265,7 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
 | `LOG_LEVEL` | pino log level |
 | `RESEND_API_KEY` | Enables approval/report email delivery |
 | `CENTER_EMAIL` | Central notification/report mailbox |
-| `ADMIN_SEED_PASSWORD`, `ADMIN_SEED_USER_CODE`, `ADMIN_SEED_NICKNAME` | First admin bootstrap account configuration |
+| `ADMIN_SEED_PASSWORD`, `ADMIN_SEED_USER_CODE`, `ADMIN_SEED_NICKNAME`, `ADMIN_SEED_RESET` | First admin bootstrap account configuration; reset is a one-time recovery switch |
 | `SHARED_PASSWORD`, `BOOTSTRAP_USERS_JSON` | Optional non-admin bootstrap accounts; keep real user-code inventories in deployment env, not the repository |
 | `REDIS_URL` | Optional Redis-backed active-user/location state |
 | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_REGION` | Optional persistent object storage |

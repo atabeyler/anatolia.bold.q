@@ -28,6 +28,7 @@ const SHARED_SEED_PASSWORD = process.env.SHARED_PASSWORD;
 const ADMIN_SEED_PASSWORD = process.env.ADMIN_SEED_PASSWORD || (process.env.NODE_ENV === 'development' ? SHARED_SEED_PASSWORD : undefined);
 const ADMIN_SEED_USER_CODE = process.env.ADMIN_SEED_USER_CODE || (process.env.NODE_ENV === 'development' ? 'dev-admin' : undefined);
 const ADMIN_SEED_NICKNAME = process.env.ADMIN_SEED_NICKNAME || 'BOLD';
+const ADMIN_SEED_RESET = process.env.ADMIN_SEED_RESET === 'true';
 
 function parseBootstrapUsers() {
   if (!process.env.BOOTSTRAP_USERS_JSON) return [];
@@ -111,10 +112,25 @@ async function seedBootstrapUsersIfNeeded() {
       ...(analystPasswordHash ? bootstrapUsers : []),
     ];
     for (const u of seedUsers) {
-      await query(
-        'INSERT INTO auth_users (user_code, password_hash, nickname, is_admin) VALUES ($1, $2, $3, $4) ON CONFLICT (user_code) DO NOTHING',
-        [u.userCode, u.isAdmin ? adminPasswordHash : analystPasswordHash, u.nickname, u.isAdmin]
-      );
+      const passwordHash = u.isAdmin ? adminPasswordHash : analystPasswordHash;
+      if (u.isAdmin && ADMIN_SEED_RESET) {
+        await query(
+          `INSERT INTO auth_users (user_code, password_hash, nickname, is_admin, role, blocked)
+           VALUES ($1, $2, $3, TRUE, $4, FALSE)
+           ON CONFLICT (user_code) DO UPDATE
+           SET password_hash = EXCLUDED.password_hash,
+               nickname = EXCLUDED.nickname,
+               is_admin = TRUE,
+               role = $4,
+               blocked = FALSE`,
+          [u.userCode, passwordHash, u.nickname, ROLES.ADMIN]
+        );
+      } else {
+        await query(
+          'INSERT INTO auth_users (user_code, password_hash, nickname, is_admin) VALUES ($1, $2, $3, $4) ON CONFLICT (user_code) DO NOTHING',
+          [u.userCode, passwordHash, u.nickname, u.isAdmin]
+        );
+      }
     }
     console.log('auth_users bootstrap seed checked; missing configured users inserted without overwriting existing accounts');
   } catch (err) {
