@@ -146,22 +146,24 @@ describe('createLLMQuery', () => {
 
   it('times out a stalled low-tier generation instead of waiting forever', async () => {
     vi.useFakeTimers();
-    const db = createTestDb();
-    const generate = vi.fn(() => new Promise(() => {}));
-    const dispose = vi.fn(async () => {});
-    const runtimeFactory = vi.fn(async () => ({ generate, dispose }));
-    const run = createLLMQuery({
-      db,
-      userId: 'BOLD-001',
-      modelManager: fakeModelManager({ spec: { tier: 'low', contextSize: 1536 } }),
-      runtimeFactory,
-    });
+    try {
+      const db = createTestDb();
+      const generate = vi.fn(() => new Promise(() => {}));
+      const dispose = vi.fn(async () => {});
+      const runtimeFactory = vi.fn(async () => ({ generate, dispose }));
+      const run = createLLMQuery({
+        db,
+        userId: 'BOLD-001',
+        modelManager: fakeModelManager({ spec: { tier: 'low', contextSize: 1536 } }),
+        runtimeFactory,
+      });
 
-    const pending = run({ mode: 'chat', text: 'savunma testi' });
-    await vi.advanceTimersByTimeAsync(35_000);
-
-    await expect(pending).rejects.toThrow('local_llm_timeout');
-    expect(dispose).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
+      const pending = expect(run({ mode: 'chat', text: 'savunma testi' })).rejects.toThrow('local_llm_timeout');
+      await vi.advanceTimersByTimeAsync(35_000);
+      await pending;
+      expect(dispose).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
