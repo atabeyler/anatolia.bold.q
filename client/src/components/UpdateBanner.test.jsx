@@ -124,7 +124,7 @@ describe('UpdateBanner (Android)', () => {
 
     const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
     const mobileBridge = await import('../services/mobileBridge.js');
-    mobileBridge.mobileUpdate.check = vi.fn(async () => ({ available: true, version: '2.1.140', url: 'https://x/app.apk' }));
+    mobileBridge.mobileUpdate.check = vi.fn(async () => ({ available: true, version: '2.1.140', url: 'https://x/app.apk', sha256: 'abc123' }));
     const approve = vi.fn(async () => {});
     mobileBridge.mobileUpdate.approve = approve;
 
@@ -132,7 +132,7 @@ describe('UpdateBanner (Android)', () => {
     await waitFor(() => expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Update'));
-    expect(approve).toHaveBeenCalledWith('https://x/app.apk');
+    expect(approve).toHaveBeenCalledWith('https://x/app.apk', 'abc123');
 
     vi.unstubAllGlobals();
   });

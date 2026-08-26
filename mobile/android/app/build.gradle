@@ -1,6 +1,8 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android' // for the LocalLLM plugin's Kotlin sources (src/main/java/.../localllm/)
 
+import groovy.json.JsonSlurper
+
 // Release signing: same free-tier approach as the desktop app's self-signed
 // Authenticode cert (see desktop/README.md's code-signing section) -- a
 // self-signed Android keystore, never a CA-issued one, since this app is
@@ -15,6 +17,17 @@ def hasSigningConfig = keystorePropertiesFile.exists()
 if (hasSigningConfig) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
+
+def rootPackageJson = new JsonSlurper().parse(rootProject.file('../../package.json'))
+def appVersionName = rootPackageJson.version as String
+def versionMatch = appVersionName =~ /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/
+if (!versionMatch.matches()) {
+    throw new GradleException("Invalid app version in root package.json: ${appVersionName}")
+}
+def appVersionCode =
+        (versionMatch[0][1] as Integer) * 1000000 +
+        (versionMatch[0][2] as Integer) * 10000 +
+        (versionMatch[0][3] as Integer)
 
 android {
     namespace = "com.boldkimya.anatoliaq"
@@ -31,8 +44,8 @@ android {
         applicationId "com.boldkimya.anatoliaq"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -295,6 +295,12 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+async function sha256Hex(buffer) {
+  if (!crypto?.subtle) return null;
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export const mobileUpdate = {
   // Checked via this app's own server (server/src/routes/version.js), never
   // GitHub's API directly -- see that route's comment.
@@ -306,7 +312,7 @@ export const mobileUpdate = {
       const apk = info.assets?.androidApk;
       const current = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null;
       if (!info.version || !apk?.url || !current || !isNewerVersion(info.version, current)) return { available: false };
-      return { available: true, version: info.version, notes: info.notes, url: apk.url };
+      return { available: true, version: info.version, notes: info.notes, url: apk.url, sha256: apk.sha256 || null };
     } catch {
       return { available: false };
     }
@@ -321,10 +327,17 @@ export const mobileUpdate = {
   // Android still requires an explicit tap to install (no Play-Store-style
   // silent auto-install), so this hands off to the OS installer rather than
   // completing the update itself.
-  approve: guard(async (url) => {
+  approve: guard(async (url, expectedSha256 = null) => {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`APK indirilemedi (${res.status})`);
-    const data = arrayBufferToBase64(await res.arrayBuffer());
+    const buffer = await res.arrayBuffer();
+    if (expectedSha256) {
+      const actualSha256 = await sha256Hex(buffer);
+      if (actualSha256 && actualSha256 !== expectedSha256.toLowerCase()) {
+        throw new Error('APK doğrulaması başarısız');
+      }
+    }
+    const data = arrayBufferToBase64(buffer);
     const path = 'anatolia-q-update.apk';
     await Filesystem.writeFile({ path, data, directory: Directory.Cache });
     const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });

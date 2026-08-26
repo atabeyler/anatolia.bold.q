@@ -74,7 +74,7 @@ export default function UpdateBanner() {
     } else if (isMobileApp) {
       setStage('downloading');
       try {
-        await mobileUpdate.approve(info.url);
+        await mobileUpdate.approve(info.url, info.sha256);
         setStage('dismissed'); // Android's own install prompt takes over from here
       } catch {
         setStage('error');
