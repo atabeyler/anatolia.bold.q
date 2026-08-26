@@ -24,6 +24,43 @@ const GENERATE_INSTRUCTION =
 export function createLLMQuery({ db, userId, modelManager, runtimeFactory = createLlamaRuntime } = {}) {
   let runtimePromise = null;
 
+  async function disposeCachedRuntime() {
+    if (!runtimePromise) return;
+    const currentRuntimePromise = runtimePromise;
+    runtimePromise = null;
+    try {
+      const runtime = await currentRuntimePromise;
+      await runtime.dispose?.();
+    } catch {
+      // A timed-out or failed runtime may already be half-torn-down. The
+      // next request will create a fresh runtime; there is nothing useful
+      // to surface here beyond the original generation error.
+    }
+  }
+
+  async function generateWithDeadline(runtime, prompt, options = {}, deadlineMs = 45_000) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('local_llm_timeout'));
+      }, deadlineMs);
+    });
+
+    try {
+      return await Promise.race([
+        runtime.generate(prompt, { ...options, timeoutMs: Math.min(options.timeoutMs ?? deadlineMs, deadlineMs) }),
+        timeout,
+      ]);
+    } catch (err) {
+      if (err?.message === 'local_llm_timeout') {
+        await disposeCachedRuntime();
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   function getRuntime() {
     if (!runtimePromise) {
       // Re-verify the model file's SHA-256 on every fresh load, not just
@@ -81,9 +118,10 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
       const isLowTier = modelManager.spec.tier === 'low';
       const maxTokens = isLowTier
-        ? (depth === 'derin' ? 650 : depth === 'hizli' ? 300 : 500)
+        ? (depth === 'derin' ? 350 : depth === 'hizli' ? 120 : 220)
         : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
-      const content = await runtime.generate(fullPrompt, { maxTokens, temperature: 0.35 });
+      const timeoutMs = isLowTier ? 45_000 : 90_000;
+      const content = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
       return {
         type: 'analysis',
         result: {
@@ -106,7 +144,8 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     const boundedAttachment = String(attachmentContext || '').slice(0, 8000);
     const userText = boundedAttachment ? `${text}\n\nKullanıcının eklediği yerel dosya içeriği:\n${boundedAttachment}` : text;
     const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText, lang });
-    const answer = await runtime.generate(fullPrompt, { maxTokens: modelManager.spec.tier === 'low' ? 250 : 500, temperature: 0.3 });
+    const isLowTier = modelManager.spec.tier === 'low';
+    const answer = await generateWithDeadline(runtime, fullPrompt, { maxTokens: isLowTier ? 120 : 500, temperature: 0.3 }, isLowTier ? 35_000 : 60_000);
     return {
       type: 'generated',
       text: answer,
@@ -115,10 +154,7 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
   }
 
   run.dispose = async () => {
-    if (!runtimePromise) return;
-    const runtime = await runtimePromise;
-    runtimePromise = null;
-    await runtime.dispose?.();
+    await disposeCachedRuntime();
   };
 
   return run;

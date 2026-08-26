@@ -9,8 +9,8 @@ function seedReport(db, { id = 'r1', title = 'Ekim Ayı Bütçe Raporu', categor
   `).run(id, category, title, content);
 }
 
-function fakeModelManager({ available = true, verifyChecksum = async () => ({ ok: true }) } = {}) {
-  return { isAvailable: () => available, modelPath: '/fake/model.gguf', spec: { contextSize: 4096 }, verifyChecksum };
+function fakeModelManager({ available = true, verifyChecksum = async () => ({ ok: true }), spec = { contextSize: 4096 } } = {}) {
+  return { isAvailable: () => available, modelPath: '/fake/model.gguf', spec, verifyChecksum };
 }
 
 describe('createLLMQuery', () => {
@@ -142,5 +142,26 @@ describe('createLLMQuery', () => {
     const result = await run({ mode: 'chat', text: 'tekrar' });
     expect(result.type).toBe('generated');
     expect(runtimeFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it('times out a stalled low-tier generation instead of waiting forever', async () => {
+    vi.useFakeTimers();
+    const db = createTestDb();
+    const generate = vi.fn(() => new Promise(() => {}));
+    const dispose = vi.fn(async () => {});
+    const runtimeFactory = vi.fn(async () => ({ generate, dispose }));
+    const run = createLLMQuery({
+      db,
+      userId: 'BOLD-001',
+      modelManager: fakeModelManager({ spec: { tier: 'low', contextSize: 1536 } }),
+      runtimeFactory,
+    });
+
+    const pending = run({ mode: 'chat', text: 'savunma testi' });
+    await vi.advanceTimersByTimeAsync(35_000);
+
+    await expect(pending).rejects.toThrow('local_llm_timeout');
+    expect(dispose).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });
