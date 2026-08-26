@@ -64,7 +64,7 @@ export async function routeConsultChat({ isOffline, cloudCall, nativeAIQuery, ch
   if (!isOffline) {
     try {
       const r = await cloudCall();
-      return { engine: ENGINE.CLOUD, ok: true, content: r.content, providerLabel: r.provider, raw: r };
+      return { engine: ENGINE.CLOUD, ok: true, content: r.content, providerLabel: 'Q CLOUD', raw: r };
     } catch (cloudError) {
       if (!nativeAIQuery) throw cloudError;
       // Connectivity can change between the 30-second health checks. Retry
