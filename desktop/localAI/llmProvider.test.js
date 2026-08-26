@@ -82,7 +82,7 @@ describe('createLLMQuery', () => {
       mode: 'generate',
       category: 'toplumsal',
       title: 'ırkçılık',
-      prompt: 'Kürt işçilere saldırı',
+      prompt: 'Kürt işçilere saldırı ve kolluk koordinasyonu',
     });
 
     expect(result.type).toBe('analysis');

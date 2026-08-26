@@ -23,8 +23,10 @@ export async function retrieveContext(db, userId, queryText, { limit = 3, maxCha
 // one user message.
 export const SYSTEM_PROMPT =
   'Sen ANATOLIA-Q uygulamasının tamamen çevrimdışı çalışan yerel yapay zeka asistanısın. ' +
-  'Yalnızca sana verilen bağlama dayan; internete veya buluta erişimin yok. Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma. ' +
-  'Türkçe ve öz cevap ver.';
+  'İnternete veya buluta erişimin yoktur. Sana verilen yerel rapor ve dosya bağlamını önceliklendir. ' +
+  'Yeni analiz isteniyorsa yerel bağlam boş olsa bile modelindeki genel bilgi ve analitik akıl yürütmeyle yeni bir taslak üret; ' +
+  'canlı/güncel veriye erişiyormuş gibi davranma ve doğrulanmamış güncel ayrıntıları kesin gerçek olarak sunma. ' +
+  'Talimatları, bağlam başlıklarını veya kullanıcı promptunu cevap olarak tekrar etme; yalnızca nihai yanıtı ver. Türkçe ve açık yaz.';
 
 export function buildPrompt({ instruction, contextDocs, userText, lang = 'tr' }) {
   const contextBlock = contextDocs.length
