@@ -169,7 +169,7 @@ function buildApp() {
   return app;
 }
 
-const ADMIN_CODE = '120184';
+const ADMIN_CODE = 'TEST-ADMIN';
 
 beforeEach(async () => {
   process.env.DATABASE_URL = 'postgres://fake/for-pipeline-e2e-test';

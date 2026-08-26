@@ -19,49 +19,63 @@ const router = express.Router();
 
 const APP_URL = process.env.APP_URL || 'http://localhost:10000';
 
-// One-time migration data: the user codes that used to be hardcoded here.
-// Seeded into auth_users on first boot only (if the table is empty) so
-// existing users keep working after the move to DB-backed accounts. After
-// the seed, this list is never read again — all account management goes
-// through the /admin/users endpoints below.
-const LEGACY_SEED_PASSWORD = process.env.SHARED_PASSWORD;
-// Optional, separate seed password for the one legacy admin account
-// (120184) -- without this, the admin account is seeded with the exact
-// same bcrypt hash as all 10 non-admin legacy accounts (SHARED_PASSWORD),
-// so anyone who obtains that one value (env leak, deploy log, an
-// ex-operator) can log into the admin account too, until it's individually
-// rotated. Set ADMIN_SEED_PASSWORD in production to give the admin account
-// its own distinct bootstrap credential; SHARED_PASSWORD remains the
-// fallback so existing deployments that haven't set it yet keep working
-// (a warning is logged either way -- see seedLegacyUsersIfEmpty below).
-const ADMIN_SEED_PASSWORD = process.env.ADMIN_SEED_PASSWORD || LEGACY_SEED_PASSWORD;
-const LEGACY_SEED_USERS = [
-  { userCode: '120184', nickname: 'BOLD', isAdmin: true },
-  { userCode: '847293', nickname: 'BOLD-001', isAdmin: false },
-  { userCode: '362518', nickname: 'BOLD-002', isAdmin: false },
-  { userCode: '195047', nickname: 'BOLD-003', isAdmin: false },
-  { userCode: '728364', nickname: 'BOLD-004', isAdmin: false },
-  { userCode: '541209', nickname: 'BOLD-005', isAdmin: false },
-  { userCode: '983627', nickname: 'BOLD-006', isAdmin: false },
-  { userCode: '416853', nickname: 'BOLD-007', isAdmin: false },
-  { userCode: '274091', nickname: 'BOLD-008', isAdmin: false },
-  { userCode: '639475', nickname: 'BOLD-009', isAdmin: false },
-  { userCode: '857130', nickname: 'BOLD-010', isAdmin: false },
-];
+// Bootstrap account seeding. User-code inventories must not live in the
+// repository, especially now that deployments can be public. The only built-in
+// bootstrap identity is the first admin; additional users may be provided by
+// operators through BOOTSTRAP_USERS_JSON and are inserted without overwriting
+// existing accounts. After login, account management goes through /admin/users.
+const SHARED_SEED_PASSWORD = process.env.SHARED_PASSWORD;
+const ADMIN_SEED_PASSWORD = process.env.ADMIN_SEED_PASSWORD || (process.env.NODE_ENV === 'development' ? SHARED_SEED_PASSWORD : undefined);
+const ADMIN_SEED_USER_CODE = process.env.ADMIN_SEED_USER_CODE || (process.env.NODE_ENV === 'development' ? 'dev-admin' : undefined);
+const ADMIN_SEED_NICKNAME = process.env.ADMIN_SEED_NICKNAME || 'BOLD';
+
+function parseBootstrapUsers() {
+  if (!process.env.BOOTSTRAP_USERS_JSON) return [];
+  try {
+    const users = JSON.parse(process.env.BOOTSTRAP_USERS_JSON);
+    if (!Array.isArray(users)) throw new Error('must be a JSON array');
+    return users
+      .map((u) => ({
+        userCode: String(u.userCode || '').trim(),
+        nickname: String(u.nickname || u.userCode || '').trim(),
+        isAdmin: false,
+      }))
+      .filter((u) => u.userCode && u.nickname);
+  } catch (err) {
+    console.error('BOOTSTRAP_USERS_JSON ignored: invalid JSON array of { userCode, nickname } objects:', err.message);
+    return [];
+  }
+}
 
 let seeded = false;
-async function seedLegacyUsersIfEmpty() {
+async function seedBootstrapUsersIfNeeded() {
   if (seeded || !process.env.DATABASE_URL) return;
   seeded = true;
   try {
-    if (!LEGACY_SEED_PASSWORD) {
-      console.error('auth_users seed skipped: SHARED_PASSWORD env var is not set');
+    if (!ADMIN_SEED_USER_CODE) {
+      console.error(
+        `auth_users seed ABORTED: ADMIN_SEED_USER_CODE is not set (NODE_ENV=${process.env.NODE_ENV || '(unset)'}). Refusing to ` +
+        'seed an admin account without an operator-provided user code.'
+      );
+      seeded = false;
       return;
     }
-    if (ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD) {
+    if (!ADMIN_SEED_PASSWORD) {
+      console.error(
+        `auth_users seed ABORTED: ADMIN_SEED_PASSWORD is not set (NODE_ENV=${process.env.NODE_ENV || '(unset)'}). Refusing to ` +
+        `seed the admin account (${ADMIN_SEED_USER_CODE}) without a distinct bootstrap password.`
+      );
+      seeded = false;
+      return;
+    }
+    const bootstrapUsers = parseBootstrapUsers();
+    if (bootstrapUsers.length > 0 && !SHARED_SEED_PASSWORD) {
+      console.error('non-admin bootstrap users skipped: SHARED_PASSWORD env var is not set');
+    }
+    if (ADMIN_SEED_PASSWORD === SHARED_SEED_PASSWORD) {
       // AQ-007: this is a real "admin uses a weaker/shared path than
       // non-admin users" gap -- the admin account would be bootstrapped
-      // with the exact same bcrypt hash as all 10 non-admin legacy
+      // with the exact same bcrypt hash as non-admin bootstrap
       // accounts, so anyone holding SHARED_PASSWORD (a deploy log, an
       // ex-operator, a leaked env var) gets admin too. A warning alone was
       // easy to miss at deploy time; fail closed instead so a boot without
@@ -74,31 +88,35 @@ async function seedLegacyUsersIfEmpty() {
       // warn-and-continue behavior so local setup isn't broken.
       if (process.env.NODE_ENV !== 'development') {
         console.error(
-          `auth_users seed ABORTED: ADMIN_SEED_PASSWORD is not set (NODE_ENV=${process.env.NODE_ENV || '(unset)'}). Refusing to ` +
-          'seed the admin account (120184) with the same bootstrap password as every non-admin legacy account -- set a ' +
+          `auth_users seed ABORTED: ADMIN_SEED_PASSWORD matches SHARED_PASSWORD (NODE_ENV=${process.env.NODE_ENV || '(unset)'}). Refusing to ` +
+          `seed the admin account (${ADMIN_SEED_USER_CODE}) with the same bootstrap password as non-admin bootstrap accounts -- set a ` +
           'distinct ADMIN_SEED_PASSWORD and restart, or set NODE_ENV=development for local-only setups.'
         );
         seeded = false; // allow a retry once the operator sets it and restarts
         return;
       }
       console.warn(
-        'auth_users seed: ADMIN_SEED_PASSWORD is not set -- the admin account (120184) is being seeded ' +
-        'with the SAME bootstrap password as every non-admin legacy account. Set ADMIN_SEED_PASSWORD to a ' +
+        `auth_users seed: ADMIN_SEED_PASSWORD matches SHARED_PASSWORD -- the admin account (${ADMIN_SEED_USER_CODE}) is being seeded ` +
+        'with the SAME bootstrap password as every non-admin bootstrap account. Set ADMIN_SEED_PASSWORD to a ' +
         'distinct value and rotate the admin password immediately after first login.'
       );
     }
 
-    const analystPasswordHash = await bcrypt.hash(LEGACY_SEED_PASSWORD, 12);
-    const adminPasswordHash = ADMIN_SEED_PASSWORD === LEGACY_SEED_PASSWORD
-      ? analystPasswordHash
-      : await bcrypt.hash(ADMIN_SEED_PASSWORD, 12);
-    for (const u of LEGACY_SEED_USERS) {
+    const adminPasswordHash = await bcrypt.hash(ADMIN_SEED_PASSWORD, 12);
+    const analystPasswordHash = bootstrapUsers.length > 0 && SHARED_SEED_PASSWORD
+      ? await bcrypt.hash(SHARED_SEED_PASSWORD, 12)
+      : null;
+    const seedUsers = [
+      { userCode: ADMIN_SEED_USER_CODE, nickname: ADMIN_SEED_NICKNAME, isAdmin: true },
+      ...(analystPasswordHash ? bootstrapUsers : []),
+    ];
+    for (const u of seedUsers) {
       await query(
         'INSERT INTO auth_users (user_code, password_hash, nickname, is_admin) VALUES ($1, $2, $3, $4) ON CONFLICT (user_code) DO NOTHING',
         [u.userCode, u.isAdmin ? adminPasswordHash : analystPasswordHash, u.nickname, u.isAdmin]
       );
     }
-    console.log('auth_users legacy seed checked; missing bootstrap users inserted without overwriting existing accounts');
+    console.log('auth_users bootstrap seed checked; missing configured users inserted without overwriting existing accounts');
   } catch (err) {
     console.error('auth_users seed error:', err);
   }
@@ -125,7 +143,7 @@ router.post('/login-request', publicActionLimiter, async (req, res) => {
     if (!process.env.DATABASE_URL) {
       return res.status(503).json({ error: 'Kullanıcı veritabanı yapılandırılmamış' });
     }
-    await seedLegacyUsersIfEmpty();
+    await seedBootstrapUsersIfNeeded();
 
     const { userCode, password } = req.body;
     if (!userCode || !password) {
