@@ -1,7 +1,20 @@
 // Thin wrapper around node-llama-cpp (MIT license, prebuilt bindings for
-// Windows/macOS/Linux). Isolated in its own module, behind a factory, so
-// callers/tests can inject a fake runtime and machines without a usable
-// native addon degrade without crashing at import time.
+// Windows/macOS/Linux -- see the model/runtime evaluation in the final
+// report). Isolated in its own module, behind a factory, so:
+//   1. llmProvider.js and its tests never import node-llama-cpp directly
+//      -- they take a `runtime` object shaped exactly like what this
+//      factory returns, and tests inject a fake one. This is the same
+//      dependency-injection seam pattern already used by
+//      registry.js/provider.js (see their comments).
+//   2. A machine where node-llama-cpp isn't installed/buildable (e.g. this
+//      sandbox has no GPU and may not have build tools for every target)
+//      degrades to "runtime unavailable" instead of crashing at import
+//      time -- the dynamic import below is wrapped in try/catch.
+//
+// node-llama-cpp is intentionally NOT a hard dependency in package.json's
+// "dependencies" (it's a large native addon with per-platform prebuilds);
+// see package.json's optionalDependencies and the final report for what
+// was/wasn't verified in this sandbox.
 let cachedModule = null;
 let cachedModuleError = null;
 
@@ -9,7 +22,7 @@ async function loadNodeLlamaCpp() {
   if (cachedModule) return cachedModule;
   if (cachedModuleError) throw cachedModuleError;
   try {
-    // eslint-disable-next-line import/no-unresolved -- optional dependency
+    // eslint-disable-next-line import/no-unresolved -- optional dependency, see above
     cachedModule = await import('node-llama-cpp');
     return cachedModule;
   } catch (err) {
@@ -27,17 +40,25 @@ export async function isRuntimeInstallable() {
   }
 }
 
-// Real factory: loads node-llama-cpp, the GGUF model and one reusable
-// context sequence. The model/context stay warm, but every generate() call
-// resets LlamaChatSession history to its initial system-prompt state. This
-// matters for the prompt-echo retry in llmProvider.js and also prevents any
-// future caller that reuses this runtime from accidentally carrying one
-// analysis/chat turn into another independent request.
+// Real factory: loads node-llama-cpp, loads the given GGUF file, and
+// returns a small { generate, dispose } surface. Never called directly by
+// llmProvider.js in tests -- only by the production wiring in
+// desktop/main.js / registry.js's default provider construction.
 export async function createLlamaRuntime({ modelPath, contextSize = 4096, systemPrompt } = {}) {
   const { getLlama, LlamaChatSession } = await loadNodeLlamaCpp();
   const llama = await getLlama();
   const model = await llama.loadModel({ modelPath });
+  // 0 asks llama.cpp to use the maximum evaluation threads supported by
+  // the machine. The default can be limited to physical math cores and was
+  // needlessly slow on 4-logical-core laptops during the real smoke test.
   const context = await model.createContext({ contextSize, threads: 0 });
+  // Passing the instruction as the chat session's systemPrompt (rather
+  // than concatenating it into the user-turn text) was verified in this
+  // sandbox to matter a lot for a chat-tuned model like Qwen2.5-Instruct --
+  // concatenating it into one big user message made the model narrate
+  // about the prompt instead of answering it; a real systemPrompt gave a
+  // direct, correctly-grounded answer in the same smoke test. See the
+  // final report.
   const session = new LlamaChatSession({ contextSequence: context.getSequence(), systemPrompt });
 
   return {
@@ -45,13 +66,6 @@ export async function createLlamaRuntime({ modelPath, contextSize = 4096, system
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        // node-llama-cpp v3 exposes resetChatHistory() specifically to clear
-        // previous user/assistant turns while retaining the initial system
-        // state. Do this before every independent inference. In current
-        // desktop IPC wiring a provider is usually recreated per request,
-        // but this also makes same-request retries and future runtime reuse
-        // deterministic instead of history-dependent.
-        session.resetChatHistory?.();
         return await session.prompt(prompt, {
           maxTokens,
           temperature,
@@ -70,7 +84,6 @@ export async function createLlamaRuntime({ modelPath, contextSize = 4096, system
       }
     },
     async dispose() {
-      await session.dispose?.();
       await context.dispose?.();
       await model.dispose?.();
     },
