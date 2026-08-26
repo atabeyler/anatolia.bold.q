@@ -141,15 +141,16 @@ export function isFraudCategory(category: string): boolean {
 // for e.g. saglik/ekonomi reports. Categories are now grouped so each group
 // gets its own section skeleton, mandatory elements, and live-source domains
 // -- content still varies further via getCategoryExpertise() below.
-export type CategoryGroup = 'defense' | 'economic' | 'compliance' | 'health' | 'advisory';
+export type CategoryGroup = 'defense' | 'economic' | 'compliance' | 'health' | 'social' | 'advisory';
 
 const CATEGORY_GROUPS: Record<string, CategoryGroup> = {
   savunma: 'defense',
   saldiri: 'defense',
   enerji: 'defense',
-  toplumsal: 'defense',
+  toplumsal: 'social',
   'cok-alanli': 'defense',
   ekonomi: 'economic',
+  finans: 'economic',
   bddk: 'compliance',
   btk: 'compliance',
   saglik: 'health',
@@ -180,6 +181,10 @@ export const CATEGORY_GROUP_SOURCES: Record<CategoryGroup, { local: string[]; in
   health: {
     local: ['saglik.gov.tr', 'titck.gov.tr', 'mevzuat.gov.tr', 'resmigazete.gov.tr'],
     international: ['who.int', 'ecdc.europa.eu', 'cdc.gov'],
+  },
+  social: {
+    local: ['icisleri.gov.tr', 'adalet.gov.tr', 'aile.gov.tr', 'mevzuat.gov.tr', 'resmigazete.gov.tr'],
+    international: ['ohchr.org', 'un.org', 'osce.org'],
   },
   advisory: {
     local: ['mevzuat.gov.tr', 'resmigazete.gov.tr'],
@@ -241,6 +246,18 @@ const GROUP_SECTIONS: Record<CategoryGroup, string[]> = {
     'MALI BOYUT -- Maliyet tahmini ve finansman kaynaklari',
     'SONUC VE EYLEM CAGRISI -- Acil adimlar ve karar onerisi',
   ],
+  social: [
+    'YONETICI OZETI -- 1 sayfada ust duzey karar verici icin ozet',
+    'OLAY OZETI -- Verilen konu ve iddialarin tarafsiz ozeti',
+    'AKTORLER VE TARAFLAR -- Etkilenen gruplar, yerel aktorler, kurumlar',
+    'TOPLUMSAL GERILIM DINAMIKLERI -- Ayrimcilik, kutuplasma ve yayilma riski',
+    'NEFRET SOYLEMI VE AYRIMCILIK RISKI -- Soylem/eylem ayrimi ve hukuki hassasiyetler',
+    'KAMU DUZENI VE GUVENLIK RISKI -- Siddet, misilleme, provokasyon ihtimalleri',
+    'KURUMSAL SORUMLULUK MATRISI -- Valilik, kolluk, yargi, yerel yonetim, STK rolleri (tablo)',
+    'ILETISIM VE ONLEYICI POLITIKA ONERILERI -- Kriz iletisimi ve sahada gerilimi azaltma',
+    'KISA VADELI SENARYOLAR -- 24-72 saat ve 1-4 hafta olasiliklari',
+    'SONUC VE EYLEM CAGRISI -- Acil adimlar ve karar onerisi',
+  ],
   // advisory (danisma) never reaches this skeleton -- getCategoryExpertise('danisma')
   // supplies its own short format instead (see buildMasterSystemPrompt below).
   advisory: [],
@@ -279,6 +296,13 @@ const GROUP_MANDATORY_ELEMENTS: Record<CategoryGroup, string[]> = {
     'SAYISAL VERI: Tum iddialari rakamlarla destekle',
     'BUTCE / KAYNAK ETKISI',
     "KPI'LAR: Her onerinin olculebilir basari kriterleri",
+  ],
+  social: [
+    'HUKUKI CERCEVE: Nefret sucu/ayrimcilik iddialarinda ilgili mevzuat ve soruşturma sureci (varsa)',
+    'KURUMSAL REFERANSLAR: Valilik, kolluk, savcilik, ilgili bakanliklar ve yerel yonetimler',
+    'TOPLUMSAL HASSASIYET: Etnik, dini veya bolgesel kimlikleri genelleyici dil kullanma',
+    'SAYISAL VERI: Sadece kaynakta/verilen konuda varsa sayisal veri kullan',
+    'GERILIM AZALTMA: Her oneride uygulanabilir ve olculebilir takip adimi belirt',
   ],
   advisory: [],
 };

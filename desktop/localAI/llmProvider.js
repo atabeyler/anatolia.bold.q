@@ -1,5 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
+import { getReportFormat } from './reportFormats.js';
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -7,8 +8,9 @@ const CHAT_INSTRUCTION =
 
 const GENERATE_INSTRUCTION =
   'Kullanıcı için istenen konuda profesyonel, yapılandırılmış ve başlıklı bir karar destek analizi yaz. ' +
-  'Sırasıyla yönetici özeti, temel bulgular, riskler, fırsatlar, seçenekler, önerilen eylemler ve sonuç bölümlerini kullan. ' +
-  'Verilen yerel dosya/verileri öncelikli kaynak, geçmiş raporları destekleyici bağlam olarak kullan. ' +
+  'Aşağıdaki kategoriye özel rapor iskeletini aynen izle; iskelette olmayan, konu dışı bölüm açma. ' +
+  'Verilen yerel dosya/verileri öncelikli kaynak olarak kullan. Geçmiş raporları yalnızca biçim ve üslup desteği olarak gör; ' +
+  'geçmiş raporlardaki olay, kurum, banka, proje, silah sistemi veya kişi adlarını kullanıcı isteğinde geçmiyorsa yeni rapora taşıma. ' +
   'Kaynakta bulunmayan sayı, olay veya sonuç uydurma. Kesin veri yoksa varsayımı açıkça etiketle.';
 
 // Real generative local-LLM query, registered ahead of offline-extractive
@@ -108,13 +110,14 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
 
     if (mode === 'generate') {
       const queryText = `${category} ${title} ${prompt}`.trim();
-      const contextDocs = retrieveContext(db, userId, queryText);
+      const contextDocs = retrieveContext(db, userId, queryText, { limit: 2, maxCharsPerDoc: 280 }).filter((doc) => !category || doc.category === category);
+      const reportFormat = getReportFormat(category);
       const options = `Öncelik: ${priority}\nAnaliz derinliği: ${depth}` +
         (quantumRequested ? '\nKuantum modu istendi; çevrimdışı kuantum doğrulaması yapılamadığı için yalnızca veriye dayalı klasik analiz üret.' : '');
       const boundedAttachment = String(attachmentContext || '').slice(0, 8000);
       const userText = boundedAttachment
-        ? `${prompt || title}\n\n${options}\n\nAnalizde kullanılacak yerel dosya/veri içeriği:\n${boundedAttachment}`
-        : `${prompt || title}\n\n${options}`;
+        ? `${reportFormat}\n\nKullanıcının verdiği konu:\n${prompt || title}\n\n${options}\n\nAnalizde kullanılacak yerel dosya/veri içeriği:\n${boundedAttachment}`
+        : `${reportFormat}\n\nKullanıcının verdiği konu:\n${prompt || title}\n\n${options}`;
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
       const isLowTier = modelManager.spec.tier === 'low';
       const maxTokens = isLowTier

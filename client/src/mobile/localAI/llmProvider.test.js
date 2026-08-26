@@ -38,7 +38,11 @@ describe('mobile createLLMQuery', () => {
   it('answers a generate request with a structured analysis result', async () => {
     const db = await createTestMobileDb();
     await seedReport(db);
-    const generate = vi.fn(async () => 'Analiz içeriği.');
+    const generate = vi.fn(async (fullPrompt) => {
+      expect(fullPrompt).toContain('## Yönetici Özeti');
+      expect(fullPrompt).toContain('## Mali Riskler');
+      return 'Analiz içeriği.';
+    });
     const runtimeFactory = vi.fn(async () => ({ generate }));
 
     const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory });
@@ -47,6 +51,42 @@ describe('mobile createLLMQuery', () => {
     expect(result.type).toBe('analysis');
     expect(result.result.title).toBe('Kasım Tahmini');
     expect(result.result.content).toBe('Analiz içeriği.');
+  });
+
+  it('uses the toplumsal report skeleton and keeps other-category archive context out of generation', async () => {
+    const db = await createTestMobileDb();
+    await seedReport(db, {
+      id: 'finance-old',
+      category: 'finans',
+      title: 'Banka Optimizasyon Raporu',
+      content: 'Hedef Banka ve kaynak tahsisi optimizasyonu.',
+    });
+    await seedReport(db, {
+      id: 'social-old',
+      category: 'toplumsal',
+      title: 'Mahalle Gerginliği',
+      content: 'Yerel gerilim ve kolluk koordinasyonu.',
+    });
+    const generate = vi.fn(async (fullPrompt) => {
+      expect(fullPrompt).toContain('## Nefret Söylemi ve Ayrımcılık Riski');
+      expect(fullPrompt).toContain('Kürt işçilere saldırı');
+      expect(fullPrompt).toContain('Mahalle Gerginliği');
+      expect(fullPrompt).not.toContain('Hedef Banka');
+      expect(fullPrompt).not.toContain('optimizasyonu');
+      return 'Toplumsal analiz üretildi.';
+    });
+    const runtimeFactory = vi.fn(async () => ({ generate }));
+
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory });
+    const result = await run({
+      mode: 'generate',
+      category: 'toplumsal',
+      title: 'ırkçılık',
+      prompt: 'Kürt işçilere saldırı',
+    });
+
+    expect(result.type).toBe('analysis');
+    expect(result.result.sources).toEqual([{ id: 'social-old', title: 'Mahalle Gerginliği' }]);
   });
 
   it('surfaces the native-plugin-missing error from llmRuntime.js as a thrown error (never crashes)', async () => {

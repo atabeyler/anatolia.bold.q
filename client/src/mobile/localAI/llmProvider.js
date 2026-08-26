@@ -1,5 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
+import { getReportFormat } from './reportFormats.js';
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -18,9 +19,10 @@ const CHAT_INSTRUCTION =
 // knowledge base, which is many times larger than this model's entire
 // 2048-token context window.
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda, aşağıdaki geçmiş raporlardan faydalanarak yapılandırılmış bir analiz raporu yaz. ' +
-  'Şu başlıkları kullan (## ile): "## Değerlendirme" (durumun özeti), "## Etki ve Riskler", "## Öneriler". ' +
-  'Her başlık altında en az 2-3 dolu cümle yaz; yarım bırakma, tek kelimeyle cevap verme. Kesin veri yoksa varsayım olduğunu belirt. ' +
+  'Kullanıcı için istenen konuda, kategoriye özel rapor iskeletini aynen izleyerek yapılandırılmış bir analiz raporu yaz. ' +
+  'İskelette olmayan, konu dışı bölüm açma. Her başlık altında en az 2 dolu cümle yaz; yarım bırakma, tek kelimeyle cevap verme. ' +
+  'Geçmiş raporları yalnızca biçim ve üslup desteği olarak gör; kullanıcı isteğinde geçmeyen kişi, kurum, olay, banka, proje, silah sistemi veya ülke adını yeni rapora taşıma. ' +
+  'Kesin veri yoksa varsayım olduğunu belirt. ' +
   // A small on-device model's failure mode observed firsthand: instead of
   // writing new prose, it echoed the context block's own "[1] "Başlık"
   // (kategori, tarih)" labels back verbatim as fragmented, ungrammatical
@@ -86,12 +88,13 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
 
     if (mode === 'generate') {
       const queryText = `${category} ${title} ${prompt}`.trim();
-      const contextDocs = await retrieveContext(db, userId, queryText);
+      const contextDocs = (await retrieveContext(db, userId, queryText, { limit: 2, maxCharsPerDoc: 240 })).filter((doc) => !category || doc.category === category);
+      const reportFormat = getReportFormat(category);
       const options = `Öncelik: ${priority}\nAnaliz derinliği: ${depth}` +
         (quantumRequested ? '\nKuantum modu istendi; çevrimdışı kuantum doğrulaması yapılamadığı için yalnızca veriye dayalı klasik analiz üret.' : '');
       const userText = boundedAttachment
-        ? `${prompt || title}\n\n${options}\n\nAnalizde kullanılacak yerel dosya/veri içeriği:\n${boundedAttachment}`
-        : `${prompt || title}\n\n${options}`;
+        ? `${reportFormat}\n\nKullanıcının verdiği konu:\n${prompt || title}\n\n${options}\n\nAnalizde kullanılacak yerel dosya/veri içeriği:\n${boundedAttachment}`
+        : `${reportFormat}\n\nKullanıcının verdiği konu:\n${prompt || title}\n\n${options}`;
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
       // Raised from 220 alongside GENERATE_INSTRUCTION's 3-section format
       // and llama-android.cpp's 240s deadline -- a 3-heading report needs

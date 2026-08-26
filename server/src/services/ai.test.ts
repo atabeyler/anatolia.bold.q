@@ -29,6 +29,15 @@ describe('getSystemPromptForCategory', () => {
     const prompt = getSystemPromptForCategory('non-existent-category');
     expect(prompt).toContain('COK ALANLI SENTEZ VE SISTEM DUSUNCESI UZMANI');
   });
+
+  it('uses a social-event skeleton for toplumsal reports instead of the defense skeleton', () => {
+    const prompt = getSystemPromptForCategory('toplumsal');
+    expect(prompt).toContain('TOPLUMSAL GUVENLIK VE HIBRIT TEHDIT UZMANI');
+    expect(prompt).toContain('NEFRET SOYLEMI VE AYRIMCILIK RISKI');
+    expect(prompt).toContain('KAMU DUZENI VE GUVENLIK RISKI');
+    expect(prompt).not.toContain('NATO / STANAG UYUMU');
+    expect(prompt).not.toContain('YERLI TEKNOLOJI ONCELIGI');
+  });
 });
 
 describe('getQuantumSystemPrompt', () => {
