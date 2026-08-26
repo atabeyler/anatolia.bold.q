@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Cpu, Download, Trash2, CircleCheck, CircleAlert } from 'lucide-react';
 import { isNativeApp, nativeAI } from '../services/nativeBridge.js';
+import { isLocalModeForced, setLocalModeForced, subscribeLocalModePreference } from '../services/localModePreference.js';
 
 // Human-readable byte formatting for RAM/disk/model-size figures shown in
 // this panel -- no existing shared helper for this in the codebase (checked),
@@ -22,8 +23,10 @@ function formatBytes(bytes) {
 // specific UI has not been exercised against a real Capacitor/Android
 // runtime in this session (documented in the final report).
 //
-// Renders nothing at all on the plain web build, where there is no local
-// model to manage in the first place.
+// The shared local-mode preference renders everywhere so browser, Android,
+// and desktop expose the same Settings affordance. Plain web still cannot
+// download/run the native model, so the model-manager controls remain native
+// only.
 //
 // This is UI-only: it never touches modelManager.js's download/checksum/
 // gating logic, only calls the existing IPC/bridge surface.
@@ -33,6 +36,7 @@ export default function LocalAIPanel({ t }) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(null);
   const [removing, setRemoving] = useState(false);
+  const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
 
   const refresh = () => {
     if (!isNativeApp) return;
@@ -40,6 +44,13 @@ export default function LocalAIPanel({ t }) {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  useEffect(() => subscribeLocalModePreference(setForceLocalModeState), []);
+
+  const toggleLocalMode = () => {
+    const next = setLocalModeForced(!forceLocalMode);
+    setForceLocalModeState(next);
+  };
 
   // Desktop reports download progress via a separate IPC event (see
   // desktop/preload.cjs's onModelDownloadProgress); Android's bridge takes
@@ -87,8 +98,6 @@ export default function LocalAIPanel({ t }) {
     }
   };
 
-  if (!isNativeApp) return null;
-
   const spec = status?.spec;
   const installed = !!status?.installed;
   const capability = status?.capability;
@@ -97,6 +106,26 @@ export default function LocalAIPanel({ t }) {
 
   return (
     <div>
+      <div className="border border-cyan-300/20 rounded px-2.5 py-2.5 mb-3">
+        <button
+          onClick={toggleLocalMode}
+          className="w-full flex items-center justify-between gap-3 text-left text-[14px] text-cyan-100"
+          aria-pressed={forceLocalMode}
+        >
+          <span>
+            <span className="block tracking-[0.16em] uppercase text-gold/70">{t('localAIModeTitle')}</span>
+            <span className="block text-[14px] text-cyan-100/60 mt-1">{t(isNativeApp ? 'localAIModeNativeHint' : 'localAIModeWebHint')}</span>
+          </span>
+          <span className={`shrink-0 rounded border px-2 py-1 text-[11px] tracking-[0.18em] uppercase ${forceLocalMode ? 'border-emerald-300/40 text-emerald-200 bg-emerald-400/10' : 'border-cyan-300/20 text-cyan-100/50'}`}>
+            {forceLocalMode ? t('localAIModeOn') : t('localAIModeOff')}
+          </span>
+        </button>
+      </div>
+
+      {!isNativeApp && <p className="text-xs text-gold/60 leading-relaxed mb-3">{t('localAIWebUnavailable')}</p>}
+
+      {isNativeApp && (
+        <>
       <p className="text-xs text-gold/60 leading-relaxed mb-3">{t('localAIIntro')}</p>
 
       {status === null && <p className="text-xs text-cyan-100/50">{t('localAIChecking')}</p>}
@@ -158,6 +187,8 @@ export default function LocalAIPanel({ t }) {
           </button>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

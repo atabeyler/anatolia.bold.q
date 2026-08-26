@@ -11,6 +11,7 @@ import { useLang } from '../services/langContext.jsx';
 import { isNativeApp, nativeAI, nativeConnectivity } from '../services/nativeBridge.js';
 import { routeConsultChat, AllEnginesUnavailableError } from '../services/analysisRouter.js';
 import { ENGINE } from '../services/aiContract.js';
+import { isLocalModeForced, subscribeLocalModePreference } from '../services/localModePreference.js';
 
 const STORAGE_KEY = 'aq_consult_history';
 
@@ -50,7 +51,8 @@ export default function ConsultChat() {
   const [loading, setLoading] = useState(false);
   const [aiFiles, setAIFiles] = useState([]);
   const [connectivity, setConnectivity] = useState('cloud');
-  const isOffline = isNativeApp && connectivity === 'local';
+  const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
+  const isOffline = forceLocalMode || (isNativeApp && connectivity === 'local');
 
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -78,6 +80,8 @@ export default function ConsultChat() {
     const unsubscribe = nativeConnectivity.onChange((state) => setConnectivity(state));
     return () => { cancelled = true; unsubscribe(); };
   }, []);
+
+  useEffect(() => subscribeLocalModePreference(setForceLocalModeState), []);
 
   const removeFileAt = (idx) => setAIFiles((prev) => prev.filter((_, i) => i !== idx));
 

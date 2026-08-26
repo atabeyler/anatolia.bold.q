@@ -23,6 +23,7 @@ import { DEPTH_IDS } from '../services/voiceIntentSchema.js';
 import { isNativeApp, nativeAI, nativeAnalyses, nativeConnectivity } from '../services/nativeBridge.js';
 import { routeAnalysisGeneration, AllEnginesUnavailableError } from '../services/analysisRouter.js';
 import { ENGINE } from '../services/aiContract.js';
+import { isLocalModeForced, subscribeLocalModePreference } from '../services/localModePreference.js';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
@@ -47,7 +48,8 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const [scenarioResult, setScenarioResult] = useState(null);
   const [error, setError] = useState('');
   const [connectivity, setConnectivity] = useState('cloud');
-  const isOffline = isNativeApp && connectivity === 'local';
+  const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
+  const isOffline = forceLocalMode || (isNativeApp && connectivity === 'local');
 
   // Mirrors ConsultChat.jsx's connectivity subscription exactly -- both
   // components need the same "are we actually offline right now" signal
@@ -59,6 +61,8 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
     const unsubscribe = nativeConnectivity.onChange((state) => setConnectivity(state));
     return () => { cancelled = true; unsubscribe(); };
   }, []);
+
+  useEffect(() => subscribeLocalModePreference(setForceLocalModeState), []);
 
   const generateRef = useRef(null);
   const downloadDocxRef = useRef(null);

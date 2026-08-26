@@ -9,15 +9,26 @@ const t = (key) => key;
 
 afterEach(() => {
   delete window.anatoliaDesktop;
+  window.localStorage.clear();
   vi.doUnmock('@capacitor/core');
   vi.resetModules();
 });
 
 describe('LocalAIPanel (web build)', () => {
-  it('renders nothing without a native bridge', async () => {
+  it('shows the shared local-mode switch without native model controls', async () => {
     const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
-    const { container } = render(<LocalAIPanel t={t} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<LocalAIPanel t={t} />);
+    expect(screen.getByText('localAIModeTitle')).toBeInTheDocument();
+    expect(screen.getByText('localAIWebUnavailable')).toBeInTheDocument();
+    expect(screen.queryByText('localAIDownloadButton')).not.toBeInTheDocument();
+  });
+
+  it('persists the shared local-mode preference', async () => {
+    const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
+    render(<LocalAIPanel t={t} />);
+    fireEvent.click(screen.getByText('localAIModeTitle'));
+    expect(window.localStorage.getItem('anatolia_force_local_mode')).toBe('1');
+    expect(screen.getByText('localAIModeOn')).toBeInTheDocument();
   });
 });
 
