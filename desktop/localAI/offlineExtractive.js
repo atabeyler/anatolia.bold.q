@@ -1,12 +1,19 @@
+import { getEncryptionKey } from '../db/index.js';
+import { decryptField } from '../db/fieldCrypto.js';
+
 // Fully offline "local AI" backend: keyword search, extractive
 // summarization, and a bag-of-words comparison, all running directly
 // against the local SQLite analyses table. No model download, no network
 // call, no external dependency — this is what answers "geçen ayki
 // raporlarımı bul", "bu ikisini karşılaştır", "özetle" while offline
 // (spec point 7). Generating a brand new analysis is a different, far
-// heavier capability (LLM + optionally the quantum kernel) that stays
-// cloud-only via the existing /api/analysis endpoints — this module never
-// tries to replace that.
+// heavier capability handled by the local LLM when it is installed.
+//
+// IMPORTANT: title/content are encrypted at rest on desktop (AQ-002). The
+// history repository decrypts them before rendering, and this engine must
+// do the same before tokenization/scoring; otherwise every encrypted row
+// looks like opaque aqenc:v1 ciphertext and RAG incorrectly reports that
+// no matching history exists.
 
 const TR_MAP = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', İ: 'i' };
 
@@ -40,6 +47,15 @@ function stemTurkish(token) {
     if (token.length >= suffix.length + 3 && token.endsWith(suffix)) return token.slice(0, -suffix.length);
   }
   return token;
+}
+
+function decodeAnalysisRow(row, encryptionKey = getEncryptionKey()) {
+  if (!row) return row;
+  return {
+    ...row,
+    title: decryptField(row.title, encryptionKey),
+    content: decryptField(row.content, encryptionKey),
+  };
 }
 
 function scoreDoc(row, terms) {
@@ -91,8 +107,9 @@ function parseDateRange(text, now = new Date()) {
   return null;
 }
 
-export function findReports(db, userId, queryText, { limit = 10 } = {}) {
-  const rows = db.prepare(`SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL`).all(userId);
+export function findReports(db, userId, queryText, { limit = 10, encryptionKey = getEncryptionKey() } = {}) {
+  const rows = db.prepare(`SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL`).all(userId)
+    .map((row) => decodeAnalysisRow(row, encryptionKey));
   const terms = tokenize(queryText);
   const range = parseDateRange(queryText);
 
@@ -128,8 +145,9 @@ export function findReports(db, userId, queryText, { limit = 10 } = {}) {
 // query-relevant (here: globally frequent) terms it contains, keeps the
 // top N, and re-emits them in original order so the summary still reads
 // coherently.
-export function summarizeReport(db, userId, id, { maxSentences = 3 } = {}) {
-  const row = db.prepare(`SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(id, userId);
+export function summarizeReport(db, userId, id, { maxSentences = 3, encryptionKey = getEncryptionKey() } = {}) {
+  const rawRow = db.prepare(`SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(id, userId);
+  const row = decodeAnalysisRow(rawRow, encryptionKey);
   if (!row) return null;
 
   const sentences = (row.content || '')
@@ -161,9 +179,11 @@ export function summarizeReport(db, userId, id, { maxSentences = 3 } = {}) {
 // Bag-of-words comparison between two reports — what terms are shared vs.
 // unique to each, and the raw length delta. Not a semantic diff, but a real
 // offline signal a user can act on ("bu iki rapor ne kadar örtüşüyor").
-export function compareReports(db, userId, idA, idB) {
-  const rowA = db.prepare(`SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(idA, userId);
-  const rowB = db.prepare(`SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(idB, userId);
+export function compareReports(db, userId, idA, idB, { encryptionKey = getEncryptionKey() } = {}) {
+  const rawA = db.prepare(`SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(idA, userId);
+  const rawB = db.prepare(`SELECT * FROM analyses WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(idB, userId);
+  const rowA = decodeAnalysisRow(rawA, encryptionKey);
+  const rowB = decodeAnalysisRow(rawB, encryptionKey);
   if (!rowA || !rowB) return null;
 
   const termsA = new Set(tokenize(rowA.content));
@@ -226,4 +246,4 @@ export function synthesizeFromArchive(db, userId, { category = '', prompt = '' }
   };
 }
 
-export const _internal = { tokenize, stemTurkish, parseDateRange, scoreDoc };
+export const _internal = { tokenize, stemTurkish, parseDateRange, scoreDoc, decodeAnalysisRow };
