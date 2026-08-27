@@ -236,6 +236,86 @@ describe('LocalAIPanel (desktop)', () => {
     resolveDownload({ ok: true, path: '/x', sha256: 'abc' });
     await waitFor(() => expect(screen.getByText('localAIInstalled')).toBeInTheDocument());
   });
+
+  it('shows Durdur/İptal instead of the download button while downloading, and Durdur pauses without an error', async () => {
+    let partialBytes = 0;
+    let resolveDownload;
+    const modelDownload = vi.fn(() => new Promise((resolve) => { resolveDownload = resolve; }));
+    const modelDownloadCancel = vi.fn(async ({ deletePartial } = {}) => {
+      partialBytes = deletePartial ? 0 : 5 * 1024 * 1024;
+      resolveDownload({ ok: false, cancelled: true });
+      return { ok: true };
+    });
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      ai: {
+        modelStatus: async () => ({
+          installed: false,
+          partialBytes,
+          capability: { capable: true, totalMemBytes: 8 * 1024 * 1024 * 1024, cpuCount: 8 },
+          spec: { label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)', sizeBytes: 1117320736 },
+        }),
+        modelDownload,
+        modelDownloadCancel,
+        onModelDownloadProgress: () => () => {},
+      },
+    };
+    vi.resetModules();
+    const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
+    render(<LocalAIPanel t={t} />);
+
+    await waitFor(() => expect(screen.getByText('localAIDownloadButton')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('localAIDownloadButton'));
+
+    await waitFor(() => expect(screen.getByText('localAIStopButton')).toBeInTheDocument());
+    expect(screen.getByText('localAICancelButton')).toBeInTheDocument();
+    expect(screen.queryByText('localAIDownloadButton')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('localAIStopButton'));
+    expect(modelDownloadCancel).toHaveBeenCalledWith({ deletePartial: false });
+
+    await waitFor(() => expect(screen.getByText('localAIResumeButton')).toBeInTheDocument());
+    // A user-initiated stop is not an error.
+    expect(screen.queryByText('localAIDownloadFailed')).not.toBeInTheDocument();
+  });
+
+  it('İptal deletes the partial download and returns to the fresh download button', async () => {
+    let partialBytes = 5 * 1024 * 1024;
+    let resolveDownload;
+    const modelDownload = vi.fn(() => new Promise((resolve) => { resolveDownload = resolve; }));
+    const modelDownloadCancel = vi.fn(async ({ deletePartial } = {}) => {
+      partialBytes = deletePartial ? 0 : partialBytes;
+      resolveDownload({ ok: false, cancelled: true });
+      return { ok: true };
+    });
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      ai: {
+        modelStatus: async () => ({
+          installed: false,
+          partialBytes,
+          capability: { capable: true, totalMemBytes: 8 * 1024 * 1024 * 1024, cpuCount: 8 },
+          spec: { label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)', sizeBytes: 1117320736 },
+        }),
+        modelDownload,
+        modelDownloadCancel,
+        onModelDownloadProgress: () => () => {},
+      },
+    };
+    vi.resetModules();
+    const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
+    render(<LocalAIPanel t={t} />);
+
+    await waitFor(() => expect(screen.getByText('localAIResumeButton')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('localAIResumeButton'));
+
+    await waitFor(() => expect(screen.getByText('localAICancelButton')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('localAICancelButton'));
+    expect(modelDownloadCancel).toHaveBeenCalledWith({ deletePartial: true });
+
+    await waitFor(() => expect(screen.getByText('localAIDownloadButton')).toBeInTheDocument());
+    expect(screen.queryByText('localAIDownloadFailed')).not.toBeInTheDocument();
+  });
 });
 
 describe('LocalAIPanel (Android)', () => {

@@ -36,6 +36,8 @@ export default function LocalAIPanel({ t }) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(null);
   const [removing, setRemoving] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [tiers, setTiers] = useState([]);
   const [selectingTier, setSelectingTier] = useState(false);
   const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
@@ -86,11 +88,16 @@ export default function LocalAIPanel({ t }) {
     setProgress(null);
     try {
       const result = await nativeAI.modelDownload(setProgress);
-      if (result && result.ok === false) {
+      // A user-initiated stop/cancel (see handleStopDownload/
+      // handleCancelDownload below) settles this same promise as
+      // `{ ok: false, cancelled: true }` -- not an error to show, the
+      // panel's own refresh() below already reflects whatever actually
+      // landed on disk (paused with partial bytes, or cleanly deleted).
+      if (result && result.ok === false && !result.cancelled) {
         setError(result.error || t('localAIDownloadFailed'));
       }
     } catch (e) {
-      setError(e?.message || t('localAIDownloadFailed'));
+      if (!e?.cancelled) setError(e?.message || t('localAIDownloadFailed'));
     } finally {
       // Refresh on every path, not just success: a failed/aborted attempt
       // (e.g. a dropped connection -- downloadModel() preserves the bytes
@@ -103,6 +110,34 @@ export default function LocalAIPanel({ t }) {
       refresh();
       setDownloading(false);
       setProgress(null);
+    }
+  };
+
+  // "Durdur": pauses the in-flight download. The .download file's bytes so
+  // far are kept on disk, so the next click on the (now "Devam Et"-labeled)
+  // download button resumes it with HTTP Range instead of starting over.
+  const handleStopDownload = async () => {
+    setStopping(true);
+    try {
+      await nativeAI.modelDownloadCancel?.({ deletePartial: false });
+    } catch (e) {
+      setError(e?.message || t('localAIStopFailed'));
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  // "İptal": stops the in-flight download AND deletes whatever partial
+  // bytes it had written, leaving a clean not-installed state -- the
+  // opposite of "Durdur", which keeps them for a later resume.
+  const handleCancelDownload = async () => {
+    setCancelling(true);
+    try {
+      await nativeAI.modelDownloadCancel?.({ deletePartial: true });
+    } catch (e) {
+      setError(e?.message || t('localAICancelFailed'));
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -238,15 +273,32 @@ export default function LocalAIPanel({ t }) {
       )}
 
       <div className="space-y-2">
-        {!installed && (
+        {!installed && !downloading && (
           <button
             onClick={handleDownload}
-            disabled={downloading}
             className="w-full flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
           >
             <Download className="w-4 h-4" />
-            {downloading ? t('localAIDownloading') : partialBytes > 0 ? t('localAIResumeButton') : t('localAIDownloadButton')}
+            {partialBytes > 0 ? t('localAIResumeButton') : t('localAIDownloadButton')}
           </button>
+        )}
+        {!installed && downloading && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleStopDownload}
+              disabled={stopping || cancelling}
+              className="flex items-center justify-center gap-2 text-[14px] border border-amber-300/30 text-amber-200 rounded px-2.5 py-2 disabled:opacity-40"
+            >
+              {stopping ? t('localAIStopping') : t('localAIStopButton')}
+            </button>
+            <button
+              onClick={handleCancelDownload}
+              disabled={stopping || cancelling}
+              className="flex items-center justify-center gap-2 text-[14px] border border-red-400/30 text-red-200 rounded px-2.5 py-2 disabled:opacity-40"
+            >
+              {cancelling ? t('localAICancelling') : t('localAICancelButton')}
+            </button>
+          </div>
         )}
         {installed && (
           <button

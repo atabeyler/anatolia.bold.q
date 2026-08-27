@@ -23,6 +23,31 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
   const modelPath = path.join(modelsDir, spec.filename);
   const tmpPath = `${modelPath}.download`;
 
+  // Tracks the single in-flight downloadModel() call, if any, so
+  // cancelDownload() (Settings > Local AI's "Durdur"/"İptal" buttons) can
+  // reach into it. There is only ever one download at a time -- the
+  // renderer's Download button disables itself while downloading is true.
+  let activeDownload = null;
+
+  function makeCancelError(deletePartial) {
+    const err = new Error('İndirme durduruldu.');
+    err.cancelled = true;
+    err.deletePartial = deletePartial;
+    return err;
+  }
+
+  // deletePartial: false pauses (keeps the .download file for the next
+  // Range-resumed attempt, i.e. "Devam Et"); true also deletes it (a full
+  // "İptal" back to a clean not-installed state).
+  function cancelDownload({ deletePartial = false } = {}) {
+    if (!activeDownload) return { ok: false, error: 'no_active_download' };
+    activeDownload.cancelled = true;
+    activeDownload.deletePartial = deletePartial;
+    activeDownload.request?.destroy();
+    activeDownload.out?.destroy?.();
+    return { ok: true };
+  }
+
   function isModelInstalled() {
     return fs.existsSync(modelPath);
   }
@@ -51,57 +76,82 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
   // resolve/ URLs 302 to a signed CDN URL. Streams straight to a .download
   // temp file so a crash/interrupt mid-download never leaves a file at the
   // real modelPath that isModelInstalled() would wrongly treat as ready.
-  function httpGetFollowingRedirects(url, onResponse, redirectsLeft = 5, headers = {}) {
+  function httpGetFollowingRedirects(url, onResponse, redirectsLeft = 5, headers = {}, onRequest) {
     const getFn = fetchImpl || https.get;
     const callback = (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
         res.resume();
-        httpGetFollowingRedirects(res.headers.location, onResponse, redirectsLeft - 1, headers);
+        httpGetFollowingRedirects(res.headers.location, onResponse, redirectsLeft - 1, headers, onRequest);
         return;
       }
       onResponse(res);
     };
     const request = fetchImpl ? getFn(url, callback) : getFn(url, { headers }, callback);
+    onRequest?.(request);
     request.on('error', (err) => onResponse(null, err));
   }
 
   async function downloadModel({ onProgress } = {}) {
     await fsPromises.mkdir(modelsDir, { recursive: true });
 
-    await new Promise((resolve, reject) => {
-      const existingBytes = fs.existsSync(tmpPath) ? fs.statSync(tmpPath).size : 0;
-      const headers = existingBytes ? { Range: `bytes=${existingBytes}-` } : {};
+    // Own object per call (not just a boolean) so cancelDownload() can
+    // reach the live request/write-stream even across the redirect-retry
+    // recursion in httpGetFollowingRedirects above.
+    const state = { cancelled: false, deletePartial: false, request: null, out: null };
+    activeDownload = state;
 
-      httpGetFollowingRedirects(spec.url, (res, err) => {
-        if (err) { reject(err); return; }
-        if (![200, 206].includes(res.statusCode)) {
-          reject(new Error(`Model indirilemedi (HTTP ${res.statusCode})`));
-          return;
-        }
-        // A compliant server answers a resumed request with 206. If it
-        // ignores Range and returns 200, restart safely instead of appending
-        // a second full model to the partial file.
-        const resumeAccepted = existingBytes > 0 && res.statusCode === 206;
-        const offset = resumeAccepted ? existingBytes : 0;
-        const out = fs.createWriteStream(tmpPath, { flags: resumeAccepted ? 'a' : 'w' });
-        out.on('error', reject);
-        let received = offset;
-        const total = offset + (Number(res.headers['content-length']) || (spec.sizeBytes - offset) || 0);
-        onProgress?.({ received, total });
-        res.on('data', (chunk) => {
-          received += chunk.length;
+    try {
+      await new Promise((resolve, reject) => {
+        const existingBytes = fs.existsSync(tmpPath) ? fs.statSync(tmpPath).size : 0;
+        const headers = existingBytes ? { Range: `bytes=${existingBytes}-` } : {};
+
+        httpGetFollowingRedirects(spec.url, (res, err) => {
+          if (state.cancelled) { reject(makeCancelError(state.deletePartial)); return; }
+          if (err) { reject(err); return; }
+          if (![200, 206].includes(res.statusCode)) {
+            reject(new Error(`Model indirilemedi (HTTP ${res.statusCode})`));
+            return;
+          }
+          // A compliant server answers a resumed request with 206. If it
+          // ignores Range and returns 200, restart safely instead of appending
+          // a second full model to the partial file.
+          const resumeAccepted = existingBytes > 0 && res.statusCode === 206;
+          const offset = resumeAccepted ? existingBytes : 0;
+          const out = fs.createWriteStream(tmpPath, { flags: resumeAccepted ? 'a' : 'w' });
+          state.out = out;
+          out.on('error', reject);
+          let received = offset;
+          const total = offset + (Number(res.headers['content-length']) || (spec.sizeBytes - offset) || 0);
           onProgress?.({ received, total });
+          res.on('data', (chunk) => {
+            received += chunk.length;
+            onProgress?.({ received, total });
+          });
+          res.pipe(out);
+          out.on('finish', resolve);
+          res.on('error', (streamErr) => reject(state.cancelled ? makeCancelError(state.deletePartial) : streamErr));
+        }, 5, headers, (request) => {
+          state.request = request;
+          // cancelDownload() may already have fired before the request
+          // object exists (a call landing between the IPC round-trip and
+          // this callback) -- destroy it immediately rather than letting a
+          // stray request keep running unobserved.
+          if (state.cancelled) request.destroy();
         });
-        res.pipe(out);
-        out.on('finish', resolve);
-        res.on('error', reject);
-      }, 5, headers);
-    }).catch((err) => {
-      // Preserve partial bytes after a network/server failure. The file has
-      // the explicit .download suffix and is never considered installed;
-      // the next attempt resumes it with HTTP Range.
+      });
+    } catch (err) {
+      // Preserve partial bytes after an ordinary network/server failure --
+      // the file has the explicit .download suffix and is never considered
+      // installed, so the next attempt resumes it with HTTP Range. A
+      // deliberate cancel additionally deletes it when the caller asked
+      // for that ("İptal", as opposed to "Durdur").
+      if (state.cancelled && state.deletePartial) {
+        await fsPromises.rm(tmpPath, { force: true });
+      }
       throw err;
-    });
+    } finally {
+      activeDownload = null;
+    }
 
     const check = await verifyChecksum(tmpPath);
     if (!check.ok) {
@@ -162,6 +212,7 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
     getPartialBytes,
     verifyChecksum,
     downloadModel,
+    cancelDownload,
     removeModel,
     checkCapability,
     isAvailable,

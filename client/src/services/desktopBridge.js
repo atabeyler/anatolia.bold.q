@@ -38,6 +38,7 @@ export const desktopAI = {
   // Settings > Local AI, see components/LocalAIPanel.jsx.
   modelStatus: () => bridge?.ai.modelStatus(),
   modelDownload: () => bridge?.ai.modelDownload(),
+  modelDownloadCancel: (options) => bridge?.ai.modelDownloadCancel?.(options),
   modelRemove: () => bridge?.ai.modelRemove(),
   modelTiers: () => bridge?.ai.modelTiers?.(),
   modelSelectTier: (tier) => bridge?.ai.modelSelectTier?.(tier),

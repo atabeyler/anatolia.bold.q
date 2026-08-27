@@ -262,9 +262,16 @@ export const mobileAI = {
       await refreshInstalledState();
       return { ok: true, ...result };
     } catch (err) {
+      if (err.cancelled) return { ok: false, cancelled: true };
       return { ok: false, error: err.message };
     }
   }),
+  // "Durdur" (deletePartial: false) pauses the in-flight download while
+  // keeping the partial file for the next Range-resumed attempt; "İptal"
+  // (deletePartial: true) also deletes it. Either way the pending
+  // modelDownload() call above settles (rejects) on its own once the
+  // aborted fetch actually stops -- this only signals it.
+  modelDownloadCancel: guard(async (options) => getModelManager().cancelDownload(options)),
   modelRemove: guard(async () => {
     const result = await getModelManager().removeModel();
     await refreshInstalledState();

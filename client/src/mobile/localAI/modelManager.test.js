@@ -56,6 +56,39 @@ function fakeFetchOk() {
   }));
 }
 
+// Delivers one chunk, then hangs on the next reader.read() call until the
+// AbortSignal passed by downloadModel() (via cancelDownload()) fires --
+// mirrors a real fetch stream sitting mid-download, so a test can call
+// cancelDownload() while genuinely still "in flight" and assert on how it
+// settles.
+function fakeFetchSlow() {
+  const bytes = Uint8Array.from(FAKE_CONTENT, (c) => c.charCodeAt(0));
+  return vi.fn(async (url, { signal } = {}) => ({
+    ok: true,
+    status: 200,
+    headers: { get: (k) => (k === 'content-length' ? String(bytes.length) : null) },
+    body: {
+      getReader: () => {
+        let delivered = false;
+        return {
+          read: () => new Promise((resolve, reject) => {
+            if (!delivered) {
+              delivered = true;
+              resolve({ done: false, value: bytes.slice(0, 5) });
+              return;
+            }
+            signal?.addEventListener('abort', () => {
+              const abortError = new Error('Aborted');
+              abortError.name = 'AbortError';
+              reject(abortError);
+            });
+          }),
+        };
+      },
+    },
+  }));
+}
+
 describe('mobile modelManager', () => {
   it('reports not installed when the file is absent', async () => {
     const mm = createModelManager({ spec: TEST_SPEC, filesystem: fakeFilesystem() });
@@ -104,5 +137,33 @@ describe('mobile modelManager', () => {
     const mm = createModelManager({ spec: strictSpec, filesystem: fakeFilesystem(), deviceInfo: { nativeDeviceInfo: { totalMemBytes: 16 * 1024 ** 3, freeDiskBytes: 8 * 1024 ** 3 } } });
     expect(mm.isAvailableSync(true)).toBe(false); // installed=true but device gate fails
     expect(mm.isAvailableSync(false)).toBe(false); // not installed
+  });
+
+  it('cancelDownload is a no-op when nothing is downloading', () => {
+    const mm = createModelManager({ spec: TEST_SPEC, filesystem: fakeFilesystem() });
+    expect(mm.cancelDownload()).toEqual({ ok: false, error: 'no_active_download' });
+  });
+
+  it('cancelDownload({}) ("Durdur") pauses an in-flight download and keeps the partial bytes', async () => {
+    const fs = fakeFilesystem();
+    const mm = createModelManager({ spec: TEST_SPEC, filesystem: fs, fetchImpl: fakeFetchSlow(), subtleCrypto: webcrypto.subtle });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mm.cancelDownload()).toEqual({ ok: true });
+    await expect(promise).rejects.toThrow(/durduruldu/);
+    expect(await mm.getPartialBytes()).toBeGreaterThan(0);
+  });
+
+  it('cancelDownload({ deletePartial: true }) ("İptal") stops the download and deletes the partial file', async () => {
+    const fs = fakeFilesystem();
+    const mm = createModelManager({ spec: TEST_SPEC, filesystem: fs, fetchImpl: fakeFetchSlow(), subtleCrypto: webcrypto.subtle });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mm.cancelDownload({ deletePartial: true })).toEqual({ ok: true });
+    await expect(promise).rejects.toThrow(/durduruldu/);
+    expect(await mm.isModelInstalled()).toBe(false);
+    expect(await mm.getPartialBytes()).toBe(0);
   });
 });

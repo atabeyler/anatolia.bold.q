@@ -72,69 +72,111 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
     return null;
   }
 
+  // Tracks the single in-flight downloadModel() call, if any, so
+  // cancelDownload() (Settings > Local AI's "Durdur"/"İptal" buttons) can
+  // reach it. Only one download runs at a time -- the panel disables its
+  // Download button while downloading is true.
+  let activeDownload = null;
+
+  function makeCancelError(deletePartial) {
+    const err = new Error('İndirme durduruldu.');
+    err.cancelled = true;
+    err.deletePartial = deletePartial;
+    return err;
+  }
+
+  // deletePartial: false pauses (keeps the .download file on disk for the
+  // next Range-resumed attempt, i.e. "Devam Et"); true also deletes it (a
+  // full "İptal" back to a clean not-installed state).
+  function cancelDownload({ deletePartial = false } = {}) {
+    if (!activeDownload) return { ok: false, error: 'no_active_download' };
+    activeDownload.cancelled = true;
+    activeDownload.deletePartial = deletePartial;
+    activeDownload.controller.abort();
+    return { ok: true };
+  }
+
   async function downloadModel({ onProgress } = {}) {
     await filesystem.mkdir({ path: MODELS_SUBDIR, directory, recursive: true }).catch(() => {});
 
-    const hasNativeHasher = !!getNativeFileHasher();
-    const existingBytes = hasNativeHasher ? await getPartialBytes() : 0;
-    const headers = existingBytes ? { Range: `bytes=${existingBytes}-` } : undefined;
-    const res = await fetchImpl(spec.url, { redirect: 'follow', ...(headers ? { headers } : {}) });
-    if (!res.ok) throw new Error(`Model indirilemedi (HTTP ${res.status})`);
+    const state = { cancelled: false, deletePartial: false, controller: new AbortController() };
+    activeDownload = state;
 
-    const resumeAccepted = existingBytes > 0 && res.status === 206;
-    const offset = resumeAccepted ? existingBytes : 0;
-    const total = offset + (Number(res.headers.get('content-length')) || (spec.sizeBytes - offset) || 0);
-    const reader = res.body?.getReader?.();
-    const chunks = [];
-    let received = offset;
+    try {
+      const hasNativeHasher = !!getNativeFileHasher();
+      const existingBytes = hasNativeHasher ? await getPartialBytes() : 0;
+      const headers = existingBytes ? { Range: `bytes=${existingBytes}-` } : undefined;
+      const res = await fetchImpl(spec.url, { redirect: 'follow', signal: state.controller.signal, ...(headers ? { headers } : {}) });
+      if (!res.ok) throw new Error(`Model indirilemedi (HTTP ${res.status})`);
 
-    if (!resumeAccepted) await filesystem.writeFile({ path: tmpRelativePath, directory, data: '' }).catch(() => {});
-    onProgress?.({ received, total });
+      const resumeAccepted = existingBytes > 0 && res.status === 206;
+      const offset = resumeAccepted ? existingBytes : 0;
+      const total = offset + (Number(res.headers.get('content-length')) || (spec.sizeBytes - offset) || 0);
+      const reader = res.body?.getReader?.();
+      const chunks = [];
+      let received = offset;
 
-    if (reader) {
-      // Real chunked download: each chunk is appended to disk as it
-      // arrives (never holding the whole file as one write call), while
-      // also kept for the final in-memory checksum (see the module-level
-      // comment on why that part isn't chunked too).
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!hasNativeHasher) chunks.push(value);
-        received += value.length;
-        await filesystem.appendFile({ path: tmpRelativePath, directory, data: chunkToBase64(value) });
+      if (!resumeAccepted) await filesystem.writeFile({ path: tmpRelativePath, directory, data: '' }).catch(() => {});
+      onProgress?.({ received, total });
+
+      if (reader) {
+        // Real chunked download: each chunk is appended to disk as it
+        // arrives (never holding the whole file as one write call), while
+        // also kept for the final in-memory checksum (see the module-level
+        // comment on why that part isn't chunked too).
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!hasNativeHasher) chunks.push(value);
+          received += value.length;
+          await filesystem.appendFile({ path: tmpRelativePath, directory, data: chunkToBase64(value) });
+          onProgress?.({ received, total });
+        }
+      } else {
+        // Fallback for a fetch polyfill without a streaming body reader --
+        // still a real network download, just not incrementally written.
+        const buf = await res.arrayBuffer();
+        if (!hasNativeHasher) chunks.push(new Uint8Array(buf));
+        received = offset + buf.byteLength;
+        await filesystem.appendFile({ path: tmpRelativePath, directory, data: bufferToBase64(buf) });
         onProgress?.({ received, total });
       }
-    } else {
-      // Fallback for a fetch polyfill without a streaming body reader --
-      // still a real network download, just not incrementally written.
-      const buf = await res.arrayBuffer();
-      if (!hasNativeHasher) chunks.push(new Uint8Array(buf));
-      received = offset + buf.byteLength;
-      await filesystem.appendFile({ path: tmpRelativePath, directory, data: bufferToBase64(buf) });
-      onProgress?.({ received, total });
-    }
 
-    let actual = await hashInstalledFile(tmpRelativePath);
-    if (!actual) {
-      if (resumeAccepted) {
-        await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
-        throw new Error('native_file_hash_unavailable_after_resume');
+      let actual = await hashInstalledFile(tmpRelativePath);
+      if (!actual) {
+        if (resumeAccepted) {
+          await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
+          throw new Error('native_file_hash_unavailable_after_resume');
+        }
+        const full = new Uint8Array(received);
+        let writeOffset = resumeAccepted ? existingBytes : 0;
+        for (const chunk of chunks) { full.set(chunk, writeOffset); writeOffset += chunk.length; }
+        if (!subtleCrypto) throw new Error('web_crypto_unavailable');
+        const digest = await subtleCrypto.digest('SHA-256', full.buffer);
+        actual = bufferToHex(digest);
       }
-      const full = new Uint8Array(received);
-      let writeOffset = resumeAccepted ? existingBytes : 0;
-      for (const chunk of chunks) { full.set(chunk, writeOffset); writeOffset += chunk.length; }
-      if (!subtleCrypto) throw new Error('web_crypto_unavailable');
-      const digest = await subtleCrypto.digest('SHA-256', full.buffer);
-      actual = bufferToHex(digest);
-    }
 
-    if (actual !== spec.sha256) {
-      await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
-      throw new Error(`Model bütünlük kontrolü başarısız: beklenen ${spec.sha256}, alınan ${actual}`);
-    }
+      if (actual !== spec.sha256) {
+        await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
+        throw new Error(`Model bütünlük kontrolü başarısız: beklenen ${spec.sha256}, alınan ${actual}`);
+      }
 
-    await filesystem.rename({ from: tmpRelativePath, to: relativePath, directory, toDirectory: directory });
-    return { ok: true, sha256: actual };
+      await filesystem.rename({ from: tmpRelativePath, to: relativePath, directory, toDirectory: directory });
+      return { ok: true, sha256: actual };
+    } catch (err) {
+      // A deliberate cancel ("Durdur"/"İptal") surfaces as fetch/reader
+      // throwing an AbortError -- report it as a cancellation instead of a
+      // real download failure, and only delete the partial file when the
+      // caller asked for that ("İptal", as opposed to pausing with
+      // "Durdur", which keeps it for the next Range-resumed attempt).
+      if (state.cancelled) {
+        if (state.deletePartial) await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
+        throw makeCancelError(state.deletePartial);
+      }
+      throw err;
+    } finally {
+      activeDownload = null;
+    }
   }
 
   async function removeModel() {
@@ -183,6 +225,7 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
     isModelInstalled,
     getPartialBytes,
     downloadModel,
+    cancelDownload,
     removeModel,
     checkCapability,
     isAvailableSync,

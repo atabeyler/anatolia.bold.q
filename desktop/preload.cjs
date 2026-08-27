@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
     query: (request) => ipcRenderer.invoke('ai:query', request),
     modelStatus: () => ipcRenderer.invoke('ai:modelStatus'),
     modelDownload: () => ipcRenderer.invoke('ai:modelDownload'),
+    modelDownloadCancel: (options) => ipcRenderer.invoke('ai:modelDownloadCancel', options),
     modelRemove: () => ipcRenderer.invoke('ai:modelRemove'),
     modelTiers: () => ipcRenderer.invoke('ai:modelTiers'),
     modelSelectTier: (tier) => ipcRenderer.invoke('ai:modelSelectTier', tier),
