@@ -27,6 +27,10 @@ import { getCurrentUser } from './api.js';
 // calls the Capacitor plugins directly.
 export const isMobileApp = Capacitor.isNativePlatform();
 
+// Static for the life of the app -- used by HistoryView.jsx's device label,
+// mirrors desktopBridge.js's desktopPlatform.
+export const mobilePlatform = isMobileApp ? Capacitor.getPlatform() : null;
+
 // The deployed web app is the source of truth this points at by default;
 // override at build time with VITE_MOBILE_CLOUD_URL for a self-hosted/
 // staging server (see mobile/README.md).
@@ -178,6 +182,11 @@ export const mobileAuth = {
   }),
   verifyOfflineLogin: guard(async (userCode, password) => (await getSessionManager()).verifyOfflineLogin(userCode, password)),
   getSession: guard(async () => (await getSessionManager()).getSession()),
+  // deviceId (module-level above) is only populated once getSessionManager()
+  // has actually run at least once -- awaiting it here guarantees that
+  // without requiring every caller (just HistoryView.jsx's device label, for
+  // now) to know that detail.
+  getDeviceId: guard(async () => { await getSessionManager(); return deviceId; }),
   isOfflineLoginAllowed: guard(async (userCode) => (await getSessionManager()).isOfflineLoginAllowed(userCode)),
   needsReauth: guard(async () => (await getSessionManager()).needsReauth()),
   // Always returns a real (safely no-op-able) unsubscribe function, even on

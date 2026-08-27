@@ -2,7 +2,8 @@ import express from 'express';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { getDb, isDbConfigured } from '../db/client.js';
-import { analyses, emergencyLogs } from '../db/schema.js';
+import { getPool } from '../services/database.js';
+import { analyses, devices, emergencyLogs } from '../db/schema.js';
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
 import { getTodayBriefing, getBriefingByDate, listBriefingDates, generateMorningBriefIfNeeded } from '../services/morningBrief.js';
@@ -12,15 +13,43 @@ import { canAccessClassification } from '../lib/rbac.js';
 const router = express.Router();
 const PUBLIC_CLOUD_PROVIDER_LABEL = 'Q CLOUD';
 
+// aiProvider on a row is either a real upstream cloud provider name (set by
+// routes/analysis.js's /generate -- always masked to PUBLIC_CLOUD_PROVIDER_LABEL
+// before it ever reaches a client, so the actual vendor is never exposed) or
+// one of the local-engine's own already-public display labels, written
+// as-is by a native device's local Model Manager / offline-extractive path
+// (see AnalysisView.jsx's providerLabel and desktop|mobile's createAnalysis)
+// and carried through sync unchanged. Only the latter two are ever passed
+// through verbatim; anything else falls back to the generic cloud label.
+const LOCAL_ENGINE_LABELS = new Set(['Q LOCAL', 'Q LOCAL DATA']);
+function engineLabelFor(aiProvider) {
+  if (!aiProvider) return null;
+  return LOCAL_ENGINE_LABELS.has(aiProvider) ? aiProvider : PUBLIC_CLOUD_PROVIDER_LABEL;
+}
+
+// Devices register with the raw platform string their app runtime reports
+// (process.platform on desktop, Capacitor.getPlatform() on Android -- see
+// routes/devices.js) -- normalized here into the label History actually
+// shows next to each report's title.
+const PLATFORM_DISPLAY_LABELS = { win32: 'Windows', darwin: 'macOS', linux: 'Linux', android: 'Android', ios: 'iOS' };
+function deviceLabelFor(deviceId, devicePlatform) {
+  if (!deviceId || deviceId === 'web') return 'Web';
+  return PLATFORM_DISPLAY_LABELS[devicePlatform] || 'Bilinmeyen Cihaz';
+}
+
 // The frontend still expects snake_case field names (HistoryView.jsx, HomeView.jsx) —
 // Drizzle results (camelCase) are mapped through this to preserve the old API contract.
-const toAnalysisJson = (row) => ({
+// `devicePlatform` is only present when the caller joined in the `devices`
+// table (see the /list and /:id handlers below); omitted elsewhere.
+const toAnalysisJson = (row, devicePlatform) => ({
   id: row.id,
   user_code: row.userCode,
   category: row.category,
   title: row.title,
   content: row.content,
   ai_provider: row.aiProvider ? PUBLIC_CLOUD_PROVIDER_LABEL : null,
+  engine_label: engineLabelFor(row.aiProvider),
+  device_label: deviceLabelFor(row.deviceId, devicePlatform),
   priority: row.priority,
   depth: row.depth,
   created_at: row.createdAt,
@@ -99,11 +128,16 @@ router.get('/list', authMiddleware, async (req, res) => {
   try {
     if (!isDbConfigured()) return res.json([]);
 
+    // Left-joined so a row whose device was never registered (or was later
+    // revoked) still comes back -- deviceLabelFor() falls back to
+    // "Bilinmeyen Cihaz" rather than the row silently vanishing.
+    const selection = { analysis: analyses, devicePlatform: devices.platform };
     const scoped = req.user?.isAdmin
-      ? getDb().select().from(analyses).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(100)
+      ? getDb().select(selection).from(analyses).leftJoin(devices, eq(analyses.deviceId, devices.deviceId)).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(100)
       : getDb()
-          .select()
+          .select(selection)
           .from(analyses)
+          .leftJoin(devices, eq(analyses.deviceId, devices.deviceId))
           .where(and(eq(analyses.userCode, req.user.userCode), isNull(analyses.deletedAt)))
           .orderBy(desc(analyses.createdAt))
           .limit(100);
@@ -111,7 +145,7 @@ router.get('/list', authMiddleware, async (req, res) => {
     const rows = await scoped;
 
     res.json(
-      rows.map((r) => ({ ...toAnalysisJson(r), preview: (r.content || '').slice(0, 200) }))
+      rows.map(({ analysis, devicePlatform }) => ({ ...toAnalysisJson(analysis, devicePlatform), preview: (analysis.content || '').slice(0, 200) }))
     );
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -189,15 +223,48 @@ router.get('/:id', authMiddleware, async (req, res) => {
   try {
     if (!isDbConfigured()) return res.status(404).json({ error: 'DB yok' });
 
+    const [row] = await getDb()
+      .select({ analysis: analyses, devicePlatform: devices.platform })
+      .from(analyses)
+      .leftJoin(devices, eq(analyses.deviceId, devices.deviceId))
+      .where(eq(analyses.id, Number(req.params.id)));
+    if (!row || row.analysis.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
+    if (!req.user?.isAdmin && row.analysis.userCode !== req.user.userCode) {
+      return res.status(404).json({ error: 'Bulunamadi' });
+    }
+    if (blockedByClassification(req, row.analysis)) {
+      return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
+    }
+    res.json(toAnalysisJson(row.analysis, row.devicePlatform));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/history/:id -- soft-delete (tombstone), symmetric with the
+// existing native-only path (desktop/mobile's analyses:remove IPC/bridge
+// call -> local deleteAnalysis() -> sync_queue 'delete' op -> this same
+// analyses.deleted_at column, just reached over /api/sync/push instead).
+// This is the only delete path a plain web session has, since it has no
+// local device/sync_queue of its own to route through -- so it must bump
+// sync_revision itself here, the same way sync.js's applyOperation's
+// 'delete' branch does, or a native device would never learn the row is
+// gone on its next pull and it would silently reappear there forever.
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    if (!isDbConfigured()) return res.status(404).json({ error: 'DB yok' });
+
     const [row] = await getDb().select().from(analyses).where(eq(analyses.id, Number(req.params.id)));
     if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
       return res.status(404).json({ error: 'Bulunamadi' });
     }
-    if (blockedByClassification(req, row)) {
-      return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
-    }
-    res.json(toAnalysisJson(row));
+
+    await getPool().query(
+      `UPDATE analyses SET deleted_at = NOW(), sync_revision = nextval('analyses_sync_revision_seq') WHERE id = $1`,
+      [row.id]
+    );
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

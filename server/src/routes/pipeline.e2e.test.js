@@ -45,6 +45,7 @@ vi.mock('../db/schema.js', () => ({
   analyses: fieldProxy('analyses'),
   messages: fieldProxy('messages'),
   emergencyLogs: fieldProxy('emergencyLogs'),
+  devices: fieldProxy('devices'),
 }));
 vi.mock('drizzle-orm', () => ({
   eq: (field, val) => (row) => row[field] === val,
@@ -79,11 +80,24 @@ function makeFakeDb() {
         },
       };
     },
-    select() {
+    // `selection` is only present for history.js's device-label join
+    // (`select({ analysis: analyses, devicePlatform: devices.platform })`)
+    // -- every other call site here still uses the plain, no-arg select()
+    // and gets bare rows back, same as before.
+    select(selection) {
       return {
         from(table) {
           let rows = rowsFor(table).slice();
           const builder = {
+            // This fake has no `devices` table to actually join against --
+            // real join *correctness* (matching a row's deviceId to a
+            // registered device's platform) is covered by
+            // history.rbac.test.js instead. This just needs to not crash
+            // and to shape each row the way `selection` asks for, with the
+            // joined column always null.
+            leftJoin() {
+              return builder;
+            },
             where(pred) {
               rows = rows.filter(pred);
               return builder;
@@ -97,7 +111,10 @@ function makeFakeDb() {
               return builder;
             },
             then(resolve, reject) {
-              Promise.resolve(rows).then(resolve, reject);
+              const shaped = selection
+                ? rows.map((row) => Object.fromEntries(Object.keys(selection).map((key, i) => [key, i === 0 ? row : null])))
+                : rows;
+              Promise.resolve(shaped).then(resolve, reject);
             },
           };
           return builder;

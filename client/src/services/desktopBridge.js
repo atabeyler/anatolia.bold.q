@@ -7,10 +7,16 @@ export const isDesktop = typeof window !== 'undefined' && !!window.anatoliaDeskt
 
 const bridge = isDesktop ? window.anatoliaDesktop : null;
 
+// Static for the life of the app (Electron's process.platform never
+// changes mid-session) -- used by HistoryView.jsx's device label, mirrors
+// mobileBridge.js's mobilePlatform.
+export const desktopPlatform = bridge?.platform || null;
+
 export const desktopAuth = {
   establishOnlineSession: (jwt, password) => bridge?.auth.establishOnlineSession(jwt, password),
   verifyOfflineLogin: (userCode, password) => bridge?.auth.verifyOfflineLogin(userCode, password),
   getSession: () => bridge?.auth.getSession(),
+  getDeviceId: () => bridge?.auth.getDeviceId(),
   isOfflineLoginAllowed: (userCode) => bridge?.auth.isOfflineLoginAllowed(userCode),
   needsReauth: () => bridge?.auth.needsReauth(),
   onReauthRequired: (callback) => bridge?.auth.onReauthRequired(callback) || (() => {}),

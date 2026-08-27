@@ -372,6 +372,10 @@ function registerIpcHandlers() {
   });
   ipcMain.handle('auth:verifyOfflineLogin', (_e, userCode, password) => sessionManager.verifyOfflineLogin(userCode, password));
   ipcMain.handle('auth:getSession', () => sessionManager.getSession());
+  // Lets HistoryView.jsx tell "this device"'s own rows apart from ones
+  // synced down from elsewhere, for the device label shown next to each
+  // report's title -- display-only, never used for auth/sync itself.
+  ipcMain.handle('auth:getDeviceId', () => deviceId);
   ipcMain.handle('auth:isOfflineLoginAllowed', (_e, userCode) => sessionManager.isOfflineLoginAllowed(userCode));
   ipcMain.handle('auth:needsReauth', () => sessionManager.needsReauth());
   ipcMain.handle('auth:logout', () => sessionManager.logout());

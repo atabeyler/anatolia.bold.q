@@ -257,6 +257,7 @@ export const api = {
   morningBriefList: () => req('/api/history/morning-brief/list'),
   morningBriefByDate: (date) => req(`/api/history/morning-brief/date/${date}`),
   historyGet: (id) => req(`/api/history/${id}`),
+  historyDelete: (id) => req(`/api/history/${id}`, { method: 'DELETE' }),
   // These endpoints require the Bearer token like any other API call, so a
   // plain window.open() (no Authorization header) gets a 401 instead of the
   // file -- fetch it ourselves and hand back a Blob the caller can download

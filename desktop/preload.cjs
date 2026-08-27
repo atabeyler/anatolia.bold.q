@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
     establishOnlineSession: (jwt, password) => ipcRenderer.invoke('auth:establishOnlineSession', jwt, password),
     verifyOfflineLogin: (userCode, password) => ipcRenderer.invoke('auth:verifyOfflineLogin', userCode, password),
     getSession: () => ipcRenderer.invoke('auth:getSession'),
+    getDeviceId: () => ipcRenderer.invoke('auth:getDeviceId'),
     isOfflineLoginAllowed: (userCode) => ipcRenderer.invoke('auth:isOfflineLoginAllowed', userCode),
     needsReauth: () => ipcRenderer.invoke('auth:needsReauth'),
     onReauthRequired: (callback) => {
