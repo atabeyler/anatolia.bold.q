@@ -46,6 +46,7 @@ const isDev = process.env.ANATOLIA_DESKTOP_FORCE_PROD !== '1'
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
+  process.exit(0);
 }
 
 let mainWindow = null;

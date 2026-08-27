@@ -168,12 +168,13 @@ describe('GET /api/version/generic/:feedFile (electron-updater differential feed
   }
 
   it('rewrites the files[].url and path fields to point at our own /generic/download, never GitHub', async () => {
-    getLatestReleaseAssetsMock.mockResolvedValue(rawAssets());
+    findReleaseAssetByFilenameMock.mockResolvedValue(rawAssets().find((a) => a.name === 'latest.yml'));
     fetchAssetBinaryMock.mockResolvedValue({ text: async () => ymlText() });
 
     const res = await request(buildApp()).get('/api/version/generic/latest.yml');
 
     expect(res.status).toBe(200);
+    expect(findReleaseAssetByFilenameMock).toHaveBeenCalledWith('latest.yml');
     expect(fetchAssetBinaryMock).toHaveBeenCalledWith(12);
     expect(res.text).not.toContain('github');
     expect(res.text).toContain('https://app.example.com/api/version/generic/download/ANATOLIA-Q-Setup-2.1.140.exe');
@@ -187,12 +188,26 @@ describe('GET /api/version/generic/:feedFile (electron-updater differential feed
     expect(res.status).toBe(404);
   });
 
-  it('404s when the requested feed file was not published on the latest release', async () => {
-    getLatestReleaseAssetsMock.mockResolvedValue(rawAssets().filter((a) => a.name !== 'latest.yml'));
+  it('404s when the requested feed file was not published on any recent release', async () => {
+    findReleaseAssetByFilenameMock.mockResolvedValue(null);
 
     const res = await request(buildApp()).get('/api/version/generic/latest.yml');
 
     expect(res.status).toBe(404);
+  });
+
+  it('falls back to an older release when the newest one has not finished publishing its assets yet', async () => {
+    // Simulates the desktop-release.yml race: the newest release exists
+    // (non-draft) but its platform build/upload job hasn't uploaded
+    // latest.yml yet. findReleaseAssetByFilename is the one that walks
+    // backward through recent releases -- this route just has to trust it.
+    findReleaseAssetByFilenameMock.mockResolvedValue({ id: 9, name: 'latest.yml', size: 1 });
+    fetchAssetBinaryMock.mockResolvedValue({ text: async () => ymlText() });
+
+    const res = await request(buildApp()).get('/api/version/generic/latest.yml');
+
+    expect(res.status).toBe(200);
+    expect(fetchAssetBinaryMock).toHaveBeenCalledWith(9);
   });
 });
 

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
-import { getLatestVersionInfo, getLatestReleaseAssets, findReleaseAssetByFilename, fetchAssetBinary } from '../services/releaseVersion.js';
+import { getLatestVersionInfo, findReleaseAssetByFilename, fetchAssetBinary } from '../services/releaseVersion.js';
 import { logger } from '../lib/logger.js';
 
 const router = express.Router();
@@ -171,8 +171,16 @@ router.get('/generic/:feedFile', async (req, res) => {
   if (!FEED_FILES.has(req.params.feedFile)) return res.status(404).json({ error: 'Bilinmeyen feed dosyası' });
 
   try {
-    const assets = await getLatestReleaseAssets();
-    const feedAsset = assets.find((a) => a.name === req.params.feedFile);
+    // The very latest release is created (non-draft, so android-release.yml
+    // can find it by tag -- see desktop-release.yml's prepare-release job)
+    // before its platform build/upload jobs finish, so for several minutes
+    // after every push to main it exists with no installer assets at all.
+    // An update check landing in that window against getLatestReleaseAssets()
+    // would 404 here even though nothing is actually wrong -- searching
+    // backward through recent releases (same helper the differential
+    // installer/blockmap proxy below already relies on) finds the newest
+    // one that's actually finished publishing instead.
+    const feedAsset = await findReleaseAssetByFilename(req.params.feedFile);
     if (!feedAsset) return res.status(404).json({ error: 'Güncelleme feed dosyası bulunamadı' });
 
     const upstream = await fetchAssetBinary(feedAsset.id);
