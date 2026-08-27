@@ -1,16 +1,16 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
-import { getReportFormat } from './reportFormats.js';
+import { cleanReportOutput, getReportFormat } from './reportFormats.js';
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
   'Bağlamda yeterli bilgi yoksa bunu açıkça belirt, bilgi uydurma.';
 
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda profesyonel, yapılandırılmış ve başlıklı bir karar destek analizi yaz. ' +
+  'Kullanıcı için istenen konuda profesyonel, yapılandırılmış ve başlıklı bir karar destek analizi yaz. Cevaba talimat, iskelet, soru/istek veya bağlam etiketlerini kopyalama. ' +
   'Aşağıdaki kategoriye özel rapor iskeletini aynen izle; iskelette olmayan, konu dışı bölüm açma. ' +
-  'Verilen yerel dosya/verileri öncelikli kaynak olarak kullan. Geçmiş raporları yalnızca biçim ve üslup desteği olarak gör; ' +
-  'geçmiş raporlardaki olay, kurum, banka, proje, silah sistemi veya kişi adlarını kullanıcı isteğinde geçmiyorsa yeni rapora taşıma. ' +
+  'Verilen yerel dosya/verileri öncelikli kaynak olarak kullan. Eski raporlardan veya örneklerden kişi, kurum, banka, proje, silah sistemi veya konu taşıma. ' +
+  'Özellikle kullanıcı konusu toplumsal olay ise OPTİMİZASYON PROBLEMİ, QAOA, banka, bütçe, füze, savunma platformu veya kaynak tahsisi bölümü yazma. ' +
   'Kaynakta bulunmayan sayı, olay veya sonuç uydurma. Kesin veri yoksa varsayımı açıkça etiketle.';
 
 // Real generative local-LLM query, registered ahead of offline-extractive
@@ -109,8 +109,11 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     const runtime = await getRuntime();
 
     if (mode === 'generate') {
-      const queryText = `${category} ${title} ${prompt}`.trim();
-      const contextDocs = retrieveContext(db, userId, queryText, { limit: 2, maxCharsPerDoc: 280 }).filter((doc) => !category || doc.category === category);
+      // New report generation must not ingest prior report text by default:
+      // a previous malformed local draft can otherwise become same-category
+      // RAG context and recursively contaminate the next output. Archive
+      // retrieval remains available for chat/summarization mode below.
+      const contextDocs = [];
       const reportFormat = getReportFormat(category);
       const options = `Öncelik: ${priority}\nAnaliz derinliği: ${depth}` +
         (quantumRequested ? '\nKuantum modu istendi; çevrimdışı kuantum doğrulaması yapılamadığı için yalnızca veriye dayalı klasik analiz üret.' : '');
@@ -124,7 +127,8 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
         ? (depth === 'derin' ? 350 : depth === 'hizli' ? 120 : 220)
         : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
       const timeoutMs = isLowTier ? 45_000 : 90_000;
-      const content = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
+      const rawContent = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
+      const content = cleanReportOutput(rawContent, category);
       return {
         type: 'analysis',
         result: {

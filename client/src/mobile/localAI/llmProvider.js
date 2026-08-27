@@ -1,6 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
-import { getReportFormat } from './reportFormats.js';
+import { cleanReportOutput, getReportFormat } from './reportFormats.js';
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -19,9 +19,10 @@ const CHAT_INSTRUCTION =
 // knowledge base, which is many times larger than this model's entire
 // 2048-token context window.
 const GENERATE_INSTRUCTION =
-  'Kullanıcı için istenen konuda, kategoriye özel rapor iskeletini aynen izleyerek yapılandırılmış bir analiz raporu yaz. ' +
+  'Kullanıcı için istenen konuda, kategoriye özel rapor iskeletini aynen izleyerek yapılandırılmış bir analiz raporu yaz. Cevaba talimat, iskelet, soru/istek veya bağlam etiketlerini kopyalama. ' +
   'İskelette olmayan, konu dışı bölüm açma. Her başlık altında en az 2 dolu cümle yaz; yarım bırakma, tek kelimeyle cevap verme. ' +
-  'Geçmiş raporları yalnızca biçim ve üslup desteği olarak gör; kullanıcı isteğinde geçmeyen kişi, kurum, olay, banka, proje, silah sistemi veya ülke adını yeni rapora taşıma. ' +
+  'Eski raporlardan veya örneklerden kişi, kurum, olay, banka, proje, silah sistemi veya ülke adını yeni rapora taşıma. ' +
+  'Özellikle kullanıcı konusu toplumsal olay ise OPTİMİZASYON PROBLEMİ, QAOA, banka, bütçe, füze, savunma platformu veya kaynak tahsisi bölümü yazma. ' +
   'Kesin veri yoksa varsayım olduğunu belirt. ' +
   // A small on-device model's failure mode observed firsthand: instead of
   // writing new prose, it echoed the context block's own "[1] "Başlık"
@@ -87,8 +88,10 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
     const runtime = await getRuntime();
 
     if (mode === 'generate') {
-      const queryText = `${category} ${title} ${prompt}`.trim();
-      const contextDocs = (await retrieveContext(db, userId, queryText, { limit: 2, maxCharsPerDoc: 240 })).filter((doc) => !category || doc.category === category);
+      // Do not inject prior reports into fresh generation by default: a
+      // malformed same-category local draft can otherwise poison the next
+      // report. Archive retrieval remains available for chat mode below.
+      const contextDocs = [];
       const reportFormat = getReportFormat(category);
       const options = `Öncelik: ${priority}\nAnaliz derinliği: ${depth}` +
         (quantumRequested ? '\nKuantum modu istendi; çevrimdışı kuantum doğrulaması yapılamadığı için yalnızca veriye dayalı klasik analiz üret.' : '');
@@ -101,7 +104,8 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
       // real room. Still well short of contextSize (2048): MAX_INPUT_CHARS
       // (2000 chars, ~500 tokens) + the RAG context block + this
       // instruction leaves comfortable headroom for a 700-token reply.
-      const content = await runtime.generate(fullPrompt, { maxTokens: 700, temperature: 0.4 });
+      const rawContent = await runtime.generate(fullPrompt, { maxTokens: 700, temperature: 0.4 });
+      const content = cleanReportOutput(rawContent, category);
       return {
         type: 'analysis',
         result: {

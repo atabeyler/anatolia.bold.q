@@ -112,15 +112,40 @@ const DEFAULT_FORMAT = [
   '## Sonuç',
 ];
 
+export function getReportSections(category = '') {
+  return FORMATS[category] || DEFAULT_FORMAT;
+}
+
 export function getReportFormat(category = '') {
-  const sections = FORMATS[category] || DEFAULT_FORMAT;
+  const sections = getReportSections(category);
   return [
-    'Zorunlu rapor iskeleti:',
-    ...sections.map((section, index) => `${index + 1}. ${section}`),
+    'Cevabın ilk satırı tam olarak şu olmalı:',
+    sections[0],
+    '',
+    'Rapor sadece aşağıdaki Markdown başlıklarından oluşmalı:',
+    ...sections.map((section) => section),
     '',
     'Zorunlu kurallar:',
     ...COMMON_RULES.map((rule) => `- ${rule}`),
   ].join('\n');
+}
+
+export function cleanReportOutput(content = '', category = '') {
+  const sections = getReportSections(category);
+  const firstSection = sections[0];
+  let cleaned = String(content || '').trim();
+  const firstIndex = cleaned.toLocaleLowerCase('tr-TR').indexOf(firstSection.toLocaleLowerCase('tr-TR'));
+  if (firstIndex > 0) {
+    cleaned = cleaned.slice(firstIndex).trim();
+  }
+
+  if (category === 'toplumsal') {
+    cleaned = cleaned
+      .replace(/^(?:#{1,3}\s*)?(?:OPTİMİZASYON PROBLEMİ|OPTIMIZASYON PROBLEMI|QAOA)[\s\S]*?(?=^#{1,3}\s*(?:Yönetici Özeti|Olay Özeti|Aktörler ve Taraflar|Toplumsal Gerilim Dinamikleri|Nefret Söylemi ve Ayrımcılık Riski|Kamu Düzeni ve Güvenlik Riski|Yerel Yönetim ve Kolluk Değerlendirmesi|İletişim ve Önleyici Politika Önerileri|Kısa Vadeli Senaryolar|Sonuç)|(?![\s\S]))/gmi, '')
+      .trim();
+  }
+
+  return cleaned;
 }
 
 export const _internal = { FORMATS, COMMON_RULES };

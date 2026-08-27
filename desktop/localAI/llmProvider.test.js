@@ -70,10 +70,10 @@ describe('createLLMQuery', () => {
     const generate = vi.fn(async (fullPrompt) => {
       expect(fullPrompt).toContain('## Nefret Söylemi ve Ayrımcılık Riski');
       expect(fullPrompt).toContain('Kürt işçilere saldırı');
-      expect(fullPrompt).toContain('Mahalle Gerginliği');
+      expect(fullPrompt).not.toContain('Mahalle Gerginliği');
       expect(fullPrompt).not.toContain('Hedef Banka');
       expect(fullPrompt).not.toContain('optimizasyonu');
-      return 'Toplumsal analiz üretildi.';
+      return 'OPTİMİZASYON PROBLEMİ\nBütçe: %60\n\n## Yönetici Özeti\nToplumsal analiz üretildi.';
     });
     const runtimeFactory = vi.fn(async () => ({ generate }));
 
@@ -86,7 +86,9 @@ describe('createLLMQuery', () => {
     });
 
     expect(result.type).toBe('analysis');
-    expect(result.result.sources).toEqual([{ id: 'social-old', title: 'Mahalle Gerginliği' }]);
+    expect(result.result.content).toMatch(/^## Yönetici Özeti/);
+    expect(result.result.content).not.toContain('OPTİMİZASYON PROBLEMİ');
+    expect(result.result.sources).toEqual([]);
   });
 
   it('still generates a fresh analysis when there is no matching archive context', async () => {
