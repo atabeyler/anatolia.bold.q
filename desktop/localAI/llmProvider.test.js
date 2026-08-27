@@ -91,6 +91,28 @@ describe('createLLMQuery', () => {
     expect(result.result.sources).toEqual([]);
   });
 
+  it('throws local_llm_prompt_echo instead of returning the instructions as the "report" when a weak model echoes the prompt', async () => {
+    const db = createTestDb();
+    // A real failure mode of the low-tier local model: instead of writing
+    // an analysis, it parrots back the instruction text it was given
+    // (getReportFormat's own "Zorunlu kurallar" section), which happens to
+    // start with the same first section header cleanReportOutput looks for
+    // -- so the existing cleanup can't distinguish it from a real report.
+    const generate = vi.fn(async () =>
+      '## Yönetici Özeti\n\nRapor sadece aşağıdaki Markdown başlıklarından oluşmalı:\n## Yönetici Özeti\n\nZorunlu kurallar:\n- Kullanıcının verdiği başlık ve konu dışına çıkma.'
+    );
+    const runtimeFactory = vi.fn(async () => ({ generate }));
+
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory });
+
+    await expect(run({
+      mode: 'generate',
+      category: 'toplumsal',
+      title: 'ırkçılık',
+      prompt: 'Kürt işçilere saldırı ve kolluk koordinasyonu',
+    })).rejects.toThrow('local_llm_prompt_echo');
+  });
+
   it('still generates a fresh analysis when there is no matching archive context', async () => {
     const db = createTestDb();
     let systemPromptSeen = '';

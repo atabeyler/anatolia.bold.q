@@ -148,4 +148,22 @@ export function cleanReportOutput(content = '', category = '') {
   return cleaned;
 }
 
+// A weak/low-tier local model under-following instructions doesn't fail
+// loudly -- it echoes the prompt itself back as its "answer" (getReportFormat
+// above starts with the same first section header cleanReportOutput searches
+// for, so that cleanup can't tell a real report from an echoed prompt that
+// happens to start at the same header). These phrases only ever appear in
+// the instruction text this module builds, never in genuine report prose,
+// so their presence after cleaning is a reliable echo signal.
+const PROMPT_ECHO_MARKERS = [
+  'zorunlu kurallar',
+  'rapor sadece aşağıdaki markdown başlıklarından oluşmalı',
+  'cevabın ilk satırı tam olarak',
+];
+
+export function isPromptEcho(content = '') {
+  const normalized = String(content || '').toLocaleLowerCase('tr-TR');
+  return PROMPT_ECHO_MARKERS.some((marker) => normalized.includes(marker));
+}
+
 export const _internal = { FORMATS, COMMON_RULES };

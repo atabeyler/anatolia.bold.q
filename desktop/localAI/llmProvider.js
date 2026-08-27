@@ -1,6 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
-import { cleanReportOutput, getReportFormat } from './reportFormats.js';
+import { cleanReportOutput, getReportFormat, isPromptEcho } from './reportFormats.js';
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -129,6 +129,15 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
       const timeoutMs = isLowTier ? 45_000 : 90_000;
       const rawContent = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
       const content = cleanReportOutput(rawContent, category);
+      // A weak/low-tier model can under-follow instructions badly enough to
+      // echo the prompt itself back as its "report" (see reportFormats.js's
+      // isPromptEcho) instead of failing outright. Throwing here -- same as
+      // the local_llm_unavailable/timeout paths above -- routes this request
+      // through provider.js's fallback to offline-extractive instead of
+      // handing the user a document made of our own instruction text.
+      if (isPromptEcho(content)) {
+        throw new Error('local_llm_prompt_echo');
+      }
       return {
         type: 'analysis',
         result: {
