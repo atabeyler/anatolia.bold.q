@@ -443,10 +443,20 @@ function registerIpcHandlers() {
       diagnostics.info('local_llm_model_installed', { sha256: result.sha256 });
       return { ok: true, ...result };
     } catch (err) {
+      if (err.cancelled) {
+        diagnostics.info('local_llm_model_download_cancelled', { deleted: !!err.deletePartial });
+        return { ok: false, cancelled: true };
+      }
       diagnostics.error('local_llm_model_download_failed', { message: err.message });
       return { ok: false, error: err.message };
     }
   });
+  // "Durdur" (deletePartial: false) pauses the in-flight download while
+  // keeping the .download file for the next Range-resumed attempt;
+  // "İptal" (deletePartial: true) also deletes it. Either way the pending
+  // ai:modelDownload call above settles (rejects) on its own once the
+  // aborted request/stream actually stops -- this handler only signals it.
+  ipcMain.handle('ai:modelDownloadCancel', (_event, options) => getModelManager().cancelDownload(options));
   ipcMain.handle('ai:modelRemove', async () => getModelManager().removeModel());
 
   // Manual tier picker (Settings > Local AI): list the pinned tiers, then

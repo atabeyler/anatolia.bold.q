@@ -166,4 +166,52 @@ describe('modelManager', () => {
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('missing');
   });
+
+  // A request-shaped fake that stays "open" (never calls onResponse a
+  // second time) after its first chunk, so a test can call cancelDownload()
+  // while a download is genuinely still in flight, then assert on how it
+  // settles. `.destroy()` mirrors the one real https.get()'s ClientRequest
+  // exposes: it fires the request's own 'error' listener, which is exactly
+  // what httpGetFollowingRedirects wires up in modelManager.js.
+  function fakeSlowFetchImpl() {
+    return (url, onResponse) => {
+      const request = new EventEmitter();
+      request.destroy = () => request.emit('error', new Error('destroyed'));
+      const res = new Readable({ read() {} });
+      res.statusCode = 200;
+      res.headers = { 'content-length': String(FAKE_CONTENT.length) };
+      queueMicrotask(() => {
+        onResponse(res);
+        res.push(Buffer.from(FAKE_CONTENT.slice(0, 5)));
+      });
+      return request;
+    };
+  }
+
+  it('cancelDownload is a no-op when nothing is downloading', () => {
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC });
+    expect(mm.cancelDownload()).toEqual({ ok: false, error: 'no_active_download' });
+  });
+
+  it('cancelDownload({}) ("Durdur") pauses an in-flight download and keeps the partial bytes', async () => {
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl: fakeSlowFetchImpl() });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(mm.cancelDownload()).toEqual({ ok: true });
+    await expect(promise).rejects.toThrow(/durduruldu/);
+    expect(fs.existsSync(`${mm.modelPath}.download`)).toBe(true);
+    expect(mm.getPartialBytes()).toBeGreaterThan(0);
+  });
+
+  it('cancelDownload({ deletePartial: true }) ("İptal") stops the download and deletes the partial file', async () => {
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl: fakeSlowFetchImpl() });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(mm.cancelDownload({ deletePartial: true })).toEqual({ ok: true });
+    await expect(promise).rejects.toThrow(/durduruldu/);
+    expect(fs.existsSync(`${mm.modelPath}.download`)).toBe(false);
+    expect(mm.isModelInstalled()).toBe(false);
+  });
 });
