@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import { createModelManager } from './modelManager.js';
+import { MODEL_TIERS } from './modelSpec.js';
 
 const FAKE_CONTENT = 'hello world model bytes';
 // sha256('hello world model bytes')
@@ -126,6 +127,29 @@ describe('modelManager', () => {
     expect(mm.isModelInstalled()).toBe(true);
     await mm.removeModel();
     expect(mm.isModelInstalled()).toBe(false);
+  });
+
+  it('removeModel also clears orphaned files from OTHER pinned tiers, not just the current one', async () => {
+    // Simulates the real incident: a user downloaded the LOW tier, later
+    // switched to HIGH via the Settings > Local AI tier picker (which only
+    // repoints modelManager -- see registry.js's setModelTier), and never
+    // re-downloaded LOW's file, so it sits orphaned on disk. "Kaldır"
+    // clicked while HIGH is the current tier must still clear it, not just
+    // whatever file modelManager itself happens to be pointed at right now.
+    const orphanedLow = path.join(tmpDir, MODEL_TIERS.low.filename);
+    const orphanedMidPartial = path.join(tmpDir, `${MODEL_TIERS.mid.filename}.download`);
+    fs.writeFileSync(orphanedLow, 'old low-tier bytes');
+    fs.writeFileSync(orphanedMidPartial, 'stale partial mid-tier download');
+
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl: fakeFetchImpl() });
+    await mm.downloadModel();
+    expect(mm.isModelInstalled()).toBe(true);
+
+    await mm.removeModel();
+
+    expect(mm.isModelInstalled()).toBe(false);
+    expect(fs.existsSync(orphanedLow)).toBe(false);
+    expect(fs.existsSync(orphanedMidPartial)).toBe(false);
   });
 
   it('isAvailable is false when the model is installed but the device fails the capability gate', async () => {

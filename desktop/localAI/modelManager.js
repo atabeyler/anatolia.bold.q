@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import https from 'node:https';
 import os from 'node:os';
 
-import { MODEL_SPEC } from './modelSpec.js';
+import { MODEL_SPEC, MODEL_TIERS } from './modelSpec.js';
 import { checkDeviceCapability } from './deviceCapability.js';
 
 // Real Local Model Manager for the desktop app: install-check, streamed
@@ -114,8 +114,29 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
   }
 
   async function removeModel() {
+    // This manager's own current-tier file first -- always correct
+    // regardless of what spec was passed in (a pinned tier, or, in tests,
+    // an arbitrary fixture spec that MODEL_TIERS below knows nothing
+    // about).
     await fsPromises.rm(modelPath, { force: true });
     await fsPromises.rm(tmpPath, { force: true });
+    // Then every OTHER pinned tier's file too: Settings > Local AI's tier
+    // picker (registry.js's setModelTier) repoints modelManager at a
+    // different pinned model without ever touching whatever was already on
+    // disk for the previously-selected tier, so a switched-away-from
+    // tier's file has nothing left pointing at its path to clean it up --
+    // it would otherwise sit there wasting disk space (observed firsthand:
+    // ~3.9 GB of orphaned tier files, some from tiers no longer even
+    // offered) forever, surviving every future "Kaldır" click since each
+    // one only ever knew about the one tier active at click time. "Kaldır"
+    // removing only the current tier while other real, multi-GB model
+    // files sit untouched right next to it isn't what a user means by
+    // "remove the model".
+    for (const tierSpec of Object.values(MODEL_TIERS)) {
+      const tierPath = path.join(modelsDir, tierSpec.filename);
+      await fsPromises.rm(tierPath, { force: true });
+      await fsPromises.rm(`${tierPath}.download`, { force: true });
+    }
     return { ok: true };
   }
 

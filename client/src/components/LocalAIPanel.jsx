@@ -88,12 +88,19 @@ export default function LocalAIPanel({ t }) {
       const result = await nativeAI.modelDownload(setProgress);
       if (result && result.ok === false) {
         setError(result.error || t('localAIDownloadFailed'));
-      } else {
-        refresh();
       }
     } catch (e) {
       setError(e?.message || t('localAIDownloadFailed'));
     } finally {
+      // Refresh on every path, not just success: a failed/aborted attempt
+      // (e.g. a dropped connection -- downloadModel() preserves the bytes
+      // received so far on disk for the next Range-resumed attempt, see
+      // modelManager.js) still leaves real partial bytes behind. Without
+      // this, status.partialBytes stays stuck at its pre-attempt value, so
+      // the button silently keeps saying "İndir" instead of "Devam Et"
+      // even though the next click *does* correctly resume server-side --
+      // the label just lied about what was actually about to happen.
+      refresh();
       setDownloading(false);
       setProgress(null);
     }

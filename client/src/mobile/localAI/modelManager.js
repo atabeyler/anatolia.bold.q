@@ -1,5 +1,5 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { MODEL_SPEC } from './modelSpec.js';
+import { MODEL_SPEC, MODEL_TIERS } from './modelSpec.js';
 import { checkDeviceCapability } from './deviceCapability.js';
 import { getCapacitorPlugin } from './llmRuntime.js';
 
@@ -138,7 +138,22 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
   }
 
   async function removeModel() {
+    // This manager's own current-tier file (and its own leftover partial
+    // download, if any) first -- always correct regardless of what spec
+    // was passed in.
     await filesystem.deleteFile({ path: relativePath, directory }).catch(() => {});
+    await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
+    // Then every OTHER pinned tier's file too: mirrors desktop/localAI/
+    // modelManager.js's removeModel fix -- see that module's comment for
+    // the orphaned-file incident this addresses. Switching tiers via the
+    // Settings > Local AI picker only repoints modelManager at a different
+    // pinned model, it never touches whatever was already on disk for the
+    // previously-selected tier.
+    for (const tierSpec of Object.values(MODEL_TIERS)) {
+      const tierRelativePath = `${MODELS_SUBDIR}/${tierSpec.filename}`;
+      await filesystem.deleteFile({ path: tierRelativePath, directory }).catch(() => {});
+      await filesystem.deleteFile({ path: `${tierRelativePath}.download`, directory }).catch(() => {});
+    }
     return { ok: true };
   }
 
