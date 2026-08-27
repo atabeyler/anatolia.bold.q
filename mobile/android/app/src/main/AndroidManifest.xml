@@ -51,7 +51,7 @@
          personnel-radar location sharing (see DashboardPage.jsx). Requesting
          location through this plugin instead of the WebView's own
          navigator.geolocation triggers Android's native OS permission
-         dialog -- which shows this app's own name and icon -- instead of
+         dialog, which shows this app's own name and icon, instead of
          the WebView's per-origin geolocation prompt, which would otherwise
          show the site's raw hosting URL. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
