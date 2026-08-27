@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
     modelStatus: () => ipcRenderer.invoke('ai:modelStatus'),
     modelDownload: () => ipcRenderer.invoke('ai:modelDownload'),
     modelRemove: () => ipcRenderer.invoke('ai:modelRemove'),
+    modelTiers: () => ipcRenderer.invoke('ai:modelTiers'),
+    modelSelectTier: (tier) => ipcRenderer.invoke('ai:modelSelectTier', tier),
     onModelDownloadProgress: (callback) => {
       const listener = (_event, progress) => callback(progress);
       ipcRenderer.on('ai:modelDownloadProgress', listener);

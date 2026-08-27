@@ -149,6 +149,27 @@ describe('synthesizeFromArchive', () => {
     expect(result.note).toMatch(/en yakın eşleşen/);
   });
 
+  it('prefers a same-category match over a longer, unrelated-category report that only wins on generic term repetition', () => {
+    insertAnalysis('social', {
+      title: 'Toplumsal Gerilim Raporu',
+      content: 'Bölgesel toplumsal gerilim ve yerel güvenlik değerlendirmesi.',
+      category: 'toplumsal',
+    });
+    // Simulates the real incident: an old, unrelated-category test report
+    // padded with generic words shared by almost any query -- under pure
+    // term-frequency scoring (no category awareness) this out-scores the
+    // short, actually-relevant same-category report above.
+    insertAnalysis('military', {
+      title: 'Saldırı Senaryosu',
+      content: 'Bölge bölge bölge güvenlik güvenlik güvenlik risk risk risk toplum toplum toplum tedbir tedbir.',
+      category: 'saldiri',
+    });
+
+    const result = synthesizeFromArchive(db, USER, { category: 'toplumsal', prompt: 'bölgesel güvenlik ve toplumsal gerilim' });
+
+    expect(result.matches.map((m) => m.id)).toEqual(['social']);
+  });
+
   it('is honest when nothing matches, instead of claiming success', () => {
     const result = synthesizeFromArchive(db, USER, { category: 'bilinmeyen', prompt: 'hiçbir şey eşleşmeyecek zzz' });
     expect(result.generated).toBe(false);

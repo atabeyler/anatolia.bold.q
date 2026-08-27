@@ -79,6 +79,8 @@
   "localAIRemoving": "Kaldırılıyor...",
   "localAIDownloadFailed": "İndirme başarısız oldu.",
   "localAIRemoveFailed": "Model kaldırılamadı.",
+  "localAITierPickerTitle": "Model Seç",
+  "localAITierSelectFailed": "Model seçilemedi.",
   "settingsAbout": "Hakkında",
   "settingsVersion": "Sürüm",
   "settingsOpenGuide": "Kullanım Kılavuzunu Aç",

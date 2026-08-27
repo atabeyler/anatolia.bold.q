@@ -79,6 +79,8 @@
   "localAIRemoving": "Wird entfernt...",
   "localAIDownloadFailed": "Download fehlgeschlagen.",
   "localAIRemoveFailed": "Modell konnte nicht entfernt werden.",
+  "localAITierPickerTitle": "Modell auswählen",
+  "localAITierSelectFailed": "Modell konnte nicht ausgewählt werden.",
   "settingsAbout": "Info",
   "settingsVersion": "Version",
   "settingsOpenGuide": "Benutzerhandbuch öffnen",

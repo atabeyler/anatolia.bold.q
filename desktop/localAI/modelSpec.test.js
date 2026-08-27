@@ -21,19 +21,30 @@ describe('selectTierForDevice', () => {
     expect(selectTierForDevice(null)).toBe(MODEL_TIERS.mid);
   });
 
-  it('selects MID for a typical 4-12 GB desktop', () => {
+  it('selects MID for a typical 4-11 GB desktop, regardless of core count', () => {
     expect(selectTierForDevice(4 * 1024 ** 3)).toBe(MODEL_TIERS.mid);
     expect(selectTierForDevice(8 * 1024 ** 3)).toBe(MODEL_TIERS.mid);
     expect(selectTierForDevice(11 * 1024 ** 3)).toBe(MODEL_TIERS.mid);
+    // A low-core machine (e.g. a 2-core/4-thread laptop) with 4+ GB RAM
+    // used to be forced onto the weak LOW/0.5B tier by a blanket
+    // cpuCount<8 rule -- weak enough to fail real requests outright (see
+    // llmProvider.js's isPromptEcho guard). Core count no longer gates
+    // tier selection at all; RAM alone decides.
+    expect(selectTierForDevice(4 * 1024 ** 3, 2)).toBe(MODEL_TIERS.mid);
   });
 
-  it('selects HIGH only when a 12 GB+ desktop also has enough CPU cores', () => {
+  it('selects HIGH whenever RAM meets its floor, regardless of core count', () => {
     expect(selectTierForDevice(12 * 1024 ** 3, 8)).toBe(MODEL_TIERS.high);
     expect(selectTierForDevice(32 * 1024 ** 3, 16)).toBe(MODEL_TIERS.high);
-    expect(selectTierForDevice(16 * 1024 ** 3, 4)).toBe(MODEL_TIERS.low);
+    // Core count used to gate HIGH (require >=8); a real 2-core/16 GB
+    // machine now still qualifies on RAM alone -- generation is slower,
+    // but that's a user-accepted tradeoff, not a hard block.
+    expect(selectTierForDevice(16 * 1024 ** 3, 4)).toBe(MODEL_TIERS.high);
+    expect(selectTierForDevice(12 * 1024 ** 3, 2)).toBe(MODEL_TIERS.high);
   });
 
-  it('selects LOW on a low-core desktop so generation remains responsive', () => {
-    expect(selectTierForDevice(16 * 1024 ** 3, 4)).toBe(MODEL_TIERS.low);
+  it('selects LOW when RAM is below MID\'s floor, regardless of core count', () => {
+    expect(selectTierForDevice(2 * 1024 ** 3, 4)).toBe(MODEL_TIERS.low);
+    expect(selectTierForDevice(2 * 1024 ** 3, 16)).toBe(MODEL_TIERS.low);
   });
 });

@@ -1,9 +1,10 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
 import { createModelManager } from './modelManager.js';
 import { createLLMQuery } from './llmProvider.js';
-import { selectTierForDevice } from './modelSpec.js';
+import { MODEL_TIERS, selectTierForDevice } from './modelSpec.js';
 
 // Ordered by preference:
 //   1. local-llm    -- real generative inference (Qwen2.5-1.5B-Instruct,
@@ -25,11 +26,48 @@ import { selectTierForDevice } from './modelSpec.js';
 // file is the only thing that needs a new entry, per the original seam
 // design (see the comment history in provider.js).
 let modelsDir = path.join(os.homedir(), '.anatolia-q', 'models');
+
+// A user can override the auto-selected tier from Settings > Local AI
+// (Model Manager: remove the current model, pick a different tier, then
+// download it -- see main.js's ai:modelSelectTier handler). That choice is
+// saved next to the models themselves so it survives an app restart --
+// without this, setModelTier() would only last until the next launch,
+// which re-derives the tier from RAM alone and silently reverts a
+// deliberate choice (e.g. someone accepting HIGH's slower generation on a
+// low-core machine, exactly the case this file's tiering logic exists
+// for). Best-effort: a read/write failure here just means the manual
+// choice doesn't persist, never a crash.
+function tierPreferencePath() {
+  return path.join(path.dirname(modelsDir), 'model-tier-preference.json');
+}
+
+function readTierPreference() {
+  try {
+    const { tier } = JSON.parse(fs.readFileSync(tierPreferencePath(), 'utf-8'));
+    return MODEL_TIERS[tier] ? tier : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTierPreference(tier) {
+  try {
+    fs.mkdirSync(path.dirname(tierPreferencePath()), { recursive: true });
+    fs.writeFileSync(tierPreferencePath(), JSON.stringify({ tier }), 'utf-8');
+  } catch {
+    // Best-effort persistence -- see the comment above tierPreferencePath.
+  }
+}
+
 // Device-tiered model selection (mirrors client/src/mobile/localAI/
-// registry.js's own tiering, minus the async native-plugin round-trip).
-// Desktop uses both RAM and logical CPU count: fitting 7B in memory is not
-// enough if generation would be unusably slow on a low-core machine.
-let modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem(), os.cpus().length) });
+// registry.js's own tiering) unless a saved manual choice exists, in which
+// case that wins outright.
+function resolveSpec() {
+  const preferred = readTierPreference();
+  return preferred ? MODEL_TIERS[preferred] : selectTierForDevice(os.totalmem(), os.cpus().length);
+}
+
+let modelManager = createModelManager({ modelsDir, spec: resolveSpec() });
 
 // Called once from desktop/main.js's startup sequence with Electron's real
 // app.getPath('userData')-based path, so the model lives next to the rest
@@ -39,13 +77,44 @@ let modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.
 export function configureLocalLLM({ modelsDir: dir } = {}) {
   if (dir && dir !== modelsDir) {
     modelsDir = dir;
-    modelManager = createModelManager({ modelsDir, spec: selectTierForDevice(os.totalmem(), os.cpus().length) });
+    modelManager = createModelManager({ modelsDir, spec: resolveSpec() });
   }
   return modelManager;
 }
 
 export function getModelManager() {
   return modelManager;
+}
+
+// Settings > Local AI: manual tier override (see the comment above
+// tierPreferencePath). Switching tiers only repoints modelManager at a
+// different pinned model -- it does NOT download or delete any file, so
+// the caller (main.js's ai:modelSelectTier handler) is expected to have
+// the UI remove the old model first (a different tier is a different
+// filename; the old one would otherwise sit on disk unused, which is
+// harmless but wasteful) and prompt a fresh download for the new one.
+export function setModelTier(tierKey) {
+  const spec = MODEL_TIERS[tierKey];
+  if (!spec) throw new Error(`unknown_model_tier: ${tierKey}`);
+  writeTierPreference(tierKey);
+  modelManager = createModelManager({ modelsDir, spec });
+  return modelManager;
+}
+
+// Settings UI data source: every pinned tier's picker-relevant fields, not
+// the whole frozen spec object (skips url/sha256 -- internal to
+// modelManager's own download/verify, nothing a picker needs to render).
+export function listModelTiers() {
+  return Object.entries(MODEL_TIERS).map(([tier, spec]) => ({
+    tier,
+    id: spec.id,
+    label: spec.label,
+    displayLabel: spec.displayLabel,
+    sizeBytes: spec.sizeBytes,
+    contextSize: spec.contextSize,
+    recommendedMinRamBytes: spec.recommendedMinRamBytes,
+    recommendedMinFreeDiskBytes: spec.recommendedMinFreeDiskBytes,
+  }));
 }
 
 const PROVIDERS = [

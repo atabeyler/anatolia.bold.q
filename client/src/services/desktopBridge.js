@@ -39,6 +39,8 @@ export const desktopAI = {
   modelStatus: () => bridge?.ai.modelStatus(),
   modelDownload: () => bridge?.ai.modelDownload(),
   modelRemove: () => bridge?.ai.modelRemove(),
+  modelTiers: () => bridge?.ai.modelTiers?.(),
+  modelSelectTier: (tier) => bridge?.ai.modelSelectTier?.(tier),
   onModelDownloadProgress: (callback) => bridge?.ai.onModelDownloadProgress(callback) || (() => {}),
 };
 

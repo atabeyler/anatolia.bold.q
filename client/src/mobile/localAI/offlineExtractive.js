@@ -90,8 +90,15 @@ function parseDateRange(text, now = new Date()) {
   return null;
 }
 
-export async function findReports(db, userId, queryText, { limit = 10 } = {}) {
-  const rows = await decryptAnalysisRows(await dbAll(db, `SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL`, [userId]));
+export async function findReports(db, userId, queryText, { limit = 10, category = '' } = {}) {
+  const allRows = await decryptAnalysisRows(await dbAll(db, `SELECT * FROM analyses WHERE user_id = ? AND deleted_at IS NULL`, [userId]));
+  // Category is a hard, structured relevance signal -- unlike a free-text
+  // term overlap score, it can't be won by coincidence. Scoping to it here
+  // (rather than only folding it into the free-text query, as callers used
+  // to do) stops a long, unrelated-category report from outranking a
+  // shorter genuinely relevant one just because it repeats generic terms
+  // (see synthesizeFromArchive's comment for the incident this fixes).
+  const rows = category ? allRows.filter((r) => r.category === category) : allRows;
   const terms = tokenize(queryText);
   const range = parseDateRange(queryText);
 
@@ -196,8 +203,18 @@ export async function queryOffline(db, userId, { text = '', entityIds = [] } = {
 // see that module's comment for why this deliberately does not fabricate a
 // new AI-written report.
 export async function synthesizeFromArchive(db, userId, { category = '', prompt = '' } = {}) {
-  const queryText = `${category} ${prompt}`.trim();
-  const matches = await findReports(db, userId, queryText, { limit: 5 });
+  // Try the same category first: term-frequency scoring alone let a long,
+  // categorically unrelated report (an old test fixture repeating generic
+  // words like "bölge"/"güvenlik"/"risk") outscore and displace the
+  // genuinely relevant same-category report it should have lost to.
+  // Only widen to every category (the old behavior, category folded into
+  // the free-text query) when nothing in the request's own category
+  // exists at all, so this fallback still tries to help rather than going
+  // straight to "nothing found".
+  const scopedMatches = category ? await findReports(db, userId, prompt, { limit: 5, category }) : [];
+  const matches = scopedMatches.length
+    ? scopedMatches
+    : await findReports(db, userId, `${category} ${prompt}`.trim(), { limit: 5 });
   const summaries = [];
   for (const m of matches) {
     const summary = await summarizeReport(db, userId, m.id, { maxSentences: 2 });

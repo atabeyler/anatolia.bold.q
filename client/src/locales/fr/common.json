@@ -79,6 +79,8 @@
   "localAIRemoving": "Suppression en cours...",
   "localAIDownloadFailed": "Le téléchargement a échoué.",
   "localAIRemoveFailed": "Impossible de supprimer le modèle.",
+  "localAITierPickerTitle": "Choisir un modèle",
+  "localAITierSelectFailed": "Impossible de sélectionner le modèle.",
   "settingsAbout": "À propos",
   "settingsVersion": "Version",
   "settingsOpenGuide": "Ouvrir le Guide d'Utilisation",

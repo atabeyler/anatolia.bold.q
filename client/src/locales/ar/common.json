@@ -79,6 +79,8 @@
   "localAIRemoving": "جارٍ الإزالة...",
   "localAIDownloadFailed": "فشل التنزيل.",
   "localAIRemoveFailed": "تعذّرت إزالة النموذج.",
+  "localAITierPickerTitle": "اختر نموذجًا",
+  "localAITierSelectFailed": "تعذّر اختيار النموذج.",
   "settingsAbout": "حول",
   "settingsVersion": "الإصدار",
   "settingsOpenGuide": "فتح دليل الاستخدام",

@@ -33,10 +33,17 @@ import { getNativeDeviceInfo } from './llmRuntime.js';
 let modelManager = createModelManager({ spec: MODEL_TIERS.mid });
 let installedCache = false;
 let deviceInfoCache = null;
+// Settings > Local AI: manual tier override (remove the current model,
+// pick a different tier, download it -- see mobileBridge.js's
+// modelSelectTier). Session-only (no on-device persistence yet, unlike
+// desktop/localAI/registry.js's saved preference file) -- a restart
+// reverts to the device-RAM-derived tier. When set, it wins outright over
+// the RAM-derived tier on every refreshInstalledState() call below.
+let manualTierKey = null;
 
 export async function refreshInstalledState() {
   deviceInfoCache = await getNativeDeviceInfo();
-  const tierSpec = selectTierForDevice(deviceInfoCache) || MODEL_TIERS.mid;
+  const tierSpec = manualTierKey ? MODEL_TIERS[manualTierKey] : (selectTierForDevice(deviceInfoCache) || MODEL_TIERS.mid);
   // Always rebuild against the freshly-read deviceInfo, not only when the
   // tier changes -- the starting modelManager (line 33) is already pinned
   // to the MID tier, so for the (very common) case of a device that also
@@ -54,6 +61,27 @@ export async function refreshInstalledState() {
 
 export function getModelManager() {
   return modelManager;
+}
+
+export function setModelTier(tierKey) {
+  if (!MODEL_TIERS[tierKey]) throw new Error(`unknown_model_tier: ${tierKey}`);
+  manualTierKey = tierKey;
+  modelManager = createModelManager({ spec: MODEL_TIERS[tierKey], deviceInfo: { nativeDeviceInfo: deviceInfoCache } });
+  return modelManager;
+}
+
+// Settings UI data source: every pinned tier's picker-relevant fields.
+export function listModelTiers() {
+  return Object.entries(MODEL_TIERS).map(([tier, spec]) => ({
+    tier,
+    id: spec.id,
+    label: spec.label,
+    displayLabel: spec.displayLabel,
+    sizeBytes: spec.sizeBytes,
+    contextSize: spec.contextSize,
+    recommendedMinRamBytes: spec.recommendedMinRamBytes,
+    recommendedMinFreeDiskBytes: spec.recommendedMinFreeDiskBytes,
+  }));
 }
 
 // Informational only (diagnostics/Settings UI) -- the actual gating always

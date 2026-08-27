@@ -13,7 +13,7 @@ import { createSessionManager } from './auth/session.js';
 import { runSync } from './sync/engine.js';
 import { listUnresolvedConflicts, resolveConflict } from './sync/conflict.js';
 import { createLocalAIProvider } from './localAI/provider.js';
-import { configureLocalLLM, getModelManager } from './localAI/registry.js';
+import { configureLocalLLM, getModelManager, listModelTiers, setModelTier } from './localAI/registry.js';
 import { createConnectivityMonitor } from './connectivity.js';
 import { serveStaticDir } from './staticServer.js';
 // electron-updater is a CommonJS package with no "exports" map telling
@@ -448,6 +448,21 @@ function registerIpcHandlers() {
     }
   });
   ipcMain.handle('ai:modelRemove', async () => getModelManager().removeModel());
+
+  // Manual tier picker (Settings > Local AI): list the pinned tiers, then
+  // repoint modelManager at the chosen one. Selecting a tier never touches
+  // any file itself -- the renderer is expected to have removed the
+  // previously-installed model first (see LocalAIPanel.jsx) and then call
+  // ai:modelDownload for the newly-selected tier.
+  ipcMain.handle('ai:modelTiers', () => listModelTiers());
+  ipcMain.handle('ai:modelSelectTier', (_event, tier) => {
+    try {
+      const mm = setModelTier(tier);
+      return { ok: true, installed: mm.isModelInstalled(), partialBytes: mm.getPartialBytes(), available: mm.isAvailable(), capability: mm.checkCapability(), spec: mm.spec };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 
   ipcMain.handle('connectivity:getState', () => connectivity.getState());
 

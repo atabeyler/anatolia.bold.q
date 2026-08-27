@@ -101,11 +101,21 @@ export const MODEL_SPEC = MID;
 // unlike mobile's fail-safe-to-null-if-underpowered gate, a real
 // desktop/laptop's realistic floor is already MID's own 4 GB minimum, so
 // there's no meaningfully weaker tier to offer below it.
+// `cpuCount` is accepted for backward compatibility with existing callers
+// (registry.js passes os.cpus().length) but no longer gates tier
+// selection: RAM is the only capacity signal used below. The 7B/1.5B
+// quants both fit their tier's RAM floor regardless of core count; a
+// low-core machine just generates more slowly within whichever tier it
+// qualifies for on RAM alone. Core count used to hard-gate both HIGH
+// (require >=8) and MID (require >=8, else force the weak LOW/0.5B tier)
+// -- the latter was strict enough to force a real 2-core/16 GB machine
+// onto a model too weak to reliably write a report at all (it echoed its
+// own instruction prompt back instead -- see llmProvider.js's
+// isPromptEcho guard, added after exactly that failure).
 export function selectTierForDevice(totalMemBytes, cpuCount = Number.POSITIVE_INFINITY) {
-  // The 7B quant fits in 12+ GB RAM, but on low-core CPUs it can take
-  // several minutes for even a short answer. Require both memory and CPU
-  // capacity so ordinary laptops receive the responsive 1.5B tier.
-  if (typeof totalMemBytes === 'number' && totalMemBytes >= HIGH.recommendedMinRamBytes && cpuCount >= 8) return HIGH;
-  if (cpuCount < 8) return LOW;
-  return MID;
+  void cpuCount;
+  if (typeof totalMemBytes !== 'number') return MID; // no RAM signal -> safe default
+  if (totalMemBytes >= HIGH.recommendedMinRamBytes) return HIGH;
+  if (totalMemBytes >= MID.recommendedMinRamBytes) return MID;
+  return LOW;
 }

@@ -1,6 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
-import { cleanReportOutput, getReportFormat } from './reportFormats.js';
+import { cleanReportOutput, getReportFormat, isPromptEcho } from './reportFormats.js';
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -106,6 +106,15 @@ export function createLLMQuery({ db, userId, modelManager, isInstalled, runtimeF
       // instruction leaves comfortable headroom for a 700-token reply.
       const rawContent = await runtime.generate(fullPrompt, { maxTokens: 700, temperature: 0.4 });
       const content = cleanReportOutput(rawContent, category);
+      // A weak/low-tier model can under-follow instructions badly enough to
+      // echo the prompt itself back as its "report" (see reportFormats.js's
+      // isPromptEcho) instead of failing outright. The 'local_llm_' prefix
+      // matches provider.js's isRecoverableLocalLLMError, routing this
+      // through the existing fallback to offline-extractive instead of
+      // handing back the prompt as a "report".
+      if (isPromptEcho(content)) {
+        throw new Error('local_llm_prompt_echo');
+      }
       return {
         type: 'analysis',
         result: {

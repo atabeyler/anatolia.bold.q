@@ -36,6 +36,8 @@ export default function LocalAIPanel({ t }) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(null);
   const [removing, setRemoving] = useState(false);
+  const [tiers, setTiers] = useState([]);
+  const [selectingTier, setSelectingTier] = useState(false);
   const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
 
   const refresh = () => {
@@ -44,6 +46,18 @@ export default function LocalAIPanel({ t }) {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  // Loaded once -- the pinned tier list itself never changes at runtime,
+  // only which one is currently selected (status.spec, refreshed above).
+  useEffect(() => {
+    if (!isNativeApp) return;
+    // Promise.resolve(...) rather than a bare `?.().then(...)` chain: the
+    // underlying bridge call itself can synchronously return undefined
+    // (an older/mocked bridge without this method), not just be missing
+    // outright, and undefined.then would throw before .catch could ever
+    // attach to it.
+    Promise.resolve(nativeAI.modelTiers?.()).then((list) => setTiers(list || [])).catch(() => {});
+  }, []);
 
   useEffect(() => subscribeLocalModePreference(setForceLocalModeState), []);
 
@@ -82,6 +96,28 @@ export default function LocalAIPanel({ t }) {
     } finally {
       setDownloading(false);
       setProgress(null);
+    }
+  };
+
+  // Repoints the backend's modelManager at a different pinned tier --
+  // never downloads or deletes a file itself (see registry.js's
+  // setModelTier comment). Only offered while no model is installed (see
+  // the render below), so this always leaves the panel showing the normal
+  // Download button next, now pointed at the newly-selected tier's spec.
+  const handleSelectTier = async (tier) => {
+    setError('');
+    setSelectingTier(true);
+    try {
+      const result = await nativeAI.modelSelectTier(tier);
+      if (result && result.ok === false) {
+        setError(result.error || t('localAITierSelectFailed'));
+      } else {
+        refresh();
+      }
+    } catch (e) {
+      setError(e?.message || t('localAITierSelectFailed'));
+    } finally {
+      setSelectingTier(false);
     }
   };
 
@@ -163,6 +199,35 @@ export default function LocalAIPanel({ t }) {
         <p className="text-[14px] text-cyan-300/70 mb-2">
           {progress && progress.total ? `${t('localAIDownloading')} (${formatBytes(progress.received)} / ${formatBytes(progress.total)})` : t('localAIDownloading')}
         </p>
+      )}
+
+      {/* Only offered while nothing is installed -- switching tiers with a
+          model already on disk would leave the old file orphaned (see
+          registry.js's setModelTier comment); the user removes the current
+          model first, which naturally lands here to pick the next one. */}
+      {!installed && tiers.length > 0 && (
+        <div className="border border-cyan-300/20 rounded px-2.5 py-2.5 mb-3">
+          <div className="text-xs tracking-[0.18em] uppercase text-gold/60 mb-1.5">{t('localAITierPickerTitle')}</div>
+          <div className="space-y-1.5">
+            {tiers.map((tier) => {
+              const selected = spec?.id === tier.id;
+              return (
+                <button
+                  key={tier.tier}
+                  onClick={() => handleSelectTier(tier.tier)}
+                  disabled={selectingTier || downloading}
+                  aria-pressed={selected}
+                  className={`w-full flex items-center justify-between gap-2 text-left text-[14px] rounded border px-2.5 py-2 disabled:opacity-40 ${
+                    selected ? 'border-cyan-300/50 text-cyan-100 bg-cyan-400/10' : 'border-cyan-300/20 text-cyan-100/70'
+                  }`}
+                >
+                  <span>{tier.displayLabel || tier.label}</span>
+                  <span className="text-[14px] text-cyan-300/50 shrink-0">{formatBytes(tier.sizeBytes)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectProvider, refreshInstalledState, getModelManager, getDeviceInfo } from './registry.js';
+import { selectProvider, refreshInstalledState, getModelManager, getDeviceInfo, setModelTier, listModelTiers } from './registry.js';
 import { MODEL_TIERS } from './modelSpec.js';
 
 describe('selectProvider', () => {
@@ -25,5 +25,32 @@ describe('refreshInstalledState (device tiering)', () => {
     await refreshInstalledState();
     expect(getModelManager().spec.id).toBe(MODEL_TIERS.mid.id);
     expect(getDeviceInfo()).toBeNull();
+  });
+});
+
+// Settings > Local AI's manual tier picker (mirrors desktop/localAI/
+// registry.js's, minus on-device persistence -- see setModelTier's comment).
+describe('model tier picker', () => {
+  it('lists every pinned tier with picker-relevant fields', () => {
+    const tiers = listModelTiers();
+    expect(tiers.map((t) => t.tier)).toEqual(['low', 'mid', 'high']);
+    expect(tiers.every((t) => typeof t.sizeBytes === 'number' && t.displayLabel)).toBe(true);
+  });
+
+  it('repoints modelManager at the chosen tier and keeps it there on the next refresh, overriding the RAM-derived tier', async () => {
+    setModelTier('high');
+    expect(getModelManager().spec.id).toBe(MODEL_TIERS.high.id);
+
+    // No native device-info signal in this test env, so an un-overridden
+    // refresh would normally fall back to MID (see the describe block
+    // above) -- the manual choice must win instead.
+    await refreshInstalledState();
+    expect(getModelManager().spec.id).toBe(MODEL_TIERS.high.id);
+  });
+
+  it('rejects an unknown tier key instead of silently keeping the old one', () => {
+    const before = getModelManager().spec.id;
+    expect(() => setModelTier('ultra')).toThrow('unknown_model_tier');
+    expect(getModelManager().spec.id).toBe(before);
   });
 });

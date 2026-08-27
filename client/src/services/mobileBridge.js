@@ -14,7 +14,7 @@ import { createSessionManager } from '../mobile/auth/session.js';
 import { runSync } from '../mobile/sync/engine.js';
 import { listUnresolvedConflicts, resolveConflict } from '../mobile/sync/conflict.js';
 import { createLocalAIProvider } from '../mobile/localAI/provider.js';
-import { getModelManager, refreshInstalledState } from '../mobile/localAI/registry.js';
+import { getModelManager, refreshInstalledState, setModelTier, listModelTiers } from '../mobile/localAI/registry.js';
 import { createDiagnostics } from '../mobile/diagnostics.js';
 import { getCurrentUser } from './api.js';
 
@@ -269,6 +269,21 @@ export const mobileAI = {
     const result = await getModelManager().removeModel();
     await refreshInstalledState();
     return result;
+  }),
+  // Manual tier picker (Settings > Local AI): list the pinned tiers, then
+  // repoint the registry's modelManager at the chosen one. Mirrors
+  // desktopAI's ai:modelTiers/ai:modelSelectTier IPC pair -- see that
+  // module's comment for why the renderer removes the old model first.
+  modelTiers: guard(async () => listModelTiers()),
+  modelSelectTier: guard(async (tier) => {
+    try {
+      setModelTier(tier);
+      const installed = await refreshInstalledState();
+      const mm = getModelManager();
+      return { ok: true, installed, capability: mm.checkCapability(), spec: mm.spec };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }),
 };
 
