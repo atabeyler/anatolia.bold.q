@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import { SQLiteConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -371,6 +372,37 @@ export const mobileUpdate = {
     const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
     await FileOpener.open({ filePath: uri, contentType: 'application/vnd.android.package-archive' });
   }),
+};
+
+// Wraps the native @capacitor/geolocation plugin (see AndroidManifest.xml's
+// ACCESS_FINE_LOCATION/ACCESS_COARSE_LOCATION comment) so DashboardPage.jsx's
+// live-location sharing can request location natively on Android instead of
+// through the WebView's own navigator.geolocation. The plain web API
+// triggers the WebView's per-origin geolocation prompt, which shows this
+// app's raw hosting URL instead of its name -- going through the native
+// plugin instead makes Android show its own OS permission dialog (app name
+// + icon) the same way any other native Android app's location prompt does.
+export const mobileGeolocation = {
+  // Mirrors navigator.geolocation.watchPosition's shape closely enough for
+  // a caller to swap between the two (see DashboardPage.jsx): takes a
+  // callback given the position's coords, returns an unsubscribe function
+  // instead of a numeric watch ID, since callers already need a cleanup
+  // function shape for their effect's return value.
+  watchPosition: (onCoords, options = {}) => {
+    if (!isMobileApp) return () => {};
+    let watchId = null;
+    let cancelled = false;
+    Geolocation.watchPosition(options, (position) => {
+      if (position?.coords) onCoords(position.coords);
+    }).then((id) => {
+      if (cancelled) { Geolocation.clearWatch({ id }).catch(() => {}); return; }
+      watchId = id;
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      if (watchId) Geolocation.clearWatch({ id: watchId }).catch(() => {});
+    };
+  },
 };
 
 export const mobileConnectivity = {

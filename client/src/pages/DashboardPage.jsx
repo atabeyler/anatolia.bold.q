@@ -22,6 +22,7 @@ import { registerActions, unregisterActions } from '../services/voiceActionRegis
 import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
 import { useLang } from '../services/langContext.jsx';
+import { isMobileApp, mobileGeolocation } from '../services/mobileBridge.js';
 
 const DAYS_SHORT = {
   tr: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
@@ -302,7 +303,7 @@ export default function DashboardPage({ user, onLogout }) {
   useEffect(() => {
     const nickname = user.nickname || user.userCode;
     if (!nickname) return;
-    if (!navigator.geolocation) return;
+    if (!isMobileApp && !navigator.geolocation) return;
 
     // Live location is shared with the personnel radar (admin view) and used
     // for the local-weather widget below — it is not required for the rest
@@ -327,6 +328,20 @@ export default function DashboardPage({ user, onLogout }) {
       setMyCoords({ lat, lng });
       sock.emit('location:update', { lat, lng });
     };
+
+    // On Android, go through the native Geolocation plugin instead of the
+    // WebView's own navigator.geolocation: the native plugin makes Android
+    // show its own OS permission dialog (this app's name + icon), where
+    // navigator.geolocation would instead trigger the WebView's per-origin
+    // geolocation prompt, which shows the app's raw hosting URL. Every
+    // other platform (web, desktop) keeps using navigator.geolocation.
+    if (isMobileApp) {
+      return mobileGeolocation.watchPosition(emitLocation, {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 30000,
+      });
+    }
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => emitLocation(position.coords),
