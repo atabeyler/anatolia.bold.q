@@ -149,15 +149,19 @@ export default function LocalAIPanel({ t }) {
   };
 
   // Repoints the backend's modelManager at a different pinned tier --
-  // never downloads or deletes a file itself (see registry.js's
-  // setModelTier comment). Only offered while no model is installed (see
-  // the render below), so this always leaves the panel showing the normal
-  // Download button next, now pointed at the newly-selected tier's spec.
+  // setModelTier() itself never downloads or deletes a file (see
+  // registry.js's comment), so when a model is already installed this
+  // removes it first -- otherwise the old tier's file would sit on disk
+  // orphaned (never tracked or cleaned up again) while the panel points at
+  // the new tier. Always leaves the panel showing the normal Download
+  // button next, pointed at the newly-selected tier's spec.
   const handleSelectTier = async (tier) => {
+    if (installed && spec?.id === tier.id) return;
     setError('');
     setSelectingTier(true);
     try {
-      const result = await nativeAI.modelSelectTier(tier);
+      if (installed) await nativeAI.modelRemove();
+      const result = await nativeAI.modelSelectTier(tier.tier);
       if (result && result.ok === false) {
         setError(result.error || t('localAITierSelectFailed'));
       } else {
@@ -259,11 +263,12 @@ export default function LocalAIPanel({ t }) {
         </p>
       )}
 
-      {/* Only offered while nothing is installed -- switching tiers with a
-          model already on disk would leave the old file orphaned (see
-          registry.js's setModelTier comment); the user removes the current
-          model first, which naturally lands here to pick the next one. */}
-      {!installed && tiers.length > 0 && (
+      {/* Always offered, installed or not, so the user can see and switch
+          to a different tier at any time (e.g. after an update changes
+          what's recommended for their device). Picking a different tier
+          while one is installed removes it first (see handleSelectTier)
+          before repointing at the new one. */}
+      {tiers.length > 0 && (
         <div className="border border-cyan-300/20 rounded px-2.5 py-2.5 mb-3">
           <div className="text-xs tracking-[0.18em] uppercase text-gold/60 mb-1.5">{t('localAITierPickerTitle')}</div>
           <div className="space-y-1.5">
@@ -272,8 +277,8 @@ export default function LocalAIPanel({ t }) {
               return (
                 <button
                   key={tier.tier}
-                  onClick={() => handleSelectTier(tier.tier)}
-                  disabled={selectingTier || downloading}
+                  onClick={() => handleSelectTier(tier)}
+                  disabled={selectingTier || downloading || removing || (installed && selected)}
                   aria-pressed={selected}
                   className={`w-full flex items-center justify-between gap-2 text-left text-[14px] rounded border px-2.5 py-2 disabled:opacity-40 ${
                     selected ? 'border-cyan-300/50 text-cyan-100 bg-cyan-400/10' : 'border-cyan-300/20 text-cyan-100/70'

@@ -78,6 +78,40 @@ describe('LocalAIPanel (desktop)', () => {
     expect(screen.queryByText('localAIDownloadButton')).not.toBeInTheDocument();
   });
 
+  it('offers the tier picker even while a model is installed, removing the old model before switching', async () => {
+    let installed = true;
+    const modelRemove = vi.fn(async () => { installed = false; });
+    const modelSelectTier = vi.fn(async (tier) => ({ ok: true, tier }));
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      ai: {
+        modelStatus: async () => ({
+          installed,
+          capability: { capable: true, totalMemBytes: 8 * 1024 * 1024 * 1024, cpuCount: 8 },
+          spec: { id: 'qwen2.5-1.5b', label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)', sizeBytes: 1117320736 },
+        }),
+        modelTiers: async () => ([
+          { tier: 'mid', id: 'qwen2.5-1.5b', label: 'Qwen2.5-1.5B', sizeBytes: 1117320736 },
+          { tier: 'high', id: 'mistral-7b', label: 'Mistral-7B', sizeBytes: 4683074240 },
+        ]),
+        modelRemove,
+        modelSelectTier,
+        onModelDownloadProgress: () => () => {},
+      },
+    };
+    vi.resetModules();
+    const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
+    render(<LocalAIPanel t={t} />);
+
+    await waitFor(() => expect(screen.getByText('localAIInstalled')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Mistral-7B')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Mistral-7B'));
+
+    await waitFor(() => expect(modelRemove).toHaveBeenCalledTimes(1));
+    expect(modelSelectTier).toHaveBeenCalledWith('high');
+  });
+
   it('shows a resumable partial download instead of presenting it as a fresh download', async () => {
     window.anatoliaDesktop = {
       isDesktop: true,
