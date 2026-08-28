@@ -90,7 +90,7 @@ function readBase64(file) {
   });
 }
 
-export default function FileAttach({ onText, onFile, onAIFile, compact = false }) {
+export default function FileAttach({ onText, onFile, onAIFile, compact = false, dataClassification = null }) {
   const { t } = useLang();
   const [filename, setFilename] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -112,7 +112,7 @@ export default function FileAttach({ onText, onFile, onAIFile, compact = false }
         if (isDoc) {
           let result;
           try {
-            result = await api.uploadForAI(file);
+            result = await api.uploadForAI(file, dataClassification);
           } catch (uploadError) {
             // Plain-text formats can still be consumed entirely on-device
             // when the upload/parser service is unreachable. Binary Office

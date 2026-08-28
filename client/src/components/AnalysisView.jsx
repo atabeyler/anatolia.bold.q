@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { CATEGORIES } from './CategorySidebar.jsx';
 import { api } from '../services/api.js';
+import { classifyCategory } from '../services/classification.js';
 import { useLang } from '../services/langContext.jsx';
 import { reportTitleExamples } from '../services/i18n.js';
 import { base64ToBlob, downloadBlob, shareOrDownloadBlob } from '../services/shareFile.js';
@@ -184,6 +185,13 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const isConsult = category === 'danisma';
   const isFraudCategory = category === 'bddk' || category === 'btk';
   const categoryLabel = cat ? t(cat.nameKey) : '';
+  // Informational only -- the server's own classifyData() re-derives and
+  // enforces the real floor from `category` on every write/upload; this
+  // just lets the client tell an attachment upload which classification
+  // it's about to belong to (see FileAttach's dataClassification prop and
+  // lib/fileScan.js's fail-closed policy) instead of it defaulting to
+  // INTERNAL because the request never said otherwise.
+  const dataClassification = classifyCategory(category);
   const titlePlaceholder = reportTitleExamples[lang]?.[category] || t('reportTitlePh');
 
   const handleAIFile = (file) => {
@@ -269,7 +277,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
       const normalized = await routeAnalysisGeneration({
         isOffline,
-        cloudCall: () => api.generateAnalysis(category, resolvedTitle, prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang, priority, depth),
+        cloudCall: () => api.generateAnalysis(category, resolvedTitle, prompt, quantumMode, mergedContext, aiImageData, realTransactions?.transactions || null, realScenarios?.scenarios || null, realOptimizationPayload, lang, priority, depth, dataClassification),
         nativeAIQuery: isNativeApp ? nativeAI.query : undefined,
         generateRequest: { category, title: resolvedTitle, prompt, attachmentContext: allLocalContext, priority, depth, quantumRequested: quantumMode, lang },
       });
@@ -442,6 +450,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
               removeImageAt={removeImageAt} removeDocAt={removeDocAt}
               setRealTransactions={setRealTransactions} setRealScenarios={setRealScenarios} setRealOptimization={setRealOptimization}
               handleAIFile={handleAIFile}
+              dataClassification={dataClassification}
               quantumMode={quantumMode} setQuantumMode={setQuantumMode}
               isFraudCategory={isFraudCategory}
               error={error}
@@ -534,7 +543,7 @@ function TaskDefinitionPanel(props) {
     t, title, setTitle, categoryLabel, titlePlaceholder, prompt, setPrompt,
     documentContexts, imageFiles, realTransactions, realScenarios, realOptimization,
     removeImageAt, removeDocAt, setRealTransactions, setRealScenarios, setRealOptimization,
-    handleAIFile, quantumMode, setQuantumMode, isFraudCategory, error, loading, hasPrompt, generate, locked,
+    handleAIFile, dataClassification, quantumMode, setQuantumMode, isFraudCategory, error, loading, hasPrompt, generate, locked,
   } = props;
 
   const sources = [
@@ -565,7 +574,7 @@ function TaskDefinitionPanel(props) {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[12px] text-cyan-300/40 tracking-widest uppercase">Kaynak Dosya</span>
-            <FileAttach onAIFile={handleAIFile} />
+            <FileAttach onAIFile={handleAIFile} dataClassification={dataClassification} />
           </div>
           {quantumMode && (
             <p className="text-[12px] text-white/35 leading-relaxed">

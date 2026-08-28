@@ -100,7 +100,25 @@ describe('AnalysisView', () => {
     expect(api.generateAnalysis.mock.calls[0][3]).toBe(false); // quantumMode off by default
     expect(api.generateAnalysis.mock.calls[0][10]).toBe('normal'); // priority default
     expect(api.generateAnalysis.mock.calls[0][11]).toBe('standart'); // depth default
+    expect(api.generateAnalysis.mock.calls[0][12]).toBe('INTERNAL'); // dataClassification: ordinary category floor
     expect(await screen.findByText('Rapor')).toBeInTheDocument();
+  });
+
+  // Audit finding: the UI computed no classification at all for the
+  // generate call, so a high-sensitivity category's attachments/analysis
+  // request looked identical to an ordinary one by the time it reached the
+  // API. classifyCategory() (services/classification.js) mirrors the
+  // server's own classifyData() category floor.
+  it('passes CONFIDENTIAL for a high-sensitivity category (savunma)', async () => {
+    renderView({ category: 'savunma' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'savunma brifingi' } });
+    clickNext(4);
+    fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled());
+    expect(api.generateAnalysis.mock.calls[0][0]).toBe('savunma');
+    expect(api.generateAnalysis.mock.calls[0][12]).toBe('CONFIDENTIAL');
   });
 
   it('passes quantumMode=true through to the API when the quantum toggle is checked', async () => {

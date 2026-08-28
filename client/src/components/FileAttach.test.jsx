@@ -1,7 +1,54 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LangProvider } from '../services/langContext.jsx';
 import { describeStructuredUpload, FileMessageContent } from './FileAttach.jsx';
+
+const uploadForAIMock = vi.fn(async () => ({ type: 'text', text: 'içerik', filename: 'a.txt' }));
+vi.mock('../services/api.js', () => ({
+  api: {
+    uploadForAI: (...args) => uploadForAIMock(...args),
+    uploadFile: vi.fn(async () => ({ url: '/api/files/x' })),
+  },
+}));
+
+// item audit finding: uploadForAI() gained an optional classification
+// param so a RESTRICTED/CONFIDENTIAL analysis's attachment gets scanned
+// under that classification's fail-closed policy instead of silently
+// defaulting to INTERNAL -- this must actually reach the API call, not
+// just exist as an unused prop.
+describe('FileAttach forwards dataClassification to the upload call', () => {
+  it('passes the dataClassification prop through to api.uploadForAI', async () => {
+    uploadForAIMock.mockClear();
+    const FileAttachModule = await import('./FileAttach.jsx');
+    const FileAttach = FileAttachModule.default;
+    const onAIFile = vi.fn();
+    const { container } = render(
+      <LangProvider><FileAttach onAIFile={onAIFile} dataClassification="RESTRICTED" /></LangProvider>
+    );
+    const input = container.querySelector('input[type="file"]');
+    const file = new File(['merhaba'], 'not.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(uploadForAIMock).toHaveBeenCalled());
+    expect(uploadForAIMock).toHaveBeenCalledWith(file, 'RESTRICTED');
+  });
+
+  it('passes null when no dataClassification prop is given (unchanged default)', async () => {
+    uploadForAIMock.mockClear();
+    const FileAttachModule = await import('./FileAttach.jsx');
+    const FileAttach = FileAttachModule.default;
+    const onAIFile = vi.fn();
+    const { container } = render(
+      <LangProvider><FileAttach onAIFile={onAIFile} /></LangProvider>
+    );
+    const input = container.querySelector('input[type="file"]');
+    const file = new File(['merhaba'], 'not.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(uploadForAIMock).toHaveBeenCalled());
+    expect(uploadForAIMock).toHaveBeenCalledWith(file, null);
+  });
+});
 
 // AQ security review finding: an emergency-chat message from ANOTHER
 // participant (not just the local user) containing a crafted
