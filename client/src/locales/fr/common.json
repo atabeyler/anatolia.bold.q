@@ -87,6 +87,7 @@
   "localAIRemoveFailed": "Impossible de supprimer le modèle.",
   "localAITierPickerTitle": "Choisir un modèle",
   "localAITierSelectFailed": "Impossible de sélectionner le modèle.",
+  "localAITargetModelHint": "sélectionné pour le téléchargement",
   "settingsAbout": "À propos",
   "settingsVersion": "Version",
   "settingsOpenGuide": "Ouvrir le Guide d'Utilisation",

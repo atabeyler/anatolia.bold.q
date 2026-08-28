@@ -188,9 +188,24 @@ describe('modelManager', () => {
     };
   }
 
-  it('cancelDownload is a no-op when nothing is downloading', () => {
+  it('cancelDownload is a no-op when nothing is downloading and there is no partial file to discard', () => {
     const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC });
     expect(mm.cancelDownload()).toEqual({ ok: false, error: 'no_active_download' });
+  });
+
+  it('cancelDownload({ deletePartial: true }) discards a paused download\'s partial file even with nothing in flight', async () => {
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl: fakeSlowFetchImpl() });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Pause it first ("Durdur") -- nothing is actively downloading anymore,
+    // only a partial file left on disk, same as clicking "İptal Et" on an
+    // already-paused ("Devam Et") download in the panel.
+    mm.cancelDownload();
+    await expect(promise).rejects.toThrow(/durduruldu/);
+    expect(fs.existsSync(`${mm.modelPath}.download`)).toBe(true);
+
+    expect(mm.cancelDownload({ deletePartial: true })).toEqual({ ok: true });
+    expect(fs.existsSync(`${mm.modelPath}.download`)).toBe(false);
   });
 
   it('cancelDownload({}) ("Durdur") pauses an in-flight download and keeps the partial bytes', async () => {

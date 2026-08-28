@@ -88,12 +88,23 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
   // deletePartial: false pauses (keeps the .download file on disk for the
   // next Range-resumed attempt, i.e. "Devam Et"); true also deletes it (a
   // full "İptal" back to a clean not-installed state).
-  function cancelDownload({ deletePartial = false } = {}) {
-    if (!activeDownload) return { ok: false, error: 'no_active_download' };
-    activeDownload.cancelled = true;
-    activeDownload.deletePartial = deletePartial;
-    activeDownload.controller.abort();
-    return { ok: true };
+  async function cancelDownload({ deletePartial = false } = {}) {
+    if (activeDownload) {
+      activeDownload.cancelled = true;
+      activeDownload.deletePartial = deletePartial;
+      activeDownload.controller.abort();
+      return { ok: true };
+    }
+    // Nothing in flight -- e.g. "İptal Et" clicked on an already-paused
+    // ("Devam Et") download. There's no request to interrupt, but a
+    // deletePartial request should still discard the leftover .download
+    // file so the user can actually walk away from it instead of being
+    // forced to resume first just so there's something to cancel.
+    if (deletePartial) {
+      await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {}); // already gone -- same end state
+      return { ok: true };
+    }
+    return { ok: false, error: 'no_active_download' };
   }
 
   async function downloadModel({ onProgress } = {}) {

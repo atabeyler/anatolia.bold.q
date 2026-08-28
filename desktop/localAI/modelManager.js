@@ -40,12 +40,23 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
   // Range-resumed attempt, i.e. "Devam Et"); true also deletes it (a full
   // "İptal" back to a clean not-installed state).
   function cancelDownload({ deletePartial = false } = {}) {
-    if (!activeDownload) return { ok: false, error: 'no_active_download' };
-    activeDownload.cancelled = true;
-    activeDownload.deletePartial = deletePartial;
-    activeDownload.request?.destroy();
-    activeDownload.out?.destroy?.();
-    return { ok: true };
+    if (activeDownload) {
+      activeDownload.cancelled = true;
+      activeDownload.deletePartial = deletePartial;
+      activeDownload.request?.destroy();
+      activeDownload.out?.destroy?.();
+      return { ok: true };
+    }
+    // Nothing in flight -- e.g. "İptal Et" clicked on an already-paused
+    // ("Devam Et") download. There's no request to interrupt, but a
+    // deletePartial request should still discard the leftover .download
+    // file so the user can actually walk away from it instead of being
+    // forced to resume first just so there's something to cancel.
+    if (deletePartial && fs.existsSync(tmpPath)) {
+      fs.rmSync(tmpPath, { force: true });
+      return { ok: true };
+    }
+    return { ok: false, error: 'no_active_download' };
   }
 
   function isModelInstalled() {

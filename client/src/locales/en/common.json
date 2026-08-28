@@ -87,6 +87,7 @@
   "localAIRemoveFailed": "Could not remove the model.",
   "localAITierPickerTitle": "Choose a Model",
   "localAITierSelectFailed": "Could not select the model.",
+  "localAITargetModelHint": "selected to download",
   "settingsAbout": "About",
   "settingsVersion": "Version",
   "settingsOpenGuide": "Open Usage Guide",

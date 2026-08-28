@@ -139,9 +139,25 @@ describe('mobile modelManager', () => {
     expect(mm.isAvailableSync(false)).toBe(false); // not installed
   });
 
-  it('cancelDownload is a no-op when nothing is downloading', () => {
+  it('cancelDownload is a no-op when nothing is downloading and there is no partial file to discard', async () => {
     const mm = createModelManager({ spec: TEST_SPEC, filesystem: fakeFilesystem() });
-    expect(mm.cancelDownload()).toEqual({ ok: false, error: 'no_active_download' });
+    expect(await mm.cancelDownload()).toEqual({ ok: false, error: 'no_active_download' });
+  });
+
+  it('cancelDownload({ deletePartial: true }) discards a paused download\'s partial file even with nothing in flight', async () => {
+    const fs = fakeFilesystem();
+    const mm = createModelManager({ spec: TEST_SPEC, filesystem: fs, fetchImpl: fakeFetchSlow(), subtleCrypto: webcrypto.subtle });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Pause it first ("Durdur") -- nothing is actively downloading anymore,
+    // only a partial file left on disk, same as clicking "İptal Et" on an
+    // already-paused ("Devam Et") download in the panel.
+    await mm.cancelDownload();
+    await expect(promise).rejects.toThrow(/durduruldu/);
+    expect(await mm.getPartialBytes()).toBeGreaterThan(0);
+
+    expect(await mm.cancelDownload({ deletePartial: true })).toEqual({ ok: true });
+    expect(await mm.getPartialBytes()).toBe(0);
   });
 
   it('cancelDownload({}) ("Durdur") pauses an in-flight download and keeps the partial bytes', async () => {
@@ -150,7 +166,7 @@ describe('mobile modelManager', () => {
     const promise = mm.downloadModel();
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(mm.cancelDownload()).toEqual({ ok: true });
+    expect(await mm.cancelDownload()).toEqual({ ok: true });
     await expect(promise).rejects.toThrow(/durduruldu/);
     expect(await mm.getPartialBytes()).toBeGreaterThan(0);
   });
@@ -161,7 +177,7 @@ describe('mobile modelManager', () => {
     const promise = mm.downloadModel();
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(mm.cancelDownload({ deletePartial: true })).toEqual({ ok: true });
+    expect(await mm.cancelDownload({ deletePartial: true })).toEqual({ ok: true });
     await expect(promise).rejects.toThrow(/durduruldu/);
     expect(await mm.isModelInstalled()).toBe(false);
     expect(await mm.getPartialBytes()).toBe(0);

@@ -131,12 +131,19 @@ export default function LocalAIPanel({ t }) {
   // bytes it had written, leaving a clean not-installed state -- the
   // opposite of "Durdur", which keeps them for a later resume.
   const handleCancelDownload = async () => {
+    setError('');
     setCancelling(true);
     try {
       await nativeAI.modelDownloadCancel?.({ deletePartial: true });
     } catch (e) {
       setError(e?.message || t('localAICancelFailed'));
     } finally {
+      // While actively downloading, handleDownload's own finally already
+      // refreshes once its promise settles from this cancel -- redundant
+      // there, but required for the paused ("Devam Et") case: cancelling
+      // a download that isn't running has no other pending call whose
+      // finally would ever pick up the now-deleted partial file.
+      refresh();
       setCancelling(false);
     }
   };
@@ -214,7 +221,16 @@ export default function LocalAIPanel({ t }) {
             {installed ? <CircleCheck className="w-4 h-4 text-emerald-300/80 shrink-0" /> : <CircleAlert className="w-4 h-4 text-amber-300/80 shrink-0" />}
             <span className="text-xs text-cyan-100">{installed ? t('localAIInstalled') : t('localAINotInstalled')}</span>
           </div>
-          {spec && <div className="text-[14px] text-cyan-300/50 pl-6 mt-0.5">{spec.displayLabel || spec.label} · {formatBytes(spec.sizeBytes)}</div>}
+          {spec && (
+            <div className="text-[14px] text-cyan-300/50 pl-6 mt-0.5">
+              {spec.displayLabel || spec.label} · {formatBytes(spec.sizeBytes)}
+              {/* Not-installed state: this line names whichever tier is
+                  currently selected/targeted -- what İndir would fetch --
+                  not something already on disk. Without this qualifier it
+                  reads as if the model were already installed. */}
+              {!installed && <span className="text-cyan-300/30"> ({t('localAITargetModelHint')})</span>}
+            </div>
+          )}
           {!installed && partialBytes > 0 && spec && (
             <div className="text-[14px] text-amber-300/70 pl-6 mt-1">{t('localAIPartialDownload')}: {formatBytes(partialBytes)} / {formatBytes(spec.sizeBytes)}</div>
           )}
@@ -273,14 +289,36 @@ export default function LocalAIPanel({ t }) {
       )}
 
       <div className="space-y-2">
-        {!installed && !downloading && (
+        {!installed && !downloading && partialBytes === 0 && (
           <button
             onClick={handleDownload}
             className="w-full flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
           >
             <Download className="w-4 h-4" />
-            {partialBytes > 0 ? t('localAIResumeButton') : t('localAIDownloadButton')}
+            {t('localAIDownloadButton')}
           </button>
+        )}
+        {/* Paused (partial bytes on disk, nothing actively downloading):
+            offer both continuing it and giving up on it outright, not just
+            "Devam Et" -- walking away used to require resuming first just
+            to have something to cancel. */}
+        {!installed && !downloading && partialBytes > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleDownload}
+              className="flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
+            >
+              <Download className="w-4 h-4" />
+              {t('localAIResumeButton')}
+            </button>
+            <button
+              onClick={handleCancelDownload}
+              disabled={cancelling}
+              className="flex items-center justify-center gap-2 text-[14px] border border-red-400/30 text-red-200 rounded px-2.5 py-2 disabled:opacity-40"
+            >
+              {cancelling ? t('localAICancelling') : t('localAICancelButton')}
+            </button>
+          </div>
         )}
         {!installed && downloading && (
           <div className="grid grid-cols-2 gap-2">

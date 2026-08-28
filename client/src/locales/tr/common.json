@@ -87,6 +87,7 @@
   "localAIRemoveFailed": "Model kaldırılamadı.",
   "localAITierPickerTitle": "Model Seç",
   "localAITierSelectFailed": "Model seçilemedi.",
+  "localAITargetModelHint": "indirilecek model",
   "settingsAbout": "Hakkında",
   "settingsVersion": "Sürüm",
   "settingsOpenGuide": "Kullanım Kılavuzunu Aç",

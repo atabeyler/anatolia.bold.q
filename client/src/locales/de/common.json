@@ -87,6 +87,7 @@
   "localAIRemoveFailed": "Modell konnte nicht entfernt werden.",
   "localAITierPickerTitle": "Modell auswählen",
   "localAITierSelectFailed": "Modell konnte nicht ausgewählt werden.",
+  "localAITargetModelHint": "zum Herunterladen ausgewählt",
   "settingsAbout": "Info",
   "settingsVersion": "Version",
   "settingsOpenGuide": "Benutzerhandbuch öffnen",
