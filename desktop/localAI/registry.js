@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
+import { queryOffline } from './offlineExtractive.js';
 import { createModelManager } from './modelManager.js';
 import { createLLMQuery } from './llmProvider.js';
 import { MODEL_TIERS, selectTierForDevice } from './modelSpec.js';
@@ -17,9 +17,12 @@ import { MODEL_TIERS, selectTierForDevice } from './modelSpec.js';
 //                       analysisRouter.js) catches and falls through on.
 //   2. offline-extractive -- the original read-only keyword/summary/
 //                       compare engine (offlineExtractive.js), unchanged,
-//                       always available, and now also the fallback for a
-//                       "generate a new analysis" request when local-llm
-//                       is unavailable (see synthesizeFromArchive).
+//                       always available for chat-mode archive queries.
+//                       Deliberately NOT a fallback for a "generate a new
+//                       analysis" request when local-llm is unavailable --
+//                       see this file's own offline-extractive createQuery
+//                       for why (a "new analysis" must never silently
+//                       become an old-report synthesis).
 //
 // provider.js and everything above it (main.js's ai:query IPC handler, the
 // renderer) never need to change to pick up a new provider here -- this
@@ -127,8 +130,20 @@ const PROVIDERS = [
     capability: 'offline-extractive',
     isAvailable: () => true, // no model download or network dependency
     createQuery: ({ db, userId }) => (request) => {
+      // A "generate a new analysis" request must never silently become a
+      // synthesis of unrelated past reports -- that read like a real
+      // generated analysis of the requested topic but was actually just
+      // related old report text stitched together (synthesizeFromArchive
+      // stays available below for explicit chat-mode archive queries:
+      // "past reports about X", "summarize report Y", etc., where the user
+      // is knowingly asking about history, not requesting something new).
+      // Without a real local LLM there is no offline capability to
+      // generate a genuinely new analysis -- say so honestly (provider.js
+      // turns this into { ok: false, ... }, which the Analysis Router
+      // surfaces as AllEnginesUnavailableError) instead of returning a
+      // misleading document.
       if (request?.mode === 'generate') {
-        return { type: 'archive-synthesis', result: synthesizeFromArchive(db, userId, request) };
+        throw new Error('offline_generation_unavailable');
       }
       return queryOffline(db, userId, request);
     },

@@ -19,10 +19,23 @@ describe('isFileScanConfigured', () => {
 });
 
 describe('scanFile', () => {
-  it('is a no-op pass when no webhook is configured (unchanged pre-existing behavior)', async () => {
+  it('is a no-op pass when no webhook is configured, for a low-sensitivity upload', async () => {
     delete process.env.FILE_SCAN_WEBHOOK_URL;
-    const result = await scanFile(Buffer.from('hello'), { filename: 'a.txt', classification: 'RESTRICTED' });
+    const result = await scanFile(Buffer.from('hello'), { filename: 'a.txt', classification: 'INTERNAL' });
     expect(result).toEqual({ ok: true, scanned: false, reason: expect.stringContaining('not configured') });
+  });
+
+  // Previously this fell through to the same no-op "not configured" allow
+  // as INTERNAL/PUBLIC, regardless of classification -- an unconfigured
+  // scanner (the common case for any deployment that hasn't set up a
+  // webhook yet) let a RESTRICTED upload through completely unscanned.
+  it('rejects a CONFIDENTIAL/RESTRICTED upload when no webhook is configured at all', async () => {
+    delete process.env.FILE_SCAN_WEBHOOK_URL;
+    const restricted = await scanFile(Buffer.from('hello'), { filename: 'a.txt', classification: 'RESTRICTED' });
+    expect(restricted.ok).toBe(false);
+    expect(restricted.reason).toContain('RESTRICTED');
+    const confidential = await scanFile(Buffer.from('hello'), { filename: 'a.txt', classification: 'CONFIDENTIAL' });
+    expect(confidential.ok).toBe(false);
   });
 
   it('allows a file the webhook reports clean', async () => {

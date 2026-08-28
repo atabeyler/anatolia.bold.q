@@ -10,6 +10,7 @@ import { uploadLimiter } from '../middleware/rateLimit.js';
 import { scanFile } from '../lib/fileScan.js';
 import { logAuditEvent, recordUploadedFile, getUploadedFileRecord } from '../services/database.js';
 import { canAccessClassification } from '../lib/rbac.js';
+import { logger } from '../lib/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '../../uploads');
@@ -129,8 +130,18 @@ router.get('/:filename', authMiddleware, async (req, res) => {
   // fall back to the previous (any-authenticated-user) behavior only for
   // those. A file WITH a row must belong to the requester, or the
   // requester's role must be able to access its classification (mirrors
-  // requireClassificationAccess's own rule elsewhere).
-  const record = await getUploadedFileRecord(name);
+  // requireClassificationAccess's own rule elsewhere). A failed lookup is
+  // NOT treated as "no row" -- getUploadedFileRecord() now lets a query
+  // error propagate specifically so this can fail closed here instead of
+  // silently granting the legacy no-ACL fallback to a file that may well
+  // have an owner/classification on record the lookup just couldn't reach.
+  let record;
+  try {
+    record = await getUploadedFileRecord(name);
+  } catch (err) {
+    logger.warn({ err, filename: name }, '[Files] ACL lookup failed, denying access');
+    return res.status(503).json({ error: 'Dosya erişim kontrolü şu anda yapılamıyor, lütfen tekrar deneyin' });
+  }
   if (record) {
     // canAccessClassification already grants ADMIN every classification, so
     // no separate admin check is needed here.

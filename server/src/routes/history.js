@@ -181,8 +181,18 @@ router.get('/list', authMiddleware, async (req, res) => {
 
     const rows = await scoped;
 
+    // A row's own classification can only ever get stricter over time (see
+    // classifyData/maxLevel's never-downgrade rule), and a user's own role
+    // can be downgraded independently of that -- previously only GET /:id
+    // (and the two download routes) checked this; a report that used to be
+    // visible could still surface here in the list/preview after either
+    // change. Applied uniformly (including the admin branch above) since
+    // canAccessClassification(admin, *) is always true, so this is a no-op
+    // for admins and the only real gate for everyone else.
+    const visibleRows = rows.filter(({ analysis }) => !blockedByClassification(req, analysis));
+
     res.json(
-      rows.map(({ analysis, devicePlatform }) => ({ ...toAnalysisJson(analysis, devicePlatform), preview: (analysis.content || '').slice(0, 200) }))
+      visibleRows.map(({ analysis, devicePlatform }) => ({ ...toAnalysisJson(analysis, devicePlatform), preview: (analysis.content || '').slice(0, 200) }))
     );
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -196,7 +206,7 @@ router.get('/feed', authMiddleware, async (req, res) => {
 
     const db = getDb();
     const isAdmin = !!req.user?.isAdmin;
-    const [analysisRows, emergencyRows] = await Promise.all([
+    const [analysisRowsRaw, emergencyRows] = await Promise.all([
       isAdmin
         ? db.select().from(analyses).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(15)
         : db
@@ -214,6 +224,10 @@ router.get('/feed', authMiddleware, async (req, res) => {
             .orderBy(desc(emergencyLogs.createdAt))
             .limit(10),
     ]);
+
+    // Same rationale as GET /list above -- a row visible when created isn't
+    // necessarily still visible to this user now.
+    const analysisRows = analysisRowsRaw.filter((r) => !blockedByClassification(req, r));
 
     const rows = [
       ...analysisRows.map((r) => ({

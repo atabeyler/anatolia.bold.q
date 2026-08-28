@@ -137,8 +137,8 @@ export const api = {
       req('/api/webauthn/login/verify', { method: 'POST', body: JSON.stringify({ userCode, response }) }),
   },
 
-  generateAnalysis: (category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr', priority = 'normal', depth = 'standart') =>
-    req('/api/analysis/generate', { method: 'POST', body: JSON.stringify({ category, title, prompt, quantumMode, documentContext, imageData, realTransactions, realScenarios, realOptimization, lang, priority, depth }) }),
+  generateAnalysis: (category, title, prompt, quantumMode = false, documentContext = null, imageData = null, realTransactions = null, realScenarios = null, realOptimization = null, lang = 'tr', priority = 'normal', depth = 'standart', dataClassification = null) =>
+    req('/api/analysis/generate', { method: 'POST', body: JSON.stringify({ category, title, prompt, quantumMode, documentContext, imageData, realTransactions, realScenarios, realOptimization, lang, priority, depth, dataClassification }) }),
 
   scenarioDeepDive: (category, scenarioId, scenarioSummary, lang = 'tr') =>
     req('/api/analysis/scenario-deep-dive', { method: 'POST', body: JSON.stringify({ category, scenarioId, scenarioSummary, lang }) }),
@@ -203,11 +203,17 @@ export const api = {
     return { provider, content: full, complete };
   },
 
-  // AI-aware upload: image → returns base64, document → extracts text
-  uploadForAI: async (file) => {
+  // AI-aware upload: image → returns base64, document → extracts text.
+  // dataClassification, when the caller knows it (e.g. attaching a file to
+  // an analysis already tagged RESTRICTED/CONFIDENTIAL), is forwarded so
+  // the server's malware-scan policy (scanFile() in lib/fileScan.js) can
+  // fail closed for a high-sensitivity upload instead of defaulting to
+  // INTERNAL just because this call never told it otherwise.
+  uploadForAI: async (file, dataClassification = null) => {
     const jwt = getJWT();
     const formData = new FormData();
     formData.append('file', file);
+    if (dataClassification) formData.append('classification', dataClassification);
     const res = await fetch(baseFor() + '/api/analysis/upload', {
       method: 'POST',
       headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},

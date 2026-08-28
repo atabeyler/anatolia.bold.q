@@ -49,12 +49,20 @@ export function isFileScanConfigured() {
  */
 export async function scanFile(buffer, { filename = '', mimetype = '', classification = 'INTERNAL' } = {}) {
   const webhookUrl = process.env.FILE_SCAN_WEBHOOK_URL;
+  const highSensitivity = HIGH_SENSITIVITY_CLASSIFICATIONS.has(classification);
   if (!webhookUrl) {
+    // Same fail-open/fail-closed split as the "scan unavailable" catch
+    // branch below -- a deployment that never configured a scanner is
+    // indistinguishable from one whose scanner is down, from the uploaded
+    // file's perspective. A CONFIDENTIAL/RESTRICTED upload must not sail
+    // through unscanned just because nobody set FILE_SCAN_WEBHOOK_URL yet.
+    if (highSensitivity) {
+      return { ok: false, scanned: false, reason: `no malware scanner configured (FILE_SCAN_WEBHOOK_URL unset) -- rejecting ${classification} upload as a precaution` };
+    }
     return { ok: true, scanned: false, reason: 'not configured (FILE_SCAN_WEBHOOK_URL unset)' };
   }
 
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-  const highSensitivity = HIGH_SENSITIVITY_CLASSIFICATIONS.has(classification);
 
   try {
     const controller = new AbortController();

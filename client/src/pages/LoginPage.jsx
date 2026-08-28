@@ -113,25 +113,10 @@ export default function LoginPage({ onLogin }) {
         params: { value: 'string — the user code digits or letters to enter' },
         handler: (p) => setUserCode((p?.value || '').toUpperCase()),
       },
-      {
-        name: 'fill_password',
-        description: 'Fill the password / şifre field',
-        params: { value: 'string — the password to enter, preserve exact case and punctuation' },
-        handler: (p) => setPassword(p?.value || ''),
-      },
-      {
-        name: 'login_with',
-        description: 'Fill both user code and password then submit — use when user says their code and password together',
-        params: { userCode: 'string — the user code', password: 'string — the password' },
-        handler: (p) => {
-          if (p?.userCode) setUserCode(p.userCode.toUpperCase());
-          if (p?.password) setPassword(p.password);
-          setTimeout(() => {
-            const btn = document.querySelector('button[type="submit"]');
-            if (btn && !btn.disabled) btn.click();
-          }, 300);
-        },
-      },
+      // Deliberately no fill_password/login_with voice actions: a password
+      // must never be dictated through the voice pipeline (transcribed
+      // speech passes through the same STT/logging path as any other voice
+      // command) -- see voiceAssistantEngine.js's localFallback comment.
       {
         name: 'submit_login',
         description: 'Submit / confirm the login form',

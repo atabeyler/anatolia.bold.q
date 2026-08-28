@@ -736,12 +736,17 @@ router.post('/chat', authMiddleware, analysisLimiter, async (req, res) => {
       ? `${wrapUntrustedEvidence('YÜKLENEN KAYNAK BELGE', documentContext)}\n\n`
       : '';
 
+    // Same CONFIDENTIAL/RESTRICTED gate as /generate's gatherResearchContext()
+    // -- this call site predates that fix and was missed then.
+    const WEB_RESEARCH_BLOCKED_CLASSIFICATIONS = new Set(['CONFIDENTIAL', 'RESTRICTED']);
     let webContext = '';
-    try {
-      const webResults = await researchWeb(message);
-      webContext = formatResearchContext(webResults);
-    } catch (e) {
-      logger.warn({ err: e }, '[WebResearch] search error');
+    if (!WEB_RESEARCH_BLOCKED_CLASSIFICATIONS.has(chatClassification)) {
+      try {
+        const webResults = await researchWeb(message);
+        webContext = formatResearchContext(webResults);
+      } catch (e) {
+        logger.warn({ err: e }, '[WebResearch] search error');
+      }
     }
     const webContextWrapped = webContext ? wrapUntrustedEvidence('CANLI WEB ARAŞTIRMASI', webContext) : '';
 

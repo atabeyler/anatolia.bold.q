@@ -4,7 +4,10 @@ import { routeAnalysisGeneration, routeConsultChat, AllEnginesUnavailableError, 
 // Full priority-chain coverage for the Analysis Router (task spec point 4):
 //   1. Cloud reachable       -> Q CLOUD
 //   2. Cloud unreachable     -> Q LOCAL LLM
-//   3. Local LLM unavailable -> Q LOCAL DATA (existing extractive engine)
+//   3. Local LLM unavailable -> a clear, honest error (NOT Q LOCAL DATA --
+//                                see the "audit finding" tests below for why
+//                                a generate request never falls to the
+//                                extractive/archive engine)
 //   4. Nothing available     -> a clear, honest error
 describe('routeAnalysisGeneration', () => {
   it('1. uses the cloud call when online, tagging the result ENGINE.CLOUD', async () => {
@@ -32,7 +35,14 @@ describe('routeAnalysisGeneration', () => {
     expect(cloudCall).not.toHaveBeenCalled();
   });
 
-  it('3. falls through to Q LOCAL DATA when the local-llm provider is unavailable (offline-extractive answered instead)', async () => {
+  // Audit finding: a "generate a new analysis" request used to accept an
+  // offline-extractive/archive-synthesis answer as if it were a real
+  // generated analysis of the requested topic, when it was actually just a
+  // synthesis of unrelated past reports. registry.js's offline-extractive
+  // provider now refuses mode:'generate' outright; this asserts the
+  // router's own belt-and-suspenders guard for the same case (e.g. if a
+  // native layer implementation somehow still returns one).
+  it('3. treats an offline-extractive/archive-synthesis response as unavailable, never as a real analysis', async () => {
     const nativeAIQuery = vi.fn(async () => ({
       ok: true,
       capability: 'offline-extractive',
@@ -40,10 +50,8 @@ describe('routeAnalysisGeneration', () => {
       result: { generated: false, matches: [{ id: 'a', title: 'Rapor A', category: 'finans', createdAt: new Date().toISOString(), summary: 'özet' }], note: 'not generated' },
     }));
 
-    const result = await routeAnalysisGeneration({ isOffline: true, cloudCall: vi.fn(), nativeAIQuery, generateRequest: {} });
-
-    expect(result.engine).toBe(ENGINE.LOCAL_DATA);
-    expect(result.content).toContain('Rapor A');
+    await expect(routeAnalysisGeneration({ isOffline: true, cloudCall: vi.fn(), nativeAIQuery, generateRequest: {} }))
+      .rejects.toBeInstanceOf(AllEnginesUnavailableError);
   });
 
   it('4. throws AllEnginesUnavailableError when nothing can answer', async () => {
@@ -57,11 +65,18 @@ describe('routeAnalysisGeneration', () => {
       .rejects.toBeInstanceOf(AllEnginesUnavailableError);
   });
 
-  it('falls back locally when the connectivity state is stale and the cloud call fails', async () => {
+  it('falls back locally when the connectivity state is stale and the cloud call fails, but still refuses an offline-extractive answer for generate', async () => {
     const cloudCall = vi.fn(async () => { throw new Error('cloud boom'); });
     const nativeAIQuery = vi.fn(async () => ({ ok: true, capability: 'offline-extractive', type: 'archive-synthesis', result: { matches: [], note: 'yerel' } }));
+    await expect(routeAnalysisGeneration({ isOffline: false, cloudCall, nativeAIQuery, generateRequest: {} }))
+      .rejects.toBeInstanceOf(AllEnginesUnavailableError);
+  });
+
+  it('accepts a local-llm answer even when falling back from a stale-online cloud failure', async () => {
+    const cloudCall = vi.fn(async () => { throw new Error('cloud boom'); });
+    const nativeAIQuery = vi.fn(async () => ({ ok: true, capability: 'local-llm', type: 'analysis', result: { title: 'Taslak', content: 'Yerel içerik', sources: [] } }));
     const result = await routeAnalysisGeneration({ isOffline: false, cloudCall, nativeAIQuery, generateRequest: {} });
-    expect(result.engine).toBe(ENGINE.LOCAL_DATA);
+    expect(result.engine).toBe(ENGINE.LOCAL_LLM);
   });
 });
 

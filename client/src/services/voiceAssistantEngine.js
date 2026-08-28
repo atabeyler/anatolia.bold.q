@@ -32,11 +32,11 @@ import { matchUiCatalogAction } from './voiceUiCatalog.js';
 // 5 supported languages since they're reached regardless of which language
 // the user is speaking.
 const FALLBACK_TEXT = {
-  tr: { loggingIn: 'Giriş yapılıyor.', formCleared: 'Form temizlendi.', passwordEntered: 'Şifre girildi.', userCodeEntered: (v) => `Kullanıcı kodu ${v} girildi.`, sayCodeOrPassword: 'Kullanıcı kodunuzu ya da şifrenizi söyleyin, ya da "giriş yap" deyin.', home: 'Ana ekrana dönüldü.', analysis: 'Analiz ekranına geçiliyor.', history: 'Geçmiş açılıyor.', voiceChat: 'Sesli danışma açılıyor.', loggingOut: 'Çıkış yapılıyor.', notUnderstood: 'Anlayamadım, tekrar söyler misiniz?' },
-  en: { loggingIn: 'Logging in.', formCleared: 'Form cleared.', passwordEntered: 'Password entered.', userCodeEntered: (v) => `User code ${v} entered.`, sayCodeOrPassword: 'Say your user code, password, or say "login".', home: 'Returning home.', analysis: 'Opening analysis.', history: 'Opening history.', voiceChat: 'Opening voice chat.', loggingOut: 'Logging out.', notUnderstood: 'Could not understand, please repeat.' },
-  de: { loggingIn: 'Anmeldung läuft.', formCleared: 'Formular geleert.', passwordEntered: 'Passwort eingegeben.', userCodeEntered: (v) => `Benutzercode ${v} eingegeben.`, sayCodeOrPassword: 'Nennen Sie Ihren Benutzercode oder Ihr Passwort, oder sagen Sie „anmelden".', home: 'Zurück zur Startseite.', analysis: 'Analyse wird geöffnet.', history: 'Verlauf wird geöffnet.', voiceChat: 'Sprachberatung wird geöffnet.', loggingOut: 'Abmeldung läuft.', notUnderstood: 'Ich habe das nicht verstanden, bitte wiederholen Sie es.' },
-  fr: { loggingIn: 'Connexion en cours.', formCleared: 'Formulaire effacé.', passwordEntered: 'Mot de passe saisi.', userCodeEntered: (v) => `Code utilisateur ${v} saisi.`, sayCodeOrPassword: 'Dites votre code utilisateur, votre mot de passe, ou dites « connexion ».', home: 'Retour à l\'accueil.', analysis: 'Ouverture de l\'analyse.', history: 'Ouverture de l\'historique.', voiceChat: 'Ouverture de la consultation vocale.', loggingOut: 'Déconnexion en cours.', notUnderstood: 'Je n\'ai pas compris, pouvez-vous répéter ?' },
-  ar: { loggingIn: 'جارٍ تسجيل الدخول.', formCleared: 'تم مسح النموذج.', passwordEntered: 'تم إدخال كلمة المرور.', userCodeEntered: (v) => `تم إدخال رمز المستخدم ${v}.`, sayCodeOrPassword: 'قل رمز المستخدم أو كلمة المرور، أو قل "تسجيل الدخول".', home: 'العودة إلى الرئيسية.', analysis: 'جارٍ فتح التحليل.', history: 'جارٍ فتح السجل.', voiceChat: 'جارٍ فتح الاستشارة الصوتية.', loggingOut: 'جارٍ تسجيل الخروج.', notUnderstood: 'لم أفهم، هل يمكنك التكرار؟' },
+  tr: { loggingIn: 'Giriş yapılıyor.', formCleared: 'Form temizlendi.', userCodeEntered: (v) => `Kullanıcı kodu ${v} girildi.`, sayCode: 'Kullanıcı kodunuzu söyleyin, şifrenizi klavyeden girin, ya da "giriş yap" deyin.', home: 'Ana ekrana dönüldü.', analysis: 'Analiz ekranına geçiliyor.', history: 'Geçmiş açılıyor.', voiceChat: 'Sesli danışma açılıyor.', loggingOut: 'Çıkış yapılıyor.', notUnderstood: 'Anlayamadım, tekrar söyler misiniz?' },
+  en: { loggingIn: 'Logging in.', formCleared: 'Form cleared.', userCodeEntered: (v) => `User code ${v} entered.`, sayCode: 'Say your user code, type your password, or say "login".', home: 'Returning home.', analysis: 'Opening analysis.', history: 'Opening history.', voiceChat: 'Opening voice chat.', loggingOut: 'Logging out.', notUnderstood: 'Could not understand, please repeat.' },
+  de: { loggingIn: 'Anmeldung läuft.', formCleared: 'Formular geleert.', userCodeEntered: (v) => `Benutzercode ${v} eingegeben.`, sayCode: 'Nennen Sie Ihren Benutzercode, geben Sie Ihr Passwort über die Tastatur ein, oder sagen Sie „anmelden".', home: 'Zurück zur Startseite.', analysis: 'Analyse wird geöffnet.', history: 'Verlauf wird geöffnet.', voiceChat: 'Sprachberatung wird geöffnet.', loggingOut: 'Abmeldung läuft.', notUnderstood: 'Ich habe das nicht verstanden, bitte wiederholen Sie es.' },
+  fr: { loggingIn: 'Connexion en cours.', formCleared: 'Formulaire effacé.', userCodeEntered: (v) => `Code utilisateur ${v} saisi.`, sayCode: 'Dites votre code utilisateur, saisissez votre mot de passe au clavier, ou dites « connexion ».', home: 'Retour à l\'accueil.', analysis: 'Ouverture de l\'analyse.', history: 'Ouverture de l\'historique.', voiceChat: 'Ouverture de la consultation vocale.', loggingOut: 'Déconnexion en cours.', notUnderstood: 'Je n\'ai pas compris, pouvez-vous répéter ?' },
+  ar: { loggingIn: 'جارٍ تسجيل الدخول.', formCleared: 'تم مسح النموذج.', userCodeEntered: (v) => `تم إدخال رمز المستخدم ${v}.`, sayCode: 'قل رمز المستخدم، وأدخل كلمة المرور من لوحة المفاتيح، أو قل "تسجيل الدخول".', home: 'العودة إلى الرئيسية.', analysis: 'جارٍ فتح التحليل.', history: 'جارٍ فتح السجل.', voiceChat: 'جارٍ فتح الاستشارة الصوتية.', loggingOut: 'جارٍ تسجيل الخروج.', notUnderstood: 'لم أفهم، هل يمكنك التكرار؟' },
 };
 
 // ─── Pending voice confirmation (logout, and any future destructive action
@@ -72,20 +72,16 @@ function localFallback(transcript, context) {
   const say = (key, ...args) => (typeof T[key] === 'function' ? T[key](...args) : T[key]);
 
   if (context.page === 'login') {
-    const raw = (transcript || '').trim();
-
     if (t.match(/giris\s*yap|login|onayla|gonder|devam|tamam|evet|confirm|submit/))
       return { actions: [{ action: 'submit_login', params: {} }], speak: say('loggingIn') };
 
     if (t.match(/temizle|sifirla|clear|sil|reset/))
       return { actions: [{ action: 'clear_login_form', params: {} }], speak: say('formCleared') };
 
-    const pwdM = t.match(/(?:sifre|parola|password)\s+(.+)/);
-    if (pwdM) {
-      const val = raw.replace(/^(şifre|sifre|parola|password)\s+/i, '');
-      return { actions: [{ action: 'fill_password', params: { value: val } }], speak: say('passwordEntered') };
-    }
-
+    // Passwords are deliberately never accepted through the voice pipeline
+    // (see LoginPage.jsx's registerActions comment) -- transcribed speech
+    // passes through the same STT/logging path as any other voice command,
+    // which is not a place a credential should ever travel through.
     const codeM = t.match(/(?:kullanici\s*(?:kod[u]?)?|kod[u]?|code|kimlik|id)\s*[:=]?\s*([a-z0-9]{2,20})/);
     if (codeM) {
       const val = codeM[1].toUpperCase();
@@ -96,7 +92,7 @@ function localFallback(transcript, context) {
       const val = onlyDigits[1];
       return { actions: [{ action: 'fill_username', params: { value: val } }], speak: say('userCodeEntered', val) };
     }
-    return { actions: [], speak: say('sayCodeOrPassword') };
+    return { actions: [], speak: say('sayCode') };
   }
 
   return { actions: [], speak: say('notUnderstood') };

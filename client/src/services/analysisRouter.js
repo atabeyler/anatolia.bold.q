@@ -1,9 +1,17 @@
-import { ENGINE, normalizeCloudAnalysis, normalizeLocalLLMAnalysis, normalizeLocalDataAnalysis, normalizeLocalChat } from './aiContract.js';
+import { ENGINE, normalizeCloudAnalysis, normalizeLocalLLMAnalysis, normalizeLocalChat } from './aiContract.js';
 
 // The single place implementing the priority chain from the task spec:
 //   1. Cloud reachable        -> Q CLOUD (existing behavior, unchanged)
 //   2. Cloud unreachable      -> Q LOCAL LLM (new)
-//   3. Local LLM unavailable  -> existing extractive Q LOCAL DATA
+//   3. Local LLM unavailable  -> existing extractive Q LOCAL DATA, but only
+//                                for chat/consult requests. A "generate a
+//                                new analysis" request has no offline-
+//                                extractive fallback (see registry.js's
+//                                offline-extractive createQuery) -- it
+//                                would otherwise read as a genuine analysis
+//                                of the requested topic while actually
+//                                being a synthesis of unrelated old
+//                                reports.
 //   4. Nothing available      -> a clear, honest error (never silently
 //                                pretend success)
 //
@@ -53,7 +61,15 @@ export async function routeAnalysisGeneration({ isOffline, cloudCall, nativeAIQu
   }
 
   if (response.capability === 'local-llm') return normalizeLocalLLMAnalysis(response);
-  if (response.capability === 'offline-extractive') return normalizeLocalDataAnalysis(response);
+  // offline-extractive is a valid answer for routeConsultChat below, never
+  // for a "new analysis" generation request -- registry.js's own
+  // offline-extractive provider already refuses a mode:'generate' request
+  // outright (this route always sends mode:'generate', see the
+  // nativeAIQuery call above), so a response tagged offline-extractive
+  // reaching here would mean that guard was bypassed. Treated the same as
+  // "no engine available" rather than accepted, so a synthesis of
+  // unrelated past reports can never be handed back as if it were a real
+  // analysis of the requested topic.
   throw new AllEnginesUnavailableError(`unexpected_capability:${response.capability}`);
 }
 

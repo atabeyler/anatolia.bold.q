@@ -120,3 +120,39 @@ describe('createLocalAIProvider local-llm -> offline-extractive fallback', () =>
     expect(result.capability).toBe('local-llm');
   });
 });
+
+// Audit finding: offline-extractive used to quietly synthesize an answer
+// from unrelated past reports for a "new analysis" request when no real
+// local LLM was available, which read like a genuine generated analysis of
+// the requested topic. A "generate" request without local-llm must now
+// surface as a clear failure instead.
+describe('createLocalAIProvider mode: generate without a real local LLM', () => {
+  it('reports failure instead of silently synthesizing an answer from past reports', async () => {
+    const db = await createTestMobileDb();
+    await dbRun(db, `
+      INSERT INTO analyses (id, user_id, device_id, version, created_at, updated_at, sync_status, category, title, content)
+      VALUES ('a', 'BOLD-001', 'AQ-AND-TEST', 1, datetime('now'), datetime('now'), 'synced', 'ekonomi', 'Eski Rapor', 'ilgisiz eski içerik')
+    `);
+    // No local-llm mock installed -- PROVIDERS[0].isAvailable() is false in
+    // this test environment (no native plugin), so selectProvider() already
+    // picks offline-extractive, exactly the case under test.
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ mode: 'generate', category: 'ekonomi', prompt: 'yeni bir konu' });
+    expect(result.ok).toBe(false);
+    expect(result.type).not.toBe('archive-synthesis');
+  });
+
+  it('still answers a normal (non-generate) chat query via offline-extractive', async () => {
+    const db = await createTestMobileDb();
+    await dbRun(db, `
+      INSERT INTO analyses (id, user_id, device_id, version, created_at, updated_at, sync_status, category, title, content)
+      VALUES ('a', 'BOLD-001', 'AQ-AND-TEST', 1, datetime('now'), datetime('now'), 'synced', 'x', 'Rapor', 'içerik')
+    `);
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ text: 'rapor' });
+    expect(result.ok).toBe(true);
+    expect(result.capability).toBe('offline-extractive');
+  });
+});

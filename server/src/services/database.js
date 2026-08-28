@@ -374,18 +374,20 @@ export async function recordUploadedFile({ filename, ownerUserCode, classificati
   }
 }
 
+// Deliberately lets a query failure propagate instead of swallowing it into
+// a null return: the caller (routes/files.js's GET /:filename) treats a
+// null record as "this file predates the ownership migration, fall back to
+// legacy any-authenticated-user access" -- collapsing "genuinely no record"
+// and "the lookup itself failed" into the same null used to let a
+// transient DB error silently grant that same no-ACL fallback to every
+// file, including ones that DO have an owner/classification on record.
 export async function getUploadedFileRecord(filename) {
   if (!process.env.DATABASE_URL) return null;
-  try {
-    const { rows } = await query(
-      'SELECT filename, owner_user_code, classification FROM uploaded_files WHERE filename = $1',
-      [filename]
-    );
-    return rows[0] || null;
-  } catch (err) {
-    logger.warn({ err }, '[Database] Failed to load uploaded file record');
-    return null;
-  }
+  const { rows } = await query(
+    'SELECT filename, owner_user_code, classification FROM uploaded_files WHERE filename = $1',
+    [filename]
+  );
+  return rows[0] || null;
 }
 
 export async function getUserEmailByNickname(nickname) {

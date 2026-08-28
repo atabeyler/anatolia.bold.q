@@ -1,4 +1,4 @@
-import { queryOffline, synthesizeFromArchive } from './offlineExtractive.js';
+import { queryOffline } from './offlineExtractive.js';
 import { createModelManager } from './modelManager.js';
 import { createLLMQuery } from './llmProvider.js';
 import { MODEL_TIERS, selectTierForDevice } from './modelSpec.js';
@@ -9,9 +9,11 @@ import { getNativeDeviceInfo } from './llmRuntime.js';
 //                            Capacitor plugin (LocalLLM, see llmRuntime.js
 //                            and mobile/android/app/src/main/java/.../
 //                            localllm/LocalLLMPlugin.kt).
-//   2. offline-extractive -- unchanged, always available, and the fallback
-//                            for a "generate a new analysis" request too
-//                            (synthesizeFromArchive).
+//   2. offline-extractive -- unchanged, always available for chat-mode
+//                            archive queries. Deliberately NOT a fallback
+//                            for a "generate a new analysis" request when
+//                            local-llm is unavailable (see this file's own
+//                            offline-extractive createQuery).
 //
 // isModelInstalled() is async (Capacitor's Filesystem API has no sync
 // variant), but selectProvider()'s isAvailable() contract must stay
@@ -100,8 +102,11 @@ const PROVIDERS = [
     capability: 'offline-extractive',
     isAvailable: () => true,
     createQuery: ({ db, userId }) => (request) => {
+      // See desktop/localAI/registry.js's own offline-extractive
+      // createQuery for why: a "generate a new analysis" request must
+      // never silently become a synthesis of unrelated past reports.
       if (request?.mode === 'generate') {
-        return synthesizeFromArchive(db, userId, request).then((result) => ({ type: 'archive-synthesis', result }));
+        return Promise.reject(new Error('offline_generation_unavailable'));
       }
       return queryOffline(db, userId, request);
     },
