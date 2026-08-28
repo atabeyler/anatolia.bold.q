@@ -28,8 +28,13 @@ jobs:
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > /tmp/signing.jks
+          # Print full output plus a highlighted SHA256 line -- keytool's
+          # "Certificate fingerprints:" block layout (which hashes it lists,
+          # in what order) varies across JDK versions, so grep for the
+          # SHA256 line specifically instead of assuming a fixed offset from
+          # a header line.
+          keytool -list -v -keystore /tmp/signing.jks -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD"
+          echo "----- SHA256 -----"
           keytool -list -v -keystore /tmp/signing.jks -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" \
-            | grep -A1 '^Certificate fingerprints' \
-            || keytool -list -v -keystore /tmp/signing.jks -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" \
-              | grep 'SHA256:'
+            | grep -i 'sha256'
           rm -f /tmp/signing.jks
