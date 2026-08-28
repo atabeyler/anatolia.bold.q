@@ -80,7 +80,36 @@ const HIGH = Object.freeze({
   recommendedMinFreeDiskBytes: 6 * 1024 * 1024 * 1024,
 });
 
-export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH });
+// Second model family, offered alongside (not instead of) the Qwen2.5
+// tiers above -- a manual-only pick from Settings > Local AI's tier
+// picker, never returned by selectTierForDevice() below, so it changes
+// nothing about the existing automatic RAM-based selection or about any
+// device that never opens the picker. Mirrors desktop/localAI/
+// modelSpec.js's own PHI_MINI -- see that file's comment for why
+// bartowski's requant is pinned instead of Microsoft's own (gated, 401
+// without a HF login) GGUF repo, and for the license/checksum sourcing.
+// No phi-14b tier here (unlike desktop): a phone faces real OOM-kill risk
+// even at HIGH's much smaller 4.68GB file (see that tier's own comment
+// above for the actual crash history) -- a 9GB file is not something to
+// offer on this platform at all, regardless of RAM floor.
+const PHI_MINI = Object.freeze({
+  id: 'phi-4-mini-instruct-q4_k_m',
+  tier: 'phi-mini',
+  label: 'Phi-4-mini-instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Phi-4 Mini Model',
+  filename: 'phi-4-mini-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf',
+  sha256: '01999f17c39cc3074afae5e9c539bc82d45f2dd7faa3917c66cbef76fce8c0c2',
+  sizeBytes: 2491874688,
+  license: 'MIT',
+  contextSize: 2048,
+  // Between MID's and HIGH's own floors above, in the same proportion to
+  // this file's size (2.49GB, between MID's 1.04GB and HIGH's 4.68GB).
+  recommendedMinRamBytes: 8 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 4 * 1024 * 1024 * 1024,
+});
+
+export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH, 'phi-mini': PHI_MINI });
 
 // Backward-compatible single-spec export -- the MID tier, i.e. exactly what
 // this file exported before tiering existed. modelManager.js's default

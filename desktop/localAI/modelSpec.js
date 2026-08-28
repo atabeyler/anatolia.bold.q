@@ -86,7 +86,68 @@ const HIGH = Object.freeze({
   recommendedMinFreeDiskBytes: 6 * 1024 * 1024 * 1024,
 });
 
-export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH });
+// Second model family, offered alongside (not instead of) the Qwen2.5
+// tiers above -- a manual-only pick from Settings > Local AI's tier
+// picker, never returned by selectTierForDevice() below, so it changes
+// nothing about the existing automatic RAM-based selection or about any
+// device that never opens the picker.
+//
+//   - Publisher: Microsoft (Phi-4 family) -- MIT license, verified on the
+//     model's Hugging Face card (huggingface.co/microsoft/Phi-4-mini-
+//     instruct and huggingface.co/microsoft/phi-4) on 2026-08-27.
+//   - GGUF source: Microsoft's own official GGUF repos
+//     (microsoft/Phi-4-mini-instruct-gguf, microsoft/phi-4-gguf) require a
+//     Hugging Face account + accepted license click-through to download
+//     (confirmed: an unauthenticated request gets HTTP 401) -- unusable
+//     for this app's anonymous HTTPS download. bartowski's community
+//     requant (same MIT-licensed weights, same Q4_K_M quant method, no
+//     gating) is pinned instead, same reasoning as HIGH's Qwen2.5-7B
+//     pick above.
+//   - sha256/sizeBytes read the same way every other entry in this file
+//     was (X-Linked-ETag/X-Linked-Size on the HF CDN redirect), verified
+//     via a real HTTPS HEAD request on 2026-08-27 -- re-verify before
+//     release, same caveat as the other tiers.
+const PHI_MINI = Object.freeze({
+  id: 'phi-4-mini-instruct-q4_k_m',
+  tier: 'phi-mini',
+  label: 'Phi-4-mini-instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Phi-4 Mini Model',
+  filename: 'phi-4-mini-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf',
+  sha256: '01999f17c39cc3074afae5e9c539bc82d45f2dd7faa3917c66cbef76fce8c0c2',
+  sizeBytes: 2491874688,
+  license: 'MIT',
+  contextSize: 4096,
+  recommendedMinRamBytes: 8 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 4 * 1024 * 1024 * 1024,
+});
+
+// Full-size Phi-4 (14B) -- meaningfully higher quality than any Qwen2.5
+// tier above (per public MMLU benchmarks) at the cost of a much higher
+// RAM floor. Desktop-only (see client/src/mobile/localAI/modelSpec.js --
+// mobile does not pin this): a phone-class device faces real OOM-kill
+// risk at this size (see that file's own HIGH-tier comment for the actual
+// crash history), a desktop/laptop with the RAM to spare does not.
+const PHI_14B = Object.freeze({
+  id: 'phi-4-q4_k_m',
+  tier: 'phi-14b',
+  label: 'Phi-4 (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Phi-4 Model',
+  filename: 'phi-4-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/phi-4-GGUF/resolve/main/phi-4-Q4_K_M.gguf',
+  sha256: '009aba717c09d4a35890c7d35eb59d54e1dba884c7c526e7197d9c13ab5911d9',
+  sizeBytes: 9053114816,
+  license: 'MIT',
+  contextSize: 4096,
+  // A ~9GB Q4 file run on CPU (no dedicated GPU/VRAM pool -- see
+  // llmRuntime.js) needs real headroom above HIGH's own 12GB floor for a
+  // file half this size; conservative on purpose, same philosophy as
+  // every other floor in this file.
+  recommendedMinRamBytes: 20 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 12 * 1024 * 1024 * 1024,
+});
+
+export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH, 'phi-mini': PHI_MINI, 'phi-14b': PHI_14B });
 
 // Backward-compatible single-spec export -- the MID tier, i.e. exactly what
 // this file exported before tiering existed. Any caller that hasn't opted

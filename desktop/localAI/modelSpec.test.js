@@ -13,6 +13,16 @@ describe('MODEL_TIERS', () => {
       expect(tier.sizeBytes).toBeGreaterThan(0);
     }
   });
+
+  it('offers a second (Phi-4) model family manually, alongside the Qwen2.5 tiers', () => {
+    expect(MODEL_TIERS['phi-mini'].id).toBe('phi-4-mini-instruct-q4_k_m');
+    expect(MODEL_TIERS['phi-mini'].license).toBe('MIT');
+    expect(MODEL_TIERS['phi-14b'].id).toBe('phi-4-q4_k_m');
+    expect(MODEL_TIERS['phi-14b'].license).toBe('MIT');
+    // Still exactly the 3 original tiers plus these 2 -- nothing else
+    // sneaked in.
+    expect(Object.keys(MODEL_TIERS).sort()).toEqual(['high', 'low', 'mid', 'phi-14b', 'phi-mini']);
+  });
 });
 
 describe('selectTierForDevice', () => {
@@ -46,5 +56,10 @@ describe('selectTierForDevice', () => {
   it('selects LOW when RAM is below MID\'s floor, regardless of core count', () => {
     expect(selectTierForDevice(2 * 1024 ** 3, 4)).toBe(MODEL_TIERS.low);
     expect(selectTierForDevice(2 * 1024 ** 3, 16)).toBe(MODEL_TIERS.low);
+  });
+
+  it('never auto-selects the Phi-4 tiers -- those are manual-only, even on a very high-RAM machine', () => {
+    expect(selectTierForDevice(64 * 1024 ** 3, 16)).toBe(MODEL_TIERS.high);
+    expect(selectTierForDevice(128 * 1024 ** 3, 32)).toBe(MODEL_TIERS.high);
   });
 });

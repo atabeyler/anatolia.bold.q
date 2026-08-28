@@ -13,6 +13,13 @@ describe('MODEL_TIERS', () => {
       expect(tier.sizeBytes).toBeGreaterThan(0);
     }
   });
+
+  it('offers a second (Phi-4 Mini) model family manually, alongside the Qwen2.5 tiers -- no phi-14b on Android', () => {
+    expect(MODEL_TIERS['phi-mini'].id).toBe('phi-4-mini-instruct-q4_k_m');
+    expect(MODEL_TIERS['phi-mini'].license).toBe('MIT');
+    expect(MODEL_TIERS['phi-14b']).toBeUndefined();
+    expect(Object.keys(MODEL_TIERS).sort()).toEqual(['high', 'low', 'mid', 'phi-mini']);
+  });
 });
 
 describe('selectTierForDevice', () => {
@@ -42,5 +49,9 @@ describe('selectTierForDevice', () => {
   it('selects HIGH for a 12 GB+ device', () => {
     expect(selectTierForDevice({ totalMemBytes: 12 * 1024 ** 3 })).toBe(MODEL_TIERS.high);
     expect(selectTierForDevice({ totalMemBytes: 16 * 1024 ** 3 })).toBe(MODEL_TIERS.high);
+  });
+
+  it('never auto-selects the Phi-4 Mini tier -- manual-only, even on a very high-RAM phone', () => {
+    expect(selectTierForDevice({ totalMemBytes: 32 * 1024 ** 3 })).toBe(MODEL_TIERS.high);
   });
 });

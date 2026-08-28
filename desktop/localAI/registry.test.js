@@ -36,7 +36,7 @@ describe('model tier picker', () => {
 
   it('lists every pinned tier with picker-relevant fields', () => {
     const tiers = listModelTiers();
-    expect(tiers.map((t) => t.tier)).toEqual(['low', 'mid', 'high']);
+    expect(tiers.map((t) => t.tier)).toEqual(['low', 'mid', 'high', 'phi-mini', 'phi-14b']);
     expect(tiers.every((t) => typeof t.sizeBytes === 'number' && t.displayLabel)).toBe(true);
   });
 
