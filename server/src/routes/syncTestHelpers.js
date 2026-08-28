@@ -64,7 +64,10 @@ export function createFakePool() {
       }
 
       if (s.startsWith('INSERT INTO analyses')) {
-        const [userCode, category, title, content, aiProvider, clientId, deviceId] = params;
+        // item 5/6: INSERT now also carries data_classification as its 6th
+        // column/param, shifting client_id/device_id to $7/$8 -- see
+        // sync.js's applyOperation() create branch.
+        const [userCode, category, title, content, aiProvider, dataClassification, clientId, deviceId] = params;
         const row = {
           id: state.nextId++,
           user_code: userCode,
@@ -72,6 +75,7 @@ export function createFakePool() {
           title,
           content,
           ai_provider: aiProvider,
+          data_classification: dataClassification,
           fraud_transaction_count: null,
           fraud_flagged_count: null,
           created_at: new Date(),
@@ -87,10 +91,13 @@ export function createFakePool() {
       }
 
       if (s.startsWith('UPDATE analyses SET title')) {
-        const [clientId, deviceId, title, content] = params;
+        // item 5/6: this UPDATE now also sets data_classification as its
+        // 5th param -- see sync.js's applyOperation() update branch.
+        const [clientId, deviceId, title, content, dataClassification] = params;
         const row = state.analyses.find((r) => r.client_id === clientId);
         row.title = title ?? row.title;
         row.content = content ?? row.content;
+        row.data_classification = dataClassification;
         row.device_id = deviceId;
         row.version += 1;
         row.updated_at = new Date();

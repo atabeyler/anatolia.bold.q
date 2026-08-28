@@ -115,13 +115,48 @@ export function mergeOptimizerResults(optimizerResult) {
     ? ` **Hibrit çözüm:** ${optimizerResult.items.length} kalem, tek bir QAOA devresinin taşıyabileceği kalem sayısının (8) üzerinde olduğu için değer/maliyet oranına göre sıralanıp ${optimizerResult.partitionCount} gruba (her biri kendi QAOA devresiyle) bölünerek çözülmüştür. Bu, gruplar arası olası ödünleşimleri gözden kaçırabilecek bir yaklaşık çözümdür — aşağıdaki klasik karşılaştırma bu farkı gösterir.`
     : '';
 
-  const note = `\n## KUANTUM KAYNAK TAHSİSİ OPTİMİZASYONU (QAOA)\n` +
+  // item 24: QAOA is a heuristic (COBYLA-tuned variational circuit) --
+  // classical_optimal() in portfolio_optimizer.py computes the true exact
+  // optimum via dynamic programming on the same problem, so we always know
+  // whether QAOA actually found the best answer or just a plausible one.
+  // This used to present the QAOA selection as THE answer unconditionally,
+  // with the classical comparison relegated to a secondary section --
+  // exactly backwards when QAOA demonstrably did worse. Below, a beaten
+  // QAOA result is relabeled as an experimental/comparison data point and
+  // the classical optimum (verifiably correct, no heuristic involved) is
+  // surfaced as the recommended selection instead -- same "verification
+  // lane, never the authoritative decision" pattern already used for real
+  // IBM hardware runs (see buildOptimizerHardwareSection above).
+  const benchmark = optimizerResult.classicalBenchmark;
+  const qaoaBeaten = benchmark && !benchmark.matchesOptimal;
+
+  const heading = qaoaBeaten
+    ? '## KUANTUM KAYNAK TAHSİSİ OPTİMİZASYONU (QAOA — DENEYSEL KARŞILAŞTIRMA)'
+    : '## KUANTUM KAYNAK TAHSİSİ OPTİMİZASYONU (QAOA)';
+
+  const beatenNote = qaoaBeaten
+    ? `\n\n⚠️ **DENEYSEL SONUÇ:** Bu QAOA çözümü klasik optimumdan %${benchmark.optimalityGapPercent} daha düşük değerlidir (bkz. aşağıdaki karşılaştırma). Bu, QAOA'nın kendisi doğrulanmış bir kuantum avantajı DEĞİL, deneysel bir yaklaşık-çözüm denemesi olduğu için beklenen bir durumdur. **Karar için aşağıdaki "Klasik Optimum" satırı esas alınmalıdır, bu bölümdeki QAOA seçimi değil.**`
+    : '';
+
+  const recommendedRows = qaoaBeaten
+    ? optimizerResult.items
+        .map((it) => {
+          const isClassicallySelected = benchmark.selected.includes(it.id);
+          return `| ${it.id} | ${it.value} | ${it.cost} | ${isClassicallySelected ? '✅ Seçildi (klasik optimum)' : '—'} |`;
+        })
+        .join('\n')
+    : rows;
+
+  const note = `\n${heading}\n` +
     `Aşağıdaki seçim, ${optimizerResult.qubits}-kübitlik bir QAOA (Quantum Approximate Optimization Algorithm) devresiyle ` +
     `gerçek bir kısıtlı optimizasyon problemi olarak çözülmüştür — bütçe kısıtı (%${optimizerResult.budgetPercent}) kayan (slack) kübitlerle ` +
     `devreye tam olarak kodlanmış, klasik bir COBYLA optimizasyon döngüsü devrenin parametrelerini ayarlamıştır. ` +
-    `Sonuç, bütçeyi aşmayan (fizibıl) ölçümler arasından en yüksek değerli olanıdır.${hardwareNote}${sourceNote}${hybridNote}\n\n` +
-    `**Toplam değer: ${optimizerResult.totalValue} · Toplam maliyet: %${optimizerResult.totalCost} / %${optimizerResult.budgetPercent} bütçe**\n\n` +
-    `| Kalem | Değer | Maliyet | Durum |\n|---|---|---|---|\n${rows}\n\n` +
+    `Sonuç, bütçeyi aşmayan (fizibıl) ölçümler arasından en yüksek değerli olanıdır.${hardwareNote}${sourceNote}${hybridNote}${beatenNote}\n\n` +
+    (qaoaBeaten
+      ? `**Önerilen seçim (klasik optimum): Toplam değer ${benchmark.totalValue} · Toplam maliyet %${benchmark.totalCost} / %${optimizerResult.budgetPercent} bütçe**\n` +
+        `*(QAOA'nın kendi bulduğu deneysel sonucu: Toplam değer ${optimizerResult.totalValue} · Toplam maliyet %${optimizerResult.totalCost})*\n\n`
+      : `**Toplam değer: ${optimizerResult.totalValue} · Toplam maliyet: %${optimizerResult.totalCost} / %${optimizerResult.budgetPercent} bütçe**\n\n`) +
+    `| Kalem | Değer | Maliyet | Durum |\n|---|---|---|---|\n${recommendedRows}\n\n` +
     `### QAOA Devresi\n\`\`\`\n${optimizerResult.circuitDiagram}\n\`\`\`\n` +
     buildClassicalBenchmarkSection(optimizerResult);
 
@@ -141,7 +176,7 @@ export function buildClassicalBenchmarkSection(optimizerResult) {
   if (!benchmark) return '';
   const status = benchmark.matchesOptimal
     ? '✅ Sonuç klasik optimuma eşit (optimality gap: %0).'
-    : `⚠️ Sonuç klasik optimumdan %${benchmark.optimalityGapPercent} daha düşük değerli.`;
+    : `⚠️ QAOA sonucu klasik optimumdan %${benchmark.optimalityGapPercent} daha düşük değerli — karar için klasik optimum satırı esas alınmalıdır, QAOA burada yalnızca deneysel bir karşılaştırma noktasıdır.`;
   const methodLabel = optimizerResult.hybrid ? 'QAOA (hibrit)' : 'QAOA (kuantum)';
   return `\n### Klasik Optimum Karşılaştırması (Dinamik Programlama Benchmark)\n` +
     `Aynı problem, klasik (kuantum içermeyen) bir dinamik programlama (0/1 sırt çantası) algoritmasıyla da tam olarak çözülmüş ve sonuçla karşılaştırılmıştır:\n\n` +

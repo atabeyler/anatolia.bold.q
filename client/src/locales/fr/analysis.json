@@ -40,6 +40,7 @@
   "downloadDocxBtn": "TÉLÉCHARGER .DOCX",
   "errorPrefix": "Erreur",
   "errAllProvidersFailed": "Tous les fournisseurs d'IA échouent actuellement (problème possible de quota, de facturation ou de connectivité). Veuillez réessayer plus tard.",
+  "streamCutShort": "⚠ Cette réponse a peut-être été interrompue par un problème de connexion.",
   "historySearchPh": "Rechercher par titre ou contenu…",
   "historyAllCategories": "Toutes les catégories",
   "historyNoResults": "Aucun résultat de recherche trouvé.",

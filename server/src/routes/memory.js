@@ -5,6 +5,7 @@ import { getDb, isDbConfigured } from '../db/client.js';
 import { userProfiles, conversationMemory } from '../db/schema.js';
 import { generateAnalysis } from '../services/ai.js';
 import { classifyData } from '../services/decisionIntelligence.js';
+import { canAccessClassification } from '../lib/rbac.js';
 import { wrapUntrustedEvidence, UNTRUSTED_EVIDENCE_POLICY } from '../services/aiPrompts.js';
 import { logger } from '../lib/logger.js';
 
@@ -46,7 +47,18 @@ const toConversationJson = (row) => ({
   key_facts: row.keyFacts,
   archived: row.archived,
   created_at: row.createdAt,
+  data_classification: row.dataClassification,
 });
+
+// item 19: conversationMemory rows are now classified same as analyses
+// (see memoryClassification in POST /save-conversation below), but a row
+// written before this migration has dataClassification === NULL -- must
+// floor to the same INTERNAL default classifyData(null, null) uses at
+// write time, never let NULL silently mean PUBLIC/unrestricted.
+function blockedByClassification(user, row) {
+  const classification = row.dataClassification || classifyData(null, null);
+  return !canAccessClassification(user, classification);
+}
 
 // ── Get/create user profile ──────────────────────────────────────────────
 router.get('/profile', authMiddleware, async (req, res) => {
@@ -170,6 +182,7 @@ ${wrappedHistoryForFacts}`;
           summary,
           keyFacts,
           fullHistory: history,
+          dataClassification: memoryClassification,
         })
         .returning({ id: conversationMemory.id });
       savedId = row.id;
@@ -193,7 +206,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
       .where(eq(conversationMemory.userCode, userCode))
       .orderBy(desc(conversationMemory.createdAt))
       .limit(50);
-    res.json(rows.map(toConversationJson));
+    res.json(rows.filter((row) => !blockedByClassification(req.user, row)).map(toConversationJson));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -210,6 +223,7 @@ router.get('/conversations/:id', authMiddleware, async (req, res) => {
       .from(conversationMemory)
       .where(and(eq(conversationMemory.id, Number(req.params.id)), eq(conversationMemory.userCode, userCode)));
     if (!row) return res.status(404).json({ error: 'Bulunamadı' });
+    if (blockedByClassification(req.user, row)) return res.status(403).json({ error: 'Bu kayda erişim yetkiniz yok' });
     res.json({ ...toConversationJson(row), full_history: row.fullHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -254,12 +268,13 @@ router.get('/context', authMiddleware, async (req, res) => {
     if (!isDbConfigured()) return res.json({ context: '' });
 
     // Get the summary and key facts of the last 5 conversations
-    const rows = await getDb()
+    const allRows = await getDb()
       .select()
       .from(conversationMemory)
       .where(and(eq(conversationMemory.userCode, userCode), eq(conversationMemory.archived, false)))
       .orderBy(desc(conversationMemory.createdAt))
       .limit(5);
+    const rows = allRows.filter((row) => !blockedByClassification(req.user, row));
 
     if (rows.length === 0) return res.json({ context: '', conversations: [] });
 

@@ -22,7 +22,7 @@ vi.mock('../db/client.js', () => ({
     }),
   }),
 }));
-vi.mock('../db/schema.js', () => ({ analyses: {}, devices: {}, emergencyLogs: {} }));
+vi.mock('../db/schema.js', () => ({ analyses: {}, devices: {}, emergencyLogs: {}, userProfiles: {} }));
 vi.mock('../services/docx.js', () => ({ generateReportDocx: vi.fn(async () => Buffer.from('docx')) }));
 vi.mock('../services/pdf.js', () => ({ generateReportPdf: vi.fn(async () => Buffer.from('pdf')) }));
 vi.mock('../services/morningBrief.js', () => ({

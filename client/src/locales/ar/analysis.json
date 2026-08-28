@@ -40,6 +40,7 @@
   "downloadDocxBtn": "تنزيل .DOCX",
   "errorPrefix": "خطأ",
   "errAllProvidersFailed": "تفشل جميع مزودي الذكاء الاصطناعي حالياً (قد تكون مشكلة حصة أو فوترة أو اتصال). يرجى المحاولة مرة أخرى لاحقاً.",
+  "streamCutShort": "⚠ قد تكون هذه الإجابة قد انقطعت بسبب مشكلة في الاتصال.",
   "historySearchPh": "ابحث في العنوان أو المحتوى…",
   "historyAllCategories": "جميع الفئات",
   "historyNoResults": "لم يتم العثور على نتائج بحث.",

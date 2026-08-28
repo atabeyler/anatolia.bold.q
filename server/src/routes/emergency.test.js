@@ -37,6 +37,14 @@ function token(userCode = 'BOLD-001') {
   return jwt.sign({ userCode }, JWT_SECRET, { expiresIn: '1h' });
 }
 
+// item 13: POST /users (broadcast to every connected client) now requires
+// the admin role -- an ordinary authenticated user's own token (above) is
+// exactly what an attacker had before that fix, so these tests must
+// explicitly grant admin to still exercise the route's own logic.
+function adminToken(userCode = 'BOLD-001') {
+  return jwt.sign({ userCode, role: 'admin', isAdmin: true }, JWT_SECRET, { expiresIn: '1h' });
+}
+
 beforeEach(() => {
   sendEmergencyAlertMock.mockClear();
   sendEmergencyBroadcastEmailMock.mockClear();
@@ -95,18 +103,27 @@ describe('POST /api/emergency/users (requires login -- broadcasts to every conne
     expect(res.status).toBe(401);
   });
 
-  it('broadcasts via socket.io for a validly authenticated user', async () => {
+  // item 13: this used to be reachable by any authenticated user -- now
+  // requires the admin role (see requireRole(ROLES.ADMIN) in emergency.js).
+  it('rejects a non-admin authenticated user with 403', async () => {
     const app = buildApp();
     const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token('BOLD-002')}`).send({ message: 'herkese haber' });
+    expect(res.status).toBe(403);
+    expect(app.locals.emitted).toEqual([]);
+  });
+
+  it('broadcasts via socket.io for an admin', async () => {
+    const app = buildApp();
+    const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${adminToken('BOLD-002')}`).send({ message: 'herkese haber' });
     expect(res.status).toBe(200);
     expect(app.locals.emitted).toEqual([
       { event: 'emergency:broadcast', payload: expect.objectContaining({ from: 'BOLD-002', message: 'herkese haber' }) },
     ]);
   });
 
-  it('rejects an empty message even when authenticated', async () => {
+  it('rejects an empty message even when authenticated as admin', async () => {
     const app = buildApp();
-    const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token()}`).send({ message: '   ' });
+    const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${adminToken()}`).send({ message: '   ' });
     expect(res.status).toBe(400);
   });
 
@@ -116,7 +133,7 @@ describe('POST /api/emergency/users (requires login -- broadcasts to every conne
       { user_code: 'BOLD-004', nickname: 'BOLD-004', email: 'u4@example.com' },
     ]);
     const app = buildApp();
-    const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token('BOLD-002')}`).send({ message: 'herkese haber' });
+    const res = await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${adminToken('BOLD-002')}`).send({ message: 'herkese haber' });
     expect(res.status).toBe(200);
     await flushMicrotasks();
     expect(sendEmergencyBroadcastEmailMock).toHaveBeenCalledWith(
@@ -132,7 +149,7 @@ describe('POST /api/emergency/users (requires login -- broadcasts to every conne
   it('does not attempt to email anyone when no users have an email on file', async () => {
     getUserEmailRecipientsMock.mockResolvedValue([]);
     const app = buildApp();
-    await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${token()}`).send({ message: 'test' });
+    await request(app).post('/api/emergency/users').set('Authorization', `Bearer ${adminToken()}`).send({ message: 'test' });
     await flushMicrotasks();
     expect(sendEmergencyBroadcastEmailMock).not.toHaveBeenCalled();
   });

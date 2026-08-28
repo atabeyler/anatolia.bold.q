@@ -9,7 +9,13 @@ import { buildFraudSecondaryReviewSection, summarizeFraudConfirmation } from './
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT_PATH = path.join(__dirname, '../../quantum/fraud_detection_13q.py');
 const TIMEOUT_MS = withIbmTimeout(180000);
-const MAX_TRANSACTIONS = 3000;
+// item 23: must match fraud_detection_13q.py's own MAX_INPUT_TRANSACTIONS --
+// that script's classical pre-filter (which picks the most anomalous-looking
+// records for the O(n^2) quantum kernel, instead of a blind "first N" cut)
+// can only ever see what gets past this slice, so this used to make the
+// prefilter dead code by cutting the input down to the kernel's own limit
+// (3000) before the script ever ran.
+const MAX_TRANSACTIONS = 20000;
 
 export async function computeFraudRiskScores(transactions, opts = {}) {
   if (!Array.isArray(transactions) || transactions.length < 3) return null;

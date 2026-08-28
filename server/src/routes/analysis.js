@@ -34,6 +34,7 @@ import { researchWeb, formatResearchContext } from '../services/webResearch.js';
 import { gatherResearchContext } from '../services/analysisResearch.js';
 import { resolveResultSource } from '../services/analysisOrchestrator.js';
 import { buildEvidenceItems } from '../services/evidence.js';
+import { scanFile } from '../lib/fileScan.js';
 import { fuseDecision } from '../services/decisionFusion.js';
 import { runQuantumEngines, isHardwareVerificationPending, scheduleHardwareVerification } from '../services/analysisQuantumEngines.js';
 import { broadcastToUser } from '../services/socket.js';
@@ -185,6 +186,21 @@ router.post('/upload', authMiddleware, analysisLimiter, uploadConcurrencyGate, u
       return res.status(400).json({ error: 'Dosya içeriği uzantısıyla/tipiyle uyuşmuyor' });
     }
 
+    // AQ security review finding: this upload path (attachments for AI
+    // analysis -- images, transaction/scenario CSVs, PDF/DOCX text
+    // extraction) never went through the malware-scan pipeline at all,
+    // unlike routes/files.js's general /upload -- a completely separate
+    // multer instance with no scanFile() call anywhere in this file. Same
+    // hook, same fail-open/fail-closed-by-classification behavior now
+    // applies here too (a no-op when FILE_SCAN_WEBHOOK_URL isn't
+    // configured, so an unconfigured deployment's upload flow is
+    // unchanged).
+    const uploadClassification = req.body?.classification;
+    const scanResult = await scanFile(file.buffer, { filename: file.originalname, mimetype: file.mimetype, classification: uploadClassification });
+    if (!scanResult.ok) {
+      return res.status(422).json({ error: 'Dosya güvenlik taramasından geçemedi', reason: scanResult.reason });
+    }
+
     // Image: return as base64 (for Claude Vision)
     if (file.mimetype.startsWith('image/')) {
       return res.json({
@@ -328,7 +344,7 @@ router.post('/generate', authMiddleware, analysisLimiter, async (req, res) => {
       ? getQuantumSystemPrompt(category, { hasRealTransactions, hasRealScenarios, hasRealOptimization }, lang)
       : getSystemPromptForCategory(category, lang);
 
-    const webContext = await gatherResearchContext(category, prompt, depth);
+    const webContext = await gatherResearchContext(category, prompt, depth, requestedClassification);
 
     const basePrompt = `${prompt}
 
@@ -397,6 +413,7 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
           aiProvider: result.provider,
           priority,
           depth,
+          dataClassification: requestedClassification,
           fraudTransactionCount: fraudComputation ? fraudComputation.transactionCount : null,
           fraudFlaggedCount: fraudComputation ? fraudComputation.flaggedCount : null,
           clientId: randomUUID(),
@@ -475,6 +492,12 @@ ${quantumMode ? '\nKUANTUM MOD AKTİF: Birden fazla senaryo hesapla, olasılık 
       success: true,
       analysisId,
       provider: result.provider,
+      // Read (and stripped before the client ever sees it) by
+      // analysisTraceMiddleware for the decision_records audit trail --
+      // see that middleware's own comment for why the masked `provider`
+      // field above isn't enough for saveDecisionRecord()'s ai_provider/
+      // model_name columns.
+      _realProvider: result.realProvider,
       title: responseTitle,
       content: finalContent,
       priority,
@@ -601,6 +624,7 @@ router.post('/scenario-deep-dive', authMiddleware, analysisLimiter, async (req, 
           title: `[ALT-SENARYO] ${scenarioId}`,
           content: result.content,
           aiProvider: result.provider,
+          dataClassification: deepDiveClassification,
           clientId: randomUUID(),
           deviceId: 'web',
         })

@@ -14,7 +14,18 @@ FEATURES = [
     "timeSinceLastTx", "newCounterpartyCount24h", "uniqueCounterparty7d",
     "amountDeviation",
 ]
-MAX_INPUT_TRANSACTIONS = 3000
+# item 23: this used to equal MAX_KERNEL_TRANSACTIONS (both 3000), which
+# made the classical pre-filter pass below dead code -- n_total could never
+# exceed MAX_KERNEL_TRANSACTIONS because the input was already truncated to
+# that same number before the check ever ran, so anything past record 3000
+# was silently dropped by a blind "first N" cut instead of being scored by
+# the pre-filter and given a fair shot at being kept. Mirrors the same
+# ratio portfolio_optimizer.py already uses between MAX_ITEMS (8, one
+# QAOA circuit's real capacity) and MAX_TOTAL_ITEMS (24, what's actually
+# accepted, handled via partitioning) -- accept far more than the kernel
+# can take in one pass, and let the cheap O(n) pre-filter (not truncation)
+# decide what reaches it.
+MAX_INPUT_TRANSACTIONS = 20000
 # Ported from fraud_detection.py: above this, the O(n^2) pairwise kernel
 # below (13 features here, vs. 5 there, so proportionally more expensive
 # per pair) gets a cheap classical pre-filter pass first instead of running

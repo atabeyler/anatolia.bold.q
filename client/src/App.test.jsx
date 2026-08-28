@@ -7,7 +7,14 @@ import { resolveCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
 
 vi.mock('./services/api.js', () => ({
   resolveCurrentUser: vi.fn(),
+  hydrateNativeSession: vi.fn().mockResolvedValue(undefined),
   AUTH_CHANGED_EVENT: 'anatoliaq:auth-changed',
+}));
+// Web-build stub -- App.jsx only ever calls nativeAuth.getSession() through
+// hydrateNativeSession(), which is itself mocked to a no-op above, so this
+// just needs to exist as an importable shape, not do anything real.
+vi.mock('./services/nativeBridge.js', () => ({
+  nativeAuth: { getSession: vi.fn() },
 }));
 
 vi.mock('./pages/LoginPage.jsx', () => ({ default: ({ onLogin }) => <button onClick={() => onLogin({ userCode: 'U1', nickname: 'BOLD-001', isAdmin: false })}>login-stub</button> }));

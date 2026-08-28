@@ -158,12 +158,17 @@ export default function ConsultChat() {
         }
       );
 
+      // item 18: r.complete is false when the stream ended without the
+      // server's explicit completion marker (a dropped connection or a
+      // provider erroring mid-answer) -- surfaced so a truncated reply
+      // isn't mistaken for a complete one.
+      const cutShort = r.complete === false;
       if (!streamingStarted) {
-        setMessages(prev => [...prev, { role: 'assistant', content: r.content, engine: ENGINE.CLOUD, provider: r.provider }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: r.content, engine: ENGINE.CLOUD, provider: r.provider, cutShort }]);
       } else {
         setMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = { role: 'assistant', content: r.content, engine: ENGINE.CLOUD, provider: r.provider };
+          next[next.length - 1] = { role: 'assistant', content: r.content, engine: ENGINE.CLOUD, provider: r.provider, cutShort };
           return next;
         });
       }
@@ -199,6 +204,7 @@ export default function ConsultChat() {
       {messages.map((m, i) => <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex flex-col gap-1 ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
         {m.role === 'assistant' && <span className="px-1"><EngineBadge engine={m.engine} /></span>}
         <div className={`rounded-xl px-4 py-2.5 text-sm leading-relaxed break-words ${m.role === 'user' ? 'bg-gold/20 text-gold border border-gold/30 rounded-tr-none' : m.error ? 'bg-red-950/40 text-red-400 border border-red-800/30 rounded-tl-none' : 'bg-navy/70 text-gold/90 border border-gold/15 rounded-tl-none report-content'}`}>{m.role === 'assistant' ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown> : <p className="whitespace-pre-wrap">{m.content}</p>}</div>
+        {m.role === 'assistant' && m.cutShort && !m.streaming && <span className="px-1 text-xs text-amber-400">{t('streamCutShort')}</span>}
       </motion.div>)}
       {loading && <div className="text-gold/60 text-sm">{t('analyzing')}</div>}
     </div>

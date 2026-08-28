@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { buildPredictedOutcome, buildQuantumParams, buildSourceHashes } from './analysisTrace.js';
 import { QUANTUM_ENGINE_VERSION } from '../services/decisionIntelligence.js';
 
@@ -124,5 +124,55 @@ describe('QUANTUM_ENGINE_VERSION (AQ-009)', () => {
     expect(typeof QUANTUM_ENGINE_VERSION).toBe('string');
     expect(QUANTUM_ENGINE_VERSION.length).toBeGreaterThan(0);
     expect(QUANTUM_ENGINE_VERSION).toContain('qiskit');
+  });
+});
+
+// item 17: decision_records.ai_provider must record the real AI vendor
+// (routes/analysis.js's internal `_realProvider` field), not the masked
+// "Q CLOUD" label the client sees as `provider` -- and that internal field
+// must never actually reach the client response.
+describe('analysisTraceMiddleware (item 17: real AI provider in the audit trail)', () => {
+  let saveDecisionRecordMock;
+  let analysisTraceMiddleware;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    saveDecisionRecordMock = vi.fn(() => Promise.resolve());
+    vi.doMock('../services/decisionIntelligence.js', () => ({
+      classifyData: () => 'INTERNAL',
+      saveDecisionRecord: saveDecisionRecordMock,
+    }));
+    vi.doMock('../lib/requestMetrics.js', () => ({ recordRequestMetric: () => {} }));
+    ({ analysisTraceMiddleware } = await import('./analysisTrace.js'));
+  });
+
+  function runMiddleware(body) {
+    const req = { method: 'POST', path: '/generate', body: { category: 'ekonomi', prompt: 'test' }, headers: {}, user: { userCode: 'U1' } };
+    let sentBody;
+    const res = {
+      statusCode: 200,
+      json(b) { sentBody = b; return b; },
+    };
+    analysisTraceMiddleware(req, res, () => {});
+    res.json(body);
+    return sentBody;
+  }
+
+  it('persists the real provider, not the masked label, when they differ', () => {
+    runMiddleware({ success: true, provider: 'Q CLOUD', _realProvider: 'Claude (Anthropic)' });
+    expect(saveDecisionRecordMock).toHaveBeenCalledTimes(1);
+    expect(saveDecisionRecordMock.mock.calls[0][0].aiProvider).toBe('Claude (Anthropic)');
+  });
+
+  it('strips _realProvider from the response body sent to the client', () => {
+    const sent = runMiddleware({ success: true, provider: 'Q CLOUD', _realProvider: 'Claude (Anthropic)' });
+    expect(sent._realProvider).toBeUndefined();
+    expect(sent.provider).toBe('Q CLOUD');
+  });
+
+  it('falls back to the masked provider label when _realProvider is absent', () => {
+    const sent = runMiddleware({ success: true, provider: 'Q CLOUD' });
+    expect(saveDecisionRecordMock.mock.calls[0][0].aiProvider).toBe('Q CLOUD');
+    expect(sent._realProvider).toBeUndefined();
   });
 });

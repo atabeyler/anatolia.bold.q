@@ -40,6 +40,7 @@
   "downloadDocxBtn": ".DOCX HERUNTERLADEN",
   "errorPrefix": "Fehler",
   "errAllProvidersFailed": "Alle KI-Anbieter schlagen derzeit fehl (möglicherweise ein Kontingent-, Abrechnungs- oder Verbindungsproblem). Bitte versuchen Sie es später erneut.",
+  "streamCutShort": "⚠ Diese Antwort wurde möglicherweise durch ein Verbindungsproblem abgeschnitten.",
   "historySearchPh": "Nach Titel oder Inhalt suchen…",
   "historyAllCategories": "Alle Kategorien",
   "historyNoResults": "Keine Suchergebnisse gefunden.",

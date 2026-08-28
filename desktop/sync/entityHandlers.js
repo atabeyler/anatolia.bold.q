@@ -39,8 +39,8 @@ const handlers = {
 
       if (record.deleted) {
         if (existing) {
-          db.prepare(`UPDATE analyses SET deleted_at = @ts, version = @version, updated_at = @ts, sync_status = 'synced' WHERE id = @id`)
-            .run({ id: record.entityId, ts, version: record.version });
+          db.prepare(`UPDATE analyses SET deleted_at = @ts, version = @version, updated_at = @ts, sync_status = 'synced' WHERE id = @id AND user_id = @userId`)
+            .run({ id: record.entityId, userId, ts, version: record.version });
         }
         return;
       }
@@ -55,26 +55,36 @@ const handlers = {
       const encryptedContent = encryptField(record.payload.content, key);
 
       if (existing) {
-        db.prepare(`
+        // Scoped to @userId too, not just @id -- a pulled record's entityId
+        // could otherwise collide with a *different* local user's row on a
+        // machine that's had more than one account signed in (the INSERT
+        // branch below already sets user_id correctly; only this UPDATE
+        // branch was matching on id alone), letting a compromised/malicious
+        // server response silently overwrite another local user's report.
+        const result = db.prepare(`
           UPDATE analyses SET title = @title, content = @content, category = @category, ai_provider = @aiProvider,
+            data_classification = @dataClassification,
             fraud_transaction_count = @fraudTx, fraud_flagged_count = @fraudFlag,
             version = @version, updated_at = @ts, deleted_at = NULL, sync_status = 'synced', device_id = @deviceId
-          WHERE id = @id
+          WHERE id = @id AND user_id = @userId
         `).run({
-          id: record.entityId, ts, version: record.version, deviceId: record.deviceId,
+          id: record.entityId, userId, ts, version: record.version, deviceId: record.deviceId,
           title: encryptedTitle, content: encryptedContent, category: record.payload.category,
-          aiProvider: record.payload.aiProvider ?? null,
+          aiProvider: record.payload.aiProvider ?? null, dataClassification: record.payload.dataClassification ?? null,
           fraudTx: record.payload.fraudTransactionCount ?? null, fraudFlag: record.payload.fraudFlaggedCount ?? null,
         });
+        if (result.changes === 0) {
+          throw new Error(`sync_pulled_record_user_mismatch: entity ${record.entityId} does not belong to user ${userId}`);
+        }
       } else {
         db.prepare(`
-          INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider, fraud_transaction_count, fraud_flagged_count)
-          VALUES (@id, @userId, NULL, @deviceId, 'analysis', @version, @createdAt, @updatedAt, 'synced', @category, @title, @content, @aiProvider, @fraudTx, @fraudFlag)
+          INSERT INTO analyses (id, user_id, organization_id, device_id, type, version, created_at, updated_at, sync_status, category, title, content, ai_provider, data_classification, fraud_transaction_count, fraud_flagged_count)
+          VALUES (@id, @userId, NULL, @deviceId, 'analysis', @version, @createdAt, @updatedAt, 'synced', @category, @title, @content, @aiProvider, @dataClassification, @fraudTx, @fraudFlag)
         `).run({
           id: record.entityId, userId, deviceId: record.deviceId, version: record.version,
           createdAt: record.createdAt, updatedAt: record.updatedAt,
           category: record.payload.category, title: encryptedTitle, content: encryptedContent,
-          aiProvider: record.payload.aiProvider ?? null,
+          aiProvider: record.payload.aiProvider ?? null, dataClassification: record.payload.dataClassification ?? null,
           fraudTx: record.payload.fraudTransactionCount ?? null, fraudFlag: record.payload.fraudFlaggedCount ?? null,
         });
       }

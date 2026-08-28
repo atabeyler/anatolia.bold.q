@@ -5,7 +5,8 @@ import GlobalVoiceAssistant from './components/GlobalVoiceAssistant.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import QuantumLogo from './components/QuantumLogo.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
-import { resolveCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
+import { resolveCurrentUser, AUTH_CHANGED_EVENT, hydrateNativeSession } from './services/api.js';
+import { nativeAuth } from './services/nativeBridge.js';
 import { useLang } from './services/langContext.jsx';
 
 // Shared by both loading gaps below (initial auth resolution, and the lazy
@@ -57,7 +58,13 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    resolveCurrentUser().then((u) => { if (alive) setUser(u); });
+    // Native's JWT now lives only in api.js's in-memory store (see its
+    // setJWT/hydrateNativeSession comments) -- restore it from the platform's
+    // secure session store before the first resolveCurrentUser() call, or
+    // every launch would otherwise look logged-out until the next login.
+    hydrateNativeSession(nativeAuth.getSession).then(() =>
+      resolveCurrentUser().then((u) => { if (alive) setUser(u); })
+    );
     return () => { alive = false; };
   }, []);
 

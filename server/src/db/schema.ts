@@ -26,6 +26,12 @@ export const analyses = pgTable('analyses', {
   // comments in services/database.js for what each value does.
   priority: varchar('priority', { length: 20 }).notNull().default('normal'),
   depth: varchar('depth', { length: 20 }).notNull().default('standart'),
+  // The classification decided at generation time (classifyData() in
+  // routes/analysis.js) -- NULL for rows written before this column existed
+  // or by a writer that hasn't been updated. Readers must fall back to the
+  // category floor for NULL, never treat NULL as PUBLIC -- see
+  // history.js's blockedByClassification().
+  dataClassification: varchar('data_classification', { length: 20 }),
   createdAt: timestamp('created_at').defaultNow(),
   // Desktop/multi-device sync metadata -- see routes/sync.js and
   // services/database.js for the matching ALTER TABLE statements.
@@ -122,6 +128,7 @@ export const conversationMemory = pgTable('conversation_memory', {
   keyFacts: text('key_facts'),
   fullHistory: jsonb('full_history'),
   archived: boolean('archived').default(false),
+  dataClassification: varchar('data_classification', { length: 20 }),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

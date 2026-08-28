@@ -36,7 +36,19 @@ function isNativeShell() {
   return typeof window !== 'undefined' && !!(window.anatoliaDesktop || window.anatoliaMobile);
 }
 
-function getJWT() { return isNativeShell() ? localStorage.getItem('anatolia_jwt') : null; }
+// In-memory only, not localStorage (AQ security review finding: the JWT was
+// written to localStorage AND to the platform's own encrypted secureStore
+// -- see desktop/auth/secureStore.js -- in parallel, so a renderer XSS could
+// trivially read it via the always-global localStorage API even though a
+// properly-secured copy already existed. A private module-scope variable
+// isn't reachable by a generic injected-script payload the way a global is,
+// and nothing here is written to disk in plaintext. Persistence across a
+// relaunch still works: hydrateNativeSession() below restores this from the
+// existing secureStore-backed auth:getSession()/getSession() IPC call,
+// which is the one and only place the JWT is actually persisted at rest.
+let nativeJwt = null;
+
+function getJWT() { return isNativeShell() ? nativeJwt : null; }
 
 export function getToken() { return getJWT(); }
 
@@ -160,22 +172,35 @@ export const api = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let full = '';
+    // The server (aiGenerate.ts's streamConsultationText) appends a
+    // NUL-delimited ANATOLIA_STREAM_END/ANATOLIA_STREAM_ERROR marker as its
+    // very last write, so a dropped connection or a provider erroring
+    // mid-answer isn't silently indistinguishable from a normal finish.
+    // `complete` stays false unless an END marker is actually seen -- an
+    // unmarked stream end (old server, network cut before the marker) is
+    // treated the same as an explicit error marker: unconfirmed completion.
+    let complete = false;
+    const consumeChunk = (rawChunk) => {
+      const markerIdx = rawChunk.indexOf('\u0000');
+      if (markerIdx === -1) {
+        if (rawChunk) { full += rawChunk; onChunk?.(rawChunk, full); }
+        return;
+      }
+      const visible = rawChunk.slice(0, markerIdx);
+      if (visible) { full += visible; onChunk?.(visible, full); }
+      complete = rawChunk.includes('ANATOLIA_STREAM_END');
+    };
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      full += chunk;
-      onChunk?.(chunk, full);
+      consumeChunk(decoder.decode(value, { stream: true }));
     }
     // Flush any pending partial multi-byte UTF-8 sequence left in the
     // decoder (e.g. a Turkish character split across a stream boundary) --
     // without this, a trailing byte can be silently dropped.
     const tail = decoder.decode();
-    if (tail) {
-      full += tail;
-      onChunk?.(tail, full);
-    }
-    return { provider, content: full };
+    if (tail) consumeChunk(tail);
+    return { provider, content: full, complete };
   },
 
   // AI-aware upload: image → returns base64, document → extracts text
@@ -302,13 +327,27 @@ const AUTH_BROADCAST_CHANNEL = typeof BroadcastChannel !== 'undefined' ? new Bro
 
 export function setJWT(jwt) {
   if (isNativeShell()) {
-    if (jwt) localStorage.setItem('anatolia_jwt', jwt);
-    else localStorage.removeItem('anatolia_jwt');
+    nativeJwt = jwt || null;
   }
   // Web has nothing to store here -- routes/auth.js already set/cleared the
   // httpOnly cookie as part of the login/logout request itself.
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
   AUTH_BROADCAST_CHANNEL?.postMessage('changed');
+}
+
+// Call once, before the app's first resolveCurrentUser(), with the native
+// bridge's own getSession (desktopAuth.getSession / mobileAuth.getSession)
+// -- passed in rather than imported here to avoid a circular import
+// (nativeBridge.js -> mobileBridge.js already imports getCurrentUser from
+// this module). Restores nativeJwt (see above) from the platform's
+// already-encrypted session store so a relaunch doesn't require re-login,
+// without this module ever touching localStorage itself.
+export async function hydrateNativeSession(getSessionFn) {
+  if (!isNativeShell() || typeof getSessionFn !== 'function') return;
+  try {
+    const session = await getSessionFn();
+    if (session?.jwt) nativeJwt = session.jwt;
+  } catch { /* best-effort -- falls through to the existing logged-out state */ }
 }
 
 // ConsultChat.jsx persists its message history under this key so a

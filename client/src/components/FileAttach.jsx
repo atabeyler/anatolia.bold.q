@@ -6,6 +6,26 @@ import { useLang } from '../services/langContext.jsx';
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i;
 const DOC_EXTS = /\.(pdf|docx|txt|csv|xlsx|xls)$/i;
 
+// FileMessageContent's attachment URL is parsed out of free-text message
+// content (see below), including messages from OTHER chat participants
+// (EmergencyChatPanel.jsx renders every m.from, not just the local user's
+// own messages) -- without this check, a message body containing
+// `[📎 EKLİ DOSYA: rapor.png]\njavascript:...` renders as a clickable
+// styled attachment link that runs attacker JS in the viewer's own
+// authenticated origin when clicked. Every real attachment URL this app
+// generates itself is either a same-origin relative path (`/api/files/...`)
+// or an absolute http(s)/blob: URL -- nothing else is ever legitimate.
+function isSafeAttachmentUrl(url) {
+  if (typeof url !== 'string' || !url) return false;
+  if (url.startsWith('/')) return true;
+  try {
+    const scheme = new URL(url, window.location.origin).protocol;
+    return scheme === 'https:' || scheme === 'http:' || scheme === 'blob:';
+  } catch {
+    return false;
+  }
+}
+
 export function FileMessageContent({ text, className = '' }) {
   const { t } = useLang();
   const idx = text ? text.indexOf('\n\n[📎 EKLİ DOSYA:') : -1;
@@ -18,6 +38,7 @@ export function FileMessageContent({ text, className = '' }) {
 
   const filename = m[1];
   const url = m[2].trim();
+  if (!isSafeAttachmentUrl(url)) return <span className={`whitespace-pre-wrap text-sm ${className}`}>{text}</span>;
   const isImage = IMAGE_EXTS.test(filename);
 
   return (

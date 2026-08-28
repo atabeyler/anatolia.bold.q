@@ -157,6 +157,14 @@ export function analysisTraceMiddleware(req, res, next) {
       const dataClassification = classifyData(requestBody.category, requestBody.dataClassification);
       const replayOf = Number(req.headers['x-anatolia-replay-of']) || null;
 
+      // body.provider is the masked "Q CLOUD" label the client sees --
+      // decisionIntelligence.js's own ai_provider/model_name audit columns
+      // exist specifically to answer "which vendor really produced this,"
+      // so this record needs the real one (routes/analysis.js's `_realProvider`
+      // field, added to the response body for exactly this purpose). Read
+      // it before the field is stripped below so it never reaches the client.
+      const realProvider = body._realProvider || body.provider;
+
       saveDecisionRecord({
         analysisId: body.analysisId || null,
         replayOf,
@@ -169,13 +177,15 @@ export function analysisTraceMiddleware(req, res, next) {
         dataQuality,
         evidence,
         decisionTrace: trace,
-        aiProvider: body.provider,
+        aiProvider: realProvider,
         dataClassification,
         durationMs,
         quantumParams: buildQuantumParams(body),
         predictedOutcome: buildPredictedOutcome(body),
         sourceHashes: buildSourceHashes(requestBody, body),
       }).catch(() => {});
+
+      if (body._realProvider !== undefined) delete body._realProvider;
 
       body.decisionMeta = {
         source: provenance.type,

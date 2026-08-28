@@ -104,6 +104,47 @@ describe('mergeOptimizerResults', () => {
     expect(note).toContain('%25 daha düşük değerli');
   });
 
+  // item 24: a beaten QAOA result must be demoted to an experimental
+  // comparison, not presented as the report's authoritative recommendation.
+  describe('when QAOA does not match the classical optimum', () => {
+    const result = {
+      backend: 'qiskit-aer-simulator', qubits: 11, circuitDepth: 20, circuitDiagram: '',
+      selected: ['A'], totalValue: 30, totalCost: 25, budgetPercent: 60, ibmHardwareAttempted: false,
+      items: [
+        { id: 'A', value: 30, cost: 25, selected: true },
+        { id: 'B', value: 10, cost: 5, selected: false },
+      ],
+      classicalBenchmark: { totalValue: 40, totalCost: 30, selected: ['A', 'B'], optimalityGapPercent: 25, matchesOptimal: false },
+    };
+
+    it('marks the section heading as an experimental comparison', () => {
+      const note = mergeOptimizerResults(result);
+      expect(note).toContain('QAOA — DENEYSEL KARŞILAŞTIRMA');
+    });
+
+    it('surfaces the classical optimum as the recommended selection, ahead of QAOA\'s own numbers', () => {
+      const note = mergeOptimizerResults(result);
+      expect(note).toContain('DENEYSEL SONUÇ');
+      const recommendedIdx = note.indexOf('Önerilen seçim (klasik optimum): Toplam değer 40');
+      const qaoaOwnIdx = note.indexOf("QAOA'nın kendi bulduğu deneysel sonucu: Toplam değer 30");
+      expect(recommendedIdx).toBeGreaterThan(-1);
+      expect(qaoaOwnIdx).toBeGreaterThan(recommendedIdx);
+    });
+
+    it('marks the items table by the classical-optimum selection, not the QAOA selection', () => {
+      const note = mergeOptimizerResults(result);
+      expect(note).toContain('| A | 30 | 25 | ✅ Seçildi (klasik optimum) |');
+      expect(note).toContain('| B | 10 | 5 | ✅ Seçildi (klasik optimum) |');
+    });
+
+    it('does not use the experimental heading or framing when QAOA matches the optimum', () => {
+      const matching = { ...result, classicalBenchmark: { ...result.classicalBenchmark, matchesOptimal: true } };
+      const note = mergeOptimizerResults(matching);
+      expect(note).not.toContain('DENEYSEL');
+      expect(note).toContain('## KUANTUM KAYNAK TAHSİSİ OPTİMİZASYONU (QAOA)\n');
+    });
+  });
+
   it('notes the hybrid decomposition when the item count exceeded one circuit', () => {
     const result = {
       backend: 'qiskit-aer-simulator', qubits: 14, circuitDepth: 20, circuitDiagram: '',

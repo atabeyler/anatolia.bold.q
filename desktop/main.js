@@ -33,6 +33,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The deployed web app is the source of truth this points at by default;
 // override with ANATOLIA_CLOUD_URL for a self-hosted/staging server.
 const CLOUD_URL = process.env.ANATOLIA_CLOUD_URL || 'https://site--anatoliaboldq--6ftfc8q7458m.code.run';
+// Same origin as CLOUD_URL, ws(s): scheme -- Socket.IO upgrades its
+// connection to this scheme, so CSP's connect-src needs it listed
+// explicitly (see the CSP header below); scoped to this one origin rather
+// than the bare `wss:`/`ws:` schemes, which would allow a WebSocket to ANY
+// host.
+const CLOUD_WS_URL = CLOUD_URL.replace(/^http/, 'ws');
 // Fixed (not random) so it can be allowlisted in the server's CORS config
 // (server/src/index.js) -- see the loadURL call below.
 const STATIC_SERVER_PORT = 57813;
@@ -583,7 +589,16 @@ async function createWindow() {
     const current = new URL(mainWindow.webContents.getURL());
     if (target.origin !== current.origin) {
       event.preventDefault();
-      shell.openExternal(url);
+      // Mirrors setWindowOpenHandler's own scheme check above -- without
+      // it, a cross-origin will-navigate to ANY scheme (not just http/https:
+      // a custom URI handler another installed app registered, file:, etc.)
+      // was unconditionally handed to shell.openExternal(), which on
+      // Windows can invoke a registered handler with attacker-influenced
+      // arguments. Only http(s) links are worth handing off to the OS
+      // browser at all; everything else is just dropped.
+      if (target.protocol === 'http:' || target.protocol === 'https:') {
+        shell.openExternal(url);
+      }
     }
   });
 
@@ -679,8 +694,15 @@ app.whenReady().then(async () => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
+        // connect-src used to allow the bare `wss:`/`ws:` schemes -- CSP
+        // treats a scheme-only source as "any host over that scheme," so a
+        // compromised renderer (XSS) could open a WebSocket to literally
+        // any attacker-controlled wss:// endpoint and exfiltrate data,
+        // which is exactly what connect-src is supposed to prevent. Scoped
+        // to CLOUD_URL's own origin instead -- the only WebSocket endpoint
+        // (Socket.IO) this app ever legitimately connects to.
         'Content-Security-Policy': [
-          "default-src 'self' " + CLOUD_URL + "; connect-src 'self' " + CLOUD_URL + " wss: ws:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+          "default-src 'self' " + CLOUD_URL + "; connect-src 'self' " + CLOUD_URL + " " + CLOUD_WS_URL + "; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'",
         ],
       },
     });

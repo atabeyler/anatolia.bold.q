@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { query, logAuditEvent, getPool } from '../services/database.js';
 import { sendApprovalEmail } from '../services/email.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { publicActionLimiter } from '../middleware/rateLimit.js';
+import { publicActionLimiter, adminActionLimiter } from '../middleware/rateLimit.js';
 import * as onlineState from '../lib/onlineState.js';
 import { JWT_SECRET } from '../lib/jwtSecret.js';
 import { escapeHtml } from '../lib/escapeHtml.js';
@@ -362,7 +362,7 @@ function validEmail(email) {
   return email === undefined || email === null || email === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-router.get('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
+router.get('/admin/users', authMiddleware, requireAdmin, adminActionLimiter, async (req, res) => {
   try {
     const { rows } = await query(
       'SELECT user_code, nickname, email, is_admin, blocked, created_at FROM auth_users ORDER BY created_at ASC'
@@ -373,7 +373,7 @@ router.get('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   }
 });
 
-router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
+router.post('/admin/users', authMiddleware, requireAdmin, adminActionLimiter, async (req, res) => {
   try {
     const { userCode, password, nickname, isAdmin, email, role } = req.body;
     if (!userCode || !password) {
@@ -418,7 +418,7 @@ router.post('/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   }
 });
 
-router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req, res) => {
+router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, adminActionLimiter, async (req, res) => {
   try {
     const { userCode } = req.params;
     const { password, nickname, isAdmin, blocked, email, role } = req.body;
@@ -523,7 +523,7 @@ router.patch('/admin/users/:userCode', authMiddleware, requireAdmin, async (req,
 // services/database.js) across many tables, so a rename has to update all
 // of them together inside one transaction, or a partial failure would
 // leave some of the user's history orphaned under the old code.
-router.post('/admin/users/:userCode/rename', authMiddleware, requireAdmin, async (req, res) => {
+router.post('/admin/users/:userCode/rename', authMiddleware, requireAdmin, adminActionLimiter, async (req, res) => {
   const { userCode } = req.params;
   const newUserCode = String(req.body?.newUserCode || '').trim();
   try {
@@ -590,7 +590,7 @@ router.post('/admin/users/:userCode/rename', authMiddleware, requireAdmin, async
   }
 });
 
-router.delete('/admin/users/:userCode', authMiddleware, requireAdmin, async (req, res) => {
+router.delete('/admin/users/:userCode', authMiddleware, requireAdmin, adminActionLimiter, async (req, res) => {
   try {
     const { userCode } = req.params;
     if (userCode === req.user.userCode) {
@@ -621,7 +621,7 @@ router.delete('/admin/users/:userCode', authMiddleware, requireAdmin, async (req
   }
 });
 
-router.get('/admin/audit-log', authMiddleware, requireAdmin, async (req, res) => {
+router.get('/admin/audit-log', authMiddleware, requireAdmin, adminActionLimiter, async (req, res) => {
   try {
     const { rows } = await query(
       'SELECT id, actor_user_code, actor_nickname, action, target_user_code, details, created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT 200'

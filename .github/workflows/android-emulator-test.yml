@@ -22,6 +22,11 @@ on:
       - main
   workflow_dispatch: {}
 
+# Explicit least-privilege default -- this job only builds/runs a debug test
+# APK on an emulator, it never pushes commits or publishes anything.
+permissions:
+  contents: read
+
 jobs:
   instrumented-test:
     runs-on: ubuntu-latest

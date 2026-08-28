@@ -6,14 +6,36 @@ const { Pool } = pkg;
 
 let pool;
 
+// Fail-closed at module load (same pattern/timing as lib/jwtSecret.js's own
+// hard requirement -- both throw before server.listen() ever runs, not
+// inside a request handler or a .catch()-swallowed startup promise): a
+// production deployment that has a database configured but no CA cert to
+// verify its TLS certificate against used to silently downgrade to
+// rejectUnauthorized:false (still encrypted, but MITM-able) and keep
+// running. That's a real, working default for a quick deploy, but not one
+// an institutional/defense profile should ever be running without a
+// deliberate, informed choice -- so it's now a hard startup refusal instead
+// of a warning log easy to miss in a boot trace.
+if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL && !process.env.DATABASE_CA_CERT) {
+  throw new Error(
+    'DATABASE_CA_CERT ortam değişkeni tanımlanmamış — üretimde DATABASE_URL ' +
+    'ayarlıyken zorunludur (aksi halde Postgres TLS doğrulaması atlanır, MITM riski oluşur).'
+  );
+}
+
 function buildSslConfig() {
   if (process.env.NODE_ENV !== 'production') return false;
   const caCert = process.env.DATABASE_CA_CERT;
   if (caCert) {
     return { rejectUnauthorized: true, ca: caCert };
   }
-  logger.warn('DATABASE_CA_CERT not set — Postgres TLS connections are encrypted but unverified (MITM risk); set DATABASE_CA_CERT to enable certificate verification.');
-  return { rejectUnauthorized: false };
+  // Unreachable in practice -- the module-level check above already throws
+  // before this function can ever run without DATABASE_CA_CERT set in
+  // production. Kept as a last-resort fail-closed default rather than
+  // deleting it outright, in case a future caller reaches buildSslConfig()
+  // from a path that bypasses this module's own top-level evaluation.
+  logger.warn('DATABASE_CA_CERT not set — Postgres TLS connections would be unverified (MITM risk).');
+  return { rejectUnauthorized: true };
 }
 
 export function getPool() {
@@ -113,6 +135,16 @@ export async function initDatabase() {
   await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS priority VARCHAR(20) NOT NULL DEFAULT 'normal';`);
   await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS depth VARCHAR(20) NOT NULL DEFAULT 'standart';`);
 
+  // The classification decided at generation time (see routes/analysis.js's
+  // classifyData() call in /generate) used to be re-derived from `category`
+  // on every read instead of stored -- so a report explicitly raised to
+  // RESTRICTED at creation could read back as a lower, category-derived
+  // floor later (history.js, sync, downloads). NULL here means "no stored
+  // value yet" (rows written before this migration, or writers that haven't
+  // been updated to pass one) -- readers must still fall back to the
+  // category floor for NULL, never treat NULL as PUBLIC.
+  await p.query(`ALTER TABLE analyses ADD COLUMN IF NOT EXISTS data_classification VARCHAR(20);`);
+
   await p.query(`
     CREATE TABLE IF NOT EXISTS devices (
       id SERIAL PRIMARY KEY,
@@ -169,6 +201,26 @@ export async function initDatabase() {
       message TEXT NOT NULL,
       target VARCHAR(50) NOT NULL,
       region VARCHAR(50),
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  // Ownership/classification record for uploaded files (routes/files.js).
+  // Uploads previously had no DB row at all -- the random UUID filename was
+  // the only "access control," so any authenticated user who obtained/
+  // guessed a filename could download it regardless of who uploaded it. A
+  // row here lets the download route enforce owner-or-classification-access
+  // instead. Rows for files uploaded before this migration don't exist --
+  // files.js treats a missing row as pre-migration legacy content and
+  // allows the existing (any-authenticated-user) behavior only for those,
+  // never for a filename that does have a row.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS uploaded_files (
+      filename VARCHAR(255) PRIMARY KEY,
+      owner_user_code VARCHAR(50) NOT NULL,
+      classification VARCHAR(20) NOT NULL DEFAULT 'INTERNAL',
+      original_name TEXT,
+      mimetype VARCHAR(255),
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
@@ -311,6 +363,41 @@ export async function getUserEmailRecipients() {
   }
 }
 
+// Records who uploaded a file and at what classification -- see the
+// uploaded_files table comment above. Best-effort: a logging failure here
+// must not fail the upload itself (the file is already saved/on S3 by the
+// time this runs), but files.js's download route treats a missing row as
+// "pre-migration legacy," not "public," so a failed insert here does
+// weaken this specific file's ACL back to the old any-authenticated-user
+// behavior -- acceptable degradation, not a silent full bypass.
+export async function recordUploadedFile({ filename, ownerUserCode, classification, originalName, mimetype }) {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    await query(
+      `INSERT INTO uploaded_files (filename, owner_user_code, classification, original_name, mimetype)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (filename) DO NOTHING`,
+      [filename, ownerUserCode, classification || 'INTERNAL', originalName || null, mimetype || null]
+    );
+  } catch (err) {
+    logger.warn({ err }, '[Database] Failed to record uploaded file ownership');
+  }
+}
+
+export async function getUploadedFileRecord(filename) {
+  if (!process.env.DATABASE_URL) return null;
+  try {
+    const { rows } = await query(
+      'SELECT filename, owner_user_code, classification FROM uploaded_files WHERE filename = $1',
+      [filename]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    logger.warn({ err }, '[Database] Failed to load uploaded file record');
+    return null;
+  }
+}
+
 export async function getUserEmailByNickname(nickname) {
   if (!process.env.DATABASE_URL || !nickname) return null;
   try {
@@ -367,10 +454,17 @@ export async function initMemoryTables() {
       key_facts TEXT,
       full_history JSONB,
       archived BOOLEAN DEFAULT FALSE,
+      data_classification VARCHAR(20),
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  // item 19: an already-deployed DB won't have the column above -- same
+  // never-downgrade-safe NULL fallback as the analyses table's own
+  // migration (readers must floor NULL to classifyData(null, ...), never
+  // treat it as PUBLIC).
+  await p.query(`ALTER TABLE conversation_memory ADD COLUMN IF NOT EXISTS data_classification VARCHAR(20);`);
 
   await p.query(`
     CREATE INDEX IF NOT EXISTS idx_memory_user ON conversation_memory(user_code);

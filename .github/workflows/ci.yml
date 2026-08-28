@@ -5,6 +5,13 @@ on:
     branches: ['**']
   pull_request:
 
+# Explicit least-privilege default -- none of these jobs push commits,
+# create releases, or otherwise need write access; without this the
+# workflow runs with the repo's default token permissions, which can be
+# read-write depending on org settings.
+permissions:
+  contents: read
+
 jobs:
   versions:
     runs-on: ubuntu-latest

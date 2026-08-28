@@ -1,9 +1,9 @@
 import express from 'express';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, inArray } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { getDb, isDbConfigured } from '../db/client.js';
 import { getPool } from '../services/database.js';
-import { analyses, devices, emergencyLogs } from '../db/schema.js';
+import { analyses, devices, emergencyLogs, userProfiles } from '../db/schema.js';
 import { generateReportDocx } from '../services/docx.js';
 import { generateReportPdf } from '../services/pdf.js';
 import { getTodayBriefing, getBriefingByDate, listBriefingDates, generateMorningBriefIfNeeded } from '../services/morningBrief.js';
@@ -124,6 +124,32 @@ router.post('/morning-brief/refresh', authMiddleware, async (req, res) => {
   }
 });
 
+// item 16 (RBAC -> ABAC): before this, visibility was strictly binary --
+// isAdmin saw every analysis in the system, anyone else saw only their own,
+// with nothing in between. That forced a false choice for ordinary
+// case/unit collaboration: either grant a teammate full admin rights just
+// so they can see a shared case, or keep every non-admin siloed to their
+// own reports even when they're working the same unit's caseload. This
+// adds one real attribute-based rule on top of the existing role/
+// classification checks: a teammate in the same organizational unit
+// (user_profiles.unit) may VIEW another member's analysis, but only up to
+// INTERNAL -- CONFIDENTIAL/RESTRICTED stays visible to its owner and
+// admins only, same as before. Deleting a teammate's report is
+// deliberately NOT extended by this rule (see DELETE /:id below, unchanged).
+const UNIT_SHARE_CLASSIFICATIONS = ['PUBLIC', 'INTERNAL'];
+
+async function getUserUnit(userCode) {
+  if (!isDbConfigured() || !userCode) return null;
+  const [row] = await getDb().select({ unit: userProfiles.unit }).from(userProfiles).where(eq(userProfiles.userCode, userCode));
+  return row?.unit || null;
+}
+
+function canViewAsUnitMate(row, requesterUnit, ownerUnit) {
+  if (!requesterUnit || !ownerUnit || requesterUnit !== ownerUnit) return false;
+  const classification = row.dataClassification || classifyData(row.category);
+  return UNIT_SHARE_CLASSIFICATIONS.includes(classification);
+}
+
 router.get('/list', authMiddleware, async (req, res) => {
   try {
     if (!isDbConfigured()) return res.json([]);
@@ -132,15 +158,26 @@ router.get('/list', authMiddleware, async (req, res) => {
     // revoked) still comes back -- deviceLabelFor() falls back to
     // "Bilinmeyen Cihaz" rather than the row silently vanishing.
     const selection = { analysis: analyses, devicePlatform: devices.platform };
-    const scoped = req.user?.isAdmin
-      ? getDb().select(selection).from(analyses).leftJoin(devices, eq(analyses.deviceId, devices.deviceId)).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(100)
-      : getDb()
-          .select(selection)
-          .from(analyses)
-          .leftJoin(devices, eq(analyses.deviceId, devices.deviceId))
-          .where(and(eq(analyses.userCode, req.user.userCode), isNull(analyses.deletedAt)))
-          .orderBy(desc(analyses.createdAt))
-          .limit(100);
+    let scoped;
+    if (req.user?.isAdmin) {
+      scoped = getDb().select(selection).from(analyses).leftJoin(devices, eq(analyses.deviceId, devices.deviceId)).where(isNull(analyses.deletedAt)).orderBy(desc(analyses.createdAt)).limit(100);
+    } else {
+      const requesterUnit = await getUserUnit(req.user.userCode);
+      const visibility = requesterUnit
+        ? or(
+            eq(analyses.userCode, req.user.userCode),
+            and(eq(userProfiles.unit, requesterUnit), inArray(analyses.dataClassification, UNIT_SHARE_CLASSIFICATIONS))
+          )
+        : eq(analyses.userCode, req.user.userCode);
+      scoped = getDb()
+        .select(selection)
+        .from(analyses)
+        .leftJoin(devices, eq(analyses.deviceId, devices.deviceId))
+        .leftJoin(userProfiles, eq(analyses.userCode, userProfiles.userCode))
+        .where(and(visibility, isNull(analyses.deletedAt)))
+        .orderBy(desc(analyses.createdAt))
+        .limit(100);
+    }
 
     const rows = await scoped;
 
@@ -209,14 +246,16 @@ router.get('/feed', authMiddleware, async (req, res) => {
   }
 });
 
-// The `analyses` table itself carries no classification -- it's derived
-// the same way decisionIntelligence.js's saveDecisionRecord() does
-// (classifyData(category)), so a role that couldn't have generated a
-// CONFIDENTIAL/RESTRICTED report in the first place (see routes/analysis.js's
-// /generate gate) also can't read/export/download one after the fact --
-// including one belonging to another user that an admin is looking up.
+// Prefer the classification stored at generation time (row.dataClassification
+// -- see routes/analysis.js's /generate, which now persists classifyData()'s
+// result instead of only computing it transiently). Only re-derive from
+// category for rows written before that column existed (NULL) -- otherwise
+// a report explicitly raised above its category floor (e.g. to RESTRICTED)
+// would silently read back at the lower floor every time history is viewed,
+// which is exactly the downgrade this stored column exists to prevent.
 function blockedByClassification(req, row) {
-  return !canAccessClassification(req.user, classifyData(row.category));
+  const classification = row.dataClassification || classifyData(row.category);
+  return !canAccessClassification(req.user, classification);
 }
 
 router.get('/:id', authMiddleware, async (req, res) => {
@@ -230,7 +269,11 @@ router.get('/:id', authMiddleware, async (req, res) => {
       .where(eq(analyses.id, Number(req.params.id)));
     if (!row || row.analysis.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.analysis.userCode !== req.user.userCode) {
-      return res.status(404).json({ error: 'Bulunamadi' });
+      const requesterUnit = await getUserUnit(req.user.userCode);
+      const ownerUnit = await getUserUnit(row.analysis.userCode);
+      if (!canViewAsUnitMate(row.analysis, requesterUnit, ownerUnit)) {
+        return res.status(404).json({ error: 'Bulunamadi' });
+      }
     }
     if (blockedByClassification(req, row.analysis)) {
       return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
@@ -277,7 +320,11 @@ router.get('/:id/download', authMiddleware, async (req, res) => {
     const [row] = await getDb().select().from(analyses).where(eq(analyses.id, Number(req.params.id)));
     if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
-      return res.status(404).json({ error: 'Bulunamadi' });
+      const requesterUnit = await getUserUnit(req.user.userCode);
+      const ownerUnit = await getUserUnit(row.userCode);
+      if (!canViewAsUnitMate(row, requesterUnit, ownerUnit)) {
+        return res.status(404).json({ error: 'Bulunamadi' });
+      }
     }
     if (blockedByClassification(req, row)) {
       return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });
@@ -306,7 +353,11 @@ router.get('/:id/download-pdf', authMiddleware, async (req, res) => {
     const [row] = await getDb().select().from(analyses).where(eq(analyses.id, Number(req.params.id)));
     if (!row || row.deletedAt) return res.status(404).json({ error: 'Bulunamadi' });
     if (!req.user?.isAdmin && row.userCode !== req.user.userCode) {
-      return res.status(404).json({ error: 'Bulunamadi' });
+      const requesterUnit = await getUserUnit(req.user.userCode);
+      const ownerUnit = await getUserUnit(row.userCode);
+      if (!canViewAsUnitMate(row, requesterUnit, ownerUnit)) {
+        return res.status(404).json({ error: 'Bulunamadi' });
+      }
     }
     if (blockedByClassification(req, row)) {
       return res.status(403).json({ error: 'Bu veri sınıfına erişim yetkiniz yok' });

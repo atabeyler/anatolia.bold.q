@@ -59,6 +59,17 @@ const NATIVE_APP_ORIGINS = [
 // origin (APP_URL) plus the native app origins above, instead of reflecting
 // any origin. Locally (no APP_URL / non-production) all origins are still
 // allowed for developer convenience.
+//
+// The comment above described this as production-gated from the start, but
+// the code itself never actually checked NODE_ENV -- APP_URL going unset in
+// a REAL production deploy (a plausible ops mistake, not just a local dev
+// default) silently fell through to allow-all-origins with credentials:true
+// (the httpOnly session cookie riding along), rather than failing closed.
+// Same fail-fast timing/pattern as lib/jwtSecret.js and this file's own
+// DATABASE_CA_CERT check: refuse to start rather than silently widen CORS.
+if (process.env.NODE_ENV === 'production' && !process.env.APP_URL) {
+  throw new Error('APP_URL ortam değişkeni tanımlanmamış — üretimde zorunludur (aksi halde CORS tüm kökenlere açılır).');
+}
 const allowedOrigins = process.env.APP_URL ? [process.env.APP_URL, ...NATIVE_APP_ORIGINS] : true;
 
 logEnvValidationWarnings();

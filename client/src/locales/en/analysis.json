@@ -40,6 +40,7 @@
   "downloadDocxBtn": "DOWNLOAD .DOCX",
   "errorPrefix": "Error",
   "errAllProvidersFailed": "All AI providers are currently failing (this may be a quota, billing, or connectivity issue). Please try again later.",
+  "streamCutShort": "⚠ This reply may have been cut short by a connection issue.",
   "historySearchPh": "Search by title or content…",
   "historyAllCategories": "All categories",
   "historyNoResults": "No search results found.",

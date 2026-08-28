@@ -58,6 +58,18 @@ jobs:
   # tag until it's published.
   prepare-release:
     runs-on: ubuntu-latest
+    # AQ security review (P0-05): every push to main used to become a public
+    # production release with no human review -- a typo-fix commit was
+    # indistinguishable from a deliberate release. Referencing this
+    # environment doesn't change behavior BY ITSELF (an environment with no
+    # protection rules configured behaves exactly like not having one) --
+    # it's the hook the repo owner needs to attach a required-reviewers rule
+    # to (Settings > Environments > production-release > required reviewers),
+    # a one-time manual step GitHub doesn't expose through workflow YAML.
+    # Once that's set, this job (and everything after it, including the
+    # actual build-and-publish matrix below) pauses for approval before a
+    # release is created/made public.
+    environment: production-release
     outputs:
       tag: ${{ steps.info.outputs.tag }}
     steps:

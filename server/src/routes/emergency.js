@@ -4,6 +4,7 @@ import { getDb, isDbConfigured } from '../db/client.js';
 import { getUserEmailRecipients } from '../services/database.js';
 import { emergencyLogs } from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { requireRole, ROLES } from '../lib/rbac.js';
 import { getOptionalUserCode } from '../lib/optionalAuth.js';
 import { publicActionLimiter } from '../middleware/rateLimit.js';
 import { logger } from '../lib/logger.js';
@@ -74,9 +75,11 @@ router.post('/center', publicActionLimiter, async (req, res) => {
 
 // Emergency broadcast to every other logged-in user's live session -- unlike
 // /center and /region (which only ever reach the center mailbox), this reaches
-// every connected client's screen in real time, so it requires a valid login
-// rather than just an IP rate limit.
-router.post('/users', authMiddleware, publicActionLimiter, async (req, res) => {
+// every connected client's screen in real time (socket + email + push to the
+// entire user base), so a valid login alone isn't enough gate: it requires
+// ADMIN role (rbac.js's generic tier stands in for a real "Duty Officer/
+// Crisis Commander" role until one exists -- see that file's own comment).
+router.post('/users', authMiddleware, requireRole(ROLES.ADMIN), publicActionLimiter, async (req, res) => {
   try {
     const { message } = req.body;
     if (!validMessage(message)) return res.status(400).json({ error: 'Geçerli bir mesaj gerekli (en fazla 2000 karakter)' });

@@ -76,6 +76,29 @@ class LocalLLMPlugin : Plugin() {
         private const val DEFAULT_THREAD_COUNT = 4
     }
 
+    /**
+     * item 7 (path traversal): modelPath is a string the JS layer sends
+     * verbatim (registry.js/modelSpec.js's own filenames today, but this
+     * plugin has no way to know that at runtime -- it's an untrusted
+     * cross-boundary argument like any other Capacitor call). `File(parent,
+     * child)` does NOT confine `child` to `parent`: a `child` starting with
+     * "/" replaces the parent entirely, and a relative "../../.." climbs out
+     * of it -- either way this used to let a compromised/malicious webview
+     * context read (sha256File) or mmap (load) arbitrary files the app
+     * process can access, not just files inside filesDir/models. Resolving
+     * to a canonical path and checking it's still inside filesDir closes
+     * both variants; symlink-based escapes are also caught since
+     * canonicalFile resolves symlinks before the prefix check.
+     */
+    private fun resolveConfinedFile(modelPath: String): File? {
+        val root = context.filesDir.canonicalFile
+        val candidate = File(root, modelPath).canonicalFile
+        if (candidate != root && !candidate.path.startsWith(root.path + File.separator)) {
+            return null
+        }
+        return candidate
+    }
+
     @PluginMethod
     fun load(call: PluginCall) {
         val modelPath = call.getString("modelPath")
@@ -86,7 +109,11 @@ class LocalLLMPlugin : Plugin() {
         val contextSize = call.getInt("contextSize", 2048) ?: 2048
         val systemPrompt = call.getString("systemPrompt") ?: ""
 
-        val modelFile = File(context.filesDir, modelPath)
+        val modelFile = resolveConfinedFile(modelPath)
+        if (modelFile == null) {
+            call.reject("local_llm_invalid_model_path")
+            return
+        }
         if (!modelFile.exists()) {
             call.reject("local_llm_model_file_missing: ${modelFile.absolutePath}")
             return
@@ -210,7 +237,11 @@ class LocalLLMPlugin : Plugin() {
             call.reject("modelPath is required")
             return
         }
-        val file = File(context.filesDir, modelPath)
+        val file = resolveConfinedFile(modelPath)
+        if (file == null) {
+            call.reject("local_llm_invalid_model_path")
+            return
+        }
         if (!file.exists()) {
             call.reject("local_llm_model_file_missing: ${file.absolutePath}")
             return

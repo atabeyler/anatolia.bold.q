@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { authMiddleware } from '../middleware/auth.js';
 import { getPool } from '../services/database.js';
 import { logger } from '../lib/logger.js';
+import { classifyData, maxLevel } from '../services/decisionIntelligence.js';
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ const analysisRowToPayload = (row) => ({
   title: row.title,
   content: row.content,
   aiProvider: row.ai_provider,
+  dataClassification: row.data_classification,
   fraudTransactionCount: row.fraud_transaction_count,
   fraudFlaggedCount: row.fraud_flagged_count,
 });
@@ -116,12 +118,17 @@ async function applyOperation(pool, userCode, deviceId, op) {
         // inserting a duplicate.
         result = { status: 'applied', serverVersion: current.version, serverPayload: analysisRowToPayload(current) };
       } else {
+        // classifyData() re-derives the category floor and only lets the
+        // incoming payload's dataClassification RAISE above it, never
+        // lower it -- a compromised/malicious sync source can't push a
+        // downgraded classification onto a locally-created record.
+        const insertClassification = classifyData(payload?.category, payload?.dataClassification);
         const { rows: inserted } = await client.query(
           `INSERT INTO analyses
-             (user_code, category, title, content, ai_provider, client_id, device_id, version, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 1, NOW())
+             (user_code, category, title, content, ai_provider, data_classification, client_id, device_id, version, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, NOW())
            RETURNING *`,
-          [userCode, payload?.category, payload?.title, payload?.content, payload?.aiProvider || null, entityId, deviceId]
+          [userCode, payload?.category, payload?.title, payload?.content, payload?.aiProvider || null, insertClassification, entityId, deviceId]
         );
         const row = inserted[0];
         result = { status: 'applied', serverVersion: row.version, serverPayload: analysisRowToPayload(row) };
@@ -137,17 +144,27 @@ async function applyOperation(pool, userCode, deviceId, op) {
           deleted: !!current.deleted_at,
         };
       } else {
+        // Same never-downgrade rule as create above, applied against the
+        // row's CURRENT stored classification rather than only the
+        // category floor -- an update payload can raise it further (e.g.
+        // a client later marking an existing report RESTRICTED) but can
+        // never lower what's already been set.
+        const incomingUpper = payload?.dataClassification ? String(payload.dataClassification).toUpperCase() : null;
+        const updateClassification = incomingUpper
+          ? maxLevel(current.data_classification || classifyData(current.category), incomingUpper)
+          : current.data_classification;
         const { rows: updated } = await client.query(
           `UPDATE analyses
              SET title = COALESCE($3, title),
                  content = COALESCE($4, content),
+                 data_classification = $5,
                  device_id = $2,
                  version = version + 1,
                  updated_at = NOW(),
                  sync_revision = nextval('analyses_sync_revision_seq')
            WHERE client_id = $1
            RETURNING *`,
-          [entityId, deviceId, payload?.title ?? null, payload?.content ?? null]
+          [entityId, deviceId, payload?.title ?? null, payload?.content ?? null, updateClassification]
         );
         const row = updated[0];
         result = { status: 'applied', serverVersion: row.version, serverPayload: analysisRowToPayload(row) };

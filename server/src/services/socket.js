@@ -126,6 +126,7 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('chat:history', async ({ withUser }) => {
+      if (!socket.nickname) return socket.emit('chat:history:result', []);
       if (!isDbConfigured()) return socket.emit('chat:history:result', []);
       try {
         const me = socket.nickname;
@@ -221,6 +222,7 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('video:meeting:status', ({ roomId }) => {
+      if (!socket.nickname) return;
       const rid = roomId || 'acil-toplanti';
       const meeting = activeMeetingByRoom.get(rid);
       socket.emit('video:meeting:status:result', {
@@ -238,6 +240,7 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('video:join', ({ roomId }) => {
+      if (!socket.nickname) return;
       const rid = roomId || 'acil-toplanti';
       const meeting = activeMeetingByRoom.get(rid);
       if (!meeting) return;
@@ -263,6 +266,7 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('video:leave', ({ roomId }) => {
+      if (!socket.nickname) return;
       const rid = roomId || 'acil-toplanti';
       const meeting = activeMeetingByRoom.get(rid);
       if (meeting) {
@@ -279,12 +283,19 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('video:signal', ({ roomId, to, data }) => {
+      if (!socket.nickname || !to) return;
       const rid = roomId || 'acil-toplanti';
-      if (!to) return;
+      // Both ends must actually be joined participants of this meeting --
+      // without this, any authenticated-but-unjoined socket could relay
+      // WebRTC offers/answers/ICE candidates to an arbitrary socket id it
+      // guessed, attempting to establish a media connection outside the room.
+      const meeting = activeMeetingByRoom.get(rid);
+      if (!meeting?.participants.has(socket.id) || !meeting.participants.has(to)) return;
       io.to(to).emit('video:signal', { roomId: rid, from: socket.id, data });
     });
 
     socket.on('video:media-state', ({ roomId, micOn, camOn, handRaised, screenOn }) => {
+      if (!socket.nickname) return;
       const rid = roomId || 'acil-toplanti';
       const meeting = activeMeetingByRoom.get(rid);
       if (!meeting) return;
@@ -316,6 +327,7 @@ export function initSocketHandlers(io) {
     });
 
     socket.on('video:logs:request', ({ roomId }) => {
+      if (!socket.nickname) return;
       const rid = roomId || 'acil-toplanti';
       const meeting = activeMeetingByRoom.get(rid);
       if (!meeting) return socket.emit('video:logs:result', { roomId: rid, logs: [] });

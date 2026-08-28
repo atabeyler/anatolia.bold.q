@@ -8,7 +8,8 @@ import { isS3Configured, uploadObject, getPresignedDownloadUrl } from '../lib/ob
 import { authMiddleware } from '../middleware/auth.js';
 import { uploadLimiter } from '../middleware/rateLimit.js';
 import { scanFile } from '../lib/fileScan.js';
-import { logAuditEvent } from '../services/database.js';
+import { logAuditEvent, recordUploadedFile, getUploadedFileRecord } from '../services/database.js';
+import { canAccessClassification } from '../lib/rbac.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '../../uploads');
@@ -91,6 +92,10 @@ router.post('/upload', authMiddleware, uploadLimiter, upload.single('file'), asy
     if (USE_S3) {
       const key = uuidv4() + (path.extname(file.originalname) || '');
       await uploadObject(key, file.buffer, file.mimetype);
+      await recordUploadedFile({
+        filename: key, ownerUserCode: req.user.userCode, classification,
+        originalName: file.originalname, mimetype: file.mimetype,
+      });
       return res.json({
         url: `/api/files/${key}`,
         filename: file.originalname,
@@ -98,6 +103,11 @@ router.post('/upload', authMiddleware, uploadLimiter, upload.single('file'), asy
         size: file.size,
       });
     }
+
+    await recordUploadedFile({
+      filename: file.filename, ownerUserCode: req.user.userCode, classification,
+      originalName: file.originalname, mimetype: file.mimetype,
+    });
 
     res.json({
       url: `/api/files/${file.filename}`,
@@ -114,6 +124,21 @@ router.get('/:filename', authMiddleware, async (req, res) => {
   const name = path.basename(req.params.filename);
   const forceAttachment = ACTIVE_CONTENT_EXTS.test(name);
   res.set('X-Content-Type-Options', 'nosniff');
+
+  // ACL: a missing row means the file predates the ownership migration --
+  // fall back to the previous (any-authenticated-user) behavior only for
+  // those. A file WITH a row must belong to the requester, or the
+  // requester's role must be able to access its classification (mirrors
+  // requireClassificationAccess's own rule elsewhere).
+  const record = await getUploadedFileRecord(name);
+  if (record) {
+    // canAccessClassification already grants ADMIN every classification, so
+    // no separate admin check is needed here.
+    const isOwner = record.owner_user_code === req.user.userCode;
+    if (!isOwner && !canAccessClassification(req.user, record.classification)) {
+      return res.status(403).json({ error: 'Bu dosyaya erişim yetkiniz yok' });
+    }
+  }
 
   if (USE_S3) {
     try {

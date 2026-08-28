@@ -29,3 +29,17 @@ export const analysisLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Çok fazla istek — lütfen bir dakika sonra tekrar deneyin.' },
 });
+
+// Applied to admin user-management/audit routes (routes/auth.js's /admin/*)
+// -- requireAdmin already gates who can call these, but that alone doesn't
+// bound how fast a compromised/malicious admin session (a stolen admin JWT,
+// or an insider) can mass-enumerate or mutate accounts. Generous relative to
+// the other limiters above since a real admin doing legitimate bulk work
+// (e.g. onboarding several users) shouldn't hit this in normal use.
+export const adminActionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Çok fazla yönetici isteği — lütfen bir dakika sonra tekrar deneyin.' },
+});

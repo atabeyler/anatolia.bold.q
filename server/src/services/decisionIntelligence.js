@@ -124,7 +124,7 @@ function modelForProvider(provider = '') {
 
 // Higher index = more sensitive (see dataEgressPolicy.ts's CLASSIFICATIONS,
 // the single source of truth for this ordering).
-function maxLevel(a, b) {
+export function maxLevel(a, b) {
   const ai = CLASSIFICATIONS.indexOf(a);
   const bi = CLASSIFICATIONS.indexOf(b);
   if (ai === -1) return b;

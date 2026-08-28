@@ -17,6 +17,19 @@ export { PolicyDenialError };
 
 export const PUBLIC_CLOUD_PROVIDER_LABEL = 'Q CLOUD';
 
+// item 18: a plain-text stream that just stops looks identical to the
+// client whether it finished normally or was cut off mid-answer (a dropped
+// connection, a provider erroring after the first chunk) -- there was no
+// way to tell "the model said everything it had" from "the network died
+// halfway through a sentence." These NUL-delimited markers are appended as
+// the very last write before res.end() so the client (client/src/services/
+// api.js's chatConsult) can strip them and know which case it was in. NUL
+// is chosen because it cannot occur in normal model text output, so no
+// real answer is ever mistaken for the marker.
+const NUL = String.fromCharCode(0);
+export const STREAM_END_MARKER = `${NUL}ANATOLIA_STREAM_END${NUL}`;
+export const STREAM_ERROR_MARKER = `${NUL}ANATOLIA_STREAM_ERROR${NUL}`;
+
 // Records latency + success/failure for one provider attempt, keyed
 // `ai.<provider>` -- see getMetricsSnapshot()/the /api/platform/metrics
 // endpoint. Comparing call counts across providers over time surfaces the
@@ -31,7 +44,19 @@ interface AttemptDef {
 }
 
 interface GenerateResult {
+  // Masked, UI-facing label ("Q CLOUD") -- what the client sees and what's
+  // stored on the analyses row itself. Never the real vendor.
   provider: string;
+  // AQ security review finding: the real provider identity (e.g. "Claude
+  // (Anthropic)") used to be discarded entirely at this boundary -- every
+  // caller only ever received/persisted the masked label above, including
+  // decisionIntelligence.js's saveDecisionRecord(), whose own ai_provider/
+  // model_name audit columns exist specifically to answer "which vendor
+  // actually produced this analysis" and were silently getting "Q CLOUD"/
+  // null in every row as a result. Callers that need the real identity for
+  // audit/provenance purposes (never for the client response) read this
+  // field instead.
+  realProvider: string;
   content: string;
   usage: unknown;
 }
@@ -72,7 +97,7 @@ export async function generateAnalysisWithVision(
           ],
           maxOutputTokens: 8000,
         });
-        return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: text, usage };
+        return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, realProvider: 'Claude (Anthropic)', content: text, usage };
       } catch (err) {
         logger.warn({ err }, 'Claude Vision failed -> falling back to text');
       }
@@ -131,7 +156,7 @@ export async function generateAnalysis(
         ...(maxOutputTokens ? { maxOutputTokens } : {}),
       });
       recordAiAttempt(key, startedAt, true);
-      return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: text, usage: usage ?? null };
+      return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, realProvider: name, content: text, usage: usage ?? null };
     } catch (err) {
       recordAiAttempt(key, startedAt, false);
       logger.warn({ err, provider: name }, 'AI provider failed, trying next by policy order');
@@ -154,7 +179,7 @@ export async function streamConsultationText(
   userPrompt: string,
   res: Response,
   classification: string = 'INTERNAL'
-): Promise<{ provider: string; content: string }> {
+): Promise<{ provider: string; realProvider: string; content: string }> {
   // Policy filter runs on plain {key,name} entries first -- the adapter
   // factory (anthropicProvider(...), which actually constructs an SDK model
   // handle) is only called afterward, for keys that survive the filter.
@@ -210,15 +235,17 @@ export async function streamConsultationText(
         continue;
       }
       recordAiAttempt(metricKey, startedAt, true);
+      res.write(STREAM_END_MARKER);
       res.end();
-      return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: full };
+      return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, realProvider: attempt.name, content: full };
     } catch (err) {
       recordAiAttempt(metricKey, startedAt, false);
       if (startedSending) {
         // Data has already been sent to the client — no choice but to end the stream here.
         logger.warn({ err, provider: attempt.name }, 'Streaming cut short');
+        res.write(STREAM_ERROR_MARKER);
         res.end();
-        return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, content: full };
+        return { provider: PUBLIC_CLOUD_PROVIDER_LABEL, realProvider: attempt.name, content: full };
       }
       logger.warn({ err, provider: attempt.name }, 'Failed to start streaming, trying next provider');
     }

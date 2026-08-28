@@ -40,6 +40,7 @@
   "downloadDocxBtn": ".DOCX İNDİR",
   "errorPrefix": "Hata",
   "errAllProvidersFailed": "Tüm YZ sağlayıcıları şu anda başarısız oluyor (kota/kredi/bağlantı sorunu olabilir). Lütfen daha sonra tekrar deneyin.",
+  "streamCutShort": "⚠ Yanıt bağlantı sorunu nedeniyle yarıda kesilmiş olabilir.",
   "historySearchPh": "Başlık veya içerikte ara…",
   "historyAllCategories": "Tüm kategoriler",
   "historyNoResults": "Arama sonucu bulunamadı.",

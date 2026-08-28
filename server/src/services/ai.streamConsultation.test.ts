@@ -64,8 +64,11 @@ describe('streamConsultationText', () => {
     streamTextMock.mockReturnValueOnce(chunkedStream(['Merhaba']));
     const res = fakeRes();
     const result = await streamConsultationText('sys', 'user', res as never);
-    expect(result).toEqual({ provider: 'Q CLOUD', content: 'Merhaba' });
+    expect(result).toEqual({ provider: 'Q CLOUD', realProvider: 'Claude (Anthropic)', content: 'Merhaba' });
     expect(res.writeHead).toHaveBeenCalledTimes(1);
+    // item 18: a completion marker must be written before the stream ends,
+    // so the client can tell a clean finish apart from a mid-answer cutoff.
+    expect(res.write).toHaveBeenLastCalledWith(expect.stringContaining('ANATOLIA_STREAM_END'));
     expect(res.end).toHaveBeenCalledTimes(1);
   });
 
@@ -75,11 +78,12 @@ describe('streamConsultationText', () => {
       .mockReturnValueOnce(chunkedStream(['Merhaba', ' dünya']));
     const res = fakeRes();
     const result = await streamConsultationText('sys', 'user', res as never);
-    expect(result).toEqual({ provider: 'Q CLOUD', content: 'Merhaba dünya' });
+    expect(result).toEqual({ provider: 'Q CLOUD', realProvider: 'Gemini (Google)', content: 'Merhaba dünya' });
     // Only one writeHead call -- Claude's empty attempt must never have
     // started a response, or the client would see a truncated/empty body
     // before Gemini's real content.
     expect(res.writeHead).toHaveBeenCalledTimes(1);
+    expect(res.write).toHaveBeenLastCalledWith(expect.stringContaining('ANATOLIA_STREAM_END'));
   });
 
   it('also falls back on a thrown exception (pre-existing behavior)', async () => {
@@ -88,7 +92,22 @@ describe('streamConsultationText', () => {
       .mockReturnValueOnce(chunkedStream(['Ok']));
     const res = fakeRes();
     const result = await streamConsultationText('sys', 'user', res as never);
-    expect(result).toEqual({ provider: 'Q CLOUD', content: 'Ok' });
+    expect(result).toEqual({ provider: 'Q CLOUD', realProvider: 'Gemini (Google)', content: 'Ok' });
+  });
+
+  // item 18
+  it('writes an error marker instead of an end marker when a provider errors mid-stream, after already sending data', async () => {
+    streamTextMock.mockReturnValueOnce({
+      textStream: (async function* () {
+        yield 'Merha';
+        throw new Error('connection dropped');
+      })(),
+    });
+    const res = fakeRes();
+    const result = await streamConsultationText('sys', 'user', res as never);
+    expect(result).toEqual({ provider: 'Q CLOUD', realProvider: 'Claude (Anthropic)', content: 'Merha' });
+    expect(res.write).toHaveBeenLastCalledWith(expect.stringContaining('ANATOLIA_STREAM_ERROR'));
+    expect(res.end).toHaveBeenCalledTimes(1);
   });
 
   it('throws when every provider fails or produces no output', async () => {
