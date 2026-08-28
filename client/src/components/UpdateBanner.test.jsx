@@ -155,4 +155,30 @@ describe('UpdateBanner (Android)', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('retries the check on a 5-minute interval so a failed cold-start attempt still surfaces a later update', async () => {
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
+    vi.resetModules();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+    vi.useFakeTimers();
+
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    const mobileBridge = await import('../services/mobileBridge.js');
+    let available = false;
+    const check = vi.fn(async () => (available ? { available: true, version: '2.1.140', url: 'https://x/app.apk' } : { available: false }));
+    mobileBridge.mobileUpdate.check = check;
+
+    render(<UpdateBanner />);
+    await act(async () => { await Promise.resolve(); });
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/A new version is available/)).not.toBeInTheDocument();
+
+    available = true;
+    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60 * 1000); });
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument();
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 });

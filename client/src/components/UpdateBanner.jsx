@@ -51,10 +51,19 @@ export default function UpdateBanner() {
     }
     if (isMobileApp) {
       let cancelled = false;
-      mobileUpdate.check().then((result) => {
-        if (!cancelled && result?.available) setInfo(result);
-      });
-      return () => { cancelled = true; };
+      const runCheck = () => {
+        mobileUpdate.check().then((result) => {
+          if (!cancelled && result?.available) setInfo(result);
+        });
+      };
+      // Mirrors desktop's checkAndBroadcastUpdate: an immediate check plus a
+      // 5-minute retry interval (desktop/main.js), not just a single
+      // best-effort attempt at mount -- a cold-start check can fail simply
+      // because the network isn't up yet, and without a retry that meant no
+      // banner for the rest of the session even once connectivity returned.
+      runCheck();
+      const intervalId = setInterval(runCheck, 5 * 60 * 1000);
+      return () => { cancelled = true; clearInterval(intervalId); };
     }
     return undefined;
   }, []);

@@ -340,17 +340,25 @@ async function sha256Hex(buffer) {
 
 export const mobileUpdate = {
   // Checked via this app's own server (server/src/routes/version.js), never
-  // GitHub's API directly -- see that route's comment.
+  // GitHub's API directly -- see that route's comment. Logged on failure
+  // (network not up yet at cold start, server 502 from an unauthenticated
+  // GitHub rate limit, ...) so a silently-never-shown banner is at least
+  // diagnosable -- UpdateBanner.jsx retries this on an interval so one
+  // failed attempt doesn't mean no update banner for the whole session.
   check: guard(async () => {
     try {
       const res = await fetch(`${CLOUD_URL}/api/version/latest`, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) return { available: false };
+      if (!res.ok) {
+        getDiagnostics().then((d) => d.warn('update_check_failed', { status: res.status })).catch(() => {});
+        return { available: false };
+      }
       const info = await res.json();
       const apk = info.assets?.androidApk;
       const current = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null;
       if (!info.version || !apk?.url || !current || !isNewerVersion(info.version, current)) return { available: false };
       return { available: true, version: info.version, notes: info.notes, url: apk.url, sha256: apk.sha256 || null };
-    } catch {
+    } catch (err) {
+      getDiagnostics().then((d) => d.warn('update_check_failed', { message: err?.message })).catch(() => {});
       return { available: false };
     }
   }),
