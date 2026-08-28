@@ -30,6 +30,7 @@ export function buildDashboardVoiceActions({
   setJWT,
   disconnectSocket,
   onLogout,
+  performLogout,
   dispatch,
   setPendingAnalysis = () => {},
   setSettingsOpen = () => {},
@@ -56,7 +57,16 @@ export function buildDashboardVoiceActions({
     withCatalog('close_voice_chat', () => setVoiceChatOpen(false)),
     withCatalog('open_guide', () => setGuideOpen(true)),
     withCatalog('close_guide', () => setGuideOpen(false)),
-    withCatalog('logout', () => { setJWT(null); disconnectSocket(); onLogout(); }),
+    // Prefers the page's own performLogout() (clears the native secure
+    // store too, see DashboardPage.jsx's logout()) when supplied; falls
+    // back to the bare setJWT(null)/disconnectSocket()/onLogout() sequence
+    // only for a caller (e.g. an older test) that hasn't wired it up yet.
+    withCatalog('logout', () => {
+      if (performLogout) return performLogout();
+      setJWT(null);
+      disconnectSocket();
+      onLogout();
+    }),
     withCatalog('open_emergency', () => dispatch('aq:emergency:open', {})),
     withCatalog('set_analysis_title', (p) => dispatch('aq:analysis:set', { field: 'title', value: p?.value || '' })),
     withCatalog('set_analysis_prompt', (p) => dispatch('aq:analysis:set', { field: 'prompt', value: p?.value || '' })),

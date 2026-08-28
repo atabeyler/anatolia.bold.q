@@ -23,6 +23,7 @@ import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
 import { useLang } from '../services/langContext.jsx';
 import { isMobileApp, mobileGeolocation } from '../services/mobileBridge.js';
+import { isNativeApp, nativeAuth } from '../services/nativeBridge.js';
 
 const DAYS_SHORT = {
   tr: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
@@ -255,7 +256,12 @@ export default function DashboardPage({ user, onLogout }) {
       notifyDevice(t('systemNoticeTitle'), data.body || t('newSystemEvent'));
     };
     const onBlocked = () => {
+      // A blocked user must not be able to relaunch and silently get back
+      // in via the persisted native session either -- same fix as logout()
+      // above, arguably more important here since this is an admin-forced
+      // removal, not the user's own choice.
       logoutRequest();
+      if (isNativeApp) nativeAuth.logout().catch(() => {});
       setJWT(null);
       clearLocalChatHistory();
       disconnectSocket();
@@ -418,7 +424,23 @@ export default function DashboardPage({ user, onLogout }) {
 
   const startAnalysis = (cat) => { setActiveCategory(cat); setView('analysis'); };
 
-  const logout = () => { logoutRequest(); setJWT(null); clearLocalChatHistory(); disconnectSocket(); onLogout(); };
+  // item 8's native session refactor moved the persisted JWT out of
+  // localStorage into the platform's own secure store (Electron's
+  // safeStorage-encrypted file / Capacitor's native session manager),
+  // restored on every launch via hydrateNativeSession(). This handler used
+  // to only clear the in-memory copy (setJWT(null)) -- the secure store
+  // itself was never told to clear, so a relaunch after logout silently
+  // restored the old session and skipped the login screen entirely.
+  // nativeAuth.logout() is the same IPC/native call LoginPage's own
+  // passkey/session flows already use to clear that store for real.
+  const logout = () => {
+    logoutRequest();
+    if (isNativeApp) nativeAuth.logout().catch(() => {});
+    setJWT(null);
+    clearLocalChatHistory();
+    disconnectSocket();
+    onLogout();
+  };
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('aq:context', {
@@ -438,6 +460,7 @@ export default function DashboardPage({ user, onLogout }) {
       setJWT,
       disconnectSocket,
       onLogout,
+      performLogout: logout,
       dispatch,
       setPendingAnalysis,
       setSettingsOpen,
