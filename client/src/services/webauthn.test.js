@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const startRegistrationMock = vi.fn();
 const startAuthenticationMock = vi.fn();
@@ -78,6 +78,63 @@ describe('loginWithPasskey', () => {
     expect(loginOptionsMock).toHaveBeenCalledWith('U1');
     expect(startAuthenticationMock).toHaveBeenCalledWith({ optionsJSON: { challenge: 'c2' } });
     expect(loginVerifyMock).toHaveBeenCalledWith('U1', { id: 'cred-1' });
+    expect(result.jwt).toBe('jwt-token');
+  });
+});
+
+describe('Android native PasskeyCredential plugin path', () => {
+  afterEach(() => {
+    vi.doUnmock('@capacitor/core');
+    vi.resetModules();
+  });
+
+  async function loadWithAndroidPlugin(pluginMock) {
+    vi.doMock('@capacitor/core', () => ({
+      Capacitor: { getPlatform: () => 'android', Plugins: { PasskeyCredential: pluginMock } },
+    }));
+    vi.resetModules();
+    return import('./webauthn.js');
+  }
+
+  it('reports supported when the native plugin is registered, without a browser API call', async () => {
+    const { isPasskeySupported } = await loadWithAndroidPlugin({});
+    expect(isPasskeySupported()).toBe(true);
+    expect(browserSupportsWebAuthnMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the browser check when running on Android but the plugin is not registered (older bundle)', async () => {
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => 'android', Plugins: {} } }));
+    vi.resetModules();
+    browserSupportsWebAuthnMock.mockReturnValue(false);
+    const { isPasskeySupported } = await import('./webauthn.js');
+    expect(isPasskeySupported()).toBe(false);
+  });
+
+  it('registerPasskey routes through the native plugin and never touches startRegistration', async () => {
+    const register = vi.fn(async () => ({ registrationResponseJson: JSON.stringify({ id: 'native-cred-1' }) }));
+    const { registerPasskey } = await loadWithAndroidPlugin({ register });
+    registerOptionsMock.mockResolvedValue({ challenge: 'c1' });
+    registerVerifyMock.mockResolvedValue({ success: true });
+
+    const result = await registerPasskey('My Phone');
+
+    expect(register).toHaveBeenCalledWith({ requestJson: JSON.stringify({ challenge: 'c1' }) });
+    expect(startRegistrationMock).not.toHaveBeenCalled();
+    expect(registerVerifyMock).toHaveBeenCalledWith({ id: 'native-cred-1' }, 'My Phone');
+    expect(result).toEqual({ success: true });
+  });
+
+  it('loginWithPasskey routes through the native plugin and never touches startAuthentication', async () => {
+    const authenticate = vi.fn(async () => ({ authenticationResponseJson: JSON.stringify({ id: 'native-cred-1' }) }));
+    const { loginWithPasskey } = await loadWithAndroidPlugin({ authenticate });
+    loginOptionsMock.mockResolvedValue({ challenge: 'c2' });
+    loginVerifyMock.mockResolvedValue({ status: 'approved', jwt: 'jwt-token' });
+
+    const result = await loginWithPasskey('U1');
+
+    expect(authenticate).toHaveBeenCalledWith({ requestJson: JSON.stringify({ challenge: 'c2' }) });
+    expect(startAuthenticationMock).not.toHaveBeenCalled();
+    expect(loginVerifyMock).toHaveBeenCalledWith('U1', { id: 'native-cred-1' });
     expect(result.jwt).toBe('jwt-token');
   });
 });

@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-3.1.3-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-3.1.4-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -246,6 +246,14 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
 - **Offline device login** follows the same "authorize once online, then works offline" model as desktop: the first login on a given device for a given account must succeed online (it registers the device and caches a locally-verifiable credential); every login after that on that device can succeed fully offline.
 - Generation runs off the UI thread via a Capacitor plugin (`LocalLLMPlugin.kt`) and can take from several seconds to a few minutes depending on the selected tier and device CPU; keep the app in the foreground until it completes.
 
+### Passkey Login (Android)
+
+The bare browser WebAuthn API (`navigator.credentials`) is not reliably usable from a Capacitor WebView, so Android routes Settings → Security's passkey registration/login through a native Capacitor plugin (`PasskeyPlugin.kt`) backed by Android's Jetpack Credential Manager instead. It speaks the same WebAuthn JSON wire format `@simplewebauthn/browser` does, so the server (`routes/webauthn.js`) and every other platform's passkey flow need no changes.
+
+- **Requires `ANDROID_PASSKEY_CERT_FINGERPRINTS`** (see Environment Variables below) to be set server-side. Android verifies this app is authorized to create/use a passkey for the server's WebAuthn RP ID by fetching `/.well-known/assetlinks.json` itself and checking it against the installed app's own signing certificate — with the env var unset, that file 404s and Android refuses every passkey attempt for this app, so the option is effectively non-functional (not merely hidden) until it's configured.
+- Get the fingerprint from the actual signing keystore: `keytool -list -v -keystore <path> -alias <alias>`, then copy the `SHA256:` line.
+- This is new code and, unlike the rest of Local AI, has not yet been exercised on a real device — verify an actual passkey registration and login on a physical Android device before relying on it.
+
 ---
 
 ## Environment Variables
@@ -286,6 +294,7 @@ When the device has no network connectivity, ANATOLIA-Q can still generate a ful
 | `QUANTUM_MAX_CONCURRENCY` | Max concurrent quantum worker subprocesses; defaults to 4 |
 | `QUANTUM_JOB_POLL_MS` | Quantum job-queue poll interval in ms; defaults to 5000 |
 | `WEBAUTHN_RP_NAME`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGINS` | Optional passkey/WebAuthn Relying Party overrides; all default from `APP_URL` and only need setting when the public origin differs from it |
+| `ANDROID_PASSKEY_CERT_FINGERPRINTS` | Required only for Android passkey login: comma-separated SHA-256 signing certificate fingerprint(s), served at `/.well-known/assetlinks.json` (see the Android section below); unset means the Android passkey option stays hidden/non-functional while every other platform's passkey support and every other login method are unaffected |
 
 ### Quantum
 

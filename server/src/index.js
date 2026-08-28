@@ -28,6 +28,7 @@ import platformRoutes from './routes/platform.js';
 import syncRoutes from './routes/sync.js';
 import deviceRoutes from './routes/devices.js';
 import webauthnRoutes from './routes/webauthn.js';
+import wellKnownRoutes from './routes/wellKnown.js';
 import versionRoutes from './routes/version.js';
 import healthRoutes from './routes/health.js';
 import { startMorningBriefScheduler } from './services/morningBrief.js';
@@ -175,6 +176,10 @@ app.use('/api/sync', syncRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/webauthn', webauthnRoutes);
 app.use('/api/version', versionRoutes);
+// Not under /api -- Android's Credential Manager fetches this exact path
+// itself (https://<rpId>/.well-known/assetlinks.json), it is not something
+// this app's own client ever calls. See routes/wellKnown.js.
+app.use('/.well-known', wellKnownRoutes);
 
 // Socket.IO handlers
 initSocketHandlers(io);
