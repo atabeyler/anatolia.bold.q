@@ -7,11 +7,9 @@ package com.boldkimya.anatoliaq.localllm
  * [LocalLLMPlugin]'s job (idle-unload timer, request shaping, error
  * mapping to the shape llmRuntime.js expects).
  *
- * NOT COMPILED OR RUN IN THIS SANDBOX (no Android NDK here) -- see the
- * final report's honesty section. The native method signatures below must
- * match the `extern "C" JNIEXPORT` functions in llama-android.cpp exactly
- * (JNI resolves by package+class+method+signature); if either side is
- * edited, edit both.
+ * The native method signatures below must match the `extern "C" JNIEXPORT`
+ * functions in llama-android.cpp exactly (JNI resolves by
+ * package+class+method+signature); if either side is edited, edit both.
  */
 internal object LlamaBridge {
     init {

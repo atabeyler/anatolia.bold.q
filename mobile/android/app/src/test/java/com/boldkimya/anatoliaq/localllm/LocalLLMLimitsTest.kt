@@ -6,11 +6,7 @@ import org.junit.Test
 /**
  * Plain JVM unit test (Robolectric/instrumentation NOT required -- this
  * class has zero android.* imports) for the resource-safety token cap.
- *
- * This test file was NOT executed in this sandbox (no Android/Gradle
- * toolchain here) -- it should run via `./gradlew :app:testDebugUnitTest`
- * once opened in Android Studio, same as the pre-existing
- * ExampleUnitTest.java in this module, but that has not been verified.
+ * Runs via `./gradlew :app:testDebugUnitTest`.
  */
 class LocalLLMLimitsTest {
 

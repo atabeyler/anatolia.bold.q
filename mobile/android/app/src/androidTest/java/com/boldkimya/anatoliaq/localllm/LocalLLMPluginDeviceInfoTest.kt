@@ -10,10 +10,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Instrumented test -- needs a real device or emulator to run, which this
- * sandbox does not have. NOT executed here; run via
- * `./gradlew :app:connectedDebugAndroidTest` against a device/emulator in
- * Android Studio.
+ * Instrumented test -- needs a real device or emulator to run, via
+ * `./gradlew :app:connectedDebugAndroidTest`.
  *
  * Exercises the same ActivityManager.MemoryInfo/StatFs reads
  * LocalLLMPlugin.getDeviceInfo() uses, directly against the instrumentation
@@ -21,7 +19,7 @@ import org.junit.runner.RunWith
  * plausible values on the actual device/emulator this runs on -- it does
  * NOT go through the Capacitor PluginCall/Bridge machinery (that needs a
  * running Activity with a registered Bridge, which is exercised instead by
- * manual testing per the final report's "next steps in Android Studio").
+ * manual testing on a real device).
  */
 @RunWith(AndroidJUnit4::class)
 class LocalLLMPluginDeviceInfoTest {

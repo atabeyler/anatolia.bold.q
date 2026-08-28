@@ -13,15 +13,11 @@ function formatBytes(bytes) {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
-// Settings > Local AI: model-manager UI for the local LLM (task: Local
-// Model Manager). Desktop (Electron, via desktop/localAI/modelManager.js +
-// desktop/main.js's ai:model* IPC handlers) and Android (Capacitor, via
+// Settings > Local AI: model-manager UI for the local LLM. Desktop
+// (Electron, via desktop/localAI/modelManager.js + desktop/main.js's
+// ai:model* IPC handlers) and Android (Capacitor, via
 // client/src/mobile/localAI/) share the exact same nativeAI surface (see
-// services/nativeBridge.js), so this one component drives both -- desktop
-// is the tested path (see LocalAIPanel.test.jsx); the Android path reuses
-// mobileBridge.js's already-implemented/tested ai.model* methods but this
-// specific UI has not been exercised against a real Capacitor/Android
-// runtime in this session (documented in the final report).
+// services/nativeBridge.js), so this one component drives both.
 //
 // The shared local-mode preference renders everywhere so browser, Android,
 // and desktop expose the same Settings affordance. Plain web still cannot

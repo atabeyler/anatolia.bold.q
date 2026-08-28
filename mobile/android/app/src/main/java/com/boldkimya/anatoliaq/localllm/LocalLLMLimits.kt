@@ -1,11 +1,11 @@
 package com.boldkimya.anatoliaq.localllm
 
 /**
- * Pure, Android-framework-free resource-safety limits (task spec point 8),
- * split out of [LocalLLMPlugin] specifically so they're testable with a
- * plain JVM `src/test` unit test (no Robolectric/instrumentation needed --
- * see LocalLLMLimitsTest.kt) rather than only via an instrumented test that
- * needs a device/emulator this sandbox doesn't have.
+ * Pure, Android-framework-free resource-safety limits, split out of
+ * [LocalLLMPlugin] specifically so they're testable with a plain JVM
+ * `src/test` unit test (no Robolectric/instrumentation, no device/emulator
+ * needed -- see LocalLLMLimitsTest.kt) rather than only via an instrumented
+ * test.
  */
 internal object LocalLLMLimits {
     /**

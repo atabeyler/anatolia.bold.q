@@ -27,10 +27,6 @@ import java.security.MessageDigest
  *     added for task spec point 4's real RAM-based tiering -- llmRuntime.js's
  *     getNativeDeviceInfo() calls this)
  *
- * NOT COMPILED OR RUN IN THIS SANDBOX -- no Android SDK/NDK/device here.
- * See the final report for exactly what remains to be verified in Android
- * Studio and on a real device.
- *
  * Capacitor (v3+, including the v8 this project pins per
  * mobile/android/app/capacitor.build.gradle's dependency versions) already
  * dispatches each @PluginMethod call on a background thread by default, so

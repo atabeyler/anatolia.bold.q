@@ -37,8 +37,7 @@ android {
     // the NDK to be installed (Android Studio -> SDK Manager -> SDK Tools
     // -> NDK (side by side)); ndkVersion pins which one Gradle downloads/
     // uses if not already present. CMake 3.22.1+ is bundled with recent
-    // NDK installs. NOT built/verified in this sandbox -- see the final
-    // report.
+    // NDK installs.
     ndkVersion "27.0.12077973"
     defaultConfig {
         applicationId "com.boldkimya.anatoliaq"

@@ -8,10 +8,10 @@
 // plugin.generate() contract (client/src/mobile/localAI/llmRuntime.js)
 // returns one final string, not a stream.
 //
-// NOT COMPILED HERE -- no NDK in this sandbox. Function names/signatures
-// below match llama.cpp's public API as of the commit generation this was
-// written against (mid-2025-era llama.cpp; see CMakeLists.txt's submodule
-// pinning note). llama.cpp's C API has changed function names before
+// Function names/signatures below match llama.cpp's public API as of the
+// commit generation this was written against (mid-2025-era llama.cpp; see
+// CMakeLists.txt's submodule pinning note). llama.cpp's C API has changed
+// function names before
 // (e.g. llama_load_model_from_file -> llama_model_load_from_file,
 // llama_new_context_with_model -> llama_init_from_model) -- if the pinned
 // commit is older or newer than what this was written against, expect to

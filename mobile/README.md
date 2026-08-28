@@ -147,19 +147,19 @@ Android's own unknown-sources install prompt.
 
 `client/src/mobile/**/*.test.js` — 59 tests, run via the client's normal
 `npm test` (they're colocated with the rest of `client/src` so they run in
-the same Vitest suite). Since there is no real device/emulator in this
-sandbox, native-plugin-dependent code (`db/index.js`,
-`auth/secureStore.js`) is tested through dependency injection: a fake
-Capacitor SQLite connection backed by a **real** in-memory `better-sqlite3`
-database (`client/src/mobile/testHelpers.js`), not a hand-rolled fake that
+the same Vitest suite). CI has no real device/emulator, so
+native-plugin-dependent code (`db/index.js`, `auth/secureStore.js`) is
+tested through dependency injection: a fake Capacitor SQLite connection
+backed by a **real** in-memory `better-sqlite3` database
+(`client/src/mobile/testHelpers.js`), not a hand-rolled fake that
 pattern-matches SQL strings — so the tests exercise real SQL against a real
 engine, just not the real native bridge. `better-sqlite3` is a client
 `devDependency` for this reason only; it is never bundled into the shipped
 APK.
 
-What real-device verification still cannot be done in this sandbox (same
-caveat as the desktop app's `MANUAL_TEST_CHECKLIST.md`): install-from-APK
-flow on a physical/emulated Android device, offline login after a real app
-kill/relaunch, cross-device conflict resolution against the live backend,
-and Android Keystore-backed secure storage behavior across an OS-level app
-data wipe.
+What the automated suite can't cover and needs manual real-device
+verification instead (same caveat as the desktop app's
+`MANUAL_TEST_CHECKLIST.md`): install-from-APK flow on a physical/emulated
+Android device, offline login after a real app kill/relaunch, cross-device
+conflict resolution against the live backend, and Android Keystore-backed
+secure storage behavior across an OS-level app data wipe.
