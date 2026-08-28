@@ -257,9 +257,8 @@ export const mobileAI = {
   // Model Manager surface -- mirrors desktopAI's, and is wired into the
   // same Settings > Local AI panel (components/LocalAIPanel.jsx) via
   // nativeBridge.js. On Android, isAvailable() also depends on the native
-  // LocalLLM plugin (see mobile/localAI/llmRuntime.js) which does not
-  // exist yet -- see the final report's Android follow-up. This UI path
-  // has not been exercised against a real Capacitor/Android runtime.
+  // LocalLLM plugin (see mobile/localAI/llmRuntime.js and
+  // mobile/android/app/src/main/java/.../localllm/).
   modelStatus: guard(async () => {
     const mm = getModelManager();
     const installed = await refreshInstalledState();

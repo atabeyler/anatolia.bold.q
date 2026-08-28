@@ -4,10 +4,10 @@
 // (non-standard, Chromium-only) `navigator.deviceMemory` API, which only
 // reports a coarse bucketed value (0.25-8, capped at 8 regardless of
 // actual RAM) and no disk/CPU info at all. `deviceInfo` is therefore
-// injected by the caller -- production wiring (modelManager.js) reads
-// what it realistically can from the platform and passes it in, and a
-// future native plugin (see the final report's Android follow-up) can
-// supply exact values through the same shape without this file changing.
+// injected by the caller -- production wiring (registry.js's
+// refreshInstalledState, via llmRuntime.js's getNativeDeviceInfo()) reads
+// exact values from the native LocalLLM plugin's getDeviceInfo() and
+// passes them in through this same shape.
 //
 // Mirrors desktop/localAI/deviceCapability.js's evaluateCapability() shape
 // so both platforms' local-llm providers consume the same result contract.

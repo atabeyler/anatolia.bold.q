@@ -18,9 +18,9 @@ export async function retrieveContext(db, userId, queryText, { limit = 3, maxCha
 }
 
 // See desktop/localAI/rag.js's comment: this system/user split was
-// verified in this sandbox (via node-llama-cpp, the desktop runtime) to
-// produce much better-grounded answers than concatenating everything into
-// one user message.
+// verified (via node-llama-cpp, the desktop runtime) to produce much
+// better-grounded answers than concatenating everything into one user
+// message.
 export const SYSTEM_PROMPT =
   'Sen ANATOLIA-Q uygulamasının tamamen çevrimdışı çalışan yerel yapay zeka asistanısın. ' +
   'İnternete veya buluta erişimin yoktur. Sana verilen yerel rapor ve dosya bağlamını önceliklendir. ' +

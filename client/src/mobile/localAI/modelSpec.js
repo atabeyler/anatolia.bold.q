@@ -9,10 +9,10 @@
 // All three sha256/sizeBytes values below were read the same way the
 // existing MID entry was (each file's HTTP redirect chain to Hugging
 // Face's CDN exposes X-Linked-ETag, which for an LFS/Xet-backed file is
-// its SHA-256; X-Linked-Size is the exact byte count) -- verified in this
-// sandbox via a real HTTPS HEAD-style request on 2026-08-20, not invented.
-// Still: re-verify against the actual shipped file before release (a
-// repo's default `main` file can move) -- see the final report.
+// its SHA-256; X-Linked-Size is the exact byte count) -- verified via a
+// real HTTPS HEAD-style request on 2026-08-20, not invented. Still:
+// re-verify against the actual shipped file before release (a repo's
+// default `main` file can move).
 const LOW = Object.freeze({
   id: 'qwen2.5-0.5b-instruct-q4_k_m',
   tier: 'low',

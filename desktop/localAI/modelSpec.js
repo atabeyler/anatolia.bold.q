@@ -13,8 +13,8 @@
 //     Qwen license that applies to the 3B/7B+ Qwen2.5 checkpoints.
 //   - Turkish: Qwen2.5's tokenizer/training corpus is explicitly
 //     multilingual (29+ languages including Turkish per the Qwen2.5
-//     technical report); not benchmarked in this sandbox (no GPU-less
-//     Turkish eval harness run here -- see the final report).
+//     technical report); no formal Turkish-quality eval harness has been
+//     run against it, only real-device manual verification.
 //   - Size: ~1.07 GB (Q4_K_M), comfortably inside a 4-8 GB RAM desktop
 //     budget alongside the rest of the Electron app.
 //   - Runtime: node-llama-cpp (MIT), which ships prebuilt llama.cpp

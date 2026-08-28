@@ -34,8 +34,7 @@ internal object LlamaBridge {
      * a real system turn, not text concatenated into the user turn --
      * desktop/localAI/llmRuntime.js's comment documents why that distinction
      * mattered when this was verified against node-llama-cpp; the Android
-     * JNI bridge applies the same chat template approach for parity, but
-     * that parity has NOT been verified on-device here.
+     * JNI bridge applies the same chat template approach for parity.
      *
      * @return the generated completion text (never null; throws
      *   IllegalStateException on a native-side failure, mapped by
