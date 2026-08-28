@@ -4,7 +4,7 @@
   localAI/modelManager.js's MODELS_SUBDIR = 'anatolia-q-models', under
   Directory.Data == context.filesDir, matching LocalLLMPlugin.kt's own
   File(context.filesDir, modelPath) confinement) from Android's legacy
-  Auto Backup (API < 31 -- android:fullBackupContent references this file).
+  Auto Backup (API below 31; android:fullBackupContent references this file).
   A multi-gigabyte GGUF model has no business in a user's backup: it is
   re-downloadable and re-verified by sha256 on demand, and silently
   including it would balloon backup size/quota for no benefit. See
