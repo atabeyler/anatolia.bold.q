@@ -6,36 +6,26 @@ const { Pool } = pkg;
 
 let pool;
 
-// Fail-closed at module load (same pattern/timing as lib/jwtSecret.js's own
-// hard requirement -- both throw before server.listen() ever runs, not
-// inside a request handler or a .catch()-swallowed startup promise): a
-// production deployment that has a database configured but no CA cert to
-// verify its TLS certificate against used to silently downgrade to
-// rejectUnauthorized:false (still encrypted, but MITM-able) and keep
-// running. That's a real, working default for a quick deploy, but not one
-// an institutional/defense profile should ever be running without a
-// deliberate, informed choice -- so it's now a hard startup refusal instead
-// of a warning log easy to miss in a boot trace.
-if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL && !process.env.DATABASE_CA_CERT) {
-  throw new Error(
-    'DATABASE_CA_CERT ortam değişkeni tanımlanmamış — üretimde DATABASE_URL ' +
-    'ayarlıyken zorunludur (aksi halde Postgres TLS doğrulaması atlanır, MITM riski oluşur).'
-  );
-}
-
+// item 11 was reverted after a real production outage (2026-08-28): making
+// this a hard startup refusal assumed an operator can always obtain their
+// provider's CA cert for verified TLS, but Render (this deployment's DB
+// provider) does not publish one for external (non-Render-hosted)
+// connections -- there is no documented, supported way to satisfy this
+// requirement for a Render-DB-plus-external-server topology like this
+// project's (server on Northflank, DB on Render). The fail-closed throw
+// below made the server unable to boot AT ALL from the moment it deployed
+// until this revert. Back to the original, deliberate tradeoff: encrypted
+// but unverified (rejectUnauthorized: false) when no CA cert is configured,
+// with an operator who DOES have a CA cert (e.g. a provider that publishes
+// one) still able to opt into verified TLS by setting DATABASE_CA_CERT.
 function buildSslConfig() {
   if (process.env.NODE_ENV !== 'production') return false;
   const caCert = process.env.DATABASE_CA_CERT;
   if (caCert) {
     return { rejectUnauthorized: true, ca: caCert };
   }
-  // Unreachable in practice -- the module-level check above already throws
-  // before this function can ever run without DATABASE_CA_CERT set in
-  // production. Kept as a last-resort fail-closed default rather than
-  // deleting it outright, in case a future caller reaches buildSslConfig()
-  // from a path that bypasses this module's own top-level evaluation.
-  logger.warn('DATABASE_CA_CERT not set — Postgres TLS connections would be unverified (MITM risk).');
-  return { rejectUnauthorized: true };
+  logger.warn('DATABASE_CA_CERT not set — Postgres TLS connections are encrypted but unverified (MITM risk); see database.js comment for why this is not fail-closed.');
+  return { rejectUnauthorized: false };
 }
 
 export function getPool() {
