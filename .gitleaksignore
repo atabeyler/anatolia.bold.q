@@ -3,4 +3,4 @@
 # Verified false positive: an Android Virtual Device system-image id
 # ("avd-api34-x86_64-v1"), not a credential -- matches generic-api-key only
 # because of its "api"/hyphenated-token shape.
-.github/workflows/android-emulator-test.yml:generic-api-key:82
+.github/workflows/android-emulator-test.yml:generic-api-key:87
