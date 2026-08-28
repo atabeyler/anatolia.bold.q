@@ -33,7 +33,12 @@ describe('refreshInstalledState (device tiering)', () => {
 describe('model tier picker', () => {
   it('lists every pinned tier with picker-relevant fields', () => {
     const tiers = listModelTiers();
-    expect(tiers.map((t) => t.tier)).toEqual(['low', 'mid', 'high', 'phi-mini']);
+    // Derived from MODEL_TIERS itself, not a hardcoded list -- this test's
+    // job is "every pinned tier shows up", which a fixed array would need
+    // editing (and silently under-cover) every time a tier is added, same
+    // failure mode this test hit for real when the Llama/Mistral/Granite/
+    // Gemma families were added without updating a hardcoded list here.
+    expect(tiers.map((t) => t.tier).sort()).toEqual(Object.keys(MODEL_TIERS).sort());
     expect(tiers.every((t) => typeof t.sizeBytes === 'number' && t.displayLabel)).toBe(true);
   });
 

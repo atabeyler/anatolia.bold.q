@@ -88,10 +88,14 @@ const HIGH = Object.freeze({
 // modelSpec.js's own PHI_MINI -- see that file's comment for why
 // bartowski's requant is pinned instead of Microsoft's own (gated, 401
 // without a HF login) GGUF repo, and for the license/checksum sourcing.
-// No phi-14b tier here (unlike desktop): a phone faces real OOM-kill risk
-// even at HIGH's much smaller 4.68GB file (see that tier's own comment
-// above for the actual crash history) -- a 9GB file is not something to
-// offer on this platform at all, regardless of RAM floor.
+// No phi-14b tier here (unlike desktop): its 9GB file is roughly double
+// every other tier below and is what actually triggered the OOM-kill
+// crash history described in HIGH's own comment above -- not offered on
+// this platform at all, regardless of RAM floor. MISTRAL_7B/GRANITE_8B/
+// GEMMA_9B further below are a different call: comparable to or only
+// modestly above HIGH's own already-shipped 4.68GB file, offered at the
+// owner's explicit request despite carrying the same category of risk as
+// any large on-device model on Android.
 const PHI_MINI = Object.freeze({
   id: 'phi-4-mini-instruct-q4_k_m',
   tier: 'phi-mini',
@@ -112,9 +116,7 @@ const PHI_MINI = Object.freeze({
 // Further manual-only families, same spirit as PHI_MINI above -- mirrors
 // desktop/localAI/modelSpec.js's own LLAMA_1B/LLAMA_3B/GRANITE_2B/GEMMA_2B
 // (see that file's comment for checksum sourcing and the Llama/Gemma
-// license notes). Only the smaller variant of each family is offered here:
-// MISTRAL_7B/GRANITE_8B/GEMMA_9B stay desktop-only, same reasoning as
-// phi-14b's exclusion above -- a phone's OOM-kill risk at that file size.
+// license notes).
 const LLAMA_1B = Object.freeze({
   id: 'llama-3.2-1b-instruct-q4_k_m',
   tier: 'llama-1b',
@@ -175,6 +177,58 @@ const GEMMA_2B = Object.freeze({
   recommendedMinFreeDiskBytes: 2.5 * 1024 * 1024 * 1024,
 });
 
+// Larger siblings of the families above -- offered here at the owner's
+// explicit request despite each carrying the same category of on-device
+// risk as any large model on Android (see the comment above PHI_MINI).
+// Same specs/checksums as desktop/localAI/modelSpec.js's own
+// MISTRAL_7B/GRANITE_8B/GEMMA_9B, just with this platform's smaller
+// contextSize convention (2048, matching every other tier in this file).
+const MISTRAL_7B = Object.freeze({
+  id: 'mistral-7b-instruct-v0.3-q4_k_m',
+  tier: 'mistral-7b',
+  label: 'Mistral-7B-Instruct-v0.3 (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Mistral 7B Model',
+  filename: 'mistral-7b-instruct-v0.3-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf',
+  sha256: '1270d22c0fbb3d092fb725d4d96c457b7b687a5f5a715abe1e818da303e562b6',
+  sizeBytes: 4372812000,
+  license: 'Apache-2.0',
+  contextSize: 2048,
+  // Same size class as HIGH's own already-shipped Qwen2.5-7B -- same floor.
+  recommendedMinRamBytes: 12 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 6 * 1024 * 1024 * 1024,
+});
+
+const GRANITE_8B = Object.freeze({
+  id: 'granite-3.1-8b-instruct-q4_k_m',
+  tier: 'granite-8b',
+  label: 'Granite-3.1-8B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Granite 3.1 8B Model',
+  filename: 'granite-3.1-8b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/granite-3.1-8b-instruct-GGUF/resolve/main/granite-3.1-8b-instruct-Q4_K_M.gguf',
+  sha256: 'b72cfca8e30f23af77f922ce18d6fe1a5d4925907dddf7249c0cabc2739d48c8',
+  sizeBytes: 4942858720,
+  license: 'Apache-2.0',
+  contextSize: 2048,
+  recommendedMinRamBytes: 13 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 6.5 * 1024 * 1024 * 1024,
+});
+
+const GEMMA_9B = Object.freeze({
+  id: 'gemma-2-9b-it-q4_k_m',
+  tier: 'gemma-9b',
+  label: 'Gemma-2-9B-it (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Gemma 2 9B Model',
+  filename: 'gemma-2-9b-it-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf',
+  sha256: '13b2a7b4115bbd0900162edcebe476da1ba1fc24e718e8b40d32f6e300f56dfe',
+  sizeBytes: 5761057728,
+  license: 'Gemma Terms of Use',
+  contextSize: 2048,
+  recommendedMinRamBytes: 15 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 7.5 * 1024 * 1024 * 1024,
+});
+
 export const MODEL_TIERS = Object.freeze({
   low: LOW,
   mid: MID,
@@ -182,8 +236,11 @@ export const MODEL_TIERS = Object.freeze({
   'phi-mini': PHI_MINI,
   'llama-1b': LLAMA_1B,
   'llama-3b': LLAMA_3B,
+  'mistral-7b': MISTRAL_7B,
   'granite-2b': GRANITE_2B,
+  'granite-8b': GRANITE_8B,
   'gemma-2b': GEMMA_2B,
+  'gemma-9b': GEMMA_9B,
 });
 
 // Backward-compatible single-spec export -- the MID tier, i.e. exactly what

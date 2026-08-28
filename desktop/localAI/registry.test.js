@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { selectProvider, configureLocalLLM, getModelManager, setModelTier, listModelTiers } from './registry.js';
+import { MODEL_TIERS } from './modelSpec.js';
 
 describe('selectProvider', () => {
   it('selects offline-extractive today (the only registered, always-available provider)', () => {
@@ -36,7 +37,12 @@ describe('model tier picker', () => {
 
   it('lists every pinned tier with picker-relevant fields', () => {
     const tiers = listModelTiers();
-    expect(tiers.map((t) => t.tier)).toEqual(['low', 'mid', 'high', 'phi-mini', 'phi-14b']);
+    // Derived from MODEL_TIERS itself, not a hardcoded list -- a fixed
+    // array here needs editing (and silently under-covers new tiers in
+    // the meantime) every time a tier is added, which is exactly what
+    // broke CI for real when the Llama/Mistral/Granite/Gemma families
+    // were added without updating a hardcoded list in this test.
+    expect(tiers.map((t) => t.tier).sort()).toEqual(Object.keys(MODEL_TIERS).sort());
     expect(tiers.every((t) => typeof t.sizeBytes === 'number' && t.displayLabel)).toBe(true);
   });
 
