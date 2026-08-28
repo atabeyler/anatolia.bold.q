@@ -23,7 +23,7 @@ const LOW = Object.freeze({
   id: 'qwen2.5-0.5b-instruct-q4_k_m',
   tier: 'low',
   label: 'Qwen2.5-0.5B-Instruct (Q4_K_M, GGUF)',
-  displayLabel: 'Q LOCAL Hafif Model',
+  displayLabel: 'Q LOCAL Qwen2.5 Hafif Model',
   filename: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
   sha256: '74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db',
@@ -38,7 +38,7 @@ const MID = Object.freeze({
   id: 'qwen2.5-1.5b-instruct-q4_k_m',
   tier: 'mid',
   label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)',
-  displayLabel: 'Q LOCAL Standart Model',
+  displayLabel: 'Q LOCAL Qwen2.5 Standart Model',
   filename: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
   // Hugging Face resolve URL for the pinned file/revision. Points at
   // `main` (not a pinned commit) intentionally -- Qwen's GGUF repo does
@@ -75,7 +75,7 @@ const HIGH = Object.freeze({
   id: 'qwen2.5-7b-instruct-q4_k_m',
   tier: 'high',
   label: 'Qwen2.5-7B-Instruct (Q4_K_M, GGUF)',
-  displayLabel: 'Q LOCAL Güçlü Model',
+  displayLabel: 'Q LOCAL Qwen2.5 Güçlü Model',
   filename: 'qwen2.5-7b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
   sha256: '65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423',
@@ -147,7 +147,147 @@ const PHI_14B = Object.freeze({
   recommendedMinFreeDiskBytes: 12 * 1024 * 1024 * 1024,
 });
 
-export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH, 'phi-mini': PHI_MINI, 'phi-14b': PHI_14B });
+// Further manual-only families, same spirit as PHI_MINI/PHI_14B above:
+// never returned by selectTierForDevice(), pure user choice from Settings >
+// Local AI's tier picker. sha256/sizeBytes for every entry below were read
+// directly from each Hugging Face repo's tree API
+// (huggingface.co/api/models/{repo}/tree/main, which reports each LFS
+// file's real oid/size -- the same content hash HF itself serves, not a
+// placeholder) on 2026-08-28; license field read from the *original*
+// (non-quantized) source repo's own cardData.license on the same date,
+// since a GGUF requant repo doesn't reliably restate it. Re-verify both
+// before release, same standing caveat as every other tier in this file.
+//
+//   - Llama 3.2 (Meta): NOT Apache/MIT -- the Llama 3.2 Community License
+//     is a custom, non-OSI license with real usage terms (an acceptable-use
+//     policy, and a requirement that any product/service with >700M MAU as
+//     of the app's release date obtain a separate license from Meta). Fine
+//     for this deployment's scale, but distinct enough from every other
+//     tier's clean Apache-2.0/MIT that it's worth a user's own informed
+//     opt-in rather than ever being auto-selected.
+const LLAMA_1B = Object.freeze({
+  id: 'llama-3.2-1b-instruct-q4_k_m',
+  tier: 'llama-1b',
+  label: 'Llama-3.2-1B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Llama 3.2 1B Model',
+  filename: 'llama-3.2-1b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
+  sha256: '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83',
+  sizeBytes: 807694464,
+  license: 'Llama 3.2 Community License',
+  contextSize: 4096,
+  recommendedMinRamBytes: 3 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 1.5 * 1024 * 1024 * 1024,
+});
+
+const LLAMA_3B = Object.freeze({
+  id: 'llama-3.2-3b-instruct-q4_k_m',
+  tier: 'llama-3b',
+  label: 'Llama-3.2-3B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Llama 3.2 3B Model',
+  filename: 'llama-3.2-3b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
+  sha256: '6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff',
+  sizeBytes: 2019377696,
+  license: 'Llama 3.2 Community License',
+  contextSize: 4096,
+  recommendedMinRamBytes: 5 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 3 * 1024 * 1024 * 1024,
+});
+
+const MISTRAL_7B = Object.freeze({
+  id: 'mistral-7b-instruct-v0.3-q4_k_m',
+  tier: 'mistral-7b',
+  label: 'Mistral-7B-Instruct-v0.3 (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Mistral 7B Model',
+  filename: 'mistral-7b-instruct-v0.3-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf',
+  sha256: '1270d22c0fbb3d092fb725d4d96c457b7b687a5f5a715abe1e818da303e562b6',
+  sizeBytes: 4372812000,
+  license: 'Apache-2.0',
+  contextSize: 4096,
+  // Same size class as HIGH's Qwen2.5-7B -- same RAM/disk floor.
+  recommendedMinRamBytes: 12 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 6 * 1024 * 1024 * 1024,
+});
+
+const GRANITE_2B = Object.freeze({
+  id: 'granite-3.1-2b-instruct-q4_k_m',
+  tier: 'granite-2b',
+  label: 'Granite-3.1-2B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Granite 3.1 2B Model',
+  filename: 'granite-3.1-2b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/granite-3.1-2b-instruct-GGUF/resolve/main/granite-3.1-2b-instruct-Q4_K_M.gguf',
+  sha256: '774269c82fde2720ea18dcf457fb5bd028fe096139a0735f4ad59c0a270cfc9c',
+  sizeBytes: 1545295424,
+  license: 'Apache-2.0',
+  contextSize: 4096,
+  recommendedMinRamBytes: 6 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 2.5 * 1024 * 1024 * 1024,
+});
+
+const GRANITE_8B = Object.freeze({
+  id: 'granite-3.1-8b-instruct-q4_k_m',
+  tier: 'granite-8b',
+  label: 'Granite-3.1-8B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Granite 3.1 8B Model',
+  filename: 'granite-3.1-8b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/granite-3.1-8b-instruct-GGUF/resolve/main/granite-3.1-8b-instruct-Q4_K_M.gguf',
+  sha256: 'b72cfca8e30f23af77f922ce18d6fe1a5d4925907dddf7249c0cabc2739d48c8',
+  sizeBytes: 4942858720,
+  license: 'Apache-2.0',
+  contextSize: 4096,
+  recommendedMinRamBytes: 13 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 6.5 * 1024 * 1024 * 1024,
+});
+
+// Gemma 2: NOT Apache/MIT -- Google's own Gemma Terms of Use is a custom
+// license with prohibited-use terms, distinct from every Apache-2.0/MIT
+// tier above (same reasoning as Llama 3.2's license note above).
+const GEMMA_2B = Object.freeze({
+  id: 'gemma-2-2b-it-q4_k_m',
+  tier: 'gemma-2b',
+  label: 'Gemma-2-2B-it (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Gemma 2 2B Model',
+  filename: 'gemma-2-2b-it-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf',
+  sha256: 'e0aee85060f168f0f2d8473d7ea41ce2f3230c1bc1374847505ea599288a7787',
+  sizeBytes: 1708582752,
+  license: 'Gemma Terms of Use',
+  contextSize: 4096,
+  recommendedMinRamBytes: 6 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 2.5 * 1024 * 1024 * 1024,
+});
+
+const GEMMA_9B = Object.freeze({
+  id: 'gemma-2-9b-it-q4_k_m',
+  tier: 'gemma-9b',
+  label: 'Gemma-2-9B-it (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Gemma 2 9B Model',
+  filename: 'gemma-2-9b-it-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf',
+  sha256: '13b2a7b4115bbd0900162edcebe476da1ba1fc24e718e8b40d32f6e300f56dfe',
+  sizeBytes: 5761057728,
+  license: 'Gemma Terms of Use',
+  contextSize: 4096,
+  recommendedMinRamBytes: 15 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 7.5 * 1024 * 1024 * 1024,
+});
+
+export const MODEL_TIERS = Object.freeze({
+  low: LOW,
+  mid: MID,
+  high: HIGH,
+  'phi-mini': PHI_MINI,
+  'phi-14b': PHI_14B,
+  'llama-1b': LLAMA_1B,
+  'llama-3b': LLAMA_3B,
+  'mistral-7b': MISTRAL_7B,
+  'granite-2b': GRANITE_2B,
+  'granite-8b': GRANITE_8B,
+  'gemma-2b': GEMMA_2B,
+  'gemma-9b': GEMMA_9B,
+});
 
 // Backward-compatible single-spec export -- the MID tier, i.e. exactly what
 // this file exported before tiering existed. Any caller that hasn't opted

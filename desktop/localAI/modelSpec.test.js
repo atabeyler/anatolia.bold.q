@@ -19,9 +19,32 @@ describe('MODEL_TIERS', () => {
     expect(MODEL_TIERS['phi-mini'].license).toBe('MIT');
     expect(MODEL_TIERS['phi-14b'].id).toBe('phi-4-q4_k_m');
     expect(MODEL_TIERS['phi-14b'].license).toBe('MIT');
-    // Still exactly the 3 original tiers plus these 2 -- nothing else
-    // sneaked in.
-    expect(Object.keys(MODEL_TIERS).sort()).toEqual(['high', 'low', 'mid', 'phi-14b', 'phi-mini']);
+  });
+
+  it('offers Llama 3.2, Mistral, Granite, and Gemma 2 manually too, alongside Qwen2.5/Phi-4', () => {
+    expect(MODEL_TIERS['llama-1b'].id).toBe('llama-3.2-1b-instruct-q4_k_m');
+    expect(MODEL_TIERS['llama-3b'].id).toBe('llama-3.2-3b-instruct-q4_k_m');
+    expect(MODEL_TIERS['mistral-7b'].id).toBe('mistral-7b-instruct-v0.3-q4_k_m');
+    expect(MODEL_TIERS['mistral-7b'].license).toBe('Apache-2.0');
+    expect(MODEL_TIERS['granite-2b'].id).toBe('granite-3.1-2b-instruct-q4_k_m');
+    expect(MODEL_TIERS['granite-2b'].license).toBe('Apache-2.0');
+    expect(MODEL_TIERS['granite-8b'].id).toBe('granite-3.1-8b-instruct-q4_k_m');
+    expect(MODEL_TIERS['granite-8b'].license).toBe('Apache-2.0');
+    expect(MODEL_TIERS['gemma-2b'].id).toBe('gemma-2-2b-it-q4_k_m');
+    expect(MODEL_TIERS['gemma-9b'].id).toBe('gemma-2-9b-it-q4_k_m');
+    // Llama 3.2 and Gemma 2 carry their own custom (non-Apache/MIT)
+    // licenses -- distinct enough from every other tier's permissive
+    // license that a picker showing just "Q LOCAL ... Model" without the
+    // brand would obscure a real, informed-consent-worthy difference.
+    expect(MODEL_TIERS['llama-1b'].license).toBe('Llama 3.2 Community License');
+    expect(MODEL_TIERS['llama-3b'].license).toBe('Llama 3.2 Community License');
+    expect(MODEL_TIERS['gemma-2b'].license).toBe('Gemma Terms of Use');
+    expect(MODEL_TIERS['gemma-9b'].license).toBe('Gemma Terms of Use');
+    // Exactly these 12 tiers -- nothing else sneaked in.
+    expect(Object.keys(MODEL_TIERS).sort()).toEqual([
+      'gemma-2b', 'gemma-9b', 'granite-2b', 'granite-8b', 'high', 'llama-1b', 'llama-3b',
+      'low', 'mid', 'mistral-7b', 'phi-14b', 'phi-mini',
+    ]);
   });
 });
 

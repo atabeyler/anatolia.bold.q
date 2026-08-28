@@ -17,7 +17,7 @@ const LOW = Object.freeze({
   id: 'qwen2.5-0.5b-instruct-q4_k_m',
   tier: 'low',
   label: 'Qwen2.5-0.5B-Instruct (Q4_K_M, GGUF)',
-  displayLabel: 'Q LOCAL Hafif Model',
+  displayLabel: 'Q LOCAL Qwen2.5 Hafif Model',
   filename: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
   sha256: '74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db',
@@ -38,7 +38,7 @@ const MID = Object.freeze({
   id: 'qwen2.5-1.5b-instruct-q4_k_m',
   tier: 'mid',
   label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)',
-  displayLabel: 'Q LOCAL Standart Model',
+  displayLabel: 'Q LOCAL Qwen2.5 Standart Model',
   filename: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
   sha256: '6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e',
@@ -65,7 +65,7 @@ const HIGH = Object.freeze({
   id: 'qwen2.5-7b-instruct-q4_k_m',
   tier: 'high',
   label: 'Qwen2.5-7B-Instruct (Q4_K_M, GGUF)',
-  displayLabel: 'Q LOCAL Güçlü Model',
+  displayLabel: 'Q LOCAL Qwen2.5 Güçlü Model',
   filename: 'qwen2.5-7b-instruct-q4_k_m.gguf',
   url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
   sha256: '65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423',
@@ -109,7 +109,82 @@ const PHI_MINI = Object.freeze({
   recommendedMinFreeDiskBytes: 4 * 1024 * 1024 * 1024,
 });
 
-export const MODEL_TIERS = Object.freeze({ low: LOW, mid: MID, high: HIGH, 'phi-mini': PHI_MINI });
+// Further manual-only families, same spirit as PHI_MINI above -- mirrors
+// desktop/localAI/modelSpec.js's own LLAMA_1B/LLAMA_3B/GRANITE_2B/GEMMA_2B
+// (see that file's comment for checksum sourcing and the Llama/Gemma
+// license notes). Only the smaller variant of each family is offered here:
+// MISTRAL_7B/GRANITE_8B/GEMMA_9B stay desktop-only, same reasoning as
+// phi-14b's exclusion above -- a phone's OOM-kill risk at that file size.
+const LLAMA_1B = Object.freeze({
+  id: 'llama-3.2-1b-instruct-q4_k_m',
+  tier: 'llama-1b',
+  label: 'Llama-3.2-1B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Llama 3.2 1B Model',
+  filename: 'llama-3.2-1b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
+  sha256: '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83',
+  sizeBytes: 807694464,
+  license: 'Llama 3.2 Community License',
+  contextSize: 2048,
+  recommendedMinRamBytes: 3 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 1.5 * 1024 * 1024 * 1024,
+});
+
+const LLAMA_3B = Object.freeze({
+  id: 'llama-3.2-3b-instruct-q4_k_m',
+  tier: 'llama-3b',
+  label: 'Llama-3.2-3B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Llama 3.2 3B Model',
+  filename: 'llama-3.2-3b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
+  sha256: '6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff',
+  sizeBytes: 2019377696,
+  license: 'Llama 3.2 Community License',
+  contextSize: 2048,
+  recommendedMinRamBytes: 5 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 3 * 1024 * 1024 * 1024,
+});
+
+const GRANITE_2B = Object.freeze({
+  id: 'granite-3.1-2b-instruct-q4_k_m',
+  tier: 'granite-2b',
+  label: 'Granite-3.1-2B-Instruct (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Granite 3.1 2B Model',
+  filename: 'granite-3.1-2b-instruct-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/granite-3.1-2b-instruct-GGUF/resolve/main/granite-3.1-2b-instruct-Q4_K_M.gguf',
+  sha256: '774269c82fde2720ea18dcf457fb5bd028fe096139a0735f4ad59c0a270cfc9c',
+  sizeBytes: 1545295424,
+  license: 'Apache-2.0',
+  contextSize: 2048,
+  recommendedMinRamBytes: 6 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 2.5 * 1024 * 1024 * 1024,
+});
+
+const GEMMA_2B = Object.freeze({
+  id: 'gemma-2-2b-it-q4_k_m',
+  tier: 'gemma-2b',
+  label: 'Gemma-2-2B-it (Q4_K_M, GGUF)',
+  displayLabel: 'Q LOCAL Gemma 2 2B Model',
+  filename: 'gemma-2-2b-it-q4_k_m.gguf',
+  url: 'https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf',
+  sha256: 'e0aee85060f168f0f2d8473d7ea41ce2f3230c1bc1374847505ea599288a7787',
+  sizeBytes: 1708582752,
+  license: 'Gemma Terms of Use',
+  contextSize: 2048,
+  recommendedMinRamBytes: 6 * 1024 * 1024 * 1024,
+  recommendedMinFreeDiskBytes: 2.5 * 1024 * 1024 * 1024,
+});
+
+export const MODEL_TIERS = Object.freeze({
+  low: LOW,
+  mid: MID,
+  high: HIGH,
+  'phi-mini': PHI_MINI,
+  'llama-1b': LLAMA_1B,
+  'llama-3b': LLAMA_3B,
+  'granite-2b': GRANITE_2B,
+  'gemma-2b': GEMMA_2B,
+});
 
 // Backward-compatible single-spec export -- the MID tier, i.e. exactly what
 // this file exported before tiering existed. modelManager.js's default
