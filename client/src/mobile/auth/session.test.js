@@ -213,7 +213,7 @@ describe('logoutSession', () => {
 
   it('is a no-op and does not throw when there is no cached session at all', async () => {
     const { manager } = await buildManager({ fetchImpl: vi.fn() });
-    await expect(manager.logoutSession()).resolves.not.toThrow();
+    await expect(manager.logoutSession()).resolves.toBeUndefined();
     expect(await manager.getSession()).toBeNull();
   });
 });
@@ -266,7 +266,7 @@ describe('forgetDevice', () => {
     await manager.establishOnlineSession(jwt, 'CorrectHorse123');
     fetchImpl.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
 
-    await expect(manager.forgetDevice()).resolves.not.toThrow();
+    await expect(manager.forgetDevice()).resolves.toEqual({ pendingServerRevoke: null });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const stored = await secureStore.load();
