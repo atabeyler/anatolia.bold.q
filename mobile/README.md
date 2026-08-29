@@ -53,16 +53,23 @@ call `isNativeApp` / `nativeAuth` / `nativeSync` / `nativeAI` /
 
 **ÇIKIŞ YAP vs BU CİHAZI UNUT.** `client/src/mobile/auth/session.js`
 exposes two distinct sign-out operations, not one. **ÇIKIŞ YAP**
-(`logoutSession()`) clears only the active session (the cached JWT) — this
-device's offline-login authorization is preserved, so the same account can
-offline-login again on this device immediately, without a fresh online
-round-trip. **BU CİHAZI UNUT** (`forgetDevice()`, Settings → Security)
-fully removes this device's offline-login credential and authorization
-(`device_meta.last_authorized_user_id`/`last_authorized_at` cleared, along
-with the offline-lockout counters, and the secure store wiped) and
-best-effort revokes the device server-side (`DELETE /api/devices/
-:deviceId`) — a fresh online login is required before offline login works
-again on this device.
+(`logoutSession()`) marks the encrypted cached session `signedOut: true`;
+the cached JWT, bcrypt password verifier and this device's offline-login
+authorization are deliberately preserved, so the login screen is shown again
+without destroying the ability to authenticate locally. A later successful
+offline password login clears `signedOut` and re-opens the local session.
+**BU CİHAZI UNUT** (`forgetDevice()`, Settings → Security) immediately
+removes the usable local session/offline credential and clears
+`device_meta.last_authorized_user_id` / `last_authorized_at` plus the
+offline-lockout counters, so a fresh online login is required before offline
+login works again on this device. When network use is allowed it also
+best-effort calls `DELETE /api/devices/:deviceId`. If Manual Offline Mode is
+active, no old bearer JWT is written to renderer `localStorage` or another
+plaintext file: only a non-sensitive `{ deviceId }` tombstone is kept inside
+the Android Keystore-backed secure store. The next successful online login's
+fresh JWT settles that server-side revoke before the device is registered
+again. Upgrading from v3.2.0 also removes the short-lived legacy
+`anatolia_pending_device_revoke` localStorage entry if it exists.
 
 **ÇEVRİMDIŞI MOD.** A separate, user-selected app-wide preference (Settings
 → Bağlantı, `client/src/services/appModePreference.js`), completely
@@ -76,6 +83,8 @@ to Otomatik reconnects the socket if needed and (once
 `nativeAuth.needsReauth()` says a fresh login isn't required) flushes the
 pending sync queue via the existing `nativeSync.forceSync()` call -- no new
 sync/socket mechanism, just gating the existing ones at their call sites.
+Manual Offline Mode never changes or deletes the offline-login authorization
+by itself.
 
 ## Why this needed a cross-origin fix
 
@@ -171,21 +180,17 @@ Android's own unknown-sources install prompt.
 
 ## Testing
 
-`client/src/mobile/**/*.test.js` — 59 tests, run via the client's normal
-`npm test` (they're colocated with the rest of `client/src` so they run in
-the same Vitest suite). CI has no real device/emulator, so
-native-plugin-dependent code (`db/index.js`, `auth/secureStore.js`) is
-tested through dependency injection: a fake Capacitor SQLite connection
-backed by a **real** in-memory `better-sqlite3` database
-(`client/src/mobile/testHelpers.js`), not a hand-rolled fake that
-pattern-matches SQL strings — so the tests exercise real SQL against a real
-engine, just not the real native bridge. `better-sqlite3` is a client
-`devDependency` for this reason only; it is never bundled into the shipped
-APK.
+`client/src/mobile/**/*.test.js` and the bridge/auth regression tests run via
+the client's normal `npm test`. Native-plugin-dependent code
+(`db/index.js`, `auth/secureStore.js`) is exercised through dependency
+injection with a fake Capacitor SQLite connection backed by a **real**
+in-memory `better-sqlite3` database. The GitHub Android emulator workflow
+adds an actual Android runtime check on top of the JS suite; physical-device
+verification is still required for OEM-specific Keystore behavior and
+install/update UX.
 
-What the automated suite can't cover and needs manual real-device
-verification instead (same caveat as the desktop app's
-`MANUAL_TEST_CHECKLIST.md`): install-from-APK flow on a physical/emulated
-Android device, offline login after a real app kill/relaunch, cross-device
-conflict resolution against the live backend, and Android Keystore-backed
-secure storage behavior across an OS-level app data wipe.
+Manual real-device acceptance should include: online password login → normal
+Çıkış → airplane mode → same user/password offline login; Manual Offline Mode
+with local analysis and zero app cloud traffic; Auto mode restoration and
+queued sync; Bu Cihazı Unut followed by rejected offline login; and app
+kill/relaunch around each of those transitions.
