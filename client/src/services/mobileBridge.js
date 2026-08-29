@@ -18,6 +18,7 @@ import { createLocalAIProvider } from '../mobile/localAI/provider.js';
 import { getModelManager, refreshInstalledState, setModelTier, listModelTiers } from '../mobile/localAI/registry.js';
 import { createDiagnostics } from '../mobile/diagnostics.js';
 import { getCurrentUser } from './api.js';
+import { isAppModeOffline, subscribeAppModePreference } from './appModePreference.js';
 
 // Android (Capacitor) equivalent of desktopBridge.js -- same exported API
 // shape (auth/analyses/sync/ai/connectivity) so the UI layer can treat both
@@ -49,6 +50,12 @@ let deviceId = null;
 let connectivityState = 'local';
 const connectivityListeners = new Set();
 const reauthListeners = new Set();
+
+// forgetDevice() while manually offline can't reach the server (see
+// PENDING_DEVICE_REVOKE_KEY usage below) -- this survives an app restart the
+// same way the rest of the offline-first state does, so the revoke isn't
+// lost if Auto mode isn't restored until a later session.
+const PENDING_DEVICE_REVOKE_KEY = 'anatolia_pending_device_revoke';
 
 function getDb() {
   if (!dbPromise) {
@@ -110,6 +117,10 @@ function setConnectivity(state) {
 }
 
 async function checkConnectivity() {
+  // Offline Mode (Settings > Bağlantı) is a manual, user-asserted choice --
+  // never probe the network to second-guess it, unlike the automatic
+  // local/cloud detection below.
+  if (isAppModeOffline()) { setConnectivity('local'); return connectivityState; }
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -123,6 +134,11 @@ async function checkConnectivity() {
 }
 
 async function performSync() {
+  // Single choke point: every write-triggered sync (mobileAnalyses.
+  // create/update/remove), mobileSync.forceSync/resolveConflict, and
+  // establishOnlineSession's post-login sync all funnel through here, so
+  // gating Offline Mode in one place covers all of them.
+  if (isAppModeOffline()) return { ok: false, skipped: true };
   const manager = await getSessionManager();
   const session = await manager.getSession();
   if (!session) return;
@@ -198,7 +214,19 @@ export const mobileAuth = {
     return () => reauthListeners.delete(callback);
   },
   logoutSession: guard(async () => (await getSessionManager()).logoutSession()),
-  forgetDevice: guard(async () => (await getSessionManager()).forgetDevice()),
+  // While manually offline, session.js's own forgetDevice() skips its DELETE
+  // call and hands back the revoke it still owes the server -- stash that so
+  // the Auto-mode listener below can flush it once connectivity is trusted
+  // again, instead of it being silently dropped.
+  forgetDevice: guard(async () => {
+    const result = await (await getSessionManager()).forgetDevice({ allowNetwork: !isAppModeOffline() });
+    if (result?.pendingServerRevoke) {
+      try {
+        localStorage.setItem(PENDING_DEVICE_REVOKE_KEY, JSON.stringify(result.pendingServerRevoke));
+      } catch {}
+    }
+    return result;
+  }),
 };
 
 export const mobileAnalyses = {
@@ -347,6 +375,10 @@ export const mobileUpdate = {
   // diagnosable -- UpdateBanner.jsx retries this on an interval so one
   // failed attempt doesn't mean no update banner for the whole session.
   check: guard(async () => {
+    // Independent of UpdateBanner.jsx's own Offline Mode gate -- this is an
+    // online-only service, so any other/future caller must not hit the
+    // network while the user has manually gone offline either.
+    if (isAppModeOffline()) return null;
     try {
       const res = await fetch(`${CLOUD_URL}/api/version/latest`, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) {
@@ -374,6 +406,7 @@ export const mobileUpdate = {
   // silent auto-install), so this hands off to the OS installer rather than
   // completing the update itself.
   approve: guard(async (url, expectedSha256 = null) => {
+    if (isAppModeOffline()) return null;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`APK indirilemedi (${res.status})`);
     const buffer = await res.arrayBuffer();
@@ -434,6 +467,33 @@ export const mobileConnectivity = {
   },
 };
 
+// Best-effort delivery of a device revoke that forgetDevice() couldn't send
+// while manually offline -- fire once, then clear the marker regardless of
+// outcome (same fire-and-forget philosophy as session.js's own forgetDevice:
+// the local wipe already happened, this is just the server side catching
+// up). Reuses the exact fetch shape session.js's forgetDevice() uses for its
+// own DELETE call.
+function flushPendingDeviceRevoke() {
+  let pending;
+  try {
+    const raw = localStorage.getItem(PENDING_DEVICE_REVOKE_KEY);
+    if (!raw) return;
+    pending = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (!pending?.deviceId || !pending?.jwt) {
+    try { localStorage.removeItem(PENDING_DEVICE_REVOKE_KEY); } catch {}
+    return;
+  }
+  fetch(`${CLOUD_URL}/api/devices/${pending.deviceId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${pending.jwt}` },
+  }).catch(() => {}).then(() => {
+    try { localStorage.removeItem(PENDING_DEVICE_REVOKE_KEY); } catch {}
+  });
+}
+
 // Bootstraps as soon as this module loads, if actually running as the
 // installed Android app -- mirrors desktop/main.js's app.whenReady()
 // sequence, just inline since there's no separate main process here.
@@ -453,4 +513,20 @@ if (isMobileApp) {
   // waiting for the periodic timer below (spec point 3).
   connectivityListeners.add((state) => { if (state === 'cloud') performSync().catch(() => {}); });
   setInterval(() => performSync().catch(() => {}), 5 * 60 * 1000);
+  // Both setIntervals above keep running unchanged while Offline Mode is on
+  // -- checkConnectivity/performSync are now internally no-ops in that case
+  // (see their own guards), so there's no need to pause/resume the timers
+  // themselves. This listener only closes the gap between a mode flip and
+  // the next poll: offline -> immediate 'local' instead of waiting up to
+  // 30s, auto -> immediate reconcile instead of waiting up to 30s, plus a
+  // best-effort flush of any device revoke forgetDevice() couldn't deliver
+  // while offline.
+  subscribeAppModePreference((mode) => {
+    if (mode === 'offline') {
+      setConnectivity('local');
+      return;
+    }
+    checkConnectivity();
+    flushPendingDeviceRevoke();
+  });
 }

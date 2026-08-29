@@ -53,7 +53,12 @@ describe('DesktopSyncBadge', () => {
     expect(screen.queryByText('Q LOCAL')).not.toBeInTheDocument();
   });
 
-  it('does not show the manual-offline badge when Offline Mode is on but connectivity is cloud', async () => {
+  // Regression: items 12-13 fixed effectiveState to key off appModeOffline
+  // alone, not `appModeOffline && state === 'local'` -- the underlying
+  // connectivity state is stale once Offline Mode stops the poller (see
+  // desktop/appMode.js's set('offline')), so a leftover 'cloud' reading must
+  // not suppress the manual badge.
+  it('shows the manual-offline badge when Offline Mode is on even if the (stale) connectivity state is cloud', async () => {
     const { setAppMode } = await import('../services/appModePreference.js');
     setAppMode('offline');
     window.anatoliaDesktop = {
@@ -64,7 +69,7 @@ describe('DesktopSyncBadge', () => {
     vi.resetModules();
     const { default: DesktopSyncBadge } = await import('./DesktopSyncBadge.jsx');
     render(<DesktopSyncBadge />);
-    await waitFor(() => expect(screen.getByText('Q CLOUD')).toBeInTheDocument());
-    expect(screen.queryByText('Q LOCAL · MANUEL')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Q LOCAL · MANUEL')).toBeInTheDocument());
+    expect(screen.queryByText('Q CLOUD')).not.toBeInTheDocument();
   });
 });

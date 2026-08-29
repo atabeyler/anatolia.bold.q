@@ -7,6 +7,8 @@ import QuantumLogo from './components/QuantumLogo.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
 import { resolveCurrentUser, AUTH_CHANGED_EVENT, hydrateNativeSession } from './services/api.js';
 import { nativeAuth } from './services/nativeBridge.js';
+import { isDesktop, desktopAppMode } from './services/desktopBridge.js';
+import { getAppMode, subscribeAppModePreference } from './services/appModePreference.js';
 import { useLang } from './services/langContext.jsx';
 
 // Shared by both loading gaps below (initial auth resolution, and the lazy
@@ -66,6 +68,21 @@ export default function App() {
       resolveCurrentUser().then((u) => { if (alive) setUser(u); })
     );
     return () => { alive = false; };
+  }, []);
+
+  // Pushes the renderer's localStorage Offline Mode preference into
+  // desktop/appMode.js's main-process copy -- appModePreference.js itself
+  // stays platform-agnostic (no desktopBridge import), so this is the one
+  // place that connects the two on desktop. The one-shot set() on mount
+  // covers first run / an app version where main didn't know about
+  // Offline Mode yet; the subscription covers the user flipping it live
+  // from Settings > Bağlantı. Mobile needs none of this -- its "main" and
+  // renderer share the same JS process (see mobileBridge.js), so isDesktop
+  // gates it out entirely there.
+  useEffect(() => {
+    if (!isDesktop) return undefined;
+    desktopAppMode.set(getAppMode());
+    return subscribeAppModePreference((mode) => { if (isDesktop) desktopAppMode.set(mode); });
   }, []);
 
   // Event-driven instead of polling: setJWT() fires AUTH_CHANGED_EVENT on

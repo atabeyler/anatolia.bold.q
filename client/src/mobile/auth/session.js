@@ -156,6 +156,10 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     }
 
     await dbRun(db, 'UPDATE device_meta SET failed_offline_attempts = 0, offline_locked_until = NULL WHERE device_id = ?', [deviceId]);
+    // A successful offline login is itself a fresh proof of identity --
+    // clear signedOut so this cached jwt (see getSession()) is treated as
+    // an active session again, including across the next relaunch.
+    await secureStore.save({ ...cached, signedOut: false });
     return { ok: true, jwt: cached.jwt, userCode: cached.userCode, nickname: cached.nickname, isAdmin: cached.isAdmin };
   }
 
@@ -166,7 +170,12 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // no caller of this function has a legitimate use for it.
   async function getSession() {
     const stored = await secureStore.load();
-    if (!stored) return null;
+    // signedOut:true means the user actively logged out on this device --
+    // the jwt/offlinePasswordHash below are deliberately still cached (see
+    // logoutSession()) so a subsequent verifyOfflineLogin() keeps working,
+    // but hydrateNativeSession()'s startup auto-login must not treat this
+    // as "still signed in" just because a session happens to be cached.
+    if (!stored || stored.signedOut === true) return null;
     const { offlinePasswordHash: _offlinePasswordHash, ...session } = stored;
     return session;
   }
@@ -189,18 +198,21 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     return Date.now() >= payload.exp * 1000;
   }
 
-  // Clears only the active session (the cached JWT) -- this device's
-  // offline-login authorization (device_meta.last_authorized_user_id +
-  // the cached bcrypt hash) is deliberately left intact, so the same
-  // account can immediately offline-login again on this device without
-  // a fresh online round-trip. There is no partial-update primitive on
-  // secureStore (only save/load/clear), so re-saving the full cached
-  // object with jwt: null is how a single field gets cleared. Mirrors
+  // Marks the session signed-out -- this device's offline-login
+  // authorization (device_meta.last_authorized_user_id + the cached bcrypt
+  // hash) is deliberately left intact, so the same account can immediately
+  // offline-login again on this device without a fresh online round-trip.
+  // Unlike before, the jwt itself is NOT nulled here: a null jwt made
+  // verifyOfflineLogin() (which hands back cached.jwt as-is) return a
+  // useless null token on every subsequent offline login, permanently
+  // stranding a signed-out-then-offline user. signedOut is the actual
+  // "am I logged in" flag now -- getSession() checks it, jwt is just
+  // cached credential material that survives regardless. Mirrors
   // desktop/auth/session.js's logoutSession() exactly.
   async function logoutSession() {
     const cached = await secureStore.load();
     if (!cached) return;
-    await secureStore.save({ ...cached, jwt: null });
+    await secureStore.save({ ...cached, signedOut: true });
   }
 
   // Full device revocation: wipes the local session cache, this device's
@@ -209,7 +221,14 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // then best-effort tells the server this device is no longer trusted for
   // the account. Unlike logoutSession(), a later login on this machine must
   // be online again before offline login works here for this account.
-  async function forgetDevice() {
+  //
+  // allowNetwork:false skips the server DELETE entirely (e.g. the caller
+  // already knows this device has no connectivity right now) but still
+  // performs the exact same local wipe -- the returned pendingServerRevoke
+  // tells the caller a revoke is still owed to the server once connectivity
+  // returns; wiring up that retry is a separate concern from this function.
+  // Mirrors desktop/auth/session.js's forgetDevice() exactly.
+  async function forgetDevice({ allowNetwork = true } = {}) {
     // Captured before clearing -- the jwt is needed for the server call
     // below, and secureStore has no way to read it back afterward.
     const cached = await secureStore.load();
@@ -218,12 +237,13 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     // Fire-and-forget -- the local wipe above is what actually matters for
     // this device; a network blip or an already-expired token here must
     // never block or fail forgetDevice() itself.
-    if (cached?.jwt) {
+    if (allowNetwork && cached?.jwt) {
       fetchImpl(`${apiBaseUrl}/api/devices/${deviceId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${cached.jwt}` },
       }).catch(() => {});
     }
+    return { pendingServerRevoke: (!allowNetwork && cached?.jwt) ? { deviceId, jwt: cached.jwt } : null };
   }
 
   return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logoutSession, forgetDevice, needsReauth };

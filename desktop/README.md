@@ -125,31 +125,56 @@ online login again on the next launch rather than persisting anything
 unencrypted to disk.
 
 **ÇIKIŞ YAP vs BU CİHAZI UNUT.** `auth/session.js` exposes two distinct
-sign-out operations, not one: **ÇIKIŞ YAP** (`logoutSession()`) clears only
-the active session (the cached JWT) — this device's offline-login
-authorization is preserved, so the same account can offline-login again on
-this device immediately, without a fresh online round-trip. **BU CİHAZI
-UNUT** (`forgetDevice()`, Settings → Security) fully removes this device's
+sign-out operations, not one: **ÇIKIŞ YAP** (`logoutSession()`) marks the
+cached session `signedOut: true` rather than nulling the JWT — the JWT,
+password hash and this device's offline-login authorization are all
+deliberately preserved, so `getSession()` correctly stops auto-restoring a
+live session at next launch (showing the login screen again) while a
+subsequent `verifyOfflineLogin()` still has real cached credentials to
+verify against and can log the same account back in on this device
+immediately, offline, without a fresh online round-trip — a successful
+offline login clears `signedOut` again. **BU CİHAZI UNUT**
+(`forgetDevice()`, Settings → Security) fully removes this device's
 offline-login credential and authorization (`device_meta.
 last_authorized_user_id`/`last_authorized_at` cleared, secure store wiped)
-and best-effort revokes the device server-side (`DELETE /api/devices/
-:deviceId`) — a fresh online login is required before offline login works
-again on this device. An admin-forced block (`auth:blocked`) also goes
-through `forgetDevice()`, not `logoutSession()`, since a blocked user
-should not be able to relaunch and offline-login back in.
+and, network permitting, revokes the device server-side (`DELETE
+/api/devices/:deviceId`) — a fresh online login is required before offline
+login works again on this device. When Offline Mode (below) is on,
+`forgetDevice({ allowNetwork: false })` skips that DELETE call and instead
+queues a pending-revoke marker that `appMode.js` flushes automatically the
+next time the app switches back to Otomatik. An admin-forced block
+(`auth:blocked`) also goes through `forgetDevice()`, not `logoutSession()`,
+since a blocked user should not be able to relaunch and offline-login back
+in.
 
 **ÇEVRİMDIŞI MOD.** A separate, user-selected app-wide preference (Settings
 → Bağlantı, `client/src/services/appModePreference.js`), completely
 independent of the login/device-authorization state above -- neither
 `auth/session.js` nor this preference module ever imports the other.
-Switching it on suspends cloud connectivity, live sync, and every
-online-only service (Socket.IO, the update check, the weather widget, cloud
-AI routing, passkey management) while preserving local data and the pending
-sync queue, regardless of whether this machine can actually reach the
-server. Switching back to Otomatik reconnects the socket if needed and (once
-`nativeAuth.needsReauth()` says a fresh login isn't required) flushes the
-pending sync queue via the existing `sync.forceSync()` IPC call -- no new
-sync/socket mechanism, just gating the existing ones at their call sites.
+Unlike the earlier, purely renderer-side gating, the toggle now reaches the
+Electron **main process** itself, via a dedicated `appMode:get` /
+`appMode:set` / `appMode:changed` IPC channel (`desktop/appMode.js`,
+wired in `desktop/main.js` and exposed through `desktop/preload.cjs`):
+`App.jsx` pushes every preference change to main through the
+`desktopAppMode` bridge (`client/src/services/desktopBridge.js`), so main.js
+-- not just the UI -- genuinely knows the mode. Switching it on calls
+`appMode.set('offline')`, which persists the mode to a small JSON file in
+the Electron `userData` dir (so a relaunch while Offline Mode is on does not
+silently resume polling) and stops main.js's connectivity poller and its
+sync/update timers outright, on top of suspending every online-only
+renderer service (Socket.IO, the update check, the weather widget, cloud AI
+routing, passkey management) -- local data and the pending sync queue are
+untouched either way, regardless of whether this machine can actually reach
+the server. Switching back to Otomatik calls `appMode.set('auto')`, which
+runs `reconcileAuto()`: it restarts connectivity polling and checks once
+immediately, bails out to a reauth prompt if `nativeAuth.needsReauth()`
+says the cached session has expired, otherwise runs one sync pass via the
+existing `sync.forceSync()` IPC call, restarts the periodic timers, pushes
+the fresh connectivity state to the renderer, and flushes any
+`forgetDevice({ allowNetwork: false })` device-revoke that was queued while
+offline (`appMode.js`'s `pendingRevoke` file) -- no new sync/socket
+mechanism was invented, the existing ones are just centrally started and
+stopped from one place instead of being gated ad hoc at their call sites.
 
 ## Local AI
 

@@ -17,7 +17,7 @@ import AppFooter from '../components/AppFooter.jsx';
 import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
 import DesktopConflictModal from '../components/DesktopConflictModal.jsx';
 import ReauthBanner from '../components/ReauthBanner.jsx';
-import { api, setJWT, getToken, logoutRequest, clearLocalChatHistory } from '../services/api.js';
+import { api, setJWT, setLocalAuthUser, getToken, logoutRequest, clearLocalChatHistory } from '../services/api.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -291,6 +291,7 @@ export default function DashboardPage({ user, onLogout }) {
       logoutRequest();
       if (isNativeApp) nativeAuth.forgetDevice().catch(() => {});
       setJWT(null);
+      setLocalAuthUser(null);
       clearLocalChatHistory();
       disconnectSocket();
       onLogout();
@@ -423,6 +424,9 @@ export default function DashboardPage({ user, onLogout }) {
       const lng = Number(coords?.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       setMyCoords({ lat, lng });
+      // Konum cihaz içinde kullanılabilir -- GPS watch keeps running, only
+      // the cloud emit is suppressed while Offline Mode is on.
+      if (isAppModeOffline()) return;
       sock.emit('location:update', { lat, lng });
     };
 
@@ -535,6 +539,7 @@ export default function DashboardPage({ user, onLogout }) {
     logoutRequest();
     if (isNativeApp) nativeAuth.logoutSession().catch(() => {});
     setJWT(null);
+    setLocalAuthUser(null);
     clearLocalChatHistory();
     disconnectSocket();
     onLogout();
@@ -548,6 +553,7 @@ export default function DashboardPage({ user, onLogout }) {
     logoutRequest();
     if (isNativeApp) nativeAuth.forgetDevice().catch(() => {});
     setJWT(null);
+    setLocalAuthUser(null);
     clearLocalChatHistory();
     disconnectSocket();
     onLogout();

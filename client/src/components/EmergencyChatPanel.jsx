@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, Hand, MonitorUp, Disc, UserX } from 'lucide-react';
 import { api, getToken } from '../services/api.js';
-import { connectSocket, getSocket } from '../services/socket.js';
-import { isAppModeOffline } from '../services/appModePreference.js';
+import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
+import { isAppModeOffline, subscribeAppModePreference } from '../services/appModePreference.js';
 import VoiceButton from './VoiceButton.jsx';
 import FileAttach, { FileMessageContent } from './FileAttach.jsx';
 import { useLang } from '../services/langContext.jsx';
@@ -78,13 +78,15 @@ export default function ChatPanel({ user }) {
     localStreamRef.current = localStream;
   }, [localStream]);
 
-  useEffect(() => {
-    // Offline Mode (Settings > Bağlantı): the emergency chat/meeting panel
-    // is entirely online-only, so it just doesn't connect while the app-wide
-    // toggle is on -- mirrors DashboardPage.jsx's own connectSocket() gate.
-    if (isAppModeOffline()) return undefined;
-    const sock = connectSocket(myNick, getToken());
-    if (!sock) return;
+  // All the sock.on(...) registration a freshly-connected socket needs,
+  // extracted so both the mount effect below and the aq:app-mode-reconnect
+  // handler can attach the exact same listeners to a socket (re)created
+  // after an Offline->Auto switch -- mirrors DashboardPage.jsx's identical
+  // attachSocketListeners/socketDetachRef fix for the same "reconnected
+  // socket has no listeners" bug. Returns a detach function. Kept current
+  // via a ref so the reconnect listener (registered once) always attaches
+  // with the latest closures.
+  const attachSocketListeners = (sock) => {
     const onReceive = (m) => setMessages((prev) => [...prev, m]);
     const onSent = (m) => setMessages((prev) => [...prev, { ...m, mine: true }]);
     const onOnline = (users) => {
@@ -92,9 +94,6 @@ export default function ChatPanel({ user }) {
       if (!otherUserRef.current && users.length > 1) setOtherUser(users.find(u => u !== myNick) || '');
     };
     const onHistory = (rows) => setMessages(rows.map(r => ({ from: r.from_user, message: r.message, timestamp: r.created_at, mine: r.from_user === myNick })));
-    sock.on('chat:receive', onReceive); sock.on('chat:sent', onSent); sock.on('users:online', onOnline); sock.on('chat:history:result', onHistory);
-    sock.emit('users:request');
-    sock.emit('video:meeting:status', { roomId });
 
     const onMeetingStarted = () => setMeetingActive(true);
     const onMeetingEnded = () => {
@@ -154,6 +153,11 @@ export default function ChatPanel({ user }) {
       setMicOn(!mute);
       emitMediaState({ micOn: !mute });
     };
+
+    sock.on('chat:receive', onReceive);
+    sock.on('chat:sent', onSent);
+    sock.on('users:online', onOnline);
+    sock.on('chat:history:result', onHistory);
     sock.on('video:meeting:started', onMeetingStarted);
     sock.on('video:meeting:ended', onMeetingEnded);
     sock.on('video:meeting:status:result', onMeetingStatus);
@@ -183,6 +187,69 @@ export default function ChatPanel({ user }) {
       sock.off('video:logs:result', onLogs);
       sock.off('video:admin:kicked', onKicked);
       sock.off('video:admin:mute', onAdminMute);
+    };
+  };
+  const attachSocketListenersRef = useRef(attachSocketListeners);
+  attachSocketListenersRef.current = attachSocketListeners;
+  // Tracks whichever detach function is currently "live" so whichever code
+  // disconnects/reconnects the socket always tears down exactly the
+  // listeners that are actually attached right now.
+  const socketDetachRef = useRef(() => {});
+
+  // Extracted so both the mount effect and the aq:app-mode-reconnect handler
+  // connect/attach/prime a fresh socket identically.
+  const connectPanelSocket = () => connectSocket(myNick, getToken());
+  const connectPanelSocketRef = useRef(connectPanelSocket);
+  connectPanelSocketRef.current = connectPanelSocket;
+
+  // Live-flips: dropping into Offline Mode mid-session disconnects an
+  // already-connected socket immediately and detaches this panel's
+  // listeners from it, rather than waiting for the next mount. Switching
+  // back to Auto does NOT reconnect here -- that only happens via the
+  // explicit aq:app-mode-reconnect event (see AppMenus.jsx's
+  // ConnectionPanel and DashboardPage.jsx's identical listener), so a
+  // stale tab that merely observes someone else's mode change doesn't
+  // also race to reconnect.
+  useEffect(() => subscribeAppModePreference((mode) => {
+    if (mode === 'offline') {
+      const sock = getSocket();
+      if (sock && sock.connected) {
+        socketDetachRef.current();
+        socketDetachRef.current = () => {};
+        disconnectSocket();
+      }
+    }
+  }), []);
+
+  useEffect(() => {
+    const onReconnect = () => {
+      let sock = getSocket();
+      if (!sock || !sock.connected) {
+        sock = connectPanelSocketRef.current();
+        if (!sock) return;
+        socketDetachRef.current();
+        socketDetachRef.current = attachSocketListenersRef.current(sock);
+        sock.emit('users:request');
+        sock.emit('video:meeting:status', { roomId });
+      }
+    };
+    window.addEventListener('aq:app-mode-reconnect', onReconnect);
+    return () => window.removeEventListener('aq:app-mode-reconnect', onReconnect);
+  }, []);
+
+  useEffect(() => {
+    // Offline Mode (Settings > Bağlantı): the emergency chat/meeting panel
+    // is entirely online-only, so it just doesn't connect while the app-wide
+    // toggle is on -- mirrors DashboardPage.jsx's own connectSocket() gate.
+    if (isAppModeOffline()) return undefined;
+    const sock = connectPanelSocketRef.current();
+    if (!sock) return undefined;
+    socketDetachRef.current = attachSocketListenersRef.current(sock);
+    sock.emit('users:request');
+    sock.emit('video:meeting:status', { roomId });
+    return () => {
+      socketDetachRef.current();
+      socketDetachRef.current = () => {};
     };
   }, [myNick]);
 

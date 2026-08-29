@@ -149,11 +149,23 @@ function SecurityPanel({ t, lang, onForgetDevice }) {
   // (Settings > Bağlantı) is on -- "Bu Cihazı Unut" just above stays enabled
   // either way since it's a purely local operation.
   const [appModeOffline, setAppModeOffline] = useState(() => isAppModeOffline());
-  useEffect(() => subscribeAppModePreference((mode) => setAppModeOffline(mode === 'offline')), []);
+  // Re-fetch the passkey list once connectivity comes back (Offline -> Auto)
+  // so it doesn't stay empty/stale for the rest of the session.
+  useEffect(() => subscribeAppModePreference((mode) => {
+    const offline = mode === 'offline';
+    setAppModeOffline(offline);
+    if (!offline) load();
+  }), []);
   const passkeySupported = isPasskeySupported();
   const passkeyDisabled = !passkeySupported || appModeOffline;
 
   const load = () => {
+    // Listing passkeys is a server round-trip -- skip it while Offline Mode
+    // is on (mirrors the register/rename/remove gating below) instead of
+    // leaving the list stuck on "loading" or hitting a call guaranteed to
+    // fail against a suspended connection. securityPasskeyOfflineModeHint
+    // already explains the empty list, so no separate offline flag needed.
+    if (isAppModeOffline()) { setCredentials([]); return; }
     api.webauthn.listCredentials().then(setCredentials).catch((e) => setError(e.message));
   };
 

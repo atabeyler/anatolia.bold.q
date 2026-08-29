@@ -24,6 +24,16 @@ export const desktopAuth = {
   forgetDevice: () => bridge?.auth.forgetDevice(),
 };
 
+// Renderer -> main IPC bridge for the desktop "Offline Mode" toggle
+// (Settings > Bağlantı) -- see desktop/appMode.js. Desktop-only: mobile
+// has none of this since main and the renderer share the same JS process
+// there (see mobileBridge.js).
+export const desktopAppMode = {
+  get: () => bridge?.appMode.get(),
+  set: (mode) => bridge?.appMode.set(mode),
+  onChange: (cb) => bridge?.appMode.onChange(cb) || (() => {}),
+};
+
 export const desktopAnalyses = {
   list: () => bridge?.analyses.list(),
   get: (id) => bridge?.analyses.get(id),

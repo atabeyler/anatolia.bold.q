@@ -48,6 +48,18 @@ function isNativeShell() {
 // which is the one and only place the JWT is actually persisted at rest.
 let nativeJwt = null;
 
+// Native-shell only, mirrors nativeJwt's lifetime (in-memory, cleared on
+// real logout/restart) but tracks a *different* thing: the identity a
+// successful offline login (see LoginPage.jsx's attemptOfflineLogin())
+// already proved locally, independent of whether the cached jwt handed
+// back alongside it happens to be expired. Not persisted itself -- a
+// restart re-derives "still signed in" from getSession()/signedOut instead
+// (desktop/auth/session.js, client/src/mobile/auth/session.js), which is
+// the actual source of truth across relaunches.
+let localAuthUser = null;
+
+export function setLocalAuthUser(user) { localAuthUser = user || null; }
+
 function getJWT() { return isNativeShell() ? nativeJwt : null; }
 
 export function getToken() { return getJWT(); }
@@ -390,10 +402,17 @@ function base64UrlDecode(input) {
 // getJWT()); use resolveCurrentUser() for the web path.
 export function getCurrentUser() {
   const jwt = getJWT();
-  if (!jwt) return null;
+  if (!jwt) return localAuthUser;
   try {
     const payload = JSON.parse(base64UrlDecode(jwt.split('.')[1]));
     if (payload.exp && Date.now() >= payload.exp * 1000) {
+      // Offline authentication is not the same thing as cloud bearer-token
+      // authorization: this JWT being expired only means actual cloud
+      // fetch()/req() calls will get a normal 401 (handled by
+      // needsReauth()/ReauthBanner) -- it must not also kick a locally-
+      // authenticated user out of local-only usage. Only self-clear when
+      // there's no local identity to fall back on either.
+      if (localAuthUser) return localAuthUser;
       setJWT(null);
       return null;
     }

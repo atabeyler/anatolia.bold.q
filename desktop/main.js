@@ -15,6 +15,7 @@ import { listUnresolvedConflicts, resolveConflict } from './sync/conflict.js';
 import { createLocalAIProvider } from './localAI/provider.js';
 import { configureLocalLLM, getModelManager, listModelTiers, setModelTier } from './localAI/registry.js';
 import { createConnectivityMonitor } from './connectivity.js';
+import { createAppModeController } from './appMode.js';
 import { serveStaticDir } from './staticServer.js';
 // electron-updater is a CommonJS package with no "exports" map telling
 // Node's ESM interop which of its properties are safe to statically
@@ -61,8 +62,16 @@ let db = null;
 let deviceId = null;
 let sessionManager = null;
 let connectivity = null;
+let appMode = null;
 let syncTimer = null;
 let updateTimer = null;
+// Mirrors startBackgroundServices()/pauseBackgroundServices() -- tracks
+// whether the timers + connectivity polling are currently running, since
+// (unlike before Offline Mode existed) `connectivity` itself is now created
+// once at startup and kept alive across a pause instead of being recreated/
+// nulled, so its presence can no longer be used as that signal (see
+// app.on('activate') below).
+let backgroundServicesRunning = false;
 // Created before anything else in app.whenReady() so every subsequent
 // step (db open, sync, IPC handlers) can log through it; diagnostics.js
 // itself never throws, so this is safe to call unconditionally everywhere
@@ -306,6 +315,15 @@ function currentUserCode() {
 }
 
 async function performSync() {
+  // Belt-and-suspenders alongside appMode's own timer-pausing (appMode.js's
+  // set('offline') stops syncTimer and connectivity's polling) -- this
+  // function is also called directly from the analyses:create/update/
+  // remove, sync:forceSync, sync:resolveConflict IPC handlers and the
+  // "Şimdi Senkronize Et" app-menu item, none of which go through the
+  // timer-pause path, so a stale in-flight call could still slip through
+  // without this guard.
+  if (appMode?.isOffline()) return { ok: false, skipped: true };
+
   const session_ = sessionManager?.getSession();
   if (!session_ || !db) return;
 
@@ -385,7 +403,21 @@ function registerIpcHandlers() {
   ipcMain.handle('auth:isOfflineLoginAllowed', (_e, userCode) => sessionManager.isOfflineLoginAllowed(userCode));
   ipcMain.handle('auth:needsReauth', () => sessionManager.needsReauth());
   ipcMain.handle('auth:logoutSession', () => sessionManager.logoutSession());
-  ipcMain.handle('auth:forgetDevice', () => sessionManager.forgetDevice());
+  ipcMain.handle('auth:forgetDevice', () => {
+    // Offline Mode on: skip the server DELETE (there's no connectivity to
+    // spend it on) and stash the revoke for appMode's set('auto')
+    // reconciliation to retry once the user turns Offline Mode back off --
+    // see session.js's forgetDevice({ allowNetwork }) doc comment.
+    const result = sessionManager.forgetDevice({ allowNetwork: !appMode.isOffline() });
+    if (result?.pendingServerRevoke) appMode.setPendingRevoke(result.pendingServerRevoke);
+    return result;
+  });
+
+  ipcMain.handle('appMode:get', () => appMode.get());
+  ipcMain.handle('appMode:set', (_e, mode) => {
+    appMode.set(mode);
+    mainWindow?.webContents.send('appMode:changed', mode);
+  });
 
   ipcMain.handle('analyses:list', () => {
     const userId = currentUserCode();
@@ -732,31 +764,27 @@ app.whenReady().then(async () => {
     platform: process.platform, appVersion: app.getVersion(),
   });
 
-  // macOS keeps the app process alive after all windows close (see
-  // window-all-closed below), which also tears this down -- 'activate'
-  // (the dock-icon reopen) used to only recreate the window and left sync/
-  // connectivity dead for the rest of that run, silently, until the app was
-  // fully quit and relaunched. Wrapped in one function so both the initial
-  // boot and every later reopen start it the same way.
-  function startBackgroundServices() {
-    connectivity = createConnectivityMonitor({ apiBaseUrl: CLOUD_URL });
-    connectivity.onChange((state) => {
-      diagnostics.info('connectivity_change', { state });
-      mainWindow?.webContents.send('connectivity:change', state);
-    });
-    connectivity.start();
-    // A reconnect (local -> cloud) triggers an immediate sync instead of
-    // waiting for the next timer tick -- spec point 3: sync starts
-    // automatically the moment connectivity returns, with no user action.
-    // onReconnect() (not the raw onChange()) is required here: it only fires
-    // on a genuine local->cloud transition, not on performSync()'s own
-    // sync->cloud settling step at the end of every sync pass -- see
-    // connectivity.js's onReconnect doc comment for the infinite-loop bug
-    // this previously caused (the sync status badge flickering constantly).
-    connectivity.onReconnect(() => performSync().catch(() => {}));
+  // Created once and kept alive for the life of the app (never recreated,
+  // unlike before Offline Mode existed) -- appMode.js's set('offline')
+  // needs to stop its polling without losing its last-known state (so
+  // DesktopSyncBadge can still show a sensible badge), which only works if
+  // the same instance survives a pause instead of being nulled out.
+  connectivity = createConnectivityMonitor({ apiBaseUrl: CLOUD_URL });
+  connectivity.onChange((state) => {
+    diagnostics.info('connectivity_change', { state });
+    mainWindow?.webContents.send('connectivity:change', state);
+  });
+  // A reconnect (local -> cloud) triggers an immediate sync instead of
+  // waiting for the next timer tick -- spec point 3: sync starts
+  // automatically the moment connectivity returns, with no user action.
+  // onReconnect() (not the raw onChange()) is required here: it only fires
+  // on a genuine local->cloud transition, not on performSync()'s own
+  // sync->cloud settling step at the end of every sync pass -- see
+  // connectivity.js's onReconnect doc comment for the infinite-loop bug
+  // this previously caused (the sync status badge flickering constantly).
+  connectivity.onReconnect(() => performSync().catch(() => {}));
 
-    performSync().catch(() => {});
-
+  function startTimers() {
     // Periodic background sync in addition to the reconnect-triggered one
     // above, so a long-lived idle session with a flaky-but-technically-online
     // connection still eventually reconciles.
@@ -776,14 +804,65 @@ app.whenReady().then(async () => {
     }
   }
 
-  function stopBackgroundServices() {
+  function stopTimersOnly() {
     if (syncTimer) clearInterval(syncTimer);
     if (updateTimer) clearInterval(updateTimer);
     syncTimer = null;
     updateTimer = null;
-    connectivity?.stop();
-    connectivity = null;
   }
+
+  // Pauses the timers + connectivity polling without discarding
+  // connectivity's last-known state -- used both as appMode's stopTimers
+  // callback (Offline Mode) and by window-all-closed below, so a device
+  // reawakened via 'activate' (or Offline Mode turned back off) always has
+  // a live connectivity instance to resume rather than needing to rebuild
+  // one from scratch.
+  function pauseBackgroundServices() {
+    stopTimersOnly();
+    connectivity?.stop();
+    backgroundServicesRunning = false;
+  }
+
+  // macOS keeps the app process alive after all windows close (see
+  // window-all-closed below), which also pauses this -- 'activate' (the
+  // dock-icon reopen) used to only recreate the window and left sync/
+  // connectivity dead for the rest of that run, silently, until the app was
+  // fully quit and relaunched. Wrapped in one function so both the initial
+  // boot and every later reopen start it the same way.
+  function startBackgroundServices() {
+    // Persisted Offline Mode from a previous run -- stay paused rather than
+    // start polling/syncing just to have appMode's own guard immediately
+    // no-op every call; performSync()'s own top-of-function isOffline()
+    // check is belt-and-suspenders for the handlers that call it directly,
+    // not a substitute for not starting the timers at all.
+    if (appMode.isOffline()) return;
+    connectivity.start();
+    performSync().catch(() => {});
+    startTimers();
+    backgroundServicesRunning = true;
+  }
+
+  appMode = createAppModeController({
+    userDataDir: app.getPath('userData'),
+    connectivity,
+    performSync,
+    getNeedsReauth: () => sessionManager.needsReauth(),
+    // Wrapped rather than passing the bare functions: appMode.js's own
+    // set('auto')/set('offline') already call connectivity.start()/
+    // performSync()/startTimers() (or pauseBackgroundServices) directly,
+    // bypassing startBackgroundServices() entirely -- without also flipping
+    // this flag here, app.on('activate')'s `if (!backgroundServicesRunning)`
+    // check below would think services were still stopped after switching
+    // back to Otomatik and call startBackgroundServices() again on the next
+    // dock-reopen, doubling up connectivity's poll interval and the sync/
+    // update timers (createConnectivityMonitor's start() has no
+    // already-running guard of its own).
+    startTimers: () => { startTimers(); backgroundServicesRunning = true; },
+    stopTimers: pauseBackgroundServices,
+    sendReauthRequired: () => mainWindow?.webContents.send('auth:reauthRequired'),
+    broadcastConnectivity: (state) => mainWindow?.webContents.send('connectivity:change', state),
+    apiBaseUrl: CLOUD_URL,
+  });
 
   configureAutoUpdater();
   registerIpcHandlers();
@@ -794,13 +873,13 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    // window-all-closed (macOS branch) stopped these -- restart them any
-    // time we're reopening from that stopped state, not just on cold boot.
-    if (!connectivity) startBackgroundServices();
+    // window-all-closed (macOS branch) paused these -- restart them any
+    // time we're reopening from that paused state, not just on cold boot.
+    if (!backgroundServicesRunning) startBackgroundServices();
   });
 
   app.on('window-all-closed', () => {
-    stopBackgroundServices();
+    pauseBackgroundServices();
     if (process.platform !== 'darwin') app.quit();
   });
 });

@@ -117,7 +117,7 @@ The machine-readable API definition for the new versioned platform surface is in
 |---|---|---|
 | `POST /register` | auth | Authorize (or re-authorize) a device for the current account while online, enabling later offline login for that device |
 | `GET /` | auth | List the account's registered devices |
-| `DELETE /:deviceId` | auth | Revoke a device (e.g. lost/stolen laptop). Also called automatically, best-effort and fire-and-forget, by the desktop/mobile "Bu Cihazı Unut" (forgetDevice) flow — see `desktop/auth/session.js` and `client/src/mobile/auth/session.js` — in addition to any manual device-management use |
+| `DELETE /:deviceId` | auth | Revoke a device (e.g. lost/stolen laptop). Also called automatically, best-effort, by the desktop/mobile "Bu Cihazı Unut" (forgetDevice) flow — see `desktop/auth/session.js` and `client/src/mobile/auth/session.js` — in addition to any manual device-management use. If the app-wide Offline Mode toggle is on at the time, this call is skipped and queued as a pending-revoke marker instead, flushed against this same endpoint the next time the app switches back to Otomatik (`desktop/appMode.js`) |
 
 ## Sync (`/api/sync`)
 
@@ -144,6 +144,6 @@ Offline-first sync for the desktop app; see [desktop/README.md](./desktop/README
 
 ---
 
-**Note:** the app-wide "Offline Mode" toggle (Settings → Bağlantı, `client/src/services/appModePreference.js`) introduces no new or changed server endpoints. It is purely client-side request-gating — a localStorage-backed preference that short-circuits calls to the endpoints already listed above (sync, version check, etc.) at their existing client call sites, rather than anything the server needs to know about.
+**Note:** the app-wide "Offline Mode" toggle (Settings → Bağlantı, `client/src/services/appModePreference.js`) introduces no new or changed server endpoints. It is purely client-side request-gating — a localStorage-backed preference that stops calls to the endpoints already listed above (sync, version check, etc.) rather than anything the server needs to know about. On Android the gating is centralized in `client/src/services/mobileBridge.js` (`checkConnectivity()`/`performSync()` and everything that funnels through them no-op while the preference is on); on desktop it additionally reaches the Electron main process via an `appMode:get`/`appMode:set`/`appMode:changed` IPC channel (`desktop/appMode.js`, `desktop/main.js`), which stops and restarts main.js's own connectivity poller and sync/update timers — not just renderer-side UI gating.
 
 For request/response shapes and quantum-mode field details (`quantum`, `fraud`, `optimizer` objects), see the route source directly in `server/src/routes/` — this file tracks endpoints and purpose, not full schemas.

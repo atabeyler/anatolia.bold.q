@@ -42,6 +42,13 @@ desktop build as production-ready.
       logged in online first** — must be rejected (this is the device
       authorization gate; confirm the error message is the "cihaz
       yetkilendirilmemiş" one, not a generic failure).
+- [ ] Regression check for the `logoutSession()` fix: while online, log out
+      (**ÇIKIŞ YAP**, not Bu Cihazı Unut). Disconnect the network, then log
+      back in with the **same user code and password** — this must succeed.
+      (Previously `logoutSession()` nulled the cached JWT, which left
+      `verifyOfflineLogin()` with nothing usable and permanently stranded a
+      signed-out-then-offline user; it now only sets a `signedOut` flag and
+      keeps the JWT/password hash cached, so this must work.)
 
 ## 2b. Bu Cihazı Unut (forgetDevice — distinct from ordinary logout)
 
@@ -84,6 +91,27 @@ desktop build as production-ready.
       the socket reconnects, the pending sync queue flushes (if anything
       was queued while offline), and the badge returns to a normal
       automatic state ("Q CLOUD"/"Q LOCAL"/"SYNC", not the manual variant).
+- [ ] Main-process network gating: with Çevrimdışı on, open a network
+      monitor (e.g. Fiddler/Wireshark, or the backend's own access log) and
+      confirm no outgoing requests to the health/connectivity or sync
+      endpoints originate from the app while it sits idle for a couple of
+      minutes — the poller and sync/update timers in `desktop/main.js`
+      should be genuinely stopped, not just hidden in the renderer.
+- [ ] Fully quit the app while Çevrimdışı is on, then relaunch it (still
+      offline or even with the network back on). Confirm the app comes back
+      up still in manual Offline Mode (badge shows "Q LOCAL · MANUEL") and
+      does **not** silently start polling the network again — the mode
+      must persist across restarts (`desktop/appMode.js`'s JSON file in the
+      Electron `userData` dir).
+- [ ] After the relaunch in the previous step, switch back to **Otomatik**
+      and confirm the connectivity poller and sync/update timers actually
+      resume (e.g. the badge progresses Q LOCAL → SYNC → Q CLOUD, and the
+      network monitor shows requests to the health/sync endpoints again).
+- [ ] If a **Bu Cihazı Unut** was performed while Çevrimdışı was on (so the
+      server-side revoke was skipped and only queued), switch back to
+      **Otomatik** and confirm the queued `DELETE /api/devices/:deviceId`
+      is actually sent (check the backend's `devices` table/log for the
+      revoke) rather than staying queued indefinitely.
 
 ## 3. Offline create → persists across restart (spec test B)
 

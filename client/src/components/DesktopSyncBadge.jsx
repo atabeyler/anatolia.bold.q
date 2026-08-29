@@ -35,7 +35,11 @@ export default function DesktopSyncBadge() {
 
   if (!isNativeApp) return null;
 
-  const effectiveState = appModeOffline && state === 'local' ? 'localManual' : state;
+  // Manual Offline Mode always wins, regardless of the underlying
+  // connectivity state -- main/mobileBridge stop polling entirely once it's
+  // on (see desktop/appMode.js), so `state` is just stale leftover data from
+  // before the switch, not a live signal worth branching on here.
+  const effectiveState = appModeOffline ? 'localManual' : state;
   // Every badge label here (Q CLOUD/SYNC/Q LOCAL, and now Q LOCAL · MANUEL)
   // is a hardcoded status-code string, not run through t() -- matches the
   // existing precedent for this component rather than adding a translated

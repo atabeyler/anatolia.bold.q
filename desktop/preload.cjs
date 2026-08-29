@@ -42,6 +42,16 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
     forgetDevice: () => ipcRenderer.invoke('auth:forgetDevice'),
   },
 
+  appMode: {
+    get: () => ipcRenderer.invoke('appMode:get'),
+    set: (mode) => ipcRenderer.invoke('appMode:set', mode),
+    onChange: (cb) => {
+      const l = (_e, mode) => cb(mode);
+      ipcRenderer.on('appMode:changed', l);
+      return () => ipcRenderer.removeListener('appMode:changed', l);
+    },
+  },
+
   analyses: {
     list: () => ipcRenderer.invoke('analyses:list'),
     get: (id) => ipcRenderer.invoke('analyses:get', id),

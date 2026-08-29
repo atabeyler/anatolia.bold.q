@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Shield, CheckCircle, XCircle, Menu as MenuIcon, Settings as SettingsIcon } from 'lucide-react';
-import { api, setJWT } from '../services/api.js';
+import { api, setJWT, setLocalAuthUser } from '../services/api.js';
 import { isNativeApp, nativeAuth } from '../services/nativeBridge.js';
 import { isPasskeySupported, loginWithPasskey } from '../services/webauthn.js';
 import EmergencyButton from '../components/EmergencyButton.jsx';
@@ -198,6 +198,11 @@ export default function LoginPage({ onLogin }) {
         return;
       }
       setJWT(result.jwt);
+      // The jwt above is very often already expired -- offline login just
+      // re-proved this identity locally regardless (see verifyOfflineLogin's
+      // comment), so api.js's getCurrentUser() needs this to fall back to
+      // once the expiry check would otherwise self-clear the jwt again.
+      setLocalAuthUser({ userCode: result.userCode, nickname: result.nickname, isAdmin: result.isAdmin });
       onLogin({ userCode: result.userCode, isAdmin: result.isAdmin });
     } catch (e) {
       setError(localizedAuthError(e?.message));
