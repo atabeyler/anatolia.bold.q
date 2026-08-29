@@ -17,10 +17,21 @@ const KEY = 'anatolia_app_mode';
 const EVENT = 'anatolia:app-mode-change';
 const VALID_MODES = new Set(['auto', 'offline']);
 
+// v3.2.0 briefly persisted {deviceId,jwt} for an offline "Bu Cihazı Unut"
+// operation in renderer localStorage under this key. v3.2.1 moves that
+// pending revoke into the platform encrypted auth store and never exports
+// the bearer token to the renderer. Remove the legacy key eagerly on module
+// load so upgrading users do not keep an old plaintext JWT indefinitely.
+const LEGACY_PENDING_DEVICE_REVOKE_KEY = 'anatolia_pending_device_revoke';
+
 function storage() {
   if (typeof window === 'undefined') return null;
   return window.localStorage || null;
 }
+
+try {
+  storage()?.removeItem(LEGACY_PENDING_DEVICE_REVOKE_KEY);
+} catch {}
 
 export function getAppMode() {
   try {
