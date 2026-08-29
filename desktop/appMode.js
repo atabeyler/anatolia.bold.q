@@ -7,13 +7,12 @@ import path from 'node:path';
 // addition for the one setting Offline Mode needs to survive a restart.
 const MODE_FILE_NAME = 'app-mode.json';
 
-// A forgetDevice() server-side revoke that couldn't be sent while Offline
-// Mode was on (main.js's auth:forgetDevice handler -- see session.js's
-// forgetDevice({ allowNetwork }) and its pendingServerRevoke return value).
-// Kept in its own sibling file rather than folded into app-mode.json so a
-// missing/corrupt revoke marker can never affect reading the app mode
-// itself.
-const PENDING_REVOKE_FILE_NAME = 'pending-device-revoke.json';
+// v3.2.0 briefly stored {deviceId,jwt} here as plaintext JSON when
+// "Bu Cihazı Unut" happened in Manual Offline Mode. v3.2.1 moves pending
+// revoke state into auth/session.js's OS-encrypted secureStore and uses the
+// next successful online login's fresh JWT instead. Keep the name only so
+// upgrades can proactively delete that legacy bearer-token file.
+const LEGACY_PENDING_REVOKE_FILE_NAME = 'pending-device-revoke.json';
 
 function readJsonSafe(file) {
   if (!fs.existsSync(file)) return null;
@@ -46,12 +45,15 @@ export function createAppModeController({
   stopTimers,
   sendReauthRequired = () => {},
   broadcastConnectivity = () => {},
-  apiBaseUrl,
-  fetchImpl = fetch,
 }) {
   fs.mkdirSync(userDataDir, { recursive: true });
   const modeFile = path.join(userDataDir, MODE_FILE_NAME);
-  const revokeFile = path.join(userDataDir, PENDING_REVOKE_FILE_NAME);
+  const legacyRevokeFile = path.join(userDataDir, LEGACY_PENDING_REVOKE_FILE_NAME);
+
+  // Security migration: remove any v3.2.0 plaintext pending revoke as soon
+  // as the controller is created. A stale bearer token must not survive an
+  // upgrade merely because the user never toggles Offline Mode again.
+  try { fs.rmSync(legacyRevokeFile, { force: true }); } catch {}
 
   let mode = readJsonSafe(modeFile)?.mode === 'offline' ? 'offline' : 'auto';
 
@@ -63,43 +65,20 @@ export function createAppModeController({
     return mode === 'offline';
   }
 
-  // Called from main.js's auth:forgetDevice handler when
-  // forgetDevice({ allowNetwork: false }) hands back a truthy
-  // pendingServerRevoke -- persisted to disk (not just kept in memory) so
-  // it survives an app restart that happens before Offline Mode is ever
-  // turned back off.
-  function setPendingRevoke(revoke) {
-    if (revoke) writeJsonSafe(revokeFile, revoke);
-  }
-
-  // Best-effort, fire-once: mirrors auth/session.js's own forgetDevice()
-  // DELETE call exactly (same method/header shape). This is not a
-  // guaranteed-delivery queue -- the marker is cleared regardless of
-  // outcome, matching forgetDevice()'s own fire-and-forget contract for
-  // the online case; a failed attempt here just leaves the device
-  // server-side authorized until the user forgets it again.
-  async function flushPendingRevoke() {
-    const pending = readJsonSafe(revokeFile);
-    if (!pending?.deviceId || !pending?.jwt || !apiBaseUrl) return;
-    try {
-      await fetchImpl(`${apiBaseUrl}/api/devices/${pending.deviceId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${pending.jwt}` },
-      });
-    } catch {
-      // Network blip -- ignored, best-effort as documented above.
-    } finally {
-      try { fs.rmSync(revokeFile, { force: true }); } catch {}
-    }
-  }
+  // Kept as a compatibility no-op because desktop/main.js from the same
+  // release line may still call appMode.setPendingRevoke(result...). The
+  // new session manager deliberately always returns pendingServerRevoke:null
+  // and retains only a non-sensitive tombstone inside secureStore, so this
+  // method must never persist credentials again.
+  function setPendingRevoke() {}
 
   // The reconciliation sequence for coming back to 'auto': resume
   // connectivity polling, check once immediately (rather than waiting up
   // to intervalMs for the next tick), bail out to a reauth prompt if the
   // cached session has expired (matching performSync()'s own check),
-  // otherwise sync once, restart the periodic timers, push the fresh
-  // connectivity state to the renderer, then flush any device-revoke that
-  // piled up while offline.
+  // otherwise sync once, restart the periodic timers, and push the fresh
+  // connectivity state to the renderer. A pending device revoke no longer
+  // lives here; auth/session.js settles it with the next fresh online JWT.
   async function reconcileAuto() {
     connectivity.start();
     await connectivity.checkOnce();
@@ -110,7 +89,6 @@ export function createAppModeController({
     }
     startTimers();
     broadcastConnectivity(connectivity.getState());
-    await flushPendingRevoke();
   }
 
   async function set(next) {
