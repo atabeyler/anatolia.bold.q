@@ -4,6 +4,7 @@ import HomeView from './HomeView.jsx';
 import { LangProvider } from '../services/langContext.jsx';
 import { api } from '../services/api.js';
 import { executeAction, getActionsForAI } from '../services/voiceActionRegistry.js';
+import { setAppMode } from '../services/appModePreference.js';
 
 vi.mock('./TurkeyMap.jsx', () => ({ default: () => <div>TurkeyMap stub</div> }));
 vi.mock('../services/api.js', () => ({
@@ -138,5 +139,33 @@ describe('HomeView command center', () => {
     fireEvent.change(screen.getByPlaceholderText('Başlık veya kaynakta ara…'), { target: { value: 'savunma' } });
     expect(screen.queryByText(/Ekonomi Haberi/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Savunma Haberi/i)).toBeInTheDocument();
+  });
+});
+
+describe('HomeView command data under Offline Mode', () => {
+  afterEach(() => {
+    localStorage.removeItem('anatolia_app_mode');
+  });
+
+  it('never fetches platform health/activity/briefing while Offline Mode is already on at mount', async () => {
+    setAppMode('offline');
+    renderHome();
+    await screen.findByText('TurkeyMap stub');
+    // Give the mount effect's async load() a tick to have run (or skipped).
+    await waitFor(() => {});
+    expect(api.activityFeed).not.toHaveBeenCalled();
+    expect(api.morningBriefToday).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads command data once Offline Mode flips back to Auto', async () => {
+    setAppMode('offline');
+    renderHome();
+    await screen.findByText('TurkeyMap stub');
+    expect(api.activityFeed).not.toHaveBeenCalled();
+
+    setAppMode('auto');
+    await waitFor(() => expect(api.activityFeed).toHaveBeenCalled());
+    expect(api.morningBriefToday).toHaveBeenCalled();
   });
 });

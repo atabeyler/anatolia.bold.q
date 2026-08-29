@@ -319,13 +319,27 @@ describe('SecurityPanel: passkey gating under Offline Mode', () => {
     localStorage.removeItem('anatolia_app_mode');
   });
 
-  it('disables the add-passkey button and shows a hint when Offline Mode is on', async () => {
+  it('disables the add-passkey button, shows a hint, and never calls listCredentials when Offline Mode is on', async () => {
     setAppMode('offline');
     render(<SettingsPanel t={t} lang="tr" setLang={vi.fn()} onClose={vi.fn()} soundEnabled setSoundEnabled={vi.fn()} soundVolume={0.1} setSoundVolume={vi.fn()} authenticated />);
     fireEvent.click(screen.getByText('settingsSecurity'));
     await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
     expect(screen.getByText('securityPasskeyOfflineModeHint')).toBeInTheDocument();
     expect(screen.getByText('securityPasskeyAdd').closest('button')).toBeDisabled();
+    // The empty list above must come from skipping the fetch, not from a
+    // real (mocked) round-trip that happened to resolve empty.
+    expect(listCredentialsMock).not.toHaveBeenCalled();
+  });
+
+  it('fetches the passkey list once Offline Mode flips back to Auto', async () => {
+    setAppMode('offline');
+    render(<SettingsPanel t={t} lang="tr" setLang={vi.fn()} onClose={vi.fn()} soundEnabled setSoundEnabled={vi.fn()} soundVolume={0.1} setSoundVolume={vi.fn()} authenticated />);
+    fireEvent.click(screen.getByText('settingsSecurity'));
+    await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
+    expect(listCredentialsMock).not.toHaveBeenCalled();
+
+    setAppMode('auto');
+    await waitFor(() => expect(listCredentialsMock).toHaveBeenCalled());
   });
 
   it('leaves the add-passkey button enabled in Auto mode', async () => {
