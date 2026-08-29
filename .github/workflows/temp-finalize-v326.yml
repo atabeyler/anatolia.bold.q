@@ -1,0 +1,54 @@
+name: Temporary v3.2.6 Finalizer
+
+on:
+  push:
+    branches:
+      - codex-finalize-v326
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: ${{ !contains(github.event.head_commit.message, '[finalize-bot]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply debt-closure patch and bump to v3.2.6
+        run: node scripts/finalize-v326.mjs
+
+      - name: Verify release metadata
+        run: node scripts/check-version-consistency.js
+
+      - name: Install client dependencies
+        run: npm ci --prefix client
+
+      - name: Client targeted auth/bridge regression tests
+        run: cd client && npx vitest run src/mobile/auth/session.test.js src/services/mobileBridge.test.js
+
+      - name: Client lint
+        run: npm run lint --prefix client
+
+      - name: Install desktop dependencies
+        run: npm ci
+
+      - name: Desktop auth regression tests
+        run: npx vitest run desktop/auth/session.test.js
+
+      - name: Diff sanity check
+        run: git diff --check
+
+      - name: Commit finalized tree to staging branch
+        run: |
+          git config user.name "ANATOLIA-Q Finalizer"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "[finalize-bot] prepare v3.2.6 debt closure"
+          git push origin HEAD:codex-finalize-v326
