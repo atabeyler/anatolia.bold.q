@@ -26,7 +26,6 @@ function makeController(overrides = {}) {
   const stopTimers = overrides.stopTimers || vi.fn();
   const sendReauthRequired = overrides.sendReauthRequired || vi.fn();
   const broadcastConnectivity = overrides.broadcastConnectivity || vi.fn();
-  const fetchImpl = overrides.fetchImpl || vi.fn(async () => ({ ok: true }));
 
   const controller = createAppModeController({
     userDataDir,
@@ -37,11 +36,9 @@ function makeController(overrides = {}) {
     stopTimers,
     sendReauthRequired,
     broadcastConnectivity,
-    apiBaseUrl: overrides.apiBaseUrl ?? 'https://api.test',
-    fetchImpl,
   });
 
-  return { controller, userDataDir, connectivity, performSync, getNeedsReauth, startTimers, stopTimers, sendReauthRequired, broadcastConnectivity, fetchImpl };
+  return { controller, userDataDir, connectivity, performSync, getNeedsReauth, startTimers, stopTimers, sendReauthRequired, broadcastConnectivity };
 }
 
 describe('createAppModeController', () => {
@@ -114,9 +111,6 @@ describe('createAppModeController', () => {
 
       expect(sendReauthRequired).toHaveBeenCalledTimes(1);
       expect(performSync).not.toHaveBeenCalled();
-      // Timers still restart even when reauth is needed -- otherwise the
-      // app would stay silently paused forever once the user does
-      // re-authenticate through the renderer's own reauth flow.
       expect(startTimers).toHaveBeenCalledTimes(1);
     });
 
@@ -128,54 +122,22 @@ describe('createAppModeController', () => {
     });
   });
 
-  describe('pending device revoke (item 11)', () => {
-    it('does nothing when no revoke is pending', async () => {
-      const { controller, fetchImpl } = makeController();
-      await controller.set('auto');
-      expect(fetchImpl).not.toHaveBeenCalled();
+  describe('v3.2.0 plaintext pending-revoke migration', () => {
+    it('deletes a legacy pending-device-revoke.json containing a bearer token as soon as the controller starts', () => {
+      const userDataDir = tmpDir();
+      const legacyPath = path.join(userDataDir, 'pending-device-revoke.json');
+      fs.writeFileSync(legacyPath, JSON.stringify({ deviceId: 'AQ-WIN-ABCD1234', jwt: 'legacy-plaintext-jwt' }));
+      expect(fs.existsSync(legacyPath)).toBe(true);
+
+      makeController({ userDataDir });
+
+      expect(fs.existsSync(legacyPath)).toBe(false);
     });
 
-    it('flushes a pending revoke once app mode returns to auto, then clears the marker', async () => {
-      const userDataDir = tmpDir();
-      const fetchImpl = vi.fn(async () => ({ ok: true }));
-      const { controller } = makeController({ userDataDir, fetchImpl, apiBaseUrl: 'https://api.test' });
-
-      controller.setPendingRevoke({ deviceId: 'AQ-WIN-ABCD1234', jwt: 'jwt-token' });
-      expect(fs.existsSync(path.join(userDataDir, 'pending-device-revoke.json'))).toBe(true);
-
-      await controller.set('auto');
-
-      expect(fetchImpl).toHaveBeenCalledWith('https://api.test/api/devices/AQ-WIN-ABCD1234', {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer jwt-token' },
-      });
+    it('setPendingRevoke is a compatibility no-op and never recreates a plaintext credential file', () => {
+      const { controller, userDataDir } = makeController();
+      controller.setPendingRevoke({ deviceId: 'AQ-WIN-ABCD1234', jwt: 'must-never-hit-disk' });
       expect(fs.existsSync(path.join(userDataDir, 'pending-device-revoke.json'))).toBe(false);
-    });
-
-    it('still clears the marker even if the DELETE request fails', async () => {
-      const userDataDir = tmpDir();
-      const fetchImpl = vi.fn(async () => { throw new Error('offline'); });
-      const { controller } = makeController({ userDataDir, fetchImpl });
-
-      controller.setPendingRevoke({ deviceId: 'AQ-WIN-ABCD1234', jwt: 'jwt-token' });
-      await expect(controller.set('auto')).resolves.toBe('auto');
-
-      expect(fs.existsSync(path.join(userDataDir, 'pending-device-revoke.json'))).toBe(false);
-    });
-
-    it('survives a restart -- a pending revoke written before a relaunch is still flushed', async () => {
-      const userDataDir = tmpDir();
-      const fetchImpl = vi.fn(async () => ({ ok: true }));
-      const { controller: first } = makeController({ userDataDir });
-      first.setPendingRevoke({ deviceId: 'AQ-MAC-DEADBEEF', jwt: 'stale-jwt' });
-
-      const { controller: second } = makeController({ userDataDir, fetchImpl });
-      await second.set('auto');
-
-      expect(fetchImpl).toHaveBeenCalledWith('https://api.test/api/devices/AQ-MAC-DEADBEEF', {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer stale-jwt' },
-      });
     });
   });
 
