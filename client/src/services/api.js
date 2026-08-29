@@ -343,14 +343,34 @@ export const AUTH_CHANGED_EVENT = 'anatoliaq:auth-changed';
 // 'storage' would be, and every browser this app targets supports it.
 const AUTH_BROADCAST_CHANNEL = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('anatoliaq-auth') : null;
 
+// Auth updates often consist of two synchronous writes: the native JWT plus
+// localAuthUser (offline login), or clearing both during logout/block/forget.
+// Dispatching AUTH_CHANGED_EVENT synchronously from setJWT() let App.jsx run
+// resolveCurrentUser() in the tiny gap between those writes: an expired JWT
+// could bounce a valid offline login back to null, while logout could briefly
+// see the old localAuthUser and look signed-in again. Batch the notification
+// into one microtask so all synchronous auth-state writes in the current
+// call stack settle before observers resolve the user.
+let authChangeScheduled = false;
+function scheduleAuthChanged() {
+  if (authChangeScheduled) return;
+  authChangeScheduled = true;
+  queueMicrotask(() => {
+    authChangeScheduled = false;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
+    }
+    AUTH_BROADCAST_CHANNEL?.postMessage('changed');
+  });
+}
+
 export function setJWT(jwt) {
   if (isNativeShell()) {
     nativeJwt = jwt || null;
   }
   // Web has nothing to store here -- routes/auth.js already set/cleared the
   // httpOnly cookie as part of the login/logout request itself.
-  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
-  AUTH_BROADCAST_CHANNEL?.postMessage('changed');
+  scheduleAuthChanged();
 }
 
 // Call once, before the app's first resolveCurrentUser(), with the native
