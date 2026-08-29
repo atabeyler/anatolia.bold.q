@@ -1,18 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createFakeSqliteConnection } from '../mobile/testHelpers.js';
 
-// mobileBridge.js's isMobileApp is computed once at import time from
-// Capacitor.isNativePlatform(), so every test here mocks @capacitor/core to
-// report 'android' *before* a fresh dynamic import (vi.resetModules()) --
-// otherwise every exported method silently no-ops (guard()'s web/desktop
-// path). DB-backed paths (getSessionManager -> getDb) reuse the same fake
-// SQLite connection pattern as mobile/testHelpers.js (a real in-memory
-// better-sqlite3 db behind the @capacitor-community/sqlite plugin shape),
-// per mobile/README.md's Testing section, wired through a minimal
-// SQLiteConnection stand-in since production code goes through that class
-// rather than the raw connection object testHelpers.js hands session.test.js
-// directly.
-
 function fakeJwt(payload) {
   const b64 = btoa(JSON.stringify(payload));
   return `header.${b64}.signature`;
@@ -44,14 +32,6 @@ function mockNativePlugins() {
   vi.doMock('@aparajita/capacitor-secure-storage', () => ({ SecureStorage: fakeSecureStorage() }));
 }
 
-// appModePreference.js's subscribeAppModePreference() attaches a plain
-// window 'anatolia:app-mode-change' listener that outlives vi.resetModules()
-// (jsdom's window isn't torn down between tests in the same file) -- without
-// tracking and removing them, a later test's setAppMode() would also fire
-// every earlier test's now-stale mobileBridge module instance (still
-// pointed at the *current* global fetch), double-counting calls. Track every
-// addEventListener call for this one event type per test and remove them
-// all in afterEach.
 let trackedListeners = [];
 const realAddEventListener = window.addEventListener.bind(window);
 beforeEach(() => {
@@ -128,16 +108,23 @@ describe('mobileBridge -- Offline Mode sync gate', () => {
   });
 });
 
-describe('mobileBridge -- forgetDevice offline/auto handoff', () => {
-  it('skips the DELETE while offline, persists a pending revoke marker, and flushes it once back to Auto', async () => {
+describe('mobileBridge -- forgetDevice offline/online handoff', () => {
+  it('never persists a bearer token in localStorage; the next online login uses its fresh JWT for the server revoke', async () => {
     mockNativePlugins();
     const registerCalls = [];
     const deleteCalls = [];
     const fetchMock = vi.fn(async (url, options = {}) => {
       const u = String(url);
-      if (u.includes('/api/devices/register')) { registerCalls.push(u); return { ok: true, json: async () => ({}) }; }
-      if (options.method === 'DELETE' && u.includes('/api/devices/')) { deleteCalls.push(u); return { ok: true, json: async () => ({}) }; }
-      return { ok: false, json: async () => ({}) };
+      if (u.includes('/api/devices/register')) {
+        registerCalls.push({ url: u, options });
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (options.method === 'DELETE' && u.includes('/api/devices/')) {
+        deleteCalls.push({ url: u, options });
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (u.includes('/api/health')) return { ok: true, status: 200, json: async () => ({}) };
+      return { ok: false, status: 500, json: async () => ({}) };
     });
     vi.stubGlobal('fetch', fetchMock);
     vi.resetModules();
@@ -145,21 +132,40 @@ describe('mobileBridge -- forgetDevice offline/auto handoff', () => {
     const { mobileAuth } = await import('./mobileBridge.js');
     const appModePref = await import('./appModePreference.js');
 
-    await mobileAuth.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'pw');
+    const firstJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) + 3600 });
+    await mobileAuth.establishOnlineSession(firstJwt, 'pw');
     expect(registerCalls).toHaveLength(1);
 
     appModePref.setAppMode('offline');
     const result = await mobileAuth.forgetDevice();
 
-    expect(result.pendingServerRevoke).toBeTruthy();
+    expect(result).toEqual({ pendingServerRevoke: null });
     expect(deleteCalls).toHaveLength(0);
-    const stored = JSON.parse(localStorage.getItem('anatolia_pending_device_revoke'));
-    expect(stored).toMatchObject({ deviceId: result.pendingServerRevoke.deviceId, jwt: result.pendingServerRevoke.jwt });
+    expect(localStorage.getItem('anatolia_pending_device_revoke')).toBeNull();
+    expect(JSON.stringify(localStorage)).not.toContain(firstJwt);
 
+    // Returning to Auto restores connectivity, but there is deliberately no
+    // old bearer token available to perform a safe authenticated DELETE.
     appModePref.setAppMode('auto');
     await new Promise((r) => setTimeout(r, 0));
+    expect(deleteCalls).toHaveLength(0);
+
+    const freshJwt = fakeJwt({ userCode: 'BOLD-001', exp: Math.floor(Date.now() / 1000) + 7200 });
+    await mobileAuth.establishOnlineSession(freshJwt, 'pw');
 
     expect(deleteCalls).toHaveLength(1);
+    expect(deleteCalls[0].options.headers.Authorization).toBe(`Bearer ${freshJwt}`);
+    expect(registerCalls).toHaveLength(2);
+  });
+
+  it('removes the v3.2.0 legacy plaintext pending-revoke localStorage key on startup', async () => {
+    localStorage.setItem('anatolia_pending_device_revoke', JSON.stringify({ deviceId: 'AQ-AND-OLD', jwt: 'legacy-plaintext-token' }));
+    mockNativePlugins();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })));
+    vi.resetModules();
+
+    await import('./mobileBridge.js');
+
     expect(localStorage.getItem('anatolia_pending_device_revoke')).toBeNull();
   });
 });
