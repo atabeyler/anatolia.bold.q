@@ -35,6 +35,43 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     }
   }
 
+  // "Bu Cihazı Unut" çevrimdışıyken server DELETE gönderemez. Eski 3.2.0
+  // akışı bu işi daha sonra yapmak için bearer JWT'yi pendingServerRevoke
+  // içinde renderer/appMode katmanına döndürüyor ve düz JSON dosyasına
+  // yazdırıyordu. Revoke borcunu artık secureStore içinde yalnızca hassas
+  // olmayan deviceId işaretiyle tutuyoruz; DELETE için gereken bearer token
+  // bir sonraki başarılı *online* girişin taze JWT'sinden alınır.
+  function pendingRevoke() {
+    const stored = secureStore.load();
+    return stored?.pendingServerRevoke?.deviceId ? stored.pendingServerRevoke : null;
+  }
+
+  function clearPendingRevokeTombstoneIfCurrent(targetDeviceId) {
+    const current = secureStore.load();
+    // A fresh login may have replaced the tombstone while a best-effort
+    // DELETE was in flight. Never clear a real newly-created session.
+    if (current?.pendingServerRevoke?.deviceId === targetDeviceId && !current.userCode) {
+      secureStore.clear();
+    }
+  }
+
+  async function tryPendingRevokeWithFreshJwt(jwt) {
+    const pending = pendingRevoke();
+    if (!pending?.deviceId || !jwt) return;
+    try {
+      const res = await fetchImpl(`${apiBaseUrl}/api/devices/${pending.deviceId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      if (res.ok || res.status === 404) {
+        clearPendingRevokeTombstoneIfCurrent(pending.deviceId);
+      }
+    } catch {
+      // Keep the encrypted tombstone. If device registration below also
+      // fails, the next successful online login gets another chance.
+    }
+  }
+
   // Call once the renderer's existing login flow (the same LoginPage /
   // api.js the web app already uses) has produced a valid JWT. This is the
   // "must be online once" step -- it both saves the session locally and
@@ -59,6 +96,12 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     // attemptOfflineLogin() shows result.error/e.message verbatim). The UI
     // layer maps these codes through t() instead.
     if (!payload?.userCode) throw new Error('invalid_session_token');
+
+    // If this device was forgotten while manually offline, use the fresh
+    // JWT we have *now* to settle the old server-side revoke before the
+    // registration below re-authorizes the same device. No old bearer token
+    // ever needs to be persisted outside secureStore.
+    await tryPendingRevokeWithFreshJwt(jwt);
 
     // This one round-trip is the single gate on this device ever getting
     // offline-login capability at all -- a login just succeeded (the JWT
@@ -195,35 +238,42 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     secureStore.save({ ...cached, signedOut: true });
   }
 
-  // Full device revocation: wipes the local session cache *and* this
-  // device's offline-login authorization, then best-effort tells the
-  // server this device is no longer trusted for the account. Unlike
-  // logoutSession(), a later login on this machine must be online again
-  // before offline login works here for this account.
-  //
-  // allowNetwork:false skips the server DELETE entirely (e.g. the caller
-  // already knows this device has no connectivity right now) but still
-  // performs the exact same local wipe -- the returned pendingServerRevoke
-  // tells the caller a revoke is still owed to the server once connectivity
-  // returns; wiring up that retry is a separate concern from this function.
+  // Full device revocation: removes the usable local session/offline
+  // credential and clears device_meta immediately. If a server-side DELETE
+  // cannot be sent now, only a non-sensitive deviceId tombstone is kept in
+  // encrypted secureStore; the next successful online login supplies a
+  // fresh JWT to settle that revoke before re-registering the device.
   function forgetDevice({ allowNetwork = true } = {}) {
-    // Captured before clearing -- the jwt is needed for the server call
-    // below, and secureStore has no way to read it back afterward.
     const cached = secureStore.load();
-    secureStore.clear();
     db.prepare('UPDATE device_meta SET last_authorized_user_id = NULL, last_authorized_at = NULL WHERE device_id = ?').run(deviceId);
-    // Fire-and-forget -- the local wipe above is what actually matters
-    // for this device; a network blip or an already-expired token here
-    // must never block or fail forgetDevice() itself. Not awaited, so
-    // this function deliberately stays non-async to match the rest of
-    // this module's synchronous style.
-    if (allowNetwork && cached?.jwt) {
+
+    if (!cached?.jwt) {
+      // Preserve an already-pending tombstone if forgetDevice is called a
+      // second time before a fresh login; otherwise there is nothing useful
+      // left to retain.
+      if (!cached?.pendingServerRevoke?.deviceId) secureStore.clear();
+      return { pendingServerRevoke: null };
+    }
+
+    // This tombstone deliberately contains NO JWT, password hash, userCode,
+    // nickname or role. secureStore itself is OS-keychain encrypted, but
+    // minimizing the retained data means even a future refactor cannot
+    // accidentally expose an old bearer token through a pending-revoke path.
+    secureStore.save({ signedOut: true, pendingServerRevoke: { deviceId } });
+
+    if (allowNetwork) {
       fetchImpl(`${apiBaseUrl}/api/devices/${deviceId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${cached.jwt}` },
-      }).catch(() => {});
+      }).then((res) => {
+        if (res.ok || res.status === 404) clearPendingRevokeTombstoneIfCurrent(deviceId);
+      }).catch(() => {
+        // Keep the encrypted marker; a later fresh online login retries it.
+      });
     }
-    return { pendingServerRevoke: (!allowNetwork && cached?.jwt) ? { deviceId, jwt: cached.jwt } : null };
+
+    // Never return a bearer token to renderer/main app-mode persistence.
+    return { pendingServerRevoke: null };
   }
 
   return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logoutSession, forgetDevice, needsReauth };
