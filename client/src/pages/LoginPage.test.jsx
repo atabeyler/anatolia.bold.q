@@ -83,6 +83,19 @@ describe('LoginPage passkey mode', () => {
     expect(onLogin).toHaveBeenCalledWith({ userCode: 'U1', nickname: 'BOLD-001', role: 'analyst', isAdmin: false });
   });
 
+  it('registers this device for offline login on a native app after a successful passkey ceremony, same as password login', async () => {
+    isNativeAppMock.value = true;
+    const { nativeAuth } = await import('../services/nativeBridge.js');
+    loginWithPasskeyMock.mockResolvedValue({ status: 'approved', jwt: 'jwt-1', userCode: 'U1', nickname: 'BOLD-001', role: 'analyst', isAdmin: false });
+    renderLogin();
+
+    fireEvent.click(await screen.findByText('Sign in with Face ID / Fingerprint / Passkey'));
+    fireEvent.change(screen.getByPlaceholderText('· · · · · · ·'), { target: { value: 'U1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with Face ID / Fingerprint / Passkey' }));
+
+    await waitFor(() => expect(nativeAuth.establishOnlineSession).toHaveBeenCalledWith('jwt-1', undefined));
+  });
+
   it('shows an error and never logs in when the passkey ceremony fails (e.g. the user cancels the biometric prompt)', async () => {
     loginWithPasskeyMock.mockRejectedValue(new Error('User cancelled the operation'));
     const onLogin = renderLogin();

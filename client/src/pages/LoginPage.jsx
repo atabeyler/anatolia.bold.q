@@ -257,6 +257,17 @@ export default function LoginPage({ onLogin }) {
     try {
       const r = await loginWithPasskey(userCode.trim());
       setJWT(r.jwt);
+      // Same device-authorization step the password login paths above take
+      // (see registerNativeSession's comment) -- without this, a device
+      // that has only ever logged in via passkey never gets marked
+      // "authorized offline" (device_meta.last_authorized_user_id stays
+      // unset), so a later network hiccup falling back to offline login
+      // would wrongly reject this device as never authorized. No password
+      // to cache here (passkey login never collects one), so this only
+      // registers the device -- verifyOfflineLogin's separate cached-
+      // password-hash check still requires at least one password login to
+      // ever succeed offline, same as before.
+      registerNativeSession(r.jwt);
       onLogin({ userCode: r.userCode, nickname: r.nickname, role: r.role, isAdmin: r.isAdmin });
     } catch (err) {
       // A user cancelling the OS biometric prompt (or having no matching
