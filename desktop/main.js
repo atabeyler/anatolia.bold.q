@@ -384,7 +384,8 @@ function registerIpcHandlers() {
   ipcMain.handle('auth:getDeviceId', () => deviceId);
   ipcMain.handle('auth:isOfflineLoginAllowed', (_e, userCode) => sessionManager.isOfflineLoginAllowed(userCode));
   ipcMain.handle('auth:needsReauth', () => sessionManager.needsReauth());
-  ipcMain.handle('auth:logout', () => sessionManager.logout());
+  ipcMain.handle('auth:logoutSession', () => sessionManager.logoutSession());
+  ipcMain.handle('auth:forgetDevice', () => sessionManager.forgetDevice());
 
   ipcMain.handle('analyses:list', () => {
     const userId = currentUserCode();

@@ -197,7 +197,8 @@ export const mobileAuth = {
     reauthListeners.add(callback);
     return () => reauthListeners.delete(callback);
   },
-  logout: guard(async () => (await getSessionManager()).logout()),
+  logoutSession: guard(async () => (await getSessionManager()).logoutSession()),
+  forgetDevice: guard(async () => (await getSessionManager()).forgetDevice()),
 };
 
 export const mobileAnalyses = {

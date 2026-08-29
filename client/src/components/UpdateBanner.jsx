@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { isDesktop, desktopUpdate } from '../services/desktopBridge.js';
 import { isMobileApp, mobileUpdate } from '../services/mobileBridge.js';
+import { isAppModeOffline, subscribeAppModePreference } from '../services/appModePreference.js';
 
 // Native-app-only (desktop + Android): checks this app's own server for a
 // newer published version (never GitHub directly, see
@@ -18,6 +19,9 @@ export default function UpdateBanner() {
   const [stage, setStage] = useState('idle'); // idle | downloading | ready | error | dismissed
   const [progress, setProgress] = useState(null);
   const [dismissedVersion, setDismissedVersion] = useState(null);
+  const [appModeOffline, setAppModeOffline] = useState(() => isAppModeOffline());
+
+  useEffect(() => subscribeAppModePreference((mode) => setAppModeOffline(mode === 'offline')), []);
   const notesText = info?.notes
     ? info.notes
         .replace(/https?:\/\/\S+/gi, '')
@@ -35,6 +39,12 @@ export default function UpdateBanner() {
   }, [info?.version, dismissedVersion, stage]);
 
   useEffect(() => {
+    // Offline Mode (Settings > Connection): the update check is an online-only
+    // service, so it's stopped entirely while the toggle is on -- no
+    // immediate check, and no pending interval left running in the
+    // background. Flipping back to Auto (appModeOffline -> false) re-runs
+    // this effect and resumes checking normally.
+    if (appModeOffline) return undefined;
     if (isDesktop) {
       let cancelled = false;
       (async () => {
@@ -66,7 +76,7 @@ export default function UpdateBanner() {
       return () => { cancelled = true; clearInterval(intervalId); };
     }
     return undefined;
-  }, []);
+  }, [appModeOffline]);
 
   useEffect(() => {
     if (!isDesktop) return undefined;

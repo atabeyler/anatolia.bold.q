@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 
 afterEach(() => {
   delete window.anatoliaDesktop;
+  localStorage.removeItem('anatolia_app_mode');
   vi.doUnmock('@capacitor/core');
   vi.resetModules();
 });
@@ -13,6 +14,47 @@ describe('UpdateBanner (web build)', () => {
     const { container } = render(<UpdateBanner />);
     await new Promise((r) => setTimeout(r, 0));
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('UpdateBanner (Offline Mode)', () => {
+  it('does not check for updates on desktop when Offline Mode is already on', async () => {
+    const { setAppMode } = await import('../services/appModePreference.js');
+    setAppMode('offline');
+    const getAvailable = vi.fn(async () => ({ available: false }));
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      update: { onAvailable: () => () => {}, onProgress: () => () => {}, getAvailable },
+    };
+    vi.resetModules();
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    render(<UpdateBanner />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getAvailable).not.toHaveBeenCalled();
+  });
+
+  it('stops a running desktop update check when Offline Mode flips on mid-session', async () => {
+    const appModePref = await import('../services/appModePreference.js');
+    let pushAvailable;
+    const getAvailable = vi.fn(async () => ({ available: false }));
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      update: { onAvailable: (cb) => { pushAvailable = cb; return () => {}; }, onProgress: () => () => {}, getAvailable },
+    };
+    vi.resetModules();
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    render(<UpdateBanner />);
+    await waitFor(() => expect(getAvailable).toHaveBeenCalledTimes(1));
+
+    act(() => { pushAvailable({ available: true, version: '2.1.140', notes: '' }); });
+    await waitFor(() => expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument());
+
+    act(() => { appModePref.setAppMode('offline'); });
+    // The banner's own effect tears down (returning from the useEffect
+    // callback via the appModeOffline guard) -- no further check calls fire.
+    getAvailable.mockClear();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getAvailable).not.toHaveBeenCalled();
   });
 });
 
@@ -179,6 +221,25 @@ describe('UpdateBanner (Android)', () => {
     expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument();
 
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not check for updates when Offline Mode is already on', async () => {
+    const appModePref = await import('../services/appModePreference.js');
+    appModePref.setAppMode('offline');
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
+    vi.resetModules();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    const mobileBridge = await import('../services/mobileBridge.js');
+    const check = vi.fn(async () => ({ available: true, version: '2.1.140', url: 'https://x/app.apk' }));
+    mobileBridge.mobileUpdate.check = check;
+
+    render(<UpdateBanner />);
+    await act(async () => { await Promise.resolve(); });
+    expect(check).not.toHaveBeenCalled();
+
     vi.unstubAllGlobals();
   });
 });

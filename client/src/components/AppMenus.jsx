@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Moon, Sun, Monitor, Search as SearchIcon, KeyRound, Trash2, Pencil, Fingerprint, TriangleAlert } from 'lucide-react';
+import { X, Check, Moon, Sun, Monitor, Search as SearchIcon, KeyRound, Trash2, Pencil, Fingerprint, TriangleAlert, Wifi, WifiOff } from 'lucide-react';
 import QuantumLogo from './QuantumLogo.jsx';
 import LocalAIPanel from './LocalAIPanel.jsx';
 import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../services/push.js';
@@ -9,6 +9,7 @@ import { isNativeApp } from '../services/nativeBridge.js';
 import { api } from '../services/api.js';
 import { guideModules, localeFor } from '../services/i18n.js';
 import { isRtl } from '../services/langContext.jsx';
+import { getAppMode, setAppMode, isAppModeOffline, subscribeAppModePreference } from '../services/appModePreference.js';
 import '../theme.css';
 
 const THEME_KEY = 'anatolia-q-theme';
@@ -133,7 +134,7 @@ function formatDateTime(iso, lang) {
 // or removing a passkey all require the caller's own session, enforced
 // server-side regardless (see server/src/routes/webauthn.js's
 // authMiddleware), this just keeps the tab from appearing pre-login.
-function SecurityPanel({ t, lang }) {
+function SecurityPanel({ t, lang, onForgetDevice }) {
   const [credentials, setCredentials] = useState(null); // null = loading
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -142,7 +143,15 @@ function SecurityPanel({ t, lang }) {
   const [newDeviceName, setNewDeviceName] = useState('');
   const [removeTarget, setRemoveTarget] = useState(null); // credential pending delete confirmation
   const [removing, setRemoving] = useState(false);
+  const [forgetConfirmOpen, setForgetConfirmOpen] = useState(false);
+  // Passkey registration/management requires server calls, so it's disabled
+  // (with an explanatory hint) while the app-wide Offline Mode toggle
+  // (Settings > Bağlantı) is on -- "Bu Cihazı Unut" just above stays enabled
+  // either way since it's a purely local operation.
+  const [appModeOffline, setAppModeOffline] = useState(() => isAppModeOffline());
+  useEffect(() => subscribeAppModePreference((mode) => setAppModeOffline(mode === 'offline')), []);
   const passkeySupported = isPasskeySupported();
+  const passkeyDisabled = !passkeySupported || appModeOffline;
 
   const load = () => {
     api.webauthn.listCredentials().then(setCredentials).catch((e) => setError(e.message));
@@ -208,6 +217,10 @@ function SecurityPanel({ t, lang }) {
         <p className="text-[14px] text-gold/50 mb-3">{t('securityPasskeyUnsupported')}</p>
       )}
 
+      {passkeySupported && appModeOffline && (
+        <p className="text-[14px] text-gold/50 mb-3">{t('securityPasskeyOfflineModeHint')}</p>
+      )}
+
       {error && <p className="text-[14px] text-red-300 mb-2">{error}</p>}
 
       {credentials === null && <p className="text-xs text-cyan-100/50">{t('securityPasskeyLoading')}</p>}
@@ -242,10 +255,10 @@ function SecurityPanel({ t, lang }) {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <button onClick={() => startRename(cred)} className="text-cyan-300/60 hover:text-cyan-100 p-1" aria-label={t('securityPasskeyRename')} title={t('securityPasskeyRename')}>
+                <button onClick={() => startRename(cred)} disabled={appModeOffline} className="text-cyan-300/60 hover:text-cyan-100 p-1 disabled:opacity-40 disabled:hover:text-cyan-300/60" aria-label={t('securityPasskeyRename')} title={t('securityPasskeyRename')}>
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => setRemoveTarget(cred)} className="text-red-300/70 hover:text-red-300 p-1" aria-label={t('securityPasskeyRemove')} title={t('securityPasskeyRemove')}>
+                <button onClick={() => setRemoveTarget(cred)} disabled={appModeOffline} className="text-red-300/70 hover:text-red-300 p-1 disabled:opacity-40 disabled:hover:text-red-300/70" aria-label={t('securityPasskeyRemove')} title={t('securityPasskeyRemove')}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -260,13 +273,13 @@ function SecurityPanel({ t, lang }) {
           value={newDeviceName}
           onChange={(e) => setNewDeviceName(e.target.value)}
           placeholder={t('securityPasskeyNamePh')}
-          disabled={busy || !passkeySupported}
+          disabled={busy || passkeyDisabled}
           maxLength={200}
           className="w-full bg-[#020c18] border border-cyan-500/25 rounded px-2.5 py-2 text-xs text-cyan-100 placeholder-cyan-300/30 focus:border-cyan-400/60 focus:outline-none disabled:opacity-40"
         />
         <button
           onClick={handleRegister}
-          disabled={busy || !passkeySupported}
+          disabled={busy || passkeyDisabled}
           className="w-full flex items-center justify-center gap-2 text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2 disabled:opacity-40"
         >
           <KeyRound className="w-4 h-4" />
@@ -287,11 +300,109 @@ function SecurityPanel({ t, lang }) {
           />
         )}
       </AnimatePresence>
+
+      {isNativeApp && (
+        <div className="mt-4 pt-4 border-t border-gold/20">
+          <div className="text-xs tracking-[0.18em] uppercase text-gold/60 mb-1">{t('securityDeviceForgetTitle')}</div>
+          <p className="text-[13px] text-gold/45 leading-relaxed mb-2">{t('securityDeviceForgetHint')}</p>
+          <button
+            onClick={() => setForgetConfirmOpen(true)}
+            className="w-full flex items-center justify-center gap-2 text-[14px] border border-red-400/30 text-red-200 rounded px-2.5 py-2 hover:bg-red-500/10"
+          >
+            {t('securityDeviceForgetTitle')}
+          </button>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {forgetConfirmOpen && (
+          <ConfirmModal
+            title={t('securityDeviceForgetConfirmTitle')}
+            body={t('securityDeviceForgetConfirmBody')}
+            confirmLabel={t('securityDeviceForgetConfirmBtn')}
+            cancelLabel={t('securityDeviceForgetCancelBtn')}
+            onConfirm={() => { setForgetConfirmOpen(false); onForgetDevice?.(); }}
+            onCancel={() => setForgetConfirmOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, sidebarCollapsed, setSidebarCollapsed, onOpenGuide, showAppearance = true, authenticated = false }) {
+// ─── Connection tab: app-wide Offline Mode toggle ──────────────────────────
+// Otomatik (default) leaves cloud connectivity/sync/online services to the
+// app's own automatic connectivity detection (see nativeConnectivity /
+// DesktopSyncBadge). Çevrimdışı is a user-selected override that suspends
+// all of that regardless of actual reachability -- see appModePreference.js
+// and the various gating call sites (socket, weather, update check, cloud AI
+// routing, passkey UI) it feeds. Switching to Çevrimdışı requires confirming
+// a ConfirmModal (same shared component as the passkey-remove/forget-device
+// flows above); switching back to Otomatik is immediate and triggers
+// reconciliation (DashboardPage.jsx's aq:app-mode-reconnect listener).
+function ConnectionPanel({ t }) {
+  const [mode, setMode] = useState(() => getAppMode());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => subscribeAppModePreference(setMode), []);
+
+  const switchToAuto = () => {
+    setAppMode('auto');
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('aq:app-mode-reconnect'));
+  };
+
+  const confirmOffline = () => {
+    setConfirmOpen(false);
+    setAppMode('offline');
+  };
+
+  return (
+    <div>
+      <div className="text-xs tracking-[0.18em] uppercase text-gold/60 mb-2">{t('appModeTitle')}</div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button
+          type="button"
+          onClick={switchToAuto}
+          className={`rounded-lg border px-2 py-3 flex flex-col items-center gap-1.5 transition ${mode === 'auto' ? 'border-cyan-300/70 bg-cyan-500/15 text-cyan-100' : 'border-cyan-300/25 text-cyan-100/65 hover:bg-white/5'}`}
+        >
+          <Wifi className="w-4 h-4" />
+          <span className="text-[14px]">{t('appModeAuto')}</span>
+          {mode === 'auto' && <Check className="w-3.5 h-3.5 text-cyan-300" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          className={`rounded-lg border px-2 py-3 flex flex-col items-center gap-1.5 transition ${mode === 'offline' ? 'border-gold/70 bg-gold/15 text-gold' : 'border-cyan-300/25 text-cyan-100/65 hover:bg-white/5'}`}
+        >
+          <WifiOff className="w-4 h-4" />
+          <span className="text-[14px]">{t('appModeOffline')}</span>
+          {mode === 'offline' && <Check className="w-3.5 h-3.5 text-gold" />}
+        </button>
+      </div>
+
+      {mode === 'offline' && (
+        <div className="text-[13px] tracking-widest uppercase text-gold/80 border border-gold/30 rounded px-2.5 py-2 text-center">
+          {t('appModeManualBadge')}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {confirmOpen && (
+          <ConfirmModal
+            title={t('appModeOfflineConfirmTitle')}
+            body={t('appModeOfflineConfirmBody')}
+            confirmLabel={t('appModeOfflineConfirmBtn')}
+            cancelLabel={t('appModeOfflineCancelBtn')}
+            onConfirm={confirmOffline}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnabled, soundVolume, setSoundVolume, sidebarCollapsed, setSidebarCollapsed, onOpenGuide, onForgetDevice, showAppearance = true, authenticated = false }) {
   const [tab, setTab] = useState('language');
   const [pushState, setPushState] = useState('checking');
   const [pushError, setPushError] = useState('');
@@ -332,7 +443,7 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
   };
 
   const tabs = [
-    { key: 'language', label: t('settingsLanguage') }, { key: 'sound', label: t('settingsSound') }, { key: 'push', label: t('settingsPush') }, ...(showAppearance ? [{ key: 'appearance', label: t('settingsAppearance') }] : []), ...(authenticated ? [{ key: 'security', label: t('settingsSecurity') }] : []), { key: 'localAI', label: t('settingsLocalAI') }, { key: 'about', label: t('settingsAbout') },
+    { key: 'language', label: t('settingsLanguage') }, { key: 'sound', label: t('settingsSound') }, { key: 'push', label: t('settingsPush') }, ...(showAppearance ? [{ key: 'appearance', label: t('settingsAppearance') }] : []), ...(authenticated ? [{ key: 'security', label: t('settingsSecurity') }] : []), { key: 'connection', label: t('settingsConnection') }, { key: 'localAI', label: t('settingsLocalAI') }, { key: 'about', label: t('settingsAbout') },
   ];
 
   const themeOptions = [
@@ -356,7 +467,8 @@ function SettingsPanel({ t, lang, setLang, onClose, soundEnabled, setSoundEnable
         </div>
         {typeof setSidebarCollapsed === 'function' && <button onClick={() => setSidebarCollapsed((v) => !v)} className="w-full flex items-center justify-between text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2"><span>{t('settingsCollapseSidebar')}</span>{sidebarCollapsed ? <Check className="w-4 h-4 text-cyan-300" /> : <X className="w-4 h-4 text-cyan-100/40" />}</button>}
       </div>}
-      {tab === 'security' && authenticated && <SecurityPanel t={t} lang={lang} />}
+      {tab === 'security' && authenticated && <SecurityPanel t={t} lang={lang} onForgetDevice={onForgetDevice} />}
+      {tab === 'connection' && <ConnectionPanel t={t} />}
       {tab === 'localAI' && <LocalAIPanel t={t} />}
       {tab === 'about' && <div><p className="text-[14px] text-cyan-100/80 mb-3">{t('appName')} · {t('settingsVersion')} {__APP_VERSION__}</p><button onClick={onOpenGuide} className="text-[14px] border border-cyan-300/30 text-cyan-100 rounded px-2.5 py-2">{t('settingsOpenGuide')}</button></div>}
     </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Video, PhoneOff, Mic, MicOff, Camera, CameraOff, Hand, MonitorUp, Disc, UserX } from 'lucide-react';
 import { api, getToken } from '../services/api.js';
 import { connectSocket, getSocket } from '../services/socket.js';
+import { isAppModeOffline } from '../services/appModePreference.js';
 import VoiceButton from './VoiceButton.jsx';
 import FileAttach, { FileMessageContent } from './FileAttach.jsx';
 import { useLang } from '../services/langContext.jsx';
@@ -78,6 +79,10 @@ export default function ChatPanel({ user }) {
   }, [localStream]);
 
   useEffect(() => {
+    // Offline Mode (Settings > Bağlantı): the emergency chat/meeting panel
+    // is entirely online-only, so it just doesn't connect while the app-wide
+    // toggle is on -- mirrors DashboardPage.jsx's own connectSocket() gate.
+    if (isAppModeOffline()) return undefined;
     const sock = connectSocket(myNick, getToken());
     if (!sock) return;
     const onReceive = (m) => setMessages((prev) => [...prev, m]);

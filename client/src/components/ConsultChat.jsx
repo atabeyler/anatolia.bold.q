@@ -12,6 +12,7 @@ import { isNativeApp, nativeAI, nativeConnectivity } from '../services/nativeBri
 import { routeConsultChat, AllEnginesUnavailableError } from '../services/analysisRouter.js';
 import { ENGINE } from '../services/aiContract.js';
 import { isLocalModeForced, subscribeLocalModePreference } from '../services/localModePreference.js';
+import { isAppModeOffline, subscribeAppModePreference } from '../services/appModePreference.js';
 
 const STORAGE_KEY = 'aq_consult_history';
 
@@ -52,7 +53,10 @@ export default function ConsultChat() {
   const [aiFiles, setAIFiles] = useState([]);
   const [connectivity, setConnectivity] = useState('cloud');
   const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
-  const isOffline = forceLocalMode || (isNativeApp && connectivity === 'local');
+  const [appModeOffline, setAppModeOffline] = useState(() => isAppModeOffline());
+  // App-wide Offline Mode (Settings > Bağlantı) ORs into the same effective
+  // offline flag as forceLocalMode/connectivity -- mirrors AnalysisView.jsx.
+  const isOffline = forceLocalMode || appModeOffline || (isNativeApp && connectivity === 'local');
 
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -82,6 +86,7 @@ export default function ConsultChat() {
   }, []);
 
   useEffect(() => subscribeLocalModePreference(setForceLocalModeState), []);
+  useEffect(() => subscribeAppModePreference((mode) => setAppModeOffline(mode === 'offline')), []);
 
   const removeFileAt = (idx) => setAIFiles((prev) => prev.filter((_, i) => i !== idx));
 

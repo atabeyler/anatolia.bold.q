@@ -124,6 +124,33 @@ false and the session falls back to memory-only for that process, forcing
 online login again on the next launch rather than persisting anything
 unencrypted to disk.
 
+**ÇIKIŞ YAP vs BU CİHAZI UNUT.** `auth/session.js` exposes two distinct
+sign-out operations, not one: **ÇIKIŞ YAP** (`logoutSession()`) clears only
+the active session (the cached JWT) — this device's offline-login
+authorization is preserved, so the same account can offline-login again on
+this device immediately, without a fresh online round-trip. **BU CİHAZI
+UNUT** (`forgetDevice()`, Settings → Security) fully removes this device's
+offline-login credential and authorization (`device_meta.
+last_authorized_user_id`/`last_authorized_at` cleared, secure store wiped)
+and best-effort revokes the device server-side (`DELETE /api/devices/
+:deviceId`) — a fresh online login is required before offline login works
+again on this device. An admin-forced block (`auth:blocked`) also goes
+through `forgetDevice()`, not `logoutSession()`, since a blocked user
+should not be able to relaunch and offline-login back in.
+
+**ÇEVRİMDIŞI MOD.** A separate, user-selected app-wide preference (Settings
+→ Bağlantı, `client/src/services/appModePreference.js`), completely
+independent of the login/device-authorization state above -- neither
+`auth/session.js` nor this preference module ever imports the other.
+Switching it on suspends cloud connectivity, live sync, and every
+online-only service (Socket.IO, the update check, the weather widget, cloud
+AI routing, passkey management) while preserving local data and the pending
+sync queue, regardless of whether this machine can actually reach the
+server. Switching back to Otomatik reconnects the socket if needed and (once
+`nativeAuth.needsReauth()` says a fresh login isn't required) flushes the
+pending sync queue via the existing `sync.forceSync()` IPC call -- no new
+sync/socket mechanism, just gating the existing ones at their call sites.
+
 ## Local AI
 
 `localAI/offlineExtractive.js` is a real, fully offline backend — keyword

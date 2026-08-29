@@ -23,7 +23,8 @@ import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
 import { useLang } from '../services/langContext.jsx';
 import { isMobileApp, mobileGeolocation } from '../services/mobileBridge.js';
-import { isNativeApp, nativeAuth } from '../services/nativeBridge.js';
+import { isNativeApp, nativeAuth, nativeSync } from '../services/nativeBridge.js';
+import { isAppModeOffline, subscribeAppModePreference } from '../services/appModePreference.js';
 
 const DAYS_SHORT = {
   tr: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
@@ -210,9 +211,33 @@ export default function DashboardPage({ user, onLogout }) {
   const liveHandlersRef = useRef();
   liveHandlersRef.current = { t, pushNotification, notifyDevice, normalizeText };
 
-  useEffect(() => {
+  // Offline Mode (Settings > Bağlantı) -- app-wide user override, distinct
+  // from the native connectivity state DesktopSyncBadge reflects. Tracked
+  // here so the socket-connect gate below and the weather widget can both
+  // read it live.
+  const [appModeOffline, setAppModeOffline] = useState(() => isAppModeOffline());
+
+  // Extracted so both the mount effect below and the aq:app-mode-reconnect
+  // listener (B.3 reconciliation) can (re)connect the socket the same way.
+  // Kept current via a ref (mirrors liveHandlersRef just above) so the
+  // reconnect listener -- registered once -- always reads the latest
+  // user.isAdmin/nickname/userCode without needing `user` in its own deps.
+  const connectDashboardSocket = () => {
     const socketIdentity = user.isAdmin ? 'BOLD' : (user.nickname || user.userCode);
-    const sock = connectSocket(socketIdentity, getToken());
+    return connectSocket(socketIdentity, getToken());
+  };
+  const connectDashboardSocketRef = useRef(connectDashboardSocket);
+  connectDashboardSocketRef.current = connectDashboardSocket;
+
+  // All the sock.on(...) registration a freshly-connected socket needs,
+  // extracted out of the mount effect below so the aq:app-mode-reconnect
+  // handler can attach the exact same listeners to a socket it (re)creates
+  // after an Offline->Auto switch -- without this, a socket created outside
+  // the mount effect would silently receive no broadcast/chat/notification/
+  // auth:blocked/analysis events at all. Returns a detach function. Kept
+  // current via a ref (mirrors connectDashboardSocketRef) so the
+  // reconnect listener always attaches with the latest closures.
+  const attachSocketListeners = (sock) => {
     const onBroadcast = (data) => {
       const { t, pushNotification, notifyDevice, normalizeText } = liveHandlersRef.current;
       const me = user.nickname || user.userCode;
@@ -259,9 +284,12 @@ export default function DashboardPage({ user, onLogout }) {
       // A blocked user must not be able to relaunch and silently get back
       // in via the persisted native session either -- same fix as logout()
       // above, arguably more important here since this is an admin-forced
-      // removal, not the user's own choice.
+      // removal, not the user's own choice. This is forget-device (not
+      // just logoutSession): an admin block should also revoke this
+      // device's offline-login authorization, not merely end the current
+      // session.
       logoutRequest();
-      if (isNativeApp) nativeAuth.logout().catch(() => {});
+      if (isNativeApp) nativeAuth.forgetDevice().catch(() => {});
       setJWT(null);
       clearLocalChatHistory();
       disconnectSocket();
@@ -303,6 +331,69 @@ export default function DashboardPage({ user, onLogout }) {
       sock.off('auth:blocked', onBlocked);
       sock.off('analysis:hardwareVerified', onHardwareVerified);
       sock.off('analysis:completed', onAnalysisCompleted);
+    };
+  };
+  const attachSocketListenersRef = useRef(attachSocketListeners);
+  attachSocketListenersRef.current = attachSocketListeners;
+  // Tracks whichever detach function is currently "live" (from the mount
+  // effect below, or from a later aq:app-mode-reconnect reattachment) so
+  // whichever code disconnects/reconnects the socket can always tear down
+  // exactly the listeners that are actually attached right now.
+  const socketDetachRef = useRef(() => {});
+
+  // Live-flips: dropping into Offline Mode mid-session disconnects an
+  // already-connected socket immediately rather than waiting for the next
+  // mount, and detaches this component's listeners from it. Switching back
+  // to Auto does NOT reconnect here -- that only happens via the explicit
+  // aq:app-mode-reconnect event ConnectionPanel dispatches (see
+  // AppMenus.jsx), so a stale tab that merely observes someone else's mode
+  // change doesn't also race to reconnect.
+  useEffect(() => subscribeAppModePreference((mode) => {
+    const offline = mode === 'offline';
+    setAppModeOffline(offline);
+    if (offline) {
+      const sock = getSocket();
+      if (sock && sock.connected) {
+        socketDetachRef.current();
+        socketDetachRef.current = () => {};
+        disconnectSocket();
+      }
+    }
+  }), []);
+
+  useEffect(() => {
+    const onReconnect = () => {
+      let sock = getSocket();
+      if (!sock || !sock.connected) {
+        sock = connectDashboardSocketRef.current();
+        socketDetachRef.current();
+        socketDetachRef.current = attachSocketListenersRef.current(sock);
+      }
+      if (!isNativeApp) return;
+      // needsReauth()/forceSync() no-op (return undefined) on the web build
+      // and mobile-web -- Promise.resolve() safely wraps that instead of
+      // needing an isNativeApp branch inside the .then chain too.
+      Promise.resolve(nativeAuth.needsReauth()).then((needsReauth) => {
+        // A reauth prompt is ReauthBanner's job (it already polls/listens
+        // for this independently) -- this just avoids kicking off a sync
+        // that's guaranteed to fail with 401 while one is pending.
+        if (!needsReauth) return nativeSync.forceSync();
+      }).catch(() => {});
+    };
+    window.addEventListener('aq:app-mode-reconnect', onReconnect);
+    return () => window.removeEventListener('aq:app-mode-reconnect', onReconnect);
+  }, []);
+
+  useEffect(() => {
+    // Offline Mode: skip connecting at mount entirely. Switching back to
+    // Auto later reconnects via the aq:app-mode-reconnect listener above,
+    // not by re-running this effect (user.userCode hasn't changed).
+    if (isAppModeOffline()) return undefined;
+    const sock = connectDashboardSocketRef.current();
+    socketDetachRef.current = attachSocketListenersRef.current(sock);
+    return () => {
+      socketDetachRef.current();
+      socketDetachRef.current = () => {};
     };
   }, [user.userCode]);
 
@@ -368,6 +459,10 @@ export default function DashboardPage({ user, onLogout }) {
   }, [user.nickname, user.userCode]);
 
   useEffect(() => {
+    // Weather is an online-only service (proxied through the backend, see
+    // below) -- Offline Mode short-circuits it entirely rather than letting
+    // it fail silently against a suspended connection.
+    if (appModeOffline) { setLiveTemp(null); setTempLoading(false); return; }
     if (!myCoords?.lat || !myCoords?.lng) return;
     let cancelled = false;
 
@@ -390,7 +485,7 @@ export default function DashboardPage({ user, onLogout }) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [myCoords?.lat, myCoords?.lng]);
+  }, [myCoords?.lat, myCoords?.lng, appModeOffline]);
 
   useEffect(() => {
     const onVoiceNav = (e) => {
@@ -431,11 +526,27 @@ export default function DashboardPage({ user, onLogout }) {
   // to only clear the in-memory copy (setJWT(null)) -- the secure store
   // itself was never told to clear, so a relaunch after logout silently
   // restored the old session and skipped the login screen entirely.
-  // nativeAuth.logout() is the same IPC/native call LoginPage's own
-  // passkey/session flows already use to clear that store for real.
+  // nativeAuth.logoutSession() is the same IPC/native call LoginPage's own
+  // passkey/session flows already use to clear that store for real. Unlike
+  // forgetDevice() below, this preserves the device's offline-login
+  // authorization -- the same account can offline-login again on this
+  // device without a fresh online round-trip.
   const logout = () => {
     logoutRequest();
-    if (isNativeApp) nativeAuth.logout().catch(() => {});
+    if (isNativeApp) nativeAuth.logoutSession().catch(() => {});
+    setJWT(null);
+    clearLocalChatHistory();
+    disconnectSocket();
+    onLogout();
+  };
+
+  // "Bu Cihazı Unut" (Settings > Security) -- fully revokes this device's
+  // offline-login authorization, not just the active session. A fresh
+  // online login is required before offline login works again on this
+  // device. Mirrors logout() above, swapping in nativeAuth.forgetDevice().
+  const forgetDevice = () => {
+    logoutRequest();
+    if (isNativeApp) nativeAuth.forgetDevice().catch(() => {});
     setJWT(null);
     clearLocalChatHistory();
     disconnectSocket();
@@ -500,9 +611,9 @@ export default function DashboardPage({ user, onLogout }) {
               <Clock3 className="w-3.5 h-3.5" />
               <span className="text-xs font-serif hidden sm:inline">{liveDate}</span>
               <span className="text-xs font-serif">{liveTime}</span>
-              <span className="text-xs font-serif inline-flex items-center gap-1 border border-cyan-300/30 rounded px-1.5 py-0.5" title={t('tempTooltip')}>
+              <span className="text-xs font-serif inline-flex items-center gap-1 border border-cyan-300/30 rounded px-1.5 py-0.5" title={appModeOffline ? t('weatherOfflineModeUnavailable') : t('tempTooltip')}>
                 <Thermometer className="w-3 h-3" />
-                {tempLoading && liveTemp === null ? '...' : (liveTemp === null ? '' : `${liveTemp}°C`)}
+                {appModeOffline ? '—' : (tempLoading && liveTemp === null ? '...' : (liveTemp === null ? '' : `${liveTemp}°C`))}
               </span>
               <CalendarDays className="w-3.5 h-3.5" />
             </button>
@@ -631,6 +742,7 @@ export default function DashboardPage({ user, onLogout }) {
             sidebarCollapsed={sidebarCollapsed}
             setSidebarCollapsed={setSidebarCollapsed}
             onOpenGuide={() => { setGuideOpen(true); setSettingsOpen(false); }}
+            onForgetDevice={forgetDevice}
             authenticated
           />
         )}

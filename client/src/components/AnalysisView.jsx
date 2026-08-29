@@ -25,6 +25,7 @@ import { isNativeApp, nativeAI, nativeAnalyses, nativeConnectivity } from '../se
 import { routeAnalysisGeneration, AllEnginesUnavailableError } from '../services/analysisRouter.js';
 import { ENGINE } from '../services/aiContract.js';
 import { isLocalModeForced, subscribeLocalModePreference } from '../services/localModePreference.js';
+import { isAppModeOffline, subscribeAppModePreference } from '../services/appModePreference.js';
 
 const PANEL = 'rounded-lg border border-cyan-400/15 bg-[#031326]/80';
 
@@ -50,7 +51,11 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const [error, setError] = useState('');
   const [connectivity, setConnectivity] = useState('cloud');
   const [forceLocalMode, setForceLocalModeState] = useState(() => isLocalModeForced());
-  const isOffline = forceLocalMode || (isNativeApp && connectivity === 'local');
+  const [appModeOffline, setAppModeOffline] = useState(() => isAppModeOffline());
+  // App-wide Offline Mode (Settings > Bağlantı) ORs into the same effective
+  // offline flag as forceLocalMode/connectivity -- it never mutates
+  // forceLocalMode itself, it's purely an additional read-site condition.
+  const isOffline = forceLocalMode || appModeOffline || (isNativeApp && connectivity === 'local');
 
   // Mirrors ConsultChat.jsx's connectivity subscription exactly -- both
   // components need the same "are we actually offline right now" signal
@@ -64,6 +69,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   }, []);
 
   useEffect(() => subscribeLocalModePreference(setForceLocalModeState), []);
+  useEffect(() => subscribeAppModePreference((mode) => setAppModeOffline(mode === 'offline')), []);
 
   const generateRef = useRef(null);
   const downloadDocxRef = useRef(null);

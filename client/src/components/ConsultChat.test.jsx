@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ConsultChat from './ConsultChat.jsx';
 import { LangProvider } from '../services/langContext.jsx';
 import { api } from '../services/api.js';
+import { setAppMode } from '../services/appModePreference.js';
 
 vi.mock('../services/api.js', () => ({
   api: {
@@ -26,6 +27,21 @@ beforeEach(() => {
   // jsdom doesn't implement Element.scrollTo -- ConsultChat calls it to
   // autoscroll the message list on every update.
   Element.prototype.scrollTo = vi.fn();
+});
+
+describe('ConsultChat app-wide Offline Mode', () => {
+  const OFFLINE_BANNER_TEXT = 'Çevrimdışısınız — yalnızca cihazınızdaki geçmiş raporlarda arama/özet/karşılaştırma yapılabilir. Yeni analiz üretimi ve genel danışmanlık çevrimiçi olduğunuzda kullanılabilir.';
+
+  it('shows the offline banner when app-wide Offline Mode is on, even with forceLocalMode off and connectivity effectively cloud-reachable (not a native app)', () => {
+    setAppMode('offline');
+    renderConsult();
+    expect(screen.getByText(OFFLINE_BANNER_TEXT)).toBeInTheDocument();
+  });
+
+  it('does not show the offline banner in Auto mode', () => {
+    renderConsult();
+    expect(screen.queryByText(OFFLINE_BANNER_TEXT)).not.toBeInTheDocument();
+  });
 });
 
 describe('ConsultChat file-context integration', () => {

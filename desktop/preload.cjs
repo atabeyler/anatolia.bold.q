@@ -38,7 +38,8 @@ contextBridge.exposeInMainWorld('anatoliaDesktop', {
       ipcRenderer.on('auth:reauthRequired', listener);
       return () => ipcRenderer.removeListener('auth:reauthRequired', listener);
     },
-    logout: () => ipcRenderer.invoke('auth:logout'),
+    logoutSession: () => ipcRenderer.invoke('auth:logoutSession'),
+    forgetDevice: () => ipcRenderer.invoke('auth:forgetDevice'),
   },
 
   analyses: {

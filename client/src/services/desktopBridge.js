@@ -20,7 +20,8 @@ export const desktopAuth = {
   isOfflineLoginAllowed: (userCode) => bridge?.auth.isOfflineLoginAllowed(userCode),
   needsReauth: () => bridge?.auth.needsReauth(),
   onReauthRequired: (callback) => bridge?.auth.onReauthRequired(callback) || (() => {}),
-  logout: () => bridge?.auth.logout(),
+  logoutSession: () => bridge?.auth.logoutSession(),
+  forgetDevice: () => bridge?.auth.forgetDevice(),
 };
 
 export const desktopAnalyses = {

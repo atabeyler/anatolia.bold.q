@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AnalysisView from './AnalysisView.jsx';
 import { LangProvider } from '../services/langContext.jsx';
 import { api } from '../services/api.js';
+import { setAppMode } from '../services/appModePreference.js';
 
 vi.mock('../services/api.js', () => ({
   api: {
@@ -37,6 +38,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() });
   localStorage.removeItem('anatolia_lang');
+  localStorage.removeItem('anatolia_app_mode');
 });
 
 describe('AnalysisView', () => {
@@ -86,6 +88,25 @@ describe('AnalysisView', () => {
     fireEvent.change(textarea, { target: { value: 'test brief' } });
     clickNext(4);
     expect(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i })).not.toBeDisabled();
+  });
+
+  it('routes through the offline path (never calling the cloud API) when app-wide Offline Mode is on, even with connectivity reporting cloud-reachable', async () => {
+    setAppMode('offline');
+    renderView({ category: 'ekonomi' });
+    const textarea = screen.getAllByRole('textbox').find((el) => el.tagName === 'TEXTAREA');
+    fireEvent.change(textarea, { target: { value: 'ekonomik brifing talebi' } });
+    clickNext(4);
+    fireEvent.click(screen.getByRole('button', { name: /DETAYLI ANALİZ RAPORU ÜRET/i }));
+
+    // Not a native app in this test environment, so there's no local engine
+    // to fall back to either -- routeAnalysisGeneration throws instead of
+    // ever calling cloudCall (api.generateAnalysis), which is exactly the
+    // "effective offline flag" this exercises: forceLocalMode is false and
+    // isNativeApp is false (so the old isOffline computation would have
+    // been false too), yet the app-mode preference alone still routes away
+    // from the cloud.
+    await waitFor(() => expect(screen.getByText(/⚠/)).toBeInTheDocument());
+    expect(api.generateAnalysis).not.toHaveBeenCalled();
   });
 
   it('generates a standard analysis and renders the markdown report', async () => {

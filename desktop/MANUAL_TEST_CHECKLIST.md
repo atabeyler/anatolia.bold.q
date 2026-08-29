@@ -43,6 +43,48 @@ desktop build as production-ready.
       authorization gate; confirm the error message is the "cihaz
       yetkilendirilmemiş" one, not a generic failure).
 
+## 2b. Bu Cihazı Unut (forgetDevice — distinct from ordinary logout)
+
+- [ ] Log in online (step 1).
+- [ ] Open Settings → Security/Güvenlik → **Bu Cihazı Unut**, confirm the
+      modal.
+- [ ] Verify the app returns to the login screen.
+- [ ] Disconnect the network, then attempt offline login with the same
+      user code/password used in step 1 — this must now fail with the
+      device-not-authorized error (same message as the "never logged in
+      online first" case in step 2), since forgetDevice() revoked this
+      device's offline-login authorization, unlike ordinary ÇIKIŞ YAP.
+- [ ] Reconnect the network and log in online again.
+- [ ] Verify offline login works again afterward (disconnect and repeat
+      the same-password login from step 2).
+
+## 2c. Offline Mode toggle (app-wide, user-selected — distinct from 2b)
+
+- [ ] While online and logged in, open Settings → Bağlantı → **Çevrimdışı**.
+- [ ] Confirm the modal ("Çevrimdışı moda geç?") appears; canceling it
+      leaves the mode on Otomatik (verify the connection badge is
+      unaffected).
+- [ ] Confirm the modal — verify the Socket.IO connection disconnects
+      (emergency broadcasts/chat stop updating) and the header connection
+      badge switches to the distinct manual-offline state ("Q LOCAL ·
+      MANUEL"), not the plain automatic "Q LOCAL" state.
+- [ ] Verify the weather widget in the header shows its unavailable
+      placeholder instead of a temperature.
+- [ ] Verify the update-check stops (no new "a new version is available"
+      banner appears even if one is actually published).
+- [ ] Start a new analysis / open Danışma and verify requests route to the
+      local engine even though this machine is actually online (no cloud
+      call is made).
+- [ ] Verify offline login (steps 1-2 above) still works normally while
+      this mode is on — it is untouched by this toggle.
+- [ ] Verify Settings → Security → **Bu Cihazı Unut** is still usable while
+      Çevrimdışı is on (purely local operation), but passkey add/rename/
+      remove controls are disabled with an explanatory hint.
+- [ ] Switch back to **Otomatik** — verify no confirmation modal is shown,
+      the socket reconnects, the pending sync queue flushes (if anything
+      was queued while offline), and the badge returns to a normal
+      automatic state ("Q CLOUD"/"Q LOCAL"/"SYNC", not the manual variant).
+
 ## 3. Offline create → persists across restart (spec test B)
 
 - [ ] While offline (from step 2), create a new report from the desktop app.

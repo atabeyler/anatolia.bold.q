@@ -174,13 +174,15 @@ describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
     expect(manager.getSession().offlinePasswordHash).toBeUndefined();
   });
 
-  it('rejects offline login after logout, even with the correct password', async () => {
+  it('rejects offline login after forgetDevice, even with the correct password (spec: online login -> forgetDevice -> offline -> device_not_authorized_offline)', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
     const { manager } = buildManager({ fetchImpl });
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
-    manager.logout();
+    manager.forgetDevice();
 
-    expect(manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123').ok).toBe(false);
+    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('device_not_authorized_offline');
   });
 });
 
@@ -221,13 +223,85 @@ describe('needsReauth', () => {
   });
 });
 
-describe('logout', () => {
-  it('clears the cached session and revokes offline capability for this device', async () => {
+describe('logoutSession', () => {
+  it('clears the cached jwt but leaves offline-login authorization intact', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+    manager.logoutSession();
+
+    expect(manager.getSession()?.jwt).toBeFalsy();
+    expect(manager.isOfflineLoginAllowed('BOLD-001')).toBe(true);
+  });
+
+  it('offline login with the same password still succeeds afterward (spec: online login -> logoutSession -> offline -> same password succeeds)', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+    manager.logoutSession();
+
+    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    expect(result.ok).toBe(true);
+  });
+
+  it('is a no-op and does not throw when there is no cached session at all', () => {
+    const { manager } = buildManager({ fetchImpl: vi.fn() });
+    expect(() => manager.logoutSession()).not.toThrow();
+    expect(manager.getSession()).toBeNull();
+  });
+});
+
+describe('forgetDevice', () => {
+  it('clears the cached session entirely and revokes offline-login authorization for this device', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
     const { manager } = buildManager({ fetchImpl });
 
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }));
-    manager.logout();
+    manager.forgetDevice();
+
+    expect(manager.getSession()).toBeNull();
+    expect(manager.isOfflineLoginAllowed('BOLD-001')).toBe(false);
+  });
+
+  it('subsequent offline login fails with device_not_authorized_offline', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
+    manager.forgetDevice();
+
+    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('device_not_authorized_offline');
+  });
+
+  it('fires a best-effort DELETE to /api/devices/:deviceId using the previously-cached jwt', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+    const jwt = fakeJwt({ userCode: 'BOLD-001' });
+
+    await manager.establishOnlineSession(jwt);
+    fetchImpl.mockClear();
+    manager.forgetDevice();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `https://api.test/api/devices/${DEVICE}`,
+      expect.objectContaining({ method: 'DELETE', headers: expect.objectContaining({ Authorization: `Bearer ${jwt}` }) })
+    );
+  });
+
+  it('does not throw even when the fire-and-forget DELETE call rejects (network down), and still wipes the device locally', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) }));
+    const { manager } = buildManager({ fetchImpl });
+
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }));
+    fetchImpl.mockImplementation(() => Promise.reject(new TypeError('fetch failed')));
+
+    expect(() => manager.forgetDevice()).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(manager.getSession()).toBeNull();
     expect(manager.isOfflineLoginAllowed('BOLD-001')).toBe(false);

@@ -189,14 +189,44 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     return Date.now() >= payload.exp * 1000;
   }
 
-  // Explicit logout revokes this device's offline capability too -- the
-  // next login on this machine must be online again.
-  async function logout() {
-    await secureStore.clear();
-    await dbRun(db, 'UPDATE device_meta SET last_authorized_user_id = NULL WHERE device_id = ?', [deviceId]);
+  // Clears only the active session (the cached JWT) -- this device's
+  // offline-login authorization (device_meta.last_authorized_user_id +
+  // the cached bcrypt hash) is deliberately left intact, so the same
+  // account can immediately offline-login again on this device without
+  // a fresh online round-trip. There is no partial-update primitive on
+  // secureStore (only save/load/clear), so re-saving the full cached
+  // object with jwt: null is how a single field gets cleared. Mirrors
+  // desktop/auth/session.js's logoutSession() exactly.
+  async function logoutSession() {
+    const cached = await secureStore.load();
+    if (!cached) return;
+    await secureStore.save({ ...cached, jwt: null });
   }
 
-  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logout, needsReauth };
+  // Full device revocation: wipes the local session cache, this device's
+  // offline-login authorization, *and* the offline-lockout state (a fresh
+  // credential means any earlier failed-attempt count no longer applies),
+  // then best-effort tells the server this device is no longer trusted for
+  // the account. Unlike logoutSession(), a later login on this machine must
+  // be online again before offline login works here for this account.
+  async function forgetDevice() {
+    // Captured before clearing -- the jwt is needed for the server call
+    // below, and secureStore has no way to read it back afterward.
+    const cached = await secureStore.load();
+    await secureStore.clear();
+    await dbRun(db, 'UPDATE device_meta SET last_authorized_user_id = NULL, last_authorized_at = NULL, failed_offline_attempts = 0, offline_locked_until = NULL WHERE device_id = ?', [deviceId]);
+    // Fire-and-forget -- the local wipe above is what actually matters for
+    // this device; a network blip or an already-expired token here must
+    // never block or fail forgetDevice() itself.
+    if (cached?.jwt) {
+      fetchImpl(`${apiBaseUrl}/api/devices/${deviceId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${cached.jwt}` },
+      }).catch(() => {});
+    }
+  }
+
+  return { establishOnlineSession, verifyOfflineLogin, getSession, isOfflineLoginAllowed, logoutSession, forgetDevice, needsReauth };
 }
 
 export const _internal = { decodeJwtPayload };

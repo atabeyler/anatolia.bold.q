@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MenuPanel, SettingsPanel, InfoModal, GuideModal } from './AppMenus.jsx';
+import { getAppMode, setAppMode } from '../services/appModePreference.js';
 
 const t = (key) => key;
 
@@ -229,6 +230,110 @@ describe('SettingsPanel', () => {
       await waitFor(() => expect(screen.getByText('securityPasskeyUnsupported')).toBeInTheDocument());
       expect(screen.getByText('securityPasskeyAdd').closest('button')).toBeDisabled();
     });
+  });
+});
+
+describe('SettingsPanel: Connection tab (Offline Mode)', () => {
+  function renderSettings(overrides = {}) {
+    const props = {
+      t, lang: 'tr', setLang: vi.fn(), onClose: vi.fn(),
+      soundEnabled: true, setSoundEnabled: vi.fn(),
+      soundVolume: 0.1, setSoundVolume: vi.fn(),
+      sidebarCollapsed: false, setSidebarCollapsed: vi.fn(),
+      onOpenGuide: vi.fn(),
+      ...overrides,
+    };
+    render(<SettingsPanel {...props} />);
+    return props;
+  }
+
+  beforeEach(() => {
+    localStorage.removeItem('anatolia_app_mode');
+  });
+
+  afterEach(() => {
+    localStorage.removeItem('anatolia_app_mode');
+  });
+
+  it('renders the Connection tab and reflects the current (auto) mode', () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('settingsConnection'));
+    expect(screen.getByText('appModeTitle')).toBeInTheDocument();
+    expect(screen.getByText('appModeAuto').closest('button')).toHaveClass('border-cyan-300/70');
+    expect(screen.queryByText('appModeManualBadge')).not.toBeInTheDocument();
+  });
+
+  it('reflects an already-offline stored mode without any confirmation', () => {
+    setAppMode('offline');
+    renderSettings();
+    fireEvent.click(screen.getByText('settingsConnection'));
+    expect(screen.getByText('appModeOffline').closest('button')).toHaveClass('border-gold/70');
+    expect(screen.getByText('appModeManualBadge')).toBeInTheDocument();
+  });
+
+  it('switching to Offline shows a confirm modal and only calls setAppMode on confirm', () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('settingsConnection'));
+    fireEvent.click(screen.getByText('appModeOffline'));
+
+    expect(screen.getByText('appModeOfflineConfirmTitle')).toBeInTheDocument();
+    expect(getAppMode()).toBe('auto');
+
+    fireEvent.click(screen.getByText('appModeOfflineConfirmBtn'));
+    expect(getAppMode()).toBe('offline');
+  });
+
+  it('canceling the Offline confirm modal leaves the mode unchanged', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByText('settingsConnection'));
+    fireEvent.click(screen.getByText('appModeOffline'));
+    expect(screen.getByText('appModeOfflineConfirmTitle')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('appModeOfflineCancelBtn'));
+    // The modal's exit animation (AnimatePresence) can keep it mounted for a
+    // tick after confirmOpen clears -- mirrors the passkey-remove-confirm
+    // test above.
+    await waitFor(() => expect(screen.queryAllByText('appModeOfflineConfirmTitle')).toHaveLength(0));
+    expect(getAppMode()).toBe('auto');
+  });
+
+  it('switching to Auto does not show a confirm modal and calls setAppMode immediately', () => {
+    setAppMode('offline');
+    renderSettings();
+    fireEvent.click(screen.getByText('settingsConnection'));
+    fireEvent.click(screen.getByText('appModeAuto'));
+
+    expect(screen.queryByText('appModeOfflineConfirmTitle')).not.toBeInTheDocument();
+    expect(getAppMode()).toBe('auto');
+  });
+});
+
+describe('SecurityPanel: passkey gating under Offline Mode', () => {
+  beforeEach(() => {
+    localStorage.removeItem('anatolia_app_mode');
+    listCredentialsMock.mockReset().mockResolvedValue([]);
+    isPasskeySupportedMock.mockReset().mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    localStorage.removeItem('anatolia_app_mode');
+  });
+
+  it('disables the add-passkey button and shows a hint when Offline Mode is on', async () => {
+    setAppMode('offline');
+    render(<SettingsPanel t={t} lang="tr" setLang={vi.fn()} onClose={vi.fn()} soundEnabled setSoundEnabled={vi.fn()} soundVolume={0.1} setSoundVolume={vi.fn()} authenticated />);
+    fireEvent.click(screen.getByText('settingsSecurity'));
+    await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
+    expect(screen.getByText('securityPasskeyOfflineModeHint')).toBeInTheDocument();
+    expect(screen.getByText('securityPasskeyAdd').closest('button')).toBeDisabled();
+  });
+
+  it('leaves the add-passkey button enabled in Auto mode', async () => {
+    render(<SettingsPanel t={t} lang="tr" setLang={vi.fn()} onClose={vi.fn()} soundEnabled setSoundEnabled={vi.fn()} soundVolume={0.1} setSoundVolume={vi.fn()} authenticated />);
+    fireEvent.click(screen.getByText('settingsSecurity'));
+    await waitFor(() => expect(screen.getByText('securityPasskeyEmpty')).toBeInTheDocument());
+    expect(screen.queryByText('securityPasskeyOfflineModeHint')).not.toBeInTheDocument();
+    expect(screen.getByText('securityPasskeyAdd').closest('button')).not.toBeDisabled();
   });
 });
 
