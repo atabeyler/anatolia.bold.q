@@ -65,10 +65,11 @@ offline-lockout counters, so a fresh online login is required before offline
 login works again on this device. When network use is allowed it also
 best-effort calls `DELETE /api/devices/:deviceId`. If Manual Offline Mode is
 active, no old bearer JWT is written to renderer `localStorage` or another
-plaintext file: only a non-sensitive `{ deviceId }` tombstone is kept inside
-the Android Keystore-backed secure store. The next successful online login's
-fresh JWT settles that server-side revoke before the device is registered
-again. Upgrading from v3.2.0 also removes the short-lived legacy
+plaintext file: only an account-correlated `{ deviceId, userCode }` tombstone is kept inside
+the Android Keystore-backed secure store — never a bearer token or password
+verifier. The next successful online login to that same account uses its fresh
+JWT to settle the server-side revoke before the device is registered again; a
+different account's JWT is never used for the older account's revoke. Upgrading from v3.2.0 also removes the short-lived legacy
 `anatolia_pending_device_revoke` localStorage entry if it exists.
 
 **ÇEVRİMDIŞI MOD.** A separate, user-selected app-wide preference (Settings

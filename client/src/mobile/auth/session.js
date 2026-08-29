@@ -63,29 +63,36 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     return stored?.pendingServerRevoke?.deviceId ? stored.pendingServerRevoke : null;
   }
 
-  async function clearPendingRevokeTombstoneIfCurrent(targetDeviceId) {
+  async function clearPendingRevokeTombstoneIfCurrent(targetDeviceId, targetUserCode) {
     const current = await secureStore.load();
     // A fresh login may have replaced the tombstone while a best-effort
-    // DELETE was in flight. Never clear a real newly-created session.
-    if (current?.pendingServerRevoke?.deviceId === targetDeviceId && !current.userCode) {
+    // DELETE was in flight. Clear only the exact encrypted revoke debt that
+    // was attempted; never clear a newly-created session or another account's debt.
+    if (current?.pendingServerRevoke?.deviceId === targetDeviceId
+      && current?.pendingServerRevoke?.userCode === targetUserCode
+      && !current.userCode) {
       await secureStore.clear();
     }
   }
 
-  async function tryPendingRevokeWithFreshJwt(jwt) {
+  async function tryPendingRevokeWithFreshJwt(jwt, freshUserCode) {
     const pending = await pendingRevoke();
-    if (!pending?.deviceId || !jwt) return;
+    // A fresh JWT is account-scoped. Never use account B's token to settle
+    // account A's device revoke. Legacy deviceId-only tombstones are also
+    // deliberately not guessed; successful registration below safely
+    // reassigns this physical device's unique server row to the new account.
+    if (!pending?.deviceId || !pending?.userCode || !jwt || pending.userCode !== freshUserCode) return;
     try {
       const res = await fetchImpl(`${apiBaseUrl}/api/devices/${pending.deviceId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${jwt}` },
       });
       if (res.ok || res.status === 404) {
-        await clearPendingRevokeTombstoneIfCurrent(pending.deviceId);
+        await clearPendingRevokeTombstoneIfCurrent(pending.deviceId, pending.userCode);
       }
     } catch {
       // Keep the encrypted tombstone. If device registration below also
-      // fails, the next successful online login gets another chance.
+      // fails, the next successful matching-account online login gets another chance.
     }
   }
 
@@ -115,7 +122,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     // JWT we have *now* to settle the old server-side revoke before the
     // registration below re-authorizes the same device. No old bearer token
     // ever needs to be persisted outside secureStore.
-    await tryPendingRevokeWithFreshJwt(jwt);
+    await tryPendingRevokeWithFreshJwt(jwt, payload.userCode);
 
     // This one round-trip is the single gate on this device ever getting
     // offline-login capability at all -- a login just succeeded (the JWT
@@ -272,15 +279,15 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       return { pendingServerRevoke: null };
     }
 
-    // Tombstone contains NO bearer token, password hash or user identity.
-    await secureStore.save({ signedOut: true, pendingServerRevoke: { deviceId } });
+    // Tombstone contains NO bearer token or password verifier. The userCode is only an encrypted account-correlation identifier used to prevent cross-account revocation.
+    await secureStore.save({ signedOut: true, pendingServerRevoke: { deviceId, userCode: cached.userCode } });
 
     if (allowNetwork) {
       fetchImpl(`${apiBaseUrl}/api/devices/${deviceId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${cached.jwt}` },
       }).then(async (res) => {
-        if (res.ok || res.status === 404) await clearPendingRevokeTombstoneIfCurrent(deviceId);
+        if (res.ok || res.status === 404) await clearPendingRevokeTombstoneIfCurrent(deviceId, cached.userCode);
       }).catch(() => {
         // Keep the encrypted marker; a later fresh online login retries it.
       });

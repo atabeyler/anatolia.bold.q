@@ -51,11 +51,6 @@ let connectivityState = 'local';
 const connectivityListeners = new Set();
 const reauthListeners = new Set();
 
-// forgetDevice() while manually offline can't reach the server (see
-// PENDING_DEVICE_REVOKE_KEY usage below) -- this survives an app restart the
-// same way the rest of the offline-first state does, so the revoke isn't
-// lost if Auto mode isn't restored until a later session.
-const PENDING_DEVICE_REVOKE_KEY = 'anatolia_pending_device_revoke';
 
 function getDb() {
   if (!dbPromise) {
@@ -214,19 +209,11 @@ export const mobileAuth = {
     return () => reauthListeners.delete(callback);
   },
   logoutSession: guard(async () => (await getSessionManager()).logoutSession()),
-  // While manually offline, session.js's own forgetDevice() skips its DELETE
-  // call and hands back the revoke it still owes the server -- stash that so
-  // the Auto-mode listener below can flush it once connectivity is trusted
-  // again, instead of it being silently dropped.
-  forgetDevice: guard(async () => {
-    const result = await (await getSessionManager()).forgetDevice({ allowNetwork: !isAppModeOffline() });
-    if (result?.pendingServerRevoke) {
-      try {
-        localStorage.setItem(PENDING_DEVICE_REVOKE_KEY, JSON.stringify(result.pendingServerRevoke));
-      } catch {}
-    }
-    return result;
-  }),
+  // Pending server revocation is owned entirely by the encrypted session
+  // manager. Renderer localStorage never receives a bearer token or revoke debt.
+  forgetDevice: guard(async () =>
+    (await getSessionManager()).forgetDevice({ allowNetwork: !isAppModeOffline() })
+  ),
 };
 
 export const mobileAnalyses = {
@@ -467,33 +454,6 @@ export const mobileConnectivity = {
   },
 };
 
-// Best-effort delivery of a device revoke that forgetDevice() couldn't send
-// while manually offline -- fire once, then clear the marker regardless of
-// outcome (same fire-and-forget philosophy as session.js's own forgetDevice:
-// the local wipe already happened, this is just the server side catching
-// up). Reuses the exact fetch shape session.js's forgetDevice() uses for its
-// own DELETE call.
-function flushPendingDeviceRevoke() {
-  let pending;
-  try {
-    const raw = localStorage.getItem(PENDING_DEVICE_REVOKE_KEY);
-    if (!raw) return;
-    pending = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  if (!pending?.deviceId || !pending?.jwt) {
-    try { localStorage.removeItem(PENDING_DEVICE_REVOKE_KEY); } catch {}
-    return;
-  }
-  fetch(`${CLOUD_URL}/api/devices/${pending.deviceId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${pending.jwt}` },
-  }).catch(() => {}).then(() => {
-    try { localStorage.removeItem(PENDING_DEVICE_REVOKE_KEY); } catch {}
-  });
-}
-
 // Bootstraps as soon as this module loads, if actually running as the
 // installed Android app -- mirrors desktop/main.js's app.whenReady()
 // sequence, just inline since there's no separate main process here.
@@ -518,15 +478,12 @@ if (isMobileApp) {
   // (see their own guards), so there's no need to pause/resume the timers
   // themselves. This listener only closes the gap between a mode flip and
   // the next poll: offline -> immediate 'local' instead of waiting up to
-  // 30s, auto -> immediate reconcile instead of waiting up to 30s, plus a
-  // best-effort flush of any device revoke forgetDevice() couldn't deliver
-  // while offline.
+  // 30s, auto -> immediate reconcile instead of waiting up to 30s. The encrypted session manager, not this mode listener, owns any pending device revoke.
   subscribeAppModePreference((mode) => {
     if (mode === 'offline') {
       setConnectivity('local');
       return;
     }
     checkConnectivity();
-    flushPendingDeviceRevoke();
   });
 }

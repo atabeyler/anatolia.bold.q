@@ -1,59 +1,41 @@
 #!/usr/bin/env node
-// Release version authority is the three package.json files. Their versions
-// must match exactly because root package.json names the desktop/Android
-// artifact, client/package.json is embedded into the Vite build, and
-// server/package.json identifies the deployed backend. package-lock.json's
-// root `version` field is only package metadata (npm ci validates the actual
-// dependency graph/integrity separately), so a connector/API commit that
-// changes no dependencies must not block a release solely because that
-// informational field still shows the previous app version. The normal
-// developer path (`scripts/bump-version.js`) continues updating those lock
-// headers and the README badge when hooks run locally.
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
+const readJson = (p) => JSON.parse(readFileSync(path.join(root, p), 'utf8'));
 
-const packageTargets = [
-  'package.json',
-  'client/package.json',
-  'server/package.json',
-];
-
-const versions = packageTargets.map((p) => JSON.parse(readFileSync(path.join(root, p), 'utf-8')).version);
+const packageTargets = ['package.json', 'client/package.json', 'server/package.json'];
+const versions = packageTargets.map((p) => readJson(p).version);
 const canonical = versions[0];
-const mismatched = packageTargets
-  .map((file, i) => ({ file, version: versions[i] }))
-  .filter((entry) => entry.version !== canonical);
-
-if (!canonical || mismatched.length) {
+if (!canonical || versions.some((v) => v !== canonical)) {
   console.error('Version mismatch across release package.json files:');
   packageTargets.forEach((file, i) => console.error(`  ${file}: ${versions[i]}`));
-  console.error('\nKeep root/client/server package.json on the same version before releasing.');
   process.exit(1);
 }
 
-const lockTargets = [
-  'package-lock.json',
-  'client/package-lock.json',
-  'server/package-lock.json',
-];
-const staleLockHeaders = [];
+const lockTargets = ['package-lock.json', 'client/package-lock.json', 'server/package-lock.json'];
+const lockErrors = [];
 for (const file of lockTargets) {
-  try {
-    const lock = JSON.parse(readFileSync(path.join(root, file), 'utf-8'));
-    const version = lock.packages?.['']?.version ?? lock.version;
-    if (version && version !== canonical) staleLockHeaders.push(`${file}:${version}`);
-  } catch (err) {
-    console.error(`Invalid ${file}: ${err.message}`);
-    process.exit(1);
-  }
+  const lock = readJson(file);
+  const top = lock.version;
+  const rootPackage = lock.packages?.['']?.version;
+  if (top !== canonical) lockErrors.push(`${file} top-level=${top ?? 'missing'}`);
+  if (rootPackage !== canonical) lockErrors.push(`${file} packages[""].version=${rootPackage ?? 'missing'}`);
+}
+if (lockErrors.length) {
+  console.error('Lockfile application-version metadata must match the release version:');
+  lockErrors.forEach((line) => console.error(`  ${line}`));
+  process.exit(1);
 }
 
-if (staleLockHeaders.length) {
-  console.warn(`Lockfile package-version metadata is stale (${staleLockHeaders.join(', ')}); dependency integrity is still enforced by npm ci. Run scripts/bump-version.js on the next normal version bump to refresh these headers.`);
+const readme = readFileSync(path.join(root, 'README.md'), 'utf8');
+const badge = readme.match(/img\.shields\.io\/badge\/version-([0-9]+\.[0-9]+\.[0-9]+)-blue/);
+if (!badge || badge[1] !== canonical) {
+  console.error(`README version badge mismatch: expected ${canonical}, found ${badge?.[1] ?? 'missing'}`);
+  process.exit(1);
 }
 
-console.log(`Version consistency OK: ${canonical} (package.json, client/package.json, server/package.json)`);
+console.log(`Version consistency OK: ${canonical} across packages, lockfiles and README badge`);

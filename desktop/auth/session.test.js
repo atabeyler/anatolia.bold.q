@@ -309,7 +309,7 @@ describe('forgetDevice', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const stored = secureStore.load();
-    expect(stored).toEqual({ signedOut: true, pendingServerRevoke: { deviceId: DEVICE } });
+    expect(stored).toEqual({ signedOut: true, pendingServerRevoke: { deviceId: DEVICE, userCode: 'BOLD-001' } });
     expect(JSON.stringify(stored)).not.toContain(jwt);
     expect(JSON.stringify(stored)).not.toContain('CorrectHorse123');
     expect(manager.getSession()).toBeNull();
@@ -326,7 +326,7 @@ describe('forgetDevice', () => {
 
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(result).toEqual({ pendingServerRevoke: null });
-    expect(secureStore.load()).toEqual({ signedOut: true, pendingServerRevoke: { deviceId: DEVICE } });
+    expect(secureStore.load()).toEqual({ signedOut: true, pendingServerRevoke: { deviceId: DEVICE, userCode: 'BOLD-001' } });
     expect(JSON.stringify(secureStore.load())).not.toContain(jwt);
     expect(manager.isOfflineLoginAllowed('BOLD-001')).toBe(false);
   });
@@ -352,6 +352,28 @@ describe('forgetDevice', () => {
     expect(calls[0].options.headers.Authorization).toBe(`Bearer ${freshJwt}`);
     expect(calls[1].url).toBe('https://api.test/api/devices/register');
     expect(secureStore.load().jwt).toBe(freshJwt);
+    expect(secureStore.load().pendingServerRevoke).toBeUndefined();
+  });
+
+  it('never uses a different account JWT to settle an older account pending revoke', async () => {
+    const calls = [];
+    const fetchImpl = vi.fn(async (url, options) => {
+      calls.push({ url, options });
+      return { ok: true, status: 200, json: async () => ({ success: true }) };
+    });
+    const { manager, secureStore } = buildManager({ fetchImpl });
+    await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'PasswordA');
+    manager.forgetDevice({ allowNetwork: false });
+    fetchImpl.mockClear();
+    calls.length = 0;
+
+    const userBJwt = fakeJwt({ userCode: 'BOLD-002', exp: Math.floor(Date.now() / 1000) + 3600 });
+    await manager.establishOnlineSession(userBJwt, 'PasswordB');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://api.test/api/devices/register');
+    expect(calls[0].options.headers.Authorization).toBe(`Bearer ${userBJwt}`);
+    expect(secureStore.load().userCode).toBe('BOLD-002');
     expect(secureStore.load().pendingServerRevoke).toBeUndefined();
   });
 });

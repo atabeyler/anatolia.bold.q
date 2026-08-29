@@ -117,7 +117,7 @@ The machine-readable API definition for the new versioned platform surface is in
 |---|---|---|
 | `POST /register` | auth | Authorize (or re-authorize) a device for the current account while online, enabling later offline login for that device |
 | `GET /` | auth | List the account's registered devices |
-| `DELETE /:deviceId` | auth | Revoke a device (e.g. lost/stolen laptop). `Bu Cihazı Unut` removes the local offline authorization immediately. When network use is allowed, the client also calls this endpoint best-effort using the current cached bearer token. If the device is forgotten while Manual Offline Mode is active, no bearer token is written to renderer localStorage or plaintext JSON; only a non-sensitive device-id tombstone remains in the platform encrypted secure store. The server-side revoke is then attempted with the next successful online login's fresh JWT before the same device is registered again. |
+| `DELETE /:deviceId` | auth | Revoke a device (e.g. lost/stolen laptop). `Bu Cihazı Unut` removes the local offline authorization immediately. When network use is allowed, the client also calls this endpoint best-effort using the current cached bearer token. If the device is forgotten while Manual Offline Mode is active, no bearer token is written to renderer localStorage or plaintext JSON; only an account-correlated `{ deviceId, userCode }` tombstone remains in the platform encrypted secure store; it contains no bearer token or password verifier. The server-side revoke is attempted only when the next successful online login belongs to that same account, using its fresh JWT before re-registration. A different account's JWT is never used to settle the older account's revoke. |
 
 ## Sync (`/api/sync`)
 

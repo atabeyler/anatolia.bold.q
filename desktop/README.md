@@ -141,8 +141,11 @@ and, network permitting, revokes the device server-side (`DELETE
 /api/devices/:deviceId`) — a fresh online login is required before offline
 login works again on this device. When Offline Mode (below) is on,
 `forgetDevice({ allowNetwork: false })` skips that DELETE call and instead
-queues a pending-revoke marker that `appMode.js` flushes automatically the
-next time the app switches back to Otomatik. An admin-forced block
+keeps an account-correlated pending-revoke tombstone only in the OS-keychain-
+encrypted secure store. Returning to Otomatik alone never sends an old bearer
+token; the next successful online login to the same account uses its fresh JWT
+to settle the revoke before re-registering. A different account never has its
+JWT used for the older account's revoke. An admin-forced block
 (`auth:blocked`) also goes through `forgetDevice()`, not `logoutSession()`,
 since a blocked user should not be able to relaunch and offline-login back
 in.
@@ -170,23 +173,25 @@ runs `reconcileAuto()`: it restarts connectivity polling and checks once
 immediately, bails out to a reauth prompt if `nativeAuth.needsReauth()`
 says the cached session has expired, otherwise runs one sync pass via the
 existing `sync.forceSync()` IPC call, restarts the periodic timers, pushes
-the fresh connectivity state to the renderer, and flushes any
-`forgetDevice({ allowNetwork: false })` device-revoke that was queued while
-offline (`appMode.js`'s `pendingRevoke` file) -- no new sync/socket
-mechanism was invented, the existing ones are just centrally started and
-stopped from one place instead of being gated ad hoc at their call sites.
+the fresh connectivity state to the renderer, -- no new sync/socket mechanism was invented, the existing ones are just
+centrally started and stopped from one place instead of being gated ad hoc at
+their call sites. Pending device revocation is deliberately not an app-mode
+responsibility: `auth/session.js` owns its encrypted tombstone and retries it
+only after a successful matching-account online login supplies a fresh JWT.
 
 ## Local AI
 
-`localAI/offlineExtractive.js` is a real, fully offline backend — keyword
-search with Turkish relative-date parsing ("geçen ayki raporlarımı bul"),
-extractive summarization, and bag-of-words comparison — running directly
-against the local SQLite `analyses` table, no model download and no network
-call. It deliberately does **not** try to replace cloud AI: generating a new
-analysis (LLM + optionally the quantum kernel) stays cloud-only via the
-existing `/api/analysis` endpoints, exactly as it works on the web today.
-`localAI/provider.js` never throws past its boundary — a broken/unavailable
-backend degrades to a reported capability flag, not a crash.
+Desktop Local AI supports real on-device generation through `node-llama-cpp`
+with pinned GGUF tiers: Qwen2.5-1.5B-Instruct (MID) by default and
+Qwen2.5-7B-Instruct (HIGH) on machines with sufficient RAM. Models are not
+bundled; Settings → Local AI downloads and verifies the selected tier once,
+after which new analyses can be generated with no network connection and are
+saved to the local SQLite history as `Q LOCAL LLM (OFFLINE)`.
+`localAI/offlineExtractive.js` remains the zero-download fallback for local
+search/summarize/compare and archived-report matching when no generative model
+is installed or generation fails. `localAI/provider.js` keeps failures behind
+its provider boundary so an unavailable model degrades cleanly instead of
+crashing the application.
 
 ## Packaging
 
