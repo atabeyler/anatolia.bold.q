@@ -30,6 +30,7 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        queueMicrotask: 'readonly',
         atob: 'readonly',
         btoa: 'readonly',
         import: 'readonly',
