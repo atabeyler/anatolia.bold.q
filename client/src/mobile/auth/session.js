@@ -74,11 +74,34 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     // layer maps these codes through t() instead.
     if (!payload?.userCode) throw new Error('invalid_session_token');
 
-    const res = await fetchImpl(`${apiBaseUrl}/api/devices/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-      body: JSON.stringify({ deviceId, deviceName: `ANATOLIA-Q Android (${platform})`, platform, appVersion }),
-    });
+    // This one round-trip is the single gate on this device ever getting
+    // offline-login capability at all -- a login just succeeded (the JWT
+    // above proves it), so a brief network blip failing only *this* call
+    // right afterwards would otherwise silently strand the device with no
+    // offline fallback until the next fully-successful online login, with
+    // nothing shown to the user (registerNativeSession's caller only
+    // console.warns on failure -- see its comment in LoginPage.jsx). Retry
+    // a few times before giving up, same reasoning as UpdateBanner.jsx's
+    // periodic re-check: one failed attempt right after connectivity was
+    // just proven to exist is far more likely transient than permanent.
+    let res;
+    let lastErr;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        res = await fetchImpl(`${apiBaseUrl}/api/devices/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+          body: JSON.stringify({ deviceId, deviceName: `ANATOLIA-Q Android (${platform})`, platform, appVersion }),
+        });
+        // Only a server-side/transient failure (5xx) is worth retrying; a
+        // 4xx (e.g. invalid deviceId) will just fail identically again.
+        if (res.ok || res.status < 500) break;
+      } catch (err) {
+        lastErr = err;
+      }
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+    if (!res) throw lastErr || new Error('device_registration_failed:network');
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error || `device_registration_failed:${res.status}`);

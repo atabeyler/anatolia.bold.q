@@ -57,6 +57,43 @@ describe('establishOnlineSession', () => {
 
     await expect(manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }))).rejects.toThrow('Cihaz limiti aşıldı');
     expect(secureStore.load()).toBeNull();
+    // A 4xx is not retried -- it would just fail identically again.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a transient network failure right after login instead of permanently stranding the device offline', async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const fetchImpl = vi.fn(async () => {
+      attempts += 1;
+      if (attempts < 3) throw new TypeError('fetch failed');
+      return { ok: true, json: async () => ({ success: true }) };
+    });
+    const { manager, secureStore } = buildManager({ fetchImpl });
+
+    const resultPromise = manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }));
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result.userCode).toBe('BOLD-001');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(secureStore.load().userCode).toBe('BOLD-001');
+    vi.useRealTimers();
+  });
+
+  it('gives up and rejects after repeated registration failures, still without caching anything', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(async () => { throw new TypeError('fetch failed'); });
+    const { manager, secureStore } = buildManager({ fetchImpl });
+
+    const resultPromise = manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }));
+    const assertion = expect(resultPromise).rejects.toThrow('fetch failed');
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(secureStore.load()).toBeNull();
+    vi.useRealTimers();
   });
 });
 
