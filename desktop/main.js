@@ -105,21 +105,40 @@ function toRendererUpdateInfo(info) {
 }
 
 function removeCachedBlockmapBeforeUpdate() {
-  // electron-updater prefers <cache>/current.blockmap over downloading the
-  // previous release's blockmap. That cache can survive a manual installer
-  // upgrade or an interrupted update while installer.exe is replaced,
-  // leaving the two files from different versions. The resulting patch is
-  // assembled from valid bytes using the wrong copy plan and only fails at
-  // the final SHA-512 check, after which electron-updater downloads the full
-  // installer. Removing this small derived file forces a fresh, matching
-  // blockmap from the signed release assets; installer and user data remain
-  // untouched.
-  const blockmapPath = path.join(app.getPath('cache'), UPDATER_CACHE_DIR_NAME, 'current.blockmap');
-  try {
-    fs.rmSync(blockmapPath, { force: true });
-    diagnostics?.info('update_blockmap_cache_cleared', {});
-  } catch (err) {
-    diagnostics?.warn('update_blockmap_cache_clear_failed', { message: err?.message });
+  // electron-updater's NSIS differential downloader reads its "old file"
+  // baseline from two separate items in this cache dir (see
+  // AppUpdater.js's differentialDownloadInstaller): a cached copy of the
+  // previously-downloaded installer, <cache>/installer.exe (the actual
+  // bytes it copies "unchanged" blocks from), and <cache>/current.blockmap
+  // (the plan of which blocks are unchanged, preferred over re-downloading
+  // the previous release's blockmap when present). The two are only ever
+  // written together, right after a successful download -- but installer.exe
+  // can independently end up stale or truncated (an update download that
+  // was interrupted mid-write by a flaky/overloaded update server, or a
+  // manual installer run outside electron-updater's own flow), leaving a
+  // cache that no longer matches ANY real published build. A previous fix
+  // here only cleared current.blockmap, on the theory that the *plan* was
+  // stale while installer.exe itself was still trustworthy -- but a
+  // mismatched-or-corrupt installer.exe fails the differential's final
+  // SHA-512 check every single time regardless of how fresh the blockmap
+  // plan is, since the plan just tells it *which* bytes to copy from a base
+  // file that's wrong to begin with. Clearing both together removes any
+  // chance of diffing against a corrupt base: with installer.exe absent,
+  // electron-updater's open() on it fails immediately, which is caught by
+  // differentialDownloadInstaller's own try/catch and falls back to a full
+  // download right away -- instead of silently reconstructing a mismatched
+  // file and only discovering the corruption after a wasted round-trip.
+  // User data and the currently-installed application are
+  // untouched; this only clears electron-updater's own derived cache.
+  const cacheDir = path.join(app.getPath('cache'), UPDATER_CACHE_DIR_NAME);
+  for (const name of ['current.blockmap', 'installer.exe']) {
+    try {
+      fs.rmSync(path.join(cacheDir, name), { force: true });
+    } catch (err) {
+      diagnostics?.warn('update_cache_clear_failed', { file: name, message: err?.message });
+      continue;
+    }
+    diagnostics?.info('update_cache_cleared', { file: name });
   }
 }
 

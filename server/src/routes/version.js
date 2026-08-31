@@ -23,8 +23,17 @@ const PLATFORM_ASSET_KEY = {
 // not the binary) with no error until the OS fails to install/open it.
 // Defaulting the scheme here turns that failure mode into a working link
 // instead of a silent wrong-content download.
-function resolvedAppUrl() {
-  const raw = (process.env.APP_URL || 'http://localhost:10000').trim().replace(/\/+$/, '');
+//
+// When APP_URL isn't set at all, falling back to a hardcoded localhost
+// origin used to mean a missing/deleted env var silently produced update
+// URLs no real client could ever reach. Falling back to the *request's own
+// origin* instead (protocol + Host, both already proxy-aware because
+// index.js sets `trust proxy`) means that failure mode is architecturally
+// impossible in production: whatever origin a client used to reach this
+// route is by definition a working origin for it to download from next.
+function resolvedAppUrl(req) {
+  const fallback = req ? `${req.protocol}://${req.get('host')}` : 'http://localhost:10000';
+  const raw = (process.env.APP_URL || fallback).trim().replace(/\/+$/, '');
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
@@ -35,10 +44,10 @@ function resolvedAppUrl() {
 // client's network traffic and any download manager, which the product
 // deliberately doesn't want end users to see. The one-time proxy bandwidth
 // cost of always streaming through here (below) buys that opacity.
-router.get('/latest', async (_req, res) => {
+router.get('/latest', async (req, res) => {
   try {
     const info = await getLatestVersionInfo();
-    const appUrl = resolvedAppUrl();
+    const appUrl = resolvedAppUrl(req);
     const assets = { ...info.assets };
     for (const [platform, key] of Object.entries(PLATFORM_ASSET_KEY)) {
       if (assets[key]) assets[key] = { ...assets[key], url: `${appUrl}/api/version/download/${platform}` };
@@ -186,7 +195,7 @@ router.get('/generic/:feedFile', async (req, res) => {
     const upstream = await fetchAssetBinary(feedAsset.id);
     const text = await upstream.text();
     const doc = loadYaml(text);
-    const appUrl = resolvedAppUrl();
+    const appUrl = resolvedAppUrl(req);
     const toOwnUrl = (name) => `${appUrl}/api/version/generic/download/${encodeURIComponent(path.basename(name))}`;
 
     if (Array.isArray(doc?.files)) {

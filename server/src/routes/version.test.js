@@ -17,6 +17,12 @@ const { default: versionRouter } = await import('./version.js');
 
 function buildApp() {
   const app = express();
+  // Mirrors server/src/index.js's `app.set('trust proxy', 1)` so req.protocol
+  // honors X-Forwarded-Proto the same way it does behind the real reverse
+  // proxy in production -- otherwise a test sending that header wouldn't
+  // actually exercise the same code path resolvedAppUrl's request-origin
+  // fallback relies on.
+  app.set('trust proxy', 1);
   app.use('/api/version', versionRouter);
   return app;
 }
@@ -86,6 +92,23 @@ describe('GET /api/version/latest', () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBeTruthy();
+  });
+
+  it('falls back to the request\'s own origin instead of localhost when APP_URL is unset', async () => {
+    // A deleted/missing APP_URL used to silently produce
+    // http://localhost:10000/... update URLs no real client could ever
+    // reach. Whatever origin the client used to reach this route is by
+    // construction one it can reach again for the download.
+    delete process.env.APP_URL;
+    getLatestVersionInfoMock.mockResolvedValue(releaseInfo());
+
+    const res = await request(buildApp())
+      .get('/api/version/latest')
+      .set('Host', 'site--anatoliaboldq--6ftfc8q7458m.code.run')
+      .set('X-Forwarded-Proto', 'https');
+
+    expect(res.body.assets.desktopWin.url).toBe('https://site--anatoliaboldq--6ftfc8q7458m.code.run/api/version/download/windows');
+    expect(JSON.stringify(res.body)).not.toContain('localhost');
   });
 });
 

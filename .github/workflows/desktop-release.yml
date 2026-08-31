@@ -72,6 +72,16 @@ jobs:
     environment: production-release
     outputs:
       tag: ${{ steps.info.outputs.tag }}
+      # true when this tag's Windows desktop assets were already fully
+      # published by an earlier run -- see the "Find or create" step below
+      # for why this specifically guards against overwriting a shipped
+      # release (2026-08-31 incident: a same-day commit that didn't bump
+      # package.json's version reused the still-open v3.2.9 tag, and the
+      # upload step's delete-then-reupload idempotency -- meant for a
+      # deliberate workflow_dispatch re-run of *that same* build -- silently
+      # replaced the already-published v3.2.9 installer/blockmap/latest.yml
+      # with bytes from an unrelated commit).
+      already_published: ${{ steps.find_or_create.outputs.already_published }}
     steps:
       - uses: actions/checkout@v4
 
@@ -80,6 +90,7 @@ jobs:
         run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Find or create the shared GitHub Release
+        id: find_or_create
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -95,8 +106,26 @@ jobs:
             [ "$HTTP_CODE" = "200" ]
           }
 
+          # latest.yml is uploaded last in the per-platform upload step
+          # below (after the .exe and .exe.blockmap), so its presence is a
+          # reliable "this tag's Windows publish already ran to completion"
+          # signal -- a release that only got partway through a previous
+          # run (or was just created a few lines above) won't have it yet,
+          # and workflow_dispatch is exempted from the resulting guard
+          # entirely (see build-and-publish's `if:` below), so a deliberate
+          # manual re-run/repair of the *same* version can still complete.
+          release_already_published() {
+            jq -e '.assets[]? | select(.name == "latest.yml")' release.json > /dev/null 2>&1
+          }
+
           if find_release; then
             echo "Release $TAG already exists."
+            if release_already_published; then
+              echo "Windows assets for $TAG are already published -- flagging for build-and-publish to skip on a plain push."
+              echo "already_published=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "already_published=false" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
 
@@ -108,6 +137,7 @@ jobs:
 
           if [ "$CREATE_HTTP_CODE" = "201" ]; then
             echo "Created release $TAG."
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -117,7 +147,12 @@ jobs:
           echo "Release creation returned $CREATE_HTTP_CODE (likely a concurrent create by android-release.yml) -- polling for the release instead."
           for attempt in 1 2 3 4 5; do
             sleep 3
-            find_release && exit 0
+            if find_release; then
+              # This is the release *this exact push* just raced to create,
+              # so it cannot have Windows assets yet.
+              echo "already_published=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           done
 
           echo "::error::Could not find or create a release for tag $TAG"
@@ -126,6 +161,15 @@ jobs:
 
   build-and-publish:
     needs: prepare-release
+    # Skip entirely on a plain push whose version tag was already fully
+    # published (see prepare-release's `already_published` output) -- that
+    # combination only happens when a commit reached main without bumping
+    # package.json's version (Version Gate should have already failed that
+    # push separately, but it has no authority to stop this workflow; this
+    # is the guard that actually protects already-shipped release assets).
+    # workflow_dispatch is exempted so a deliberate manual re-run can still
+    # repair/complete a partially-published version.
+    if: needs.prepare-release.outputs.already_published != 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

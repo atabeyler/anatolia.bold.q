@@ -136,7 +136,14 @@ describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
     delete process.env.ANATOLIA_CLOUD_URL;
   });
 
-  it('clears a potentially stale cached blockmap before downloading', async () => {
+  it('clears both the cached blockmap and the cached base installer before downloading', async () => {
+    // A stale/corrupt local installer.exe cache fails the differential
+    // download's SHA-512 check deterministically, no matter how many times
+    // it's retried -- clearing only current.blockmap (the old mitigation)
+    // leaves that corrupt base file in place and the diff keeps failing.
+    // Both derived-cache files must be cleared together so a bad base can
+    // never be diffed against; see removeCachedBlockmapBeforeUpdate's
+    // comment in main.js.
     vi.resetModules();
     await import('./main.js');
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -146,6 +153,10 @@ describe('desktop update wiring (desktop/main.js + electron-updater)', () => {
 
     expect(fakeRmSync).toHaveBeenCalledWith(
       expect.stringMatching(/anatolia-q-updater[\\/]current\.blockmap$/),
+      { force: true },
+    );
+    expect(fakeRmSync).toHaveBeenCalledWith(
+      expect.stringMatching(/anatolia-q-updater[\\/]installer\.exe$/),
       { force: true },
     );
   });
