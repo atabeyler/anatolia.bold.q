@@ -297,10 +297,10 @@ export function startMorningBriefScheduler() {
     const hm = getNowHMTR();
     // Generate today's briefing after 07:00 if it doesn't exist yet.
     if (hm < '07:00') return;
-    const existing = await getTodayBriefing();
-    if (existing) return;
     running = true;
     try {
+      const existing = await getTodayBriefing();
+      if (existing) return;
       await generateMorningBriefIfNeeded(false);
       logger.info('[MorningBrief] today\'s summary generated');
     } catch (e) {
