@@ -41,7 +41,7 @@ describe('createLLMQuery', () => {
     const generate = vi.fn(async (fullPrompt) => {
       expect(fullPrompt).toContain('## Yönetici Özeti');
       expect(fullPrompt).toContain('## Mali Riskler');
-      return '# Analiz\n\nİçerik burada.';
+      return '# Analiz\n\nİçerik burada. '.repeat(10);
     });
     const runtimeFactory = vi.fn(async () => ({ generate }));
 
@@ -73,7 +73,7 @@ describe('createLLMQuery', () => {
       expect(fullPrompt).not.toContain('Mahalle Gerginliği');
       expect(fullPrompt).not.toContain('Hedef Banka');
       expect(fullPrompt).not.toContain('optimizasyonu');
-      return 'OPTİMİZASYON PROBLEMİ\nBütçe: %60\n\n## Yönetici Özeti\nToplumsal analiz üretildi.';
+      return 'OPTİMİZASYON PROBLEMİ\nBütçe: %60\n\n## Yönetici Özeti\n' + 'Toplumsal analiz üretildi. '.repeat(10);
     });
     const runtimeFactory = vi.fn(async () => ({ generate }));
 
@@ -113,13 +113,34 @@ describe('createLLMQuery', () => {
     })).rejects.toThrow('local_llm_prompt_echo');
   });
 
+  // Mirrors llama-android.cpp's native minimum-output-length safety net
+  // (see reportFormats.js's isTooShort comment for the real-device
+  // incident it guards against) -- node-llama-cpp has no equivalent knob
+  // to force generation past an early end-of-turn sample, so a model that
+  // stops almost immediately must be caught after the fact instead of
+  // silently accepted as a finished report.
+  it('throws local_llm_too_short instead of accepting a few-word non-answer as a finished report', async () => {
+    const db = createTestDb();
+    const generate = vi.fn(async () => '## Yönetici Özeti\n\nÖzcevap: Sınır hareketi, 08.08.2026');
+    const runtimeFactory = vi.fn(async () => ({ generate }));
+
+    const run = createLLMQuery({ db, userId: 'BOLD-001', modelManager: fakeModelManager(), runtimeFactory });
+
+    await expect(run({
+      mode: 'generate',
+      category: 'savunma',
+      title: 'sınır hareketi',
+      prompt: 'sınır hattındaki hareketlilik',
+    })).rejects.toThrow('local_llm_too_short');
+  });
+
   it('still generates a fresh analysis when there is no matching archive context', async () => {
     const db = createTestDb();
     let systemPromptSeen = '';
     const generate = vi.fn(async (fullPrompt) => {
       expect(fullPrompt).toContain('ilgili geçmiş rapor bulunamadı');
       expect(fullPrompt).toContain('deniz sınırında çatışma');
-      return '# Yeni Analiz\n\nGeçmiş rapor olmadan yeni taslak üretildi.';
+      return '# Yeni Analiz\n\n' + 'Geçmiş rapor olmadan yeni taslak üretildi. '.repeat(10);
     });
     const runtimeFactory = vi.fn(async ({ systemPrompt }) => {
       systemPromptSeen = systemPrompt;

@@ -166,4 +166,24 @@ export function isPromptEcho(content = '') {
   return PROMPT_ECHO_MARKERS.some((marker) => normalized.includes(marker));
 }
 
-export const _internal = { FORMATS, COMMON_RULES };
+// Android's llama-android.cpp has a native safety net desktop's
+// node-llama-cpp path never got: forcing the EOS/EOT logits to -infinity
+// for the first ~96 generated tokens, so a model that samples an
+// end-of-turn token on its very first step can't produce a real-world-
+// observed failure like "Özcevap: Sınır hareketi, 08.08.2026" as the
+// entire "report" (see client/src/mobile/localAI/modelSpec.js's HIGH-tier
+// comment for that incident). node-llama-cpp's LlamaChatSession.prompt()
+// has no equivalent minNewTokens/minLength option to force generation to
+// continue past an early EOS, so this can only catch the failure after the
+// fact rather than prevent it during sampling -- still enough to stop a
+// non-answer from being accepted as a finished report, the actual harm.
+// 150 chars is well under any genuine multi-section report (every format
+// in FORMATS above has several headed sections) but comfortably past a
+// one-line non-answer.
+const MIN_REPORT_CHARS = 150;
+
+export function isTooShort(content = '') {
+  return String(content || '').trim().length < MIN_REPORT_CHARS;
+}
+
+export const _internal = { FORMATS, COMMON_RULES, MIN_REPORT_CHARS };

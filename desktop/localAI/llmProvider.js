@@ -1,6 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
-import { cleanReportOutput, getReportFormat, isPromptEcho } from './reportFormats.js';
+import { cleanReportOutput, getReportFormat, isPromptEcho, isTooShort } from './reportFormats.js';
 import { MODEL_TIERS } from './modelSpec.js';
 
 const HIGH = MODEL_TIERS.high;
@@ -166,6 +166,17 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
       // handing the user a document made of our own instruction text.
       if (isPromptEcho(content)) {
         throw new Error('local_llm_prompt_echo');
+      }
+      // Android's native generation loop forces a minimum output length by
+      // suppressing the EOS/EOT token for its first ~96 steps (see
+      // reportFormats.js's isTooShort comment for the real-device incident
+      // that guards against); node-llama-cpp has no equivalent knob to do
+      // that during sampling, so this is the same failure caught after the
+      // fact instead -- a model that samples end-of-turn almost
+      // immediately produces a few-word non-answer as the entire "report"
+      // otherwise, silently accepted as a finished analysis.
+      if (isTooShort(content)) {
+        throw new Error('local_llm_too_short');
       }
       return {
         type: 'analysis',
