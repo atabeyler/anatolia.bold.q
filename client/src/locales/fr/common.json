@@ -110,6 +110,7 @@
   "localAICancelFailed": "Impossible d'annuler le téléchargement.",
   "localAIRemoveFailed": "Impossible de supprimer le modèle.",
   "localAITierPickerTitle": "Choisir un modèle",
+  "localAITierSwitchConfirm": "Changer de modèle supprimera le modèle actuellement installé (le fichier téléchargé). Continuer ?",
   "localAITierSelectFailed": "Impossible de sélectionner le modèle.",
   "localAITargetModelHint": "sélectionné pour le téléchargement",
   "settingsAbout": "À propos",

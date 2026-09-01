@@ -110,6 +110,7 @@
   "localAICancelFailed": "İndirme iptal edilemedi.",
   "localAIRemoveFailed": "Model kaldırılamadı.",
   "localAITierPickerTitle": "Model Seç",
+  "localAITierSwitchConfirm": "Farklı bir model seçmek, şu an kurulu olan modeli (indirilen dosyayı) kaldıracak. Devam edilsin mi?",
   "localAITierSelectFailed": "Model seçilemedi.",
   "localAITargetModelHint": "indirilecek model",
   "settingsAbout": "Hakkında",

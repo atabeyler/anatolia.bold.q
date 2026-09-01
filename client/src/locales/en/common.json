@@ -110,6 +110,7 @@
   "localAICancelFailed": "Could not cancel the download.",
   "localAIRemoveFailed": "Could not remove the model.",
   "localAITierPickerTitle": "Choose a Model",
+  "localAITierSwitchConfirm": "Switching models will remove the currently installed model (downloaded file). Continue?",
   "localAITierSelectFailed": "Could not select the model.",
   "localAITargetModelHint": "selected to download",
   "settingsAbout": "About",

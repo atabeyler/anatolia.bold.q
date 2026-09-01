@@ -110,6 +110,7 @@
   "localAICancelFailed": "تعذّر إلغاء التنزيل.",
   "localAIRemoveFailed": "تعذّرت إزالة النموذج.",
   "localAITierPickerTitle": "اختر نموذجًا",
+  "localAITierSwitchConfirm": "سيؤدي تبديل النموذج إلى إزالة النموذج المثبّت حاليًا (الملف الذي تم تنزيله). هل تريد المتابعة؟",
   "localAITierSelectFailed": "تعذّر اختيار النموذج.",
   "localAITargetModelHint": "محدد للتنزيل",
   "settingsAbout": "حول",

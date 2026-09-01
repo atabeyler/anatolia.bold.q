@@ -78,7 +78,7 @@ describe('LocalAIPanel (desktop)', () => {
     expect(screen.queryByText('localAIDownloadButton')).not.toBeInTheDocument();
   });
 
-  it('offers the tier picker even while a model is installed, removing the old model before switching', async () => {
+  it('offers the tier picker even while a model is installed, confirming before removing the old model', async () => {
     let installed = true;
     const modelRemove = vi.fn(async () => { installed = false; });
     const modelSelectTier = vi.fn(async (tier) => ({ ok: true, tier }));
@@ -100,6 +100,8 @@ describe('LocalAIPanel (desktop)', () => {
       },
     };
     vi.resetModules();
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmSpy);
     const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
     render(<LocalAIPanel t={t} />);
 
@@ -108,8 +110,51 @@ describe('LocalAIPanel (desktop)', () => {
 
     fireEvent.click(screen.getByText('Mistral-7B'));
 
+    expect(confirmSpy).toHaveBeenCalledWith('localAITierSwitchConfirm');
     await waitFor(() => expect(modelRemove).toHaveBeenCalledTimes(1));
     expect(modelSelectTier).toHaveBeenCalledWith('high');
+    vi.unstubAllGlobals();
+  });
+
+  // A tier button sits in a scrollable list right next to the one already
+  // installed -- a stray/misclick must not silently delete a multi-GB
+  // downloaded model. Declining the confirm dialog must leave the install
+  // completely untouched.
+  it('does not remove the installed model when the switch confirmation is declined', async () => {
+    const modelRemove = vi.fn(async () => {});
+    const modelSelectTier = vi.fn(async (tier) => ({ ok: true, tier }));
+    window.anatoliaDesktop = {
+      isDesktop: true,
+      ai: {
+        modelStatus: async () => ({
+          installed: true,
+          capability: { capable: true, totalMemBytes: 8 * 1024 * 1024 * 1024, cpuCount: 8 },
+          spec: { id: 'qwen2.5-1.5b', label: 'Qwen2.5-1.5B-Instruct (Q4_K_M, GGUF)', sizeBytes: 1117320736 },
+        }),
+        modelTiers: async () => ([
+          { tier: 'mid', id: 'qwen2.5-1.5b', label: 'Qwen2.5-1.5B', sizeBytes: 1117320736 },
+          { tier: 'high', id: 'mistral-7b', label: 'Mistral-7B', sizeBytes: 4683074240 },
+        ]),
+        modelRemove,
+        modelSelectTier,
+        onModelDownloadProgress: () => () => {},
+      },
+    };
+    vi.resetModules();
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirmSpy);
+    const { default: LocalAIPanel } = await import('./LocalAIPanel.jsx');
+    render(<LocalAIPanel t={t} />);
+
+    await waitFor(() => expect(screen.getByText('localAIInstalled')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Mistral-7B')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Mistral-7B'));
+
+    expect(confirmSpy).toHaveBeenCalledWith('localAITierSwitchConfirm');
+    expect(modelRemove).not.toHaveBeenCalled();
+    expect(modelSelectTier).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('shows a resumable partial download instead of presenting it as a fresh download', async () => {

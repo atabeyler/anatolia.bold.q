@@ -153,6 +153,15 @@ export default function LocalAIPanel({ t }) {
   // button next, pointed at the newly-selected tier's spec.
   const handleSelectTier = async (tier) => {
     if (installed && spec?.id === tier.id) return;
+    // A tier button sits right next to the one already selected/installed,
+    // in a scrollable list a misclick can easily land in -- unlike the
+    // dedicated "Kaldır" (remove) button below, clicking here used to
+    // delete the installed model with zero confirmation before repointing
+    // at the new tier. The already-installed model is exactly what's at
+    // risk of a stray click, so only that case needs a confirm; picking a
+    // tier while nothing is installed yet stays a single click, same as
+    // before.
+    if (installed && !window.confirm(t('localAITierSwitchConfirm'))) return;
     setError('');
     setSelectingTier(true);
     try {

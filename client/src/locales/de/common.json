@@ -110,6 +110,7 @@
   "localAICancelFailed": "Download konnte nicht abgebrochen werden.",
   "localAIRemoveFailed": "Modell konnte nicht entfernt werden.",
   "localAITierPickerTitle": "Modell auswählen",
+  "localAITierSwitchConfirm": "Beim Wechsel des Modells wird das aktuell installierte Modell (die heruntergeladene Datei) entfernt. Fortfahren?",
   "localAITierSelectFailed": "Modell konnte nicht ausgewählt werden.",
   "localAITargetModelHint": "zum Herunterladen ausgewählt",
   "settingsAbout": "Info",
