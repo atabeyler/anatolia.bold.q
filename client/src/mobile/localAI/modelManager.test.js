@@ -182,4 +182,32 @@ describe('mobile modelManager', () => {
     expect(await mm.isModelInstalled()).toBe(false);
     expect(await mm.getPartialBytes()).toBe(0);
   });
+
+  // A connection that goes quiet mid-transfer without actually closing
+  // previously hung this loop forever -- fakeFetchSlow's second read() only
+  // ever settles once the AbortSignal fires, exactly modeling a real stream
+  // that stopped delivering chunks; nothing else was going to unstick it.
+  // Fake timers advance past STALL_TIMEOUT_MS (45s) instantly instead of a
+  // real 45s wait, and must still keep the partial bytes -- same resumable
+  // path as any other network failure, not a user-initiated cancellation.
+  it('rejects a stalled connection instead of hanging forever, keeping partial bytes', async () => {
+    vi.useFakeTimers();
+    try {
+      const fs = fakeFilesystem();
+      const mm = createModelManager({ spec: TEST_SPEC, filesystem: fs, fetchImpl: fakeFetchSlow(), subtleCrypto: webcrypto.subtle });
+      const promise = mm.downloadModel();
+      // Attached before advancing time so the rejection always has a
+      // handler waiting for it -- fake-timer flushing can settle `promise`
+      // before control returns here, which otherwise trips vitest's
+      // unhandled-rejection detection even though the test itself passes.
+      const assertion = expect(promise).rejects.toThrow(/stalled/);
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(45_000);
+
+      await assertion;
+      expect(await mm.getPartialBytes()).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

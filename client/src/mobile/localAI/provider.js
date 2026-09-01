@@ -39,12 +39,23 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
       const startIndex = PROVIDERS.findIndex((p) => p.capability === provider.capability);
       const candidates = PROVIDERS.slice(Math.max(startIndex, 0)).filter((p) => p.isAvailable());
 
+      // Mirrors desktop/localAI/provider.js's same addition: mode/depth/
+      // category only, never the free-text title/prompt/content the user
+      // actually typed. Logged so a support request ("it hung") has a real
+      // start timestamp to diff against the eventual success/failure line's
+      // elapsedMs -- previously the only way to judge how long an attempt
+      // actually ran was to guess from unrelated background log lines
+      // either side of it.
+      const startedAt = Date.now();
+      diagnostics?.info?.('local_ai_query_start', { mode: request?.mode, depth: request?.depth, category: request?.category });
+
       for (let i = 0; i < candidates.length; i++) {
         const current = candidates[i];
         const isLast = i === candidates.length - 1;
         try {
           const runQuery = current.createQuery({ db, userId });
           const result = await runQuery(request);
+          diagnostics?.info?.('local_ai_query_success', { capability: current.capability, elapsedMs: Date.now() - startedAt });
           return { ok: true, capability: current.capability, ...result };
         } catch (err) {
           // registry.js's offline-extractive createQuery unconditionally
@@ -62,10 +73,10 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           const isRecoverableLLMFailure = current.capability === 'local-llm' && isRecoverableLocalLLMError(err.message);
           const fallbackCanSucceed = request?.mode !== 'generate';
           if (isRecoverableLLMFailure && !isLast && fallbackCanSucceed) {
-            diagnostics?.warn?.('local_llm_fallback', { message: err.message });
+            diagnostics?.warn?.('local_llm_fallback', { message: err.message, elapsedMs: Date.now() - startedAt });
             continue;
           }
-          diagnostics?.error('local_ai_failure', { message: err.message, capability: current.capability });
+          diagnostics?.error('local_ai_failure', { message: err.message, capability: current.capability, elapsedMs: Date.now() - startedAt });
           return { ok: false, error: 'local_ai_unavailable', detail: err.message, capability: current.capability };
         }
       }

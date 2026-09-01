@@ -113,7 +113,33 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
     const state = { cancelled: false, deletePartial: false, controller: new AbortController() };
     activeDownload = state;
 
+    // Mirrors desktop/localAI/modelManager.js's stall guard: a connection
+    // that goes quiet mid-transfer without actually closing (server/CDN
+    // hiccup, a dropped network hop) previously hung this fetch/reader loop
+    // forever -- no error, no progress, indefinitely, since neither fetch()
+    // nor reader.read() have any built-in inactivity timeout. Re-armed
+    // before the initial fetch and after every chunk, so a slow-but-still-
+    // flowing download is never affected -- only one that's gone genuinely
+    // silent for STALL_TIMEOUT_MS. Aborting the shared controller is what
+    // actually unsticks a hung reader.read()/fetch() call; stalled tracks
+    // that this abort was OUR watchdog and not a user-initiated
+    // cancelDownload(), so the catch block below can tell them apart and
+    // still surface a clear stalled_no_data_for_*ms message instead of a
+    // generic AbortError.
+    const STALL_TIMEOUT_MS = 45_000;
+    let stallTimer;
+    let stalled = false;
+    const armStallTimer = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        state.controller.abort();
+      }, STALL_TIMEOUT_MS);
+    };
+    const disarmStallTimer = () => clearTimeout(stallTimer);
+
     try {
+      armStallTimer();
       const hasNativeHasher = !!getNativeFileHasher();
       const existingBytes = hasNativeHasher ? await getPartialBytes() : 0;
       const headers = existingBytes ? { Range: `bytes=${existingBytes}-` } : undefined;
@@ -138,6 +164,7 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
+          armStallTimer(); // a chunk just arrived -- the connection is alive, push the deadline back out
           if (!hasNativeHasher) chunks.push(value);
           received += value.length;
           await filesystem.appendFile({ path: tmpRelativePath, directory, data: chunkToBase64(value) });
@@ -184,8 +211,17 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
         if (state.deletePartial) await filesystem.deleteFile({ path: tmpRelativePath, directory }).catch(() => {});
         throw makeCancelError(state.deletePartial);
       }
+      // The stall watchdog also aborts state.controller to unstick a hung
+      // reader.read()/fetch() call, which otherwise surfaces here as the
+      // exact same generic AbortError a user-initiated cancel produces --
+      // `stalled` is what tells the two apart, so this path keeps the
+      // partial file (same as any other network failure, resumable via
+      // Range on the next attempt) and reports a message that actually
+      // says what happened instead of a bare "Aborted".
+      if (stalled) throw new Error(`stalled_no_data_for_${STALL_TIMEOUT_MS}ms`);
       throw err;
     } finally {
+      disarmStallTimer();
       activeDownload = null;
     }
   }
