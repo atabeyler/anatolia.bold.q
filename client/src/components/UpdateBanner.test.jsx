@@ -224,6 +224,43 @@ describe('UpdateBanner (Android)', () => {
     vi.unstubAllGlobals();
   });
 
+  // The Android WebView commonly throttles/suspends JS timers while
+  // backgrounded (screen lock, switching apps) -- the 5-minute interval
+  // alone silently stalls and never "catches up", so a release published
+  // while the app sat backgrounded produced no banner until it was fully
+  // quit and relaunched. visibilitychange must trigger an immediate re-check
+  // on its own, not wait for the next lucky interval tick.
+  it('re-checks immediately when the app becomes visible again, not just on the interval', async () => {
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
+    vi.resetModules();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+
+    const { default: UpdateBanner } = await import('./UpdateBanner.jsx');
+    const mobileBridge = await import('../services/mobileBridge.js');
+    let available = false;
+    const check = vi.fn(async () => (available ? { available: true, version: '2.1.140', url: 'https://x/app.apk' } : { available: false }));
+    mobileBridge.mobileUpdate.check = check;
+
+    render(<UpdateBanner />);
+    await act(async () => { await Promise.resolve(); });
+    expect(check).toHaveBeenCalledTimes(1);
+
+    // The app was backgrounded and a release landed while it sat there --
+    // simulate coming back to the foreground well before the 5-minute
+    // interval would ever fire on its own.
+    available = true;
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('A new version is available: v2.1.140')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
   it('does not check for updates when Offline Mode is already on', async () => {
     const appModePref = await import('../services/appModePreference.js');
     appModePref.setAppMode('offline');

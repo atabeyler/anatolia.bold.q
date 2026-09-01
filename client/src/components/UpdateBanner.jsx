@@ -73,7 +73,24 @@ export default function UpdateBanner() {
       // banner for the rest of the session even once connectivity returned.
       runCheck();
       const intervalId = setInterval(runCheck, 5 * 60 * 1000);
-      return () => { cancelled = true; clearInterval(intervalId); };
+      // The interval alone isn't enough on Android: the WebView commonly
+      // throttles/suspends JS timers while backgrounded (screen lock,
+      // switching apps, even briefly), so setInterval silently stalls and
+      // never "catches up" -- observed firsthand: a release published while
+      // the app sat open produced no banner at all until it was fully
+      // quit and relaunched (which remounts this component and re-runs the
+      // immediate check above), every time. visibilitychange is a standard
+      // DOM event the WebView still fires on foreground/background
+      // transitions (no extra Capacitor plugin needed), so re-checking
+      // whenever the app becomes visible again closes that gap without
+      // waiting for the next lucky interval tick.
+      const onVisible = () => { if (document.visibilityState === 'visible') runCheck(); };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => {
+        cancelled = true;
+        clearInterval(intervalId);
+        document.removeEventListener('visibilitychange', onVisible);
+      };
     }
     return undefined;
   }, [appModeOffline]);
