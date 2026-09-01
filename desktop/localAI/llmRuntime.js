@@ -68,6 +68,19 @@ export async function createLlamaRuntime({ modelPath, contextSize = 4096, system
           temperature,
           signal: controller.signal,
           stopOnAbortSignal: true,
+          // Real-device failure: a small/weak model can settle into a
+          // "broken-record" loop, repeating the exact same sentence
+          // verbatim for the rest of its token budget instead of finishing
+          // the report (observed firsthand -- see llmProvider.js's
+          // isTooShort/isPromptEcho neighbors, this is the same family of
+          // "generation technically succeeded but the content is garbage"
+          // failure, just not caught by either of those). node-llama-cpp's
+          // DRY (Don't Repeat Yourself) penalty exists specifically for
+          // this: it makes exact-token-sequence repetition impossible
+          // rather than just less likely, without needing us to detect and
+          // reject the output after the fact. Disabled by default; 0.8 is
+          // node-llama-cpp's own documented recommended strength.
+          dryRepeatPenalty: { strength: 0.8 },
         });
       } catch (err) {
         if (controller.signal.aborted) {
