@@ -1,4 +1,4 @@
-package com.boldkimya.anatoliaq.localllm
+package com.boldas.anatoliaq.localllm
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry

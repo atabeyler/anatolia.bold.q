@@ -1,8 +1,8 @@
-package com.boldkimya.anatoliaq;
+package com.boldas.anatoliaq;
 
 import android.os.Bundle;
-import com.boldkimya.anatoliaq.localllm.LocalLLMPlugin;
-import com.boldkimya.anatoliaq.passkey.PasskeyPlugin;
+import com.boldas.anatoliaq.localllm.LocalLLMPlugin;
+import com.boldas.anatoliaq.passkey.PasskeyPlugin;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {

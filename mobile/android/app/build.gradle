@@ -30,7 +30,7 @@ def appVersionCode =
         (versionMatch[0][3] as Integer)
 
 android {
-    namespace = "com.boldkimya.anatoliaq"
+    namespace = "com.boldas.anatoliaq"
     compileSdk = rootProject.ext.compileSdkVersion
     // Local Android Local AI native library (LocalLLM Capacitor plugin --
     // see app/src/main/java/.../localllm/ and app/src/main/cpp/). Requires
@@ -40,7 +40,7 @@ android {
     // NDK installs.
     ndkVersion "27.0.12077973"
     defaultConfig {
-        applicationId "com.boldkimya.anatoliaq"
+        applicationId "com.boldas.anatoliaq"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode

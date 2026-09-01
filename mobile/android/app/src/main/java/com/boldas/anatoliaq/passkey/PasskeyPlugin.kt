@@ -1,4 +1,4 @@
-package com.boldkimya.anatoliaq.passkey
+package com.boldas.anatoliaq.passkey
 
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse

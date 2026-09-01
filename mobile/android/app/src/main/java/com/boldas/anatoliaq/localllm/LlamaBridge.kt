@@ -1,4 +1,4 @@
-package com.boldkimya.anatoliaq.localllm
+package com.boldas.anatoliaq.localllm
 
 /**
  * Thin Kotlin wrapper around the JNI bridge to llama.cpp

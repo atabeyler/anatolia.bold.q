@@ -1,4 +1,4 @@
-package com.boldkimya.anatoliaq.localllm
+package com.boldas.anatoliaq.localllm
 
 import android.app.ActivityManager
 import android.content.Context

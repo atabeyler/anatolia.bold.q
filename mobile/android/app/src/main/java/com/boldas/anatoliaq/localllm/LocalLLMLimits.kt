@@ -1,4 +1,4 @@
-package com.boldkimya.anatoliaq.localllm
+package com.boldas.anatoliaq.localllm
 
 /**
  * Pure, Android-framework-free resource-safety limits, split out of

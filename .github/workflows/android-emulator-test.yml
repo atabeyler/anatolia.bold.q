@@ -163,7 +163,7 @@ jobs:
             adb logcat > logcat.txt &
             LOGCAT_PID=$!
             set +e
-            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.boldkimya.anatoliaq.localllm.LocalLLMInferenceInstrumentedTest
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.boldas.anatoliaq.localllm.LocalLLMInferenceInstrumentedTest
             GRADLE_EXIT_CODE=$?
             set -e
             kill "$LOGCAT_PID" || true

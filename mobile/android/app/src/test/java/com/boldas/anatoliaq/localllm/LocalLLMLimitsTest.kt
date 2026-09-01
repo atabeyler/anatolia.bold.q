@@ -1,4 +1,4 @@
-package com.boldkimya.anatoliaq.localllm
+package com.boldas.anatoliaq.localllm
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

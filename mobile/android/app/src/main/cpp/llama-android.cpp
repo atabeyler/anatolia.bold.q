@@ -55,7 +55,7 @@ void ensureBackendInitialized() {
 } // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeLoad(
+Java_com_boldas_anatoliaq_localllm_LlamaBridge_nativeLoad(
         JNIEnv *env, jobject /* thiz */,
         jstring jModelPath, jint jContextSize, jint jThreadCount) {
     ensureBackendInitialized();
@@ -111,7 +111,7 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeLoad(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
+Java_com_boldas_anatoliaq_localllm_LlamaBridge_nativeGenerate(
         JNIEnv *env, jobject /* thiz */,
         jlong jHandle, jstring jSystemPrompt, jstring jPrompt,
         jint jMaxTokens, jfloat jTemperature) {
@@ -320,7 +320,7 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeFree(
+Java_com_boldas_anatoliaq_localllm_LlamaBridge_nativeFree(
         JNIEnv * /* env */, jobject /* thiz */, jlong jHandle) {
     auto *session = reinterpret_cast<LlamaSession *>(jHandle);
     if (session == nullptr) return;
