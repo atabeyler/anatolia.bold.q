@@ -229,7 +229,12 @@ describe('createLLMQuery', () => {
     expect(runtimeFactory).toHaveBeenCalledTimes(1);
   });
 
-  it('times out a stalled low-tier generation instead of waiting forever', async () => {
+  // The timeout is a flat 600s across every tier now, not scaled by model
+  // size -- desktop.log evidence showed this machine's own JS timer
+  // scheduling latency under load (not per-tier compute cost) was what
+  // pushed real elapsed time well past a tier-tuned nominal budget, so one
+  // generous ceiling replaces the old low/mid/large split.
+  it('times out a stalled generation instead of waiting forever', async () => {
     vi.useFakeTimers();
     try {
       const db = createTestDb();
@@ -244,7 +249,7 @@ describe('createLLMQuery', () => {
       });
 
       const pending = expect(run({ mode: 'chat', text: 'savunma testi' })).rejects.toThrow('local_llm_timeout');
-      await vi.advanceTimersByTimeAsync(35_000);
+      await vi.advanceTimersByTimeAsync(600_000);
       await pending;
       expect(dispose).toHaveBeenCalledTimes(1);
     } finally {

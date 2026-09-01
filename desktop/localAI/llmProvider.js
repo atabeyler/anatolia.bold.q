@@ -1,9 +1,6 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
 import { cleanReportOutput, getReportFormat, isPromptEcho, isTooShort } from './reportFormats.js';
-import { MODEL_TIERS } from './modelSpec.js';
-
-const HIGH = MODEL_TIERS.high;
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -126,36 +123,19 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
         : `${reportFormat}\n\nKullanıcının verdiği konu:\n${prompt || title}\n\n${options}`;
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
       const isLowTier = modelManager.spec.tier === 'low';
-      // 7B+ quants run several times slower per token than the 1.5B/2-3B
-      // tiers on CPU-only inference -- the old flat 90s deadline for
-      // "anything not low tier" was tuned for MID (1.5B) and starved a 7B+
-      // model (e.g. mistral-7b, high, granite-8b, gemma-9b, phi-14b) of the
-      // time it actually needs to finish a 'derin' report, throwing
-      // local_llm_timeout even on a capable machine. A first bump to 240s
-      // still wasn't enough on real hardware for a 'derin' (1400-token)
-      // report on a 7B model -- CPU-only generation at that size can
-      // legitimately take several minutes, not seconds. 600s (10 min) is a
-      // deliberately generous ceiling: worth the wait for someone who
-      // already chose a 7B+ model specifically for its quality over the
-      // faster low/mid tiers.
-      //
-      // Compared on recommendedMinRamBytes, not sizeBytes: different model
-      // families quantize to different file sizes for the same parameter
-      // class -- mistral-7b's GGUF (4.37GB) is smaller than HIGH's Qwen2.5-7B
-      // (4.68GB), so a sizeBytes>=HIGH.sizeBytes check silently classified
-      // mistral-7b as NOT large-tier and left it on the 90s deadline through
-      // two rounds of "fixes" that never actually applied to it (confirmed
-      // via the desktop.log timestamps of a real timeout on mistral-7b: it
-      // failed after roughly 90s, not the 240s/600s these comments claimed).
-      // recommendedMinRamBytes is set per-tier by intent (see modelSpec.js),
-      // not derived from the file, so it doesn't have this problem --
-      // mistral-7b/granite-8b/gemma-9b/phi-14b all sit at or above HIGH's
-      // 12GB floor.
-      const isLargeTier = (modelManager.spec.recommendedMinRamBytes ?? 0) >= HIGH.recommendedMinRamBytes;
       const maxTokens = isLowTier
         ? (depth === 'derin' ? 350 : depth === 'hizli' ? 120 : 220)
         : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
-      const timeoutMs = isLowTier ? 45_000 : isLargeTier ? 600_000 : 90_000;
+      // Flat 600s (10 min) across every tier, not just large ones -- real
+      // desktop.log timestamps on this machine showed the JS setTimeout
+      // driving this deadline firing 2-2.5x later than its own nominal
+      // value under real load (a 90s mid-tier budget actually took 211s; a
+      // 600s large-tier budget actually took 1123s) regardless of which
+      // model was running, so the bottleneck is this machine's own
+      // scheduling latency under load, not a specific tier's compute cost.
+      // A tiered budget tuned for nominal per-tier speed doesn't help when
+      // the delay is systemic; one generous ceiling does.
+      const timeoutMs = 600_000;
       const rawContent = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
       const content = cleanReportOutput(rawContent, category);
       // A weak/low-tier model can under-follow instructions badly enough to
@@ -201,8 +181,8 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     const userText = boundedAttachment ? `${text}\n\nKullanıcının eklediği yerel dosya içeriği:\n${boundedAttachment}` : text;
     const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText, lang });
     const isLowTier = modelManager.spec.tier === 'low';
-    const isLargeTier = (modelManager.spec.recommendedMinRamBytes ?? 0) >= HIGH.recommendedMinRamBytes;
-    const chatTimeoutMs = isLowTier ? 35_000 : isLargeTier ? 360_000 : 60_000;
+    // Same flat 600s reasoning as generate mode's timeoutMs above.
+    const chatTimeoutMs = 600_000;
     const answer = await generateWithDeadline(runtime, fullPrompt, { maxTokens: isLowTier ? 120 : 500, temperature: 0.3 }, chatTimeoutMs);
     return {
       type: 'generated',
