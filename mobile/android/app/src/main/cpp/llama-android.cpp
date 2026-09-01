@@ -211,6 +211,26 @@ Java_com_boldkimya_anatoliaq_localllm_LlamaBridge_nativeGenerate(
     llama_sampler_chain_add(sampler, llama_sampler_init_penalties(
             llama_vocab_n_tokens(session->vocab), /* penalty_last_n */ 64,
             /* penalty_repeat */ 1.15f, /* penalty_freq */ 0.0f, /* penalty_present */ 0.0f));
+    // DRY (Don't Repeat Yourself) -- a different failure mode than the
+    // single-phrase repeat penalties above already caught: a weak/small
+    // model settling into a "broken-record" loop, repeating an entire
+    // *sentence* verbatim for the rest of its output (observed firsthand on
+    // desktop's node-llama-cpp path with the same underlying llama.cpp
+    // engine -- see desktop/localAI/llmRuntime.js's dryRepeatPenalty
+    // comment for that incident; Android's own classic penalty above
+    // narrows single-token repeats but doesn't make a longer verbatim
+    // sequence repeat impossible the way DRY does). Same 0.8
+    // multiplier/strength node-llama-cpp documents as its recommended
+    // value, same 64-token window as the penalty above (bounded for a
+    // slow CPU, not the whole context). Default sequence breakers so
+    // repeating a list marker or line break is never penalized.
+    {
+        static const char *drySeqBreakers[] = {"\n", ":", "\"", "*"};
+        llama_sampler_chain_add(sampler, llama_sampler_init_dry(
+                session->vocab, /* dry_multiplier */ 0.8f, /* dry_base */ 1.75f,
+                /* dry_allowed_length */ 2, /* dry_penalty_last_n */ 64,
+                drySeqBreakers, /* num_breakers */ 4));
+    }
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(jTemperature > 0.0f ? jTemperature : 0.1f));
     llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
