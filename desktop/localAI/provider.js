@@ -27,12 +27,25 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
       // selectProvider() itself is always in the candidate list (its own
       // isAvailable() just returned true), so candidates is never empty.
 
+      // Only mode/depth/category -- enum-like control fields, never the
+      // free-text title/prompt/content the user actually typed (those stay
+      // out of the log even though redact() would also catch `title`/
+      // `content` by key name; category/depth/mode were never in that risk
+      // category to begin with). Logged so a support request ("it hung")
+      // has a real start timestamp to diff against the eventual
+      // success/failure line's elapsedMs -- previously the only way to
+      // judge how long an attempt actually ran was to guess from unrelated
+      // background log lines (sync/update-check) either side of it.
+      const startedAt = Date.now();
+      diagnostics?.info?.('local_ai_query_start', { mode: request?.mode, depth: request?.depth, category: request?.category });
+
       for (let i = 0; i < candidates.length; i++) {
         const current = candidates[i];
         const isLast = i === candidates.length - 1;
         try {
           const runQuery = current.createQuery({ db, userId });
           const result = await runQuery(request);
+          diagnostics?.info?.('local_ai_query_success', { capability: current.capability, elapsedMs: Date.now() - startedAt });
           return { ok: true, capability: current.capability, ...result };
         } catch (err) {
           // Any local-model failure is recoverable here. Integrity errors,
@@ -40,7 +53,7 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           // model-free archive engine that can still answer safely.
           const isRecoverableLLMFailure = current.capability === 'local-llm';
           if (isRecoverableLLMFailure && !isLast) {
-            diagnostics?.warn?.('local_llm_fallback', { message: err.message });
+            diagnostics?.warn?.('local_llm_fallback', { message: err.message, elapsedMs: Date.now() - startedAt });
             continue; // try the next provider (offline-extractive)
           }
           // Never throws past this boundary (spec: a missing/broken local
@@ -49,7 +62,7 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           // kullanılamıyor" rather than an unhandled error. err.message
           // only, never the request/response content itself (may contain
           // report text).
-          diagnostics?.error('local_ai_failure', { message: err.message, capability: current.capability });
+          diagnostics?.error('local_ai_failure', { message: err.message, capability: current.capability, elapsedMs: Date.now() - startedAt });
           return { ok: false, error: 'local_ai_unavailable', detail: err.message, capability: current.capability };
         }
       }

@@ -138,7 +138,20 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
       // deliberately generous ceiling: worth the wait for someone who
       // already chose a 7B+ model specifically for its quality over the
       // faster low/mid tiers.
-      const isLargeTier = (modelManager.spec.sizeBytes ?? 0) >= HIGH.sizeBytes;
+      //
+      // Compared on recommendedMinRamBytes, not sizeBytes: different model
+      // families quantize to different file sizes for the same parameter
+      // class -- mistral-7b's GGUF (4.37GB) is smaller than HIGH's Qwen2.5-7B
+      // (4.68GB), so a sizeBytes>=HIGH.sizeBytes check silently classified
+      // mistral-7b as NOT large-tier and left it on the 90s deadline through
+      // two rounds of "fixes" that never actually applied to it (confirmed
+      // via the desktop.log timestamps of a real timeout on mistral-7b: it
+      // failed after roughly 90s, not the 240s/600s these comments claimed).
+      // recommendedMinRamBytes is set per-tier by intent (see modelSpec.js),
+      // not derived from the file, so it doesn't have this problem --
+      // mistral-7b/granite-8b/gemma-9b/phi-14b all sit at or above HIGH's
+      // 12GB floor.
+      const isLargeTier = (modelManager.spec.recommendedMinRamBytes ?? 0) >= HIGH.recommendedMinRamBytes;
       const maxTokens = isLowTier
         ? (depth === 'derin' ? 350 : depth === 'hizli' ? 120 : 220)
         : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
@@ -177,7 +190,7 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     const userText = boundedAttachment ? `${text}\n\nKullanıcının eklediği yerel dosya içeriği:\n${boundedAttachment}` : text;
     const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText, lang });
     const isLowTier = modelManager.spec.tier === 'low';
-    const isLargeTier = (modelManager.spec.sizeBytes ?? 0) >= HIGH.sizeBytes;
+    const isLargeTier = (modelManager.spec.recommendedMinRamBytes ?? 0) >= HIGH.recommendedMinRamBytes;
     const chatTimeoutMs = isLowTier ? 35_000 : isLargeTier ? 360_000 : 60_000;
     const answer = await generateWithDeadline(runtime, fullPrompt, { maxTokens: isLowTier ? 120 : 500, temperature: 0.3 }, chatTimeoutMs);
     return {
