@@ -30,9 +30,9 @@
     "node": ">=20.0.0"
   },
   "build": {
-    "appId": "com.boldkimya.anatoliaq",
+    "appId": "com.boldas.anatoliaq",
     "productName": "ANATOLIA-Q",
-    "copyright": "Copyright © BOLD Kimya",
+    "copyright": "Copyright © Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
     "directories": {
       "output": "release",
       "buildResources": "desktop/build"

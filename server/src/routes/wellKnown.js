@@ -5,7 +5,7 @@ const router = express.Router();
 // Android package name is fixed by the shipped app (mobile/android/app/
 // build.gradle's `namespace`/`applicationId`), never configurable per
 // deployment.
-const ANDROID_PACKAGE_NAME = 'com.boldkimya.anatoliaq';
+const ANDROID_PACKAGE_NAME = 'com.boldas.anatoliaq';
 
 // Digital Asset Links, required before Android's Credential Manager
 // (client-side: mobile/android/app/src/main/java/.../passkey/

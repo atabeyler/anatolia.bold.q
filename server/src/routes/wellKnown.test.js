@@ -29,7 +29,7 @@ describe('GET /.well-known/assetlinks.json', () => {
         relation: ['delegate_permission/common.get_login_creds'],
         target: {
           namespace: 'android_app',
-          package_name: 'com.boldkimya.anatoliaq',
+          package_name: 'com.boldas.anatoliaq',
           sha256_cert_fingerprints: ['AA:BB:CC', 'DD:EE:FF'],
         },
       },
