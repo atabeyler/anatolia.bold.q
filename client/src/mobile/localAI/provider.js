@@ -47,8 +47,21 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           const result = await runQuery(request);
           return { ok: true, capability: current.capability, ...result };
         } catch (err) {
+          // registry.js's offline-extractive createQuery unconditionally
+          // rejects mode==='generate' with offline_generation_unavailable
+          // (a new-analysis request must never silently become an
+          // old-report synthesis), so falling through to it after a
+          // local-llm failure can never succeed for a generate request --
+          // it only replaces a diagnosable native error
+          // (local_llm_native_load_failed, local_llm_model_file_missing,
+          // local_llm_generate_failed, android_native_llm_plugin_missing)
+          // with the same generic offline_generation_unavailable in the
+          // response the UI actually shows, discarding the one piece of
+          // information (which specific failure) a user or support request
+          // actually needs. Mirrors desktop/localAI/provider.js's same fix.
           const isRecoverableLLMFailure = current.capability === 'local-llm' && isRecoverableLocalLLMError(err.message);
-          if (isRecoverableLLMFailure && !isLast) {
+          const fallbackCanSucceed = request?.mode !== 'generate';
+          if (isRecoverableLLMFailure && !isLast && fallbackCanSucceed) {
             diagnostics?.warn?.('local_llm_fallback', { message: err.message });
             continue;
           }

@@ -119,6 +119,26 @@ describe('createLocalAIProvider local-llm -> offline-extractive fallback', () =>
     expect(result.ok).toBe(false);
     expect(result.capability).toBe('local-llm');
   });
+
+  // offline-extractive always refuses mode==='generate' (see registry.js),
+  // so falling through to it for a failed generate request can never
+  // succeed -- it would only replace a diagnosable native error with the
+  // same generic offline_generation_unavailable every time. Mirrors
+  // desktop/localAI/provider.test.js's same case.
+  it('does not fall through to offline-extractive for a failed generate request', async () => {
+    Object.assign(PROVIDERS[0], {
+      isAvailable: () => true,
+      createQuery: () => async () => { throw new Error('local_llm_native_load_failed: UnsatisfiedLinkError'); },
+    });
+
+    const db = await createTestMobileDb();
+    const provider = createLocalAIProvider({ db, userId: 'BOLD-001' });
+
+    const result = await provider.query({ mode: 'generate', category: 'ekonomi', prompt: 'yeni bir konu' });
+    expect(result.ok).toBe(false);
+    expect(result.detail).toBe('local_llm_native_load_failed: UnsatisfiedLinkError');
+    expect(result.capability).toBe('local-llm');
+  });
 });
 
 // Audit finding: offline-extractive used to quietly synthesize an answer
