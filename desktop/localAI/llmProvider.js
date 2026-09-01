@@ -1,6 +1,9 @@
 import { retrieveContext, buildPrompt, SYSTEM_PROMPT } from './rag.js';
 import { createLlamaRuntime } from './llmRuntime.js';
 import { cleanReportOutput, getReportFormat, isPromptEcho } from './reportFormats.js';
+import { MODEL_TIERS } from './modelSpec.js';
+
+const HIGH = MODEL_TIERS.high;
 
 const CHAT_INSTRUCTION =
   'Kullanıcının sorusuna, aşağıdaki bağlamı kullanarak Türkçe ve öz bir şekilde cevap ver. ' +
@@ -123,10 +126,17 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
         : `${reportFormat}\n\nKullanıcının verdiği konu:\n${prompt || title}\n\n${options}`;
       const fullPrompt = buildPrompt({ instruction: GENERATE_INSTRUCTION, contextDocs, userText, lang });
       const isLowTier = modelManager.spec.tier === 'low';
+      // 7B+ quants run several times slower per token than the 1.5B/2-3B
+      // tiers on CPU-only inference -- the old flat 90s deadline for
+      // "anything not low tier" was tuned for MID (1.5B) and starved a 7B+
+      // model (e.g. mistral-7b, high, granite-8b, gemma-9b, phi-14b) of the
+      // time it actually needs to finish a 'derin' report, throwing
+      // local_llm_timeout even on a capable machine.
+      const isLargeTier = (modelManager.spec.sizeBytes ?? 0) >= HIGH.sizeBytes;
       const maxTokens = isLowTier
         ? (depth === 'derin' ? 350 : depth === 'hizli' ? 120 : 220)
         : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
-      const timeoutMs = isLowTier ? 45_000 : 90_000;
+      const timeoutMs = isLowTier ? 45_000 : isLargeTier ? 240_000 : 90_000;
       const rawContent = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
       const content = cleanReportOutput(rawContent, category);
       // A weak/low-tier model can under-follow instructions badly enough to
@@ -161,7 +171,9 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     const userText = boundedAttachment ? `${text}\n\nKullanıcının eklediği yerel dosya içeriği:\n${boundedAttachment}` : text;
     const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText, lang });
     const isLowTier = modelManager.spec.tier === 'low';
-    const answer = await generateWithDeadline(runtime, fullPrompt, { maxTokens: isLowTier ? 120 : 500, temperature: 0.3 }, isLowTier ? 35_000 : 60_000);
+    const isLargeTier = (modelManager.spec.sizeBytes ?? 0) >= HIGH.sizeBytes;
+    const chatTimeoutMs = isLowTier ? 35_000 : isLargeTier ? 150_000 : 60_000;
+    const answer = await generateWithDeadline(runtime, fullPrompt, { maxTokens: isLowTier ? 120 : 500, temperature: 0.3 }, chatTimeoutMs);
     return {
       type: 'generated',
       text: answer,
