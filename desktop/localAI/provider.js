@@ -48,11 +48,25 @@ export function createLocalAIProvider({ db, userId, diagnostics }) {
           diagnostics?.info?.('local_ai_query_success', { capability: current.capability, elapsedMs: Date.now() - startedAt });
           return { ok: true, capability: current.capability, ...result };
         } catch (err) {
-          // Any local-model failure is recoverable here. Integrity errors,
-          // missing native bindings and load failures must not disable the
-          // model-free archive engine that can still answer safely.
+          // Any local-model failure is recoverable here for a chat/archive
+          // request -- integrity errors, missing native bindings and load
+          // failures must not disable the model-free archive engine that
+          // can still answer safely. A 'generate' request is the one
+          // exception: registry.js's offline-extractive createQuery
+          // unconditionally throws offline_generation_unavailable for
+          // mode==='generate' (a new-analysis request must never silently
+          // become an old-report synthesis -- see that file's comment), so
+          // falling through here can never succeed for it. Continuing
+          // anyway just replaces a diagnosable local-llm error --
+          // local_llm_timeout, local_llm_integrity_check_failed, a missing
+          // node-llama-cpp native module, etc. -- with the same generic
+          // offline_generation_unavailable every time, discarding the one
+          // piece of information (which specific failure) a user or
+          // support request actually needs. The real cause still reaches
+          // the log either way, via the warn/error line below.
           const isRecoverableLLMFailure = current.capability === 'local-llm';
-          if (isRecoverableLLMFailure && !isLast) {
+          const fallbackCanSucceed = request?.mode !== 'generate';
+          if (isRecoverableLLMFailure && !isLast && fallbackCanSucceed) {
             diagnostics?.warn?.('local_llm_fallback', { message: err.message, elapsedMs: Date.now() - startedAt });
             continue; // try the next provider (offline-extractive)
           }
