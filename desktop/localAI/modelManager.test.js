@@ -188,6 +188,30 @@ describe('modelManager', () => {
     };
   }
 
+  // Real https.ClientRequest supports setTimeout(ms, cb) as an inactivity
+  // timer on the socket; this fake captures the callback instead of waiting
+  // out a real 45s timer, and respects destroy()'s error argument (unlike
+  // fakeSlowFetchImpl above) so the rejection can be asserted on directly --
+  // matching what modelManager.js's stall guard actually calls: destroy(new
+  // Error(...)).
+  function fakeStallableFetchImpl() {
+    let onTimeout;
+    const request = new EventEmitter();
+    request.setTimeout = (ms, cb) => { onTimeout = cb; };
+    request.destroy = (err) => { request.emit('error', err || new Error('destroyed')); };
+    const fetchImpl = (url, onResponse) => {
+      const res = new Readable({ read() {} });
+      res.statusCode = 200;
+      res.headers = { 'content-length': String(FAKE_CONTENT.length) };
+      queueMicrotask(() => {
+        onResponse(res);
+        res.push(Buffer.from(FAKE_CONTENT.slice(0, 5)));
+      });
+      return request;
+    };
+    return { fetchImpl, triggerStall: () => onTimeout?.() };
+  }
+
   it('cancelDownload is a no-op when nothing is downloading and there is no partial file to discard', () => {
     const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC });
     expect(mm.cancelDownload()).toEqual({ ok: false, error: 'no_active_download' });
@@ -228,5 +252,25 @@ describe('modelManager', () => {
     await expect(promise).rejects.toThrow(/durduruldu/);
     expect(fs.existsSync(`${mm.modelPath}.download`)).toBe(false);
     expect(mm.isModelInstalled()).toBe(false);
+  });
+
+  // A connection that goes quiet mid-transfer without actually closing the
+  // socket previously hung downloadModel()'s promise forever -- no error,
+  // no progress, indefinitely (observed firsthand: a real partial download
+  // sat with its last byte written 10+ minutes earlier and nothing in the
+  // diagnostics log at all). The stall guard must turn that into an
+  // ordinary rejection, on the same partial-bytes-preserved/resumable path
+  // as any other network failure -- not a cancellation (state.cancelled
+  // must stay false so it isn't mistaken for a user-initiated "Durdur").
+  it('rejects a stalled connection (socket open, no data) instead of hanging forever, keeping partial bytes', async () => {
+    const { fetchImpl, triggerStall } = fakeStallableFetchImpl();
+    const mm = createModelManager({ modelsDir: tmpDir, spec: TEST_SPEC, fetchImpl });
+    const promise = mm.downloadModel();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    triggerStall();
+    await expect(promise).rejects.toThrow(/stalled/);
+    expect(fs.existsSync(`${mm.modelPath}.download`)).toBe(true);
+    expect(mm.getPartialBytes()).toBeGreaterThan(0);
   });
 });

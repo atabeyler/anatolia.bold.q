@@ -83,6 +83,22 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
     return { ok: actual === spec.sha256, actual, expected: spec.sha256 };
   }
 
+  // A connection that goes quiet mid-transfer (server/CDN hiccup, a
+  // dropped Wi-Fi/VPN hop) without actually closing the socket previously
+  // hung forever here: neither https.get's callback nor its 'error' event
+  // ever fires again, so the downloadModel() promise below just never
+  // settles -- no error, no progress, indefinitely (observed firsthand: a
+  // ~1.6GB partial download sat with its last byte written 10+ minutes
+  // earlier and nothing in the diagnostics log at all). http.ClientRequest's
+  // own setTimeout(ms) tracks socket *inactivity* -- it resets on every byte
+  // received, so a slow-but-still-flowing download is never affected, only
+  // one that's gone genuinely silent. Firing it destroys the request, which
+  // downloadModel()'s res.on('error', ...)/out.on('error', ...) handlers
+  // below turn into an ordinary rejection -- same partial-bytes-preserved,
+  // Range-resumable path as any other network failure, just reachable at
+  // all instead of hanging forever.
+  const STALL_TIMEOUT_MS = 45_000;
+
   // Follows redirects itself (Node's https doesn't) -- Hugging Face's
   // resolve/ URLs 302 to a signed CDN URL. Streams straight to a .download
   // temp file so a crash/interrupt mid-download never leaves a file at the
@@ -98,6 +114,13 @@ export function createModelManager({ modelsDir, spec = MODEL_SPEC, fetchImpl } =
       onResponse(res);
     };
     const request = fetchImpl ? getFn(url, callback) : getFn(url, { headers }, callback);
+    // Optional-chained: the fetchImpl test double is a plain EventEmitter
+    // with no setTimeout method, and skipping the stall guard there is
+    // exactly right -- tests simulate a stall by simply not pushing more
+    // data, not by waiting out a real 45s timer.
+    request.setTimeout?.(STALL_TIMEOUT_MS, () => {
+      request.destroy(new Error(`stalled_no_data_for_${STALL_TIMEOUT_MS}ms`));
+    });
     onRequest?.(request);
     request.on('error', (err) => onResponse(null, err));
   }
