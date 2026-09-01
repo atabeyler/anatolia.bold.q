@@ -218,7 +218,7 @@ export function createModelManager({ spec = MODEL_SPEC, fetchImpl = fetch, subtl
       // partial file (same as any other network failure, resumable via
       // Range on the next attempt) and reports a message that actually
       // says what happened instead of a bare "Aborted".
-      if (stalled) throw new Error(`stalled_no_data_for_${STALL_TIMEOUT_MS}ms`);
+      if (stalled) throw new Error(`stalled_no_data_for_${STALL_TIMEOUT_MS}ms`, { cause: err });
       throw err;
     } finally {
       disarmStallTimer();
