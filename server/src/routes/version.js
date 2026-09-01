@@ -100,8 +100,23 @@ router.get('/download/:platform', async (req, res) => {
 // /generic/download/:filename below, and hand back the edited YAML --
 // never GitHub's own asset URLs (same reasoning as /latest above).
 const FEED_FILES = new Set(['latest.yml', 'latest-mac.yml', 'latest-linux.yml']);
-const MAX_MULTI_RANGES = 512;
-const MAX_MULTI_RANGE_BYTES = 64 * 1024 * 1024;
+// electron-updater's multi-range differential downloader batches changed
+// blocks into groups of *exactly* 1000 tasks per request, never more (see
+// executeTasksUsingMultipleRangeRequests's `nextOffset = taskOffset + 1000`
+// in electron-updater/out/differentialDownloader/multipleRangeDownloader.js)
+// -- capping below 1000 here made every real-world diff with >512 changed
+// ranges in a single batch (routine for anything but a tiny patch, e.g. the
+// 3.2.12->3.2.13 update's ~974-range batches) get rejected as
+// multi_range_too_large, 502, and silently fall back to a full download.
+// 1000 is the true, structural ceiling electron-updater can ever send in
+// one request; there's no reason to cap lower.
+const MAX_MULTI_RANGES = 1000;
+// A batch's total byte span isn't bounded by MAX_MULTI_RANGES the way count
+// is -- 1000 ranges of a heavily-changed large installer can plausibly
+// exceed the old 64MB cap. 256MB comfortably covers a single batch even for
+// a mostly-rewritten few-hundred-MB installer while still bounding this
+// public endpoint's per-request upstream-fetch cost.
+const MAX_MULTI_RANGE_BYTES = 256 * 1024 * 1024;
 const RANGE_FETCH_CONCURRENCY = 12;
 
 function parseMultiRangeHeader(header) {

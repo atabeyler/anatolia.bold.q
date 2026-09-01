@@ -38,6 +38,23 @@ jobs:
         with:
           submodules: true
 
+      # ubuntu-latest's default free disk space (~14GB after preinstalled
+      # tooling) isn't enough headroom for the Android SDK's build-tools +
+      # platform + emulator + a fresh x86_64 system image on top of the
+      # runner's other preinstalled toolchains -- observed failing with
+      # "No space left on device" while sdkmanager installed the system
+      # image (the emulator then never boots, so the later Terminate
+      # Emulator step also fails trying to reach a port nothing is
+      # listening on). Removing large preinstalled toolchains this job never
+      # uses (.NET, Haskell/GHC, the Boost headers, and the extra
+      # $AGENT_TOOLSDIRECTORY Node/Python/etc. versions) frees real space
+      # without touching anything this job's own steps depend on.
+      - name: Free disk space for the Android SDK/emulator
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune -af || true
+          df -h /
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
