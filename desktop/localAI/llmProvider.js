@@ -131,12 +131,18 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
       // "anything not low tier" was tuned for MID (1.5B) and starved a 7B+
       // model (e.g. mistral-7b, high, granite-8b, gemma-9b, phi-14b) of the
       // time it actually needs to finish a 'derin' report, throwing
-      // local_llm_timeout even on a capable machine.
+      // local_llm_timeout even on a capable machine. A first bump to 240s
+      // still wasn't enough on real hardware for a 'derin' (1400-token)
+      // report on a 7B model -- CPU-only generation at that size can
+      // legitimately take several minutes, not seconds. 600s (10 min) is a
+      // deliberately generous ceiling: worth the wait for someone who
+      // already chose a 7B+ model specifically for its quality over the
+      // faster low/mid tiers.
       const isLargeTier = (modelManager.spec.sizeBytes ?? 0) >= HIGH.sizeBytes;
       const maxTokens = isLowTier
         ? (depth === 'derin' ? 350 : depth === 'hizli' ? 120 : 220)
         : (depth === 'derin' ? 1400 : depth === 'hizli' ? 650 : 1000);
-      const timeoutMs = isLowTier ? 45_000 : isLargeTier ? 240_000 : 90_000;
+      const timeoutMs = isLowTier ? 45_000 : isLargeTier ? 600_000 : 90_000;
       const rawContent = await generateWithDeadline(runtime, fullPrompt, { maxTokens, temperature: 0.35 }, timeoutMs);
       const content = cleanReportOutput(rawContent, category);
       // A weak/low-tier model can under-follow instructions badly enough to
@@ -172,7 +178,7 @@ export function createLLMQuery({ db, userId, modelManager, runtimeFactory = crea
     const fullPrompt = buildPrompt({ instruction: CHAT_INSTRUCTION, contextDocs, userText, lang });
     const isLowTier = modelManager.spec.tier === 'low';
     const isLargeTier = (modelManager.spec.sizeBytes ?? 0) >= HIGH.sizeBytes;
-    const chatTimeoutMs = isLowTier ? 35_000 : isLargeTier ? 150_000 : 60_000;
+    const chatTimeoutMs = isLowTier ? 35_000 : isLargeTier ? 360_000 : 60_000;
     const answer = await generateWithDeadline(runtime, fullPrompt, { maxTokens: isLowTier ? 120 : 500, temperature: 0.3 }, chatTimeoutMs);
     return {
       type: 'generated',
