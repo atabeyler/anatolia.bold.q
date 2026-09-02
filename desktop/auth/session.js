@@ -1,4 +1,12 @@
-import bcrypt from 'bcryptjs';
+// Native bcrypt (not bcryptjs) specifically for its async hash()/compare() --
+// Electron's main process is single-threaded like Node's, so a *synchronous*
+// cost-12 hash here (bcryptjs's hashSync/compareSync, or even native
+// bcrypt's own *Sync variants) blocks it entirely until done, stalling every
+// other IPC call the renderer makes (including the dashboard's) for however
+// long that takes. The async API offloads the hashing to libuv's thread
+// pool instead, so the main process keeps servicing other IPC calls while
+// it runs.
+import bcrypt from 'bcrypt';
 
 function decodeJwtPayload(jwt) {
   try {
@@ -142,7 +150,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       throw new Error(body.error || `device_registration_failed:${res.status}`);
     }
 
-    const offlinePasswordHash = password ? bcrypt.hashSync(password, 12) : undefined;
+    const offlinePasswordHash = password ? await bcrypt.hash(password, 12) : undefined;
     const { persisted } = secureStore.save({
       jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin,
       offlinePasswordHash,
@@ -160,7 +168,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
   // been online-authorized for this exact account before, and (b) the
   // entered password matching the bcrypt hash cached at that time --
   // verified locally, never against plaintext, never over the network.
-  function verifyOfflineLogin(userCode, password) {
+  async function verifyOfflineLogin(userCode, password) {
     if (!isOfflineLoginAllowed(userCode)) {
       return { ok: false, error: 'device_not_authorized_offline' };
     }
@@ -168,7 +176,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
     if (!cached || cached.userCode !== userCode || !cached.offlinePasswordHash) {
       return { ok: false, error: 'no_offline_session' };
     }
-    if (!bcrypt.compareSync(password || '', cached.offlinePasswordHash)) {
+    if (!(await bcrypt.compare(password || '', cached.offlinePasswordHash))) {
       return { ok: false, error: 'invalid_credentials' };
     }
     // A successful offline login is itself a fresh proof of identity --

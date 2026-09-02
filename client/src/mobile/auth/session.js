@@ -157,7 +157,11 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       throw new Error(body.error || `device_registration_failed:${res.status}`);
     }
 
-    const offlinePasswordHash = password ? bcrypt.hashSync(password, 12) : undefined;
+    // Async, not hashSync: bcryptjs's async hash() chunks the round loop
+    // via nextTick (see its impl.js) instead of running cost-12 straight
+    // through on the WebView's single JS thread -- hashSync here would
+    // freeze the UI for however long that takes, every single login.
+    const offlinePasswordHash = password ? await bcrypt.hash(password, 12) : undefined;
     await secureStore.save({
       jwt, userCode: payload.userCode, nickname: payload.nickname, isAdmin: !!payload.isAdmin,
       offlinePasswordHash,
@@ -196,7 +200,7 @@ export function createSessionManager({ db, secureStore, deviceId, apiBaseUrl, fe
       return { ok: false, error: 'offline_session_expired' };
     }
 
-    if (!bcrypt.compareSync(password || '', cached.offlinePasswordHash)) {
+    if (!(await bcrypt.compare(password || '', cached.offlinePasswordHash))) {
       const attempts = (meta?.failed_offline_attempts || 0) + 1;
       const lockedUntil = attempts >= MAX_OFFLINE_ATTEMPTS ? new Date(now + OFFLINE_LOCKOUT_MS).toISOString() : null;
       await dbRun(db, 'UPDATE device_meta SET failed_offline_attempts = ?, offline_locked_until = ? WHERE device_id = ?', [attempts, lockedUntil, deviceId]);

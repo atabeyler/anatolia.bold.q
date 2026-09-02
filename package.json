@@ -1,6 +1,6 @@
 {
   "name": "anatolia-q",
-  "version": "3.2.35",
+  "version": "3.2.37",
   "type": "module",
   "description": "ANATOLIA-Q — Quantum-Based National Decision Support System",
   "author": "Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.",
@@ -46,6 +46,7 @@
     "extraResources": [],
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**/*",
+      "**/node_modules/bcrypt/**/*",
       "**/node_modules/node-llama-cpp/**/*",
       "**/node_modules/@node-llama-cpp/**/*"
     ],
@@ -114,7 +115,7 @@
     "wait-on": "^8.0.4"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcrypt": "^5.1.1",
     "better-sqlite3": "^11.10.0",
     "builder-util-runtime": "^9.7.0",
     "electron-updater": "^6.8.9"

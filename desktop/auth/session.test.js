@@ -135,7 +135,7 @@ describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
     const { manager } = buildManager({ fetchImpl });
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
 
-    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    const result = await manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
     expect(result.ok).toBe(true);
     expect(result.jwt).toBeTruthy();
   });
@@ -145,13 +145,13 @@ describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
     const { manager } = buildManager({ fetchImpl });
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
 
-    const result = manager.verifyOfflineLogin('BOLD-001', 'WrongPassword');
+    const result = await manager.verifyOfflineLogin('BOLD-001', 'WrongPassword');
     expect(result.ok).toBe(false);
   });
 
-  it('rejects offline login for a device never authorized for that account', () => {
+  it('rejects offline login for a device never authorized for that account', async () => {
     const { manager } = buildManager({ fetchImpl: vi.fn() });
-    const result = manager.verifyOfflineLogin('BOLD-001', 'whatever');
+    const result = await manager.verifyOfflineLogin('BOLD-001', 'whatever');
     expect(result.ok).toBe(false);
   });
 
@@ -179,7 +179,7 @@ describe('verifyOfflineLogin (spec: hashed, never plaintext)', () => {
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
     manager.forgetDevice();
 
-    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    const result = await manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
     expect(result.ok).toBe(false);
     expect(result.error).toBe('device_not_authorized_offline');
   });
@@ -244,7 +244,7 @@ describe('logoutSession', () => {
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
     manager.logoutSession();
 
-    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    const result = await manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
     expect(result.ok).toBe(true);
     expect(result.jwt).toBeTruthy();
     expect(secureStore.load().signedOut).toBe(false);
@@ -276,7 +276,7 @@ describe('forgetDevice', () => {
     await manager.establishOnlineSession(fakeJwt({ userCode: 'BOLD-001' }), 'CorrectHorse123');
     manager.forgetDevice();
 
-    const result = manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
+    const result = await manager.verifyOfflineLogin('BOLD-001', 'CorrectHorse123');
     expect(result.ok).toBe(false);
     expect(result.error).toBe('device_not_authorized_offline');
   });
