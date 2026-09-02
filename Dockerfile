@@ -14,14 +14,24 @@ FROM node:22-bookworm-slim
 # prebuilt wheels for qiskit's symengine dependency (3.12+ falls back to a
 # from-source build that fails, since the SymEngine C++ library isn't
 # installed).
+#
+# build-essential (make/g++/gcc) is needed only for `npm ci` below to compile
+# bcrypt's native addon (replaced bcryptjs -- the pure-JS fallback -- because
+# bcryptjs's cost-12 hashing on this deployment's small compute plan was
+# costing several seconds per login). It's purged again right after npm ci
+# so it never ships in the final image (smaller image, smaller attack
+# surface); the already-compiled bcrypt .node binary doesn't need it at
+# runtime.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && apt-get install -y --no-install-recommends python3 python3-pip build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY server/package.json server/package-lock.json server/
-RUN npm ci --prefix server
+RUN npm ci --prefix server \
+    && apt-get purge -y --auto-remove build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY client/package.json client/package-lock.json client/
 RUN npm ci --prefix client

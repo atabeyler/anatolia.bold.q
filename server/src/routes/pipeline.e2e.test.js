@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 
 // Full user-facing pipeline, exercised through the REAL Express routes
 // (auth.js, analysis.js, history.js, unmodified) with supertest: login ->

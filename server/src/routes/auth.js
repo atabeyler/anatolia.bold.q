@@ -1,6 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { v4 as uuid } from 'uuid';
 import { query, logAuditEvent, getPool } from '../services/database.js';
 import { sendApprovalEmail } from '../services/email.js';
