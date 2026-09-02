@@ -51,6 +51,18 @@ export function getPool() {
       // preventing the port from ever binding.
       connectionTimeoutMillis: 10000,
     });
+    // node-postgres emits 'error' on the Pool when an IDLE client's
+    // underlying connection dies (e.g. the far side -- Render Postgres,
+    // reached cross-cloud from this Northflank deployment -- resets a
+    // connection our 20s keep-alive ping (see index.js) is holding open).
+    // That event has no default handler, and an unhandled 'error' event in
+    // Node crashes the entire process -- which is what was actually causing
+    // the repeated pod restarts, not an unrelated OOM. Logging it here is
+    // enough: the pool discards the dead client and opens a fresh one on
+    // the next query on its own.
+    pool.on('error', (err) => {
+      logger.warn({ err }, '[DB] Idle client connection error (pool will reconnect)');
+    });
   }
   return pool;
 }
