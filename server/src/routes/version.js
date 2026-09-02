@@ -134,19 +134,6 @@ function parseMultiRangeHeader(header) {
   return ranges;
 }
 
-async function mapWithConcurrency(items, limit, mapper) {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-  async function worker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await mapper(items[index], index);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
 async function fetchVerifiedRange(assetId, start, end, attempts = 3) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -165,30 +152,54 @@ async function fetchVerifiedRange(assetId, start, end, attempts = 3) {
   throw lastError;
 }
 
+// Streams each range's body straight to the client as it arrives instead
+// of buffering it into a Buffer and Buffer.concat-ing the whole batch (the
+// previous implementation) -- that materialized up to MAX_MULTI_RANGE_BYTES
+// (256MB) in memory, TWICE (once per-part, again in the concat copy),
+// which was enough to OOM-kill this deployment's small container the
+// moment electron-updater's differential downloader sent a large/near-
+// max-size batch (routine for anything but a tiny patch -- see
+// MAX_MULTI_RANGES's comment). A dead container takes the whole server
+// down for every user, not just the one checking for updates, which is
+// what was actually behind the "clicking update crashes the app" reports.
+//
+// Fetches stay concurrent (RANGE_FETCH_CONCURRENCY in flight at once, via
+// a sliding window) since that concurrency is what makes the differential
+// downloader fast; only the buffering is gone. Parts are still written to
+// the response strictly in range order -- required by the multipart
+// format -- so a fetch that finishes early waits for its turn.
 async function sendMultipartRanges(res, asset, ranges) {
-  const parts = await mapWithConcurrency(ranges, RANGE_FETCH_CONCURRENCY, async ({ start, end }) => {
-    const { upstream, total } = await fetchVerifiedRange(asset.id, start, end);
-    const body = Buffer.from(await upstream.arrayBuffer());
-    if (body.length !== end - start + 1) throw new Error('invalid_upstream_range_length');
-    return { start, end, total, body };
-  });
-
   const boundary = `anatolia-update-${Date.now().toString(16)}`;
-  const chunks = [];
-  for (const part of parts) {
-    chunks.push(Buffer.from(
-      `--${boundary}\r\nContent-Type: application/octet-stream\r\nContent-Range: bytes ${part.start}-${part.end}/${part.total}\r\n\r\n`,
-      'ascii'
-    ));
-    chunks.push(part.body, Buffer.from('\r\n', 'ascii'));
-  }
-  chunks.push(Buffer.from(`--${boundary}--\r\n`, 'ascii'));
-  const body = Buffer.concat(chunks);
   res.status(206);
   res.setHeader('Content-Type', `multipart/byteranges; boundary=${boundary}`);
   res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Content-Length', body.length);
-  res.end(body);
+  // Content-Length can't be known without buffering the whole body to
+  // measure it -- Node defaults to chunked transfer encoding when it's
+  // omitted, which every HTTP/1.1 client (electron-updater included)
+  // already handles.
+
+  const startFetch = (i) => fetchVerifiedRange(asset.id, ranges[i].start, ranges[i].end);
+  const inFlight = [];
+  for (let i = 0; i < Math.min(RANGE_FETCH_CONCURRENCY, ranges.length); i += 1) {
+    inFlight[i] = startFetch(i);
+  }
+
+  for (let i = 0; i < ranges.length; i += 1) {
+    const { start, end } = ranges[i];
+    const { upstream, total } = await inFlight[i];
+    const next = i + RANGE_FETCH_CONCURRENCY;
+    if (next < ranges.length) inFlight[next] = startFetch(next);
+
+    res.write(`--${boundary}\r\nContent-Type: application/octet-stream\r\nContent-Range: bytes ${start}-${end}/${total}\r\n\r\n`);
+    let received = 0;
+    for await (const chunk of Readable.fromWeb(upstream.body)) {
+      received += chunk.length;
+      if (!res.write(chunk)) await new Promise((resolve) => res.once('drain', resolve));
+    }
+    if (received !== end - start + 1) throw new Error('invalid_upstream_range_length');
+    res.write('\r\n');
+  }
+  res.end(`--${boundary}--\r\n`);
 }
 
 router.get('/generic/:feedFile', async (req, res) => {
@@ -270,4 +281,4 @@ router.get('/generic/download/:filename', async (req, res) => {
 
 export default router;
 
-export const _internal = { parseMultiRangeHeader, mapWithConcurrency, fetchVerifiedRange };
+export const _internal = { parseMultiRangeHeader, fetchVerifiedRange };

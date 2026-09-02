@@ -241,13 +241,14 @@ describe('GET /api/version/generic/download/:filename (differential blockmap/ins
       const match = /bytes=(\d+)-(\d+)/.exec(range);
       const start = Number(match[1]);
       const end = Number(match[2]);
+      const bytes = Uint8Array.from({ length: end - start + 1 }, (_, i) => start + i);
       return {
         status: 206,
         headers: new Map([
           ['content-length', String(end - start + 1)],
           ['content-range', `bytes ${start}-${end}/200`],
         ]),
-        arrayBuffer: async () => Uint8Array.from({ length: end - start + 1 }, (_, i) => start + i).buffer,
+        body: new Response(bytes).body,
       };
     });
 
