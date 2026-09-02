@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import { logger } from './lib/logger.js';
 import { logEnvValidationWarnings } from './lib/validateEnv.js';
 import { attachSentryErrorHandler } from './lib/sentry.js';
-import { initDatabase, initMemoryTables } from './services/database.js';
+import { initDatabase, initMemoryTables, query } from './services/database.js';
 import { ensureDecisionTables, purgeExpiredDecisionRecords } from './services/decisionIntelligence.js';
 import { ensureQuantumJobTables, startQuantumJobWorker } from './services/quantumJobQueue.js';
 import { setDbReady } from './services/dbReadiness.js';
@@ -219,6 +219,20 @@ initDatabase()
       purgeExpiredDecisionRecords().catch((err) => logger.warn({ err }, 'Decision retention sweep failed'));
     }, 6 * 60 * 60 * 1000);
     retentionTimer.unref();
+
+    // Keeps one pooled connection to the (cross-cloud, server-on-Northflank
+    // / DB-on-Render) Postgres instance alive between requests. The pool's
+    // idleTimeoutMillis (see database.js) closes a connection after 30s of
+    // no queries -- logins are infrequent enough that every one was paying
+    // for a brand new TCP+TLS+auth handshake to the DB, which is what made
+    // even the admin login path (no email step, so this was the whole
+    // delay) take several seconds. Pinging well inside that 30s window
+    // keeps a warm connection around so a login never has to pay for it.
+    const dbKeepAliveTimer = setInterval(() => {
+      query('SELECT 1').catch((err) => logger.warn({ err }, 'DB keep-alive ping failed'));
+    }, 20 * 1000);
+    dbKeepAliveTimer.unref();
+
     setDbReady(true);
     logger.info('Database ready');
   })
