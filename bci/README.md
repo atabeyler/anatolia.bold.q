@@ -41,8 +41,25 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - Every read/write is scoped by `org_id`; an id from another tenant returns
   404, not 403, and cross-org relationships are rejected
 
-Job queue, engine adapters, findings, risk/confidence scoring, etc. land in
-later milestones (M4+) — none of that exists here yet.
+**M4 — Job Orchestration**
+- `scan_jobs`: a Postgres-backed queue (`SELECT ... FOR UPDATE SKIP LOCKED`,
+  no external broker — BCI must run standalone, air-gapped deployments
+  included) with a full status lifecycle (QUEUED → ANALYZING → ... →
+  COMPLETED/FAILED/CANCELLED/TIMED_OUT)
+- `POST /api/v1/scans` never creates a job on a policy DENY — it calls the
+  same `evaluateScopeAuthorization` from M2 before inserting anything
+- Bounded, idempotent retry (`max_attempts`) and a timeout sweep that
+  recovers jobs stuck in-flight after a worker crash
+- `src/worker.js` — a **separate process** from the API (spec section 6:
+  scan/data plane isolated from control plane), polling workers with
+  configurable concurrency and a `job_workers` heartbeat table for worker
+  health; run it with `npm run worker --prefix bci`
+- No engine adapters exist yet (M5), so the worker currently runs a stub
+  analysis — that stub is exactly the seam M5's real adapters plug into
+
+Engine adapters, findings, normalization/correlation, risk/confidence
+scoring, etc. land in later milestones (M5+) — none of that exists here
+yet.
 
 ## Development
 

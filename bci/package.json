@@ -7,6 +7,8 @@
   "scripts": {
     "start": "tsx src/index.js",
     "dev": "tsx watch src/index.js",
+    "worker": "tsx src/worker.js",
+    "worker:dev": "tsx watch src/worker.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -1,0 +1,133 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { query } from '../src/db/client.js';
+import { resetDatabase, createOrg, createUser } from './helpers/db.js';
+import {
+  enqueueScan,
+  claimNextJob,
+  completeJob,
+  failJob,
+  cancelJob,
+  sweepTimedOutJobs,
+} from '../src/services/jobQueue.js';
+
+beforeEach(resetDatabase);
+
+async function approveScope(orgId, userId, target, allowedScanClasses = ['PASSIVE']) {
+  const { rows } = await query(
+    `INSERT INTO authorized_scopes (org_id, name, target, allowed_scan_classes, status, created_by, approved_by, approved_at)
+     VALUES ($1, 'scope', $2, $3, 'APPROVED', $4, $4, now()) RETURNING id`,
+    [orgId, target, allowedScanClasses, userId]
+  );
+  return rows[0].id;
+}
+
+describe('job queue', () => {
+  it('refuses to enqueue a scan with no matching authorized scope', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+
+    const outcome = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    expect(outcome.accepted).toBe(false);
+    expect(outcome.decision.decision).toBe('DENY');
+
+    const { rows } = await query('SELECT count(*)::int AS n FROM scan_jobs');
+    expect(rows[0].n).toBe(0);
+  });
+
+  it('enqueues a QUEUED job once the target is in an approved scope', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+
+    const outcome = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    expect(outcome.accepted).toBe(true);
+    expect(outcome.job.status).toBe('QUEUED');
+  });
+
+  it('claimNextJob moves a job to ANALYZING and stamps a timeout', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+
+    const claimed = await claimNextJob('worker-1');
+    expect(claimed.id).toBe(job.id);
+    expect(claimed.status).toBe('ANALYZING');
+    expect(claimed.attempts).toBe(1);
+    expect(claimed.timeout_at).not.toBeNull();
+  });
+
+  it('two workers claiming concurrently never get the same job', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+
+    const [a, b] = await Promise.all([claimNextJob('worker-a'), claimNextJob('worker-b')]);
+    const claimed = [a, b].filter(Boolean);
+    expect(claimed).toHaveLength(1);
+  });
+
+  it('completeJob marks the job COMPLETED with a result payload', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    await claimNextJob('worker-1');
+
+    await completeJob(job.id, { ok: true });
+    const { rows } = await query('SELECT status, result FROM scan_jobs WHERE id = $1', [job.id]);
+    expect(rows[0].status).toBe('COMPLETED');
+    expect(rows[0].result).toEqual({ ok: true });
+  });
+
+  it('failJob requeues until max_attempts, then marks FAILED for good', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    await query('UPDATE scan_jobs SET max_attempts = 2 WHERE id = $1', [job.id]);
+
+    await claimNextJob('worker-1'); // attempt 1
+    await failJob(job.id, 'boom');
+    let { rows } = await query('SELECT status, attempts FROM scan_jobs WHERE id = $1', [job.id]);
+    expect(rows[0].status).toBe('QUEUED');
+    expect(rows[0].attempts).toBe(1);
+
+    await claimNextJob('worker-1'); // attempt 2
+    await failJob(job.id, 'boom again');
+    ({ rows } = await query('SELECT status FROM scan_jobs WHERE id = $1', [job.id]));
+    expect(rows[0].status).toBe('FAILED');
+  });
+
+  it('cancelJob stops a QUEUED job but not an already-terminal one', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+
+    const cancelled = await cancelJob({ orgId, actorUserId: userId, jobId: job.id });
+    expect(cancelled.status).toBe('CANCELLED');
+
+    const again = await cancelJob({ orgId, actorUserId: userId, jobId: job.id });
+    expect(again).toBeNull();
+  });
+
+  it('sweepTimedOutJobs requeues a stuck job within its attempt budget and TIMED_OUTs it once exhausted', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    await query('UPDATE scan_jobs SET max_attempts = 1 WHERE id = $1', [job.id]);
+
+    await claimNextJob('worker-1');
+    // Simulate a worker that crashed mid-job: force the timeout into the past.
+    await query("UPDATE scan_jobs SET timeout_at = now() - interval '1 minute' WHERE id = $1", [job.id]);
+
+    const swept = await sweepTimedOutJobs();
+    expect(swept).toBe(1);
+
+    const { rows } = await query('SELECT status FROM scan_jobs WHERE id = $1', [job.id]);
+    expect(rows[0].status).toBe('TIMED_OUT');
+  });
+});

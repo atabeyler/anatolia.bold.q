@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.js';
 import { scopesRouter } from './routes/scopes.js';
 import { auditRouter } from './routes/audit.js';
 import { assetsRouter } from './routes/assets.js';
+import { scansRouter } from './routes/scans.js';
 
 export function createApp() {
   const app = express();
@@ -49,6 +50,7 @@ export function createApp() {
   app.use('/api/v1/scopes', scopesRouter);
   app.use('/api/v1/audit', auditRouter);
   app.use('/api/v1/assets', assetsRouter);
+  app.use('/api/v1/scans', scansRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'not_found', requestId: req.id });
