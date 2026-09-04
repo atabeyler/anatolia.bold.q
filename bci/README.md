@@ -179,8 +179,27 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - `GET /api/v1/risk/security-score`, `GET /api/v1/risk/coverage-score`
   (`report:view`)
 
-Wiring engines into job execution (the Analysis Planner), the Security
-Graph, remediation/reporting, etc. land in later milestones (M10+).
+**M10 — Security Graph**
+- `security_graph_nodes`/`security_graph_edges` are a **projection**, not a
+  second place to enter data: `syncSecurityGraph(orgId)` rebuilds them from
+  `assets`, `asset_relationships`, and open `findings`/CVEs every time it's
+  called — idempotent via `ON CONFLICT` upserts, safe to re-run
+- Asset nodes + structural edges (HOSTS/DEPENDS_ON/CONNECTS_TO/CONTAINS/
+  RUNS/EXPOSES) come straight from M3's `asset_relationships`; an
+  `AFFECTED_BY` edge links an asset to a CVE node whenever an open finding's
+  target matches one of that asset's identifiers
+- **Defensive attack-path analysis** (`findReachableAssets`): BFS outward
+  from a given asset over structural edges only — never through
+  `AFFECTED_BY`, which is a leaf fact being asked about, not something to
+  traverse further — answering "which critical systems could this
+  vulnerability affect indirectly" (spec section 31). No automatic
+  exploitation, ever; this only walks facts already in the inventory
+- `POST /api/v1/graph/sync` (`asset:update` — it writes derived data),
+  `GET /api/v1/graph/assets/:assetId/reachable` (`asset:view` — read-only)
+
+Wiring engines into job execution (the Analysis Planner), remediation
+lifecycle, reporting, AI decision support, etc. land in later milestones
+(M11+).
 
 ## Development
 
