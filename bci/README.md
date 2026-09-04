@@ -264,9 +264,38 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   `GET /api/v1/intelligence/vulnerabilities/:cveId/exploitation-claim`
   (`intel:view`) — both audited, including provider failures, not just successes
 
-Wiring engines into job execution (the Analysis Planner), ANATOLIA-Q
-integration, the standalone UI, enterprise/sovereign deployment, etc. land
-in later milestones (M14+).
+**M14 — ANATOLIA-Q Integration**
+- `POST /api/v1/gateway/session` is the one trust boundary between the two
+  products: ANATOLIA-Q signs a short-lived token with `BCI_GATEWAY_SECRET`
+  (a secret distinct from and never shared with BCI's own `BCI_JWT_SECRET`)
+  asserting one of its own users' identity/role, and gets back a normal BCI
+  access token — from there on, BCI's own RBAC (M2) enforces every
+  permission exactly as it would for a native BCI user
+- Auto-provisions a "shadow" BCI user per external identity under a
+  dedicated `anatolia-q` organization, idempotently, keeping the mapped
+  role in sync on every visit — an unrecognized role never escalates past
+  `viewer`. A shadow user has an unusable random password and is explicitly
+  blocked from `POST /api/v1/auth/login` (`external_source` column):
+  the gateway token is the only way in
+  - Role mapping (ANATOLIA-Q → BCI): `admin` → `security_admin`,
+    `analyst` → `analyst`, anything else → `viewer`
+- On the ANATOLIA-Q side (`server/src/services/bciClient.js`,
+  `server/src/routes/cyberAnalysis.js`): a small, admin/analyst-only proxy
+  under `/api/cyber-analysis/*` — the browser never talks to BCI directly
+  or holds a BCI token, matching the spec section 55 trust-boundary diagram
+  (ANATOLIA client → ANATOLIA server → BCI Gateway → BCI API). A BCI outage
+  or missing config degrades to a clean `503`, never a crashed ANATOLIA-Q
+  request. A minimal Cyber Analysis page (`client/src/pages/CyberAnalysisPage.jsx`)
+  shows BCI's own Security/Coverage scores and findings — "BCI Vulnerability
+  Analysis"/"BCI Risk Analysis" language, never the third-party scanner
+  names underneath (spec section 56)
+- Full ANATOLIA-Q regression run after this change: server 538/538, client
+  589/589, both green; `server/tsc --noEmit` and both projects' `eslint`
+  clean
+
+The standalone BCI UI and enterprise/sovereign deployment hardening
+(air-gapped intelligence bundles, HA, signed releases) land in the
+remaining milestones (M15-M16).
 
 ## Development
 

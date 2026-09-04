@@ -16,6 +16,8 @@ const RECOMMENDED_VARS = [
   { name: 'OPENAI_API_KEY', note: 'GPT AI provider unavailable' },
   { name: 'SHARED_PASSWORD', note: 'legacy user seed skipped on first boot' },
   { name: 'GITHUB_TOKEN', note: 'Android/desktop update check will fail if the repo is private' },
+  { name: 'BCI_BASE_URL', note: 'Cyber Analysis (BCI) module unavailable' },
+  { name: 'BCI_GATEWAY_SECRET', note: 'Cyber Analysis (BCI) module unavailable' },
 ];
 
 export function logEnvValidationWarnings() {

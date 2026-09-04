@@ -312,6 +312,13 @@ export const api = {
   // command interpretation is now a fully local, deterministic engine (see
   // voiceAssistantEngine.js) with no AI/network call in that path. The
   // server route itself is left in place, unused -- see the comment on it.
+
+  // Cyber Analysis (BCI) -- these hit ANATOLIA-Q's own server, which proxies
+  // to the separately deployed BCI service (see server/src/routes/cyberAnalysis.js).
+  // The browser never talks to BCI directly or holds a BCI token.
+  cyberAnalysisStatus: () => req('/api/cyber-analysis/status'),
+  cyberAnalysisOverview: () => req('/api/cyber-analysis/overview'),
+  cyberAnalysisFindings: () => req('/api/cyber-analysis/findings'),
 };
 
 export const adminApi = {

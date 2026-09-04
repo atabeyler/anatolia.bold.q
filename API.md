@@ -52,6 +52,24 @@ All endpoints marked **auth** require `Authorization: Bearer <jwt>`. Admin-only 
 
 The machine-readable API definition for the new versioned platform surface is in [`openapi.yaml`](./openapi.yaml).
 
+## Cyber Analysis (`/api/cyber-analysis`, versioned alias `/api/v1/cyber-analysis`)
+
+Proxies to BCI (BOLD Cyber Intelligence, see [`bci/`](./bci/)), a separately
+deployed product with its own database and users. ANATOLIA-Q never reads
+BCI's database directly; every request here is forwarded server-to-server
+via a short-lived gateway session (see `server/src/services/bciClient.js`
+and `bci/src/routes/gateway.js`). Restricted to admin/analyst roles.
+
+| Method & Path | Auth | Description |
+|---|---|---|
+| `GET /status` | auth, admin/analyst | Whether the BCI integration is configured (`BCI_BASE_URL`/`BCI_GATEWAY_SECRET`) |
+| `GET /overview` | auth, admin/analyst | BCI Security Score + Coverage Score |
+| `GET /findings` | auth, admin/analyst | Open findings from BCI |
+| `GET /findings/:id` | auth, admin/analyst | A single finding's detail |
+
+A BCI outage or missing configuration returns `503 { error: "bci_unavailable" }`
+rather than failing the rest of ANATOLIA-Q.
+
 ## History (`/api/history`)
 
 | Method & Path | Auth | Description |

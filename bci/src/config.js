@@ -15,6 +15,13 @@ export const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   jwtSecret: process.env.BCI_JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-only-insecure-secret' : ''),
   jwtTtlSeconds: Number(process.env.BCI_JWT_TTL_SECONDS) || 14400,
+  // M14: ANATOLIA-Q (or any other future gateway) trust boundary. Deliberately
+  // a DIFFERENT secret from jwtSecret above -- a leak of one must never
+  // compromise the other, and only a caller who knows this secret can mint a
+  // gateway session at all (see routes/gateway.js).
+  gatewaySecret: process.env.BCI_GATEWAY_SECRET || '',
+  gatewayOrgSlug: process.env.BCI_GATEWAY_ORG_SLUG || 'anatolia-q',
+  gatewaySessionTtlSeconds: Number(process.env.BCI_GATEWAY_SESSION_TTL_SECONDS) || 900,
   engineBins: {
     trivy: process.env.BCI_TRIVY_BIN || 'trivy',
     osvScanner: process.env.BCI_OSV_SCANNER_BIN || 'osv-scanner',

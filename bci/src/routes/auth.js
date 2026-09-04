@@ -37,11 +37,15 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   }
 
   const { rows: userRows } = await query(
-    'SELECT id, org_id, password_hash, blocked FROM users WHERE org_id = $1 AND email = $2',
+    'SELECT id, org_id, password_hash, blocked, external_source FROM users WHERE org_id = $1 AND email = $2',
     [org.id, email]
   );
   const user = userRows[0];
-  if (!user || user.blocked) {
+  // A gateway-provisioned user (external_source set) has an unusable random
+  // password and must only ever authenticate via a verified gateway token
+  // (routes/gateway.js) -- explicit, not just relying on the random hash
+  // never matching.
+  if (!user || user.blocked || user.external_source) {
     await recordAuditEvent({ orgId: org.id, action: 'auth.login', result: 'FAILURE', metadata: { email, reason: 'no_user_or_blocked' } });
     return genericFailure();
   }

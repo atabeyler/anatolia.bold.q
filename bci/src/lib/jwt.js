@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 
-export function signAccessToken({ userId, orgId }) {
+export function signAccessToken({ userId, orgId, ttlSeconds = config.jwtTtlSeconds }) {
   return jwt.sign({ sub: userId, org: orgId }, config.jwtSecret, {
-    expiresIn: config.jwtTtlSeconds,
+    expiresIn: ttlSeconds,
   });
 }
 

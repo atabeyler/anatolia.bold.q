@@ -29,6 +29,7 @@ function LoadingFallback() {
 // login page's own weight.
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const ButtonShowcasePage = lazy(() => import('./pages/ButtonShowcasePage.jsx'));
+const CyberAnalysisPage = lazy(() => import('./pages/CyberAnalysisPage.jsx'));
 
 // The branded launch screen belongs to installed/native app shells, not a
 // normal browser tab. ANATOLIA-Q ships in three such forms:
@@ -141,6 +142,12 @@ export default function App() {
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />} />
           <Route path="/ui-buttons" element={user ? <ButtonShowcasePage /> : <Navigate to="/login" />} />
+          <Route
+            path="/cyber-analysis"
+            element={
+              user && (user.isAdmin || user.role === 'analyst') ? <CyberAnalysisPage /> : <Navigate to={user ? '/' : '/login'} />
+            }
+          />
           <Route path="/*" element={user ? <DashboardPage user={user} onLogout={() => setUser(null)} /> : <Navigate to="/login" />} />
         </Routes>
       </Suspense>
