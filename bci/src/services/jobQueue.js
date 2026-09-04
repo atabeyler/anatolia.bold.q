@@ -15,10 +15,10 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass }
   }
 
   const { rows } = await query(
-    `INSERT INTO scan_jobs (org_id, requested_by, target, requested_class, scope_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO scan_jobs (org_id, requested_by, target, requested_class, scope_id, target_type)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, status, created_at`,
-    [orgId, actorUserId, target, requestedClass, decision.scopeId]
+    [orgId, actorUserId, target, requestedClass, decision.scopeId, decision.targetType]
   );
 
   await recordAuditEvent({

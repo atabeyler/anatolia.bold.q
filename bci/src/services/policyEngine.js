@@ -61,5 +61,8 @@ async function computeDecision({ orgId, target, requestedClass }) {
     return { decision: 'DENY', reason: 'scan_class_not_allowed', scopeId: matching.id };
   }
 
-  return { decision: 'ALLOW', reason: 'matched_authorized_scope', scopeId: matching.id };
+  // targetType comes from the scope that actually authorized the request --
+  // never independently supplied by the caller, so a job's later engine
+  // selection can never disagree with what was actually authorized.
+  return { decision: 'ALLOW', reason: 'matched_authorized_scope', scopeId: matching.id, targetType: matching.target_type };
 }

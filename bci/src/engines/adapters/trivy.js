@@ -25,14 +25,16 @@ export const trivyAdapter = {
     }
   },
 
-  // target: a local filesystem path (repo checkout or extracted container).
-  // Fetching/checking out the target is the caller's job, not the
+  // target: a local filesystem path (repo checkout) when mode is 'fs', or an
+  // image reference (e.g. "registry/app:tag") when mode is 'image'.
+  // Fetching/checking out an 'fs' target is the caller's job, not the
   // adapter's -- keeps the adapter honest about only ever touching what's
   // already on disk in workDir.
-  async execute({ target, timeoutMs = 120_000 }) {
+  async execute({ target, mode = 'fs', timeoutMs = 120_000 }) {
+    const subcommand = mode === 'image' ? 'image' : 'fs';
     const { stdout } = await runBinary(
       BIN,
-      ['fs', '--scanners', 'vuln,secret,misconfig', '--format', 'json', '--quiet', target],
+      [subcommand, '--scanners', 'vuln,secret,misconfig', '--format', 'json', '--quiet', target],
       { timeoutMs, allowedExitCodes: [0, 1] }
     );
     return { raw: JSON.parse(stdout) };

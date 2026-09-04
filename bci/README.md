@@ -21,7 +21,12 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   `requirePermission(...)` middleware — never trust a hidden UI button
 - `authorized_scopes` + a deny-by-default Policy Engine
   (`POST /api/v1/scopes/evaluate`): no matching **approved**, non-expired,
-  class-matching, non-excluded scope means DENY, unconditionally
+  class-matching, non-excluded scope means DENY, unconditionally. Matching
+  is **typed** (`src/lib/targetMatcher.js`, 10 target types: DOMAIN,
+  SUBDOMAIN, URL, IP, CIDR, REPOSITORY, API, CLOUD_ACCOUNT, CONTAINER,
+  KUBERNETES_CLUSTER) with a canonical parser/matcher per type — a CIDR is
+  never matched by string suffix, a URL's path is never confused with a
+  bare domain; anything unparseable fails closed (no match, not a guess)
 - Propose/approve separation: `scope:create` only produces a `PENDING`
   record; a distinct `scope:approve` permission is required to activate it
 - Append-only audit ledger (`GET /api/v1/audit`), one write path
@@ -54,8 +59,14 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   scan/data plane isolated from control plane), polling workers with
   configurable concurrency and a `job_workers` heartbeat table for worker
   health; run it with `npm run worker --prefix bci`
-- No engine adapters exist yet (M5), so the worker currently runs a stub
-  analysis — that stub is exactly the seam M5's real adapters plug into
+- The worker runs the real pipeline (`services/analysisPipeline.js`,
+  wired in after the M5-M9 pieces below existed to plug into): the
+  Analysis Planner selects engines by the job's typed target, each runs
+  against a prepared execution target (a REPOSITORY is cloned into a
+  temp dir with `git clone --depth 1`, cleaned up after; other target
+  types run directly), raw output is normalized, new CVEs are enriched
+  against the M8 intelligence base, then Correlation (M7) and the
+  Security Graph (M10) run — no stub left in this path
 
 **M5 — Hybrid Engine Adapters**
 - `src/engines/EngineAdapter.js` — the adapter contract (duck-typed:
@@ -79,9 +90,12 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   never make a run silently look fully covered (spec section 48)
 - `raw_observations` — engine-native output, stored as-is; turning this
   into BCI's common schema is Normalization's job (M6), not an adapter's
-- Not yet wired into `scan_jobs` execution — picking which engines run for
-  a given target is the Analysis Planner's job (spec section 9), a
-  separate concern from "does the adapter itself work"
+- Wired into `scan_jobs` execution via `services/analysisPlanner.js` +
+  `services/analysisPipeline.js` — REPOSITORY gets Semgrep+OSV-Scanner+Trivy,
+  CONTAINER gets Trivy in image mode, DOMAIN/SUBDOMAIN/URL/API get Nuclei
+  (SAFE_ACTIVE+ only), IP/CIDR get naabu (SAFE_ACTIVE+ only); CLOUD_ACCOUNT
+  and KUBERNETES_CLUSTER honestly plan zero engines (no adapter exists yet)
+  rather than pretending to scan them
 
 **M6 — Normalization**
 - One normalizer per engine (`src/normalization/normalizers/`), each a pure
