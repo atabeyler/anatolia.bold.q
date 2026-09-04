@@ -7,6 +7,8 @@ import { query } from '../../src/db/client.js';
 export async function resetDatabase() {
   await query(`
     TRUNCATE TABLE
+      intelligence_updates,
+      vulnerabilities,
       finding_sources,
       findings,
       normalized_observations,

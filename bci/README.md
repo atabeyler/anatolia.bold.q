@@ -126,9 +126,33 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   `finding:update`; the verification decisions (confirm/false-positive/
   accept-risk) need the stronger `finding:verify` — every change is audited
 
-Wiring engines into job execution (the Analysis Planner), vulnerability
-intelligence, risk/priority scoring, the Security Graph, etc. land in later
-milestones (M8+).
+**M8 — Vulnerability Intelligence Platform**
+- `vulnerabilities` knowledge base merging three free, no-API-key sources:
+  **CISA KEV** (full-catalog sync — it's one JSON document, not a crawl),
+  **FIRST EPSS** (exploitation-probability scoring), and **NVD CVE 2.0**
+  (description/CVSS/CWE) — real end-to-end smoke-tested against all three
+  live APIs (1694 real KEV entries synced; a real CVE enriched with live
+  NVD+EPSS data) during development
+- `getOrEnrichVulnerability()` is lazy and on-demand, never a bulk NVD
+  crawl: reads the local cache first, only reaches out live when a row is
+  missing or >30 days stale, and on a live-fetch failure falls back to
+  whatever's cached rather than erroring (spec section 62) — an
+  `intelligence_updates` row records every sync attempt (source, SUCCESS/
+  FAILED, item count) so a caller can see a source's actual freshness
+  instead of assuming it
+- `upsertVulnerability()` merges via `COALESCE(new, existing)` — no source
+  can ever blank out a field a different source already populated, and
+  `kev` only ever flips true, never back to false
+- Each source has a pure parser (`src/intelligence/sources/`), unit-tested
+  against captured real API responses, separate from the thin fetch wrapper
+  around it
+- `GET /api/v1/intelligence/vulnerabilities/:cveId` (`intel:view`),
+  `GET /api/v1/intelligence/freshness` (`intel:view`),
+  `POST /api/v1/intelligence/sync-kev` (`intel:manage` — an outbound network
+  call, gated stronger than a read)
+
+Wiring engines into job execution (the Analysis Planner), risk/priority
+scoring, the Security Graph, etc. land in later milestones (M9+).
 
 ## Development
 
