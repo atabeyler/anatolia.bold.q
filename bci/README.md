@@ -219,9 +219,29 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   `FIX_VERIFIED` the moment the header is added; an open-port naabu finding
   the same way once the port is closed
 
-Wiring engines into job execution (the Analysis Planner), reporting, AI
-decision support, ANATOLIA-Q integration, etc. land in later milestones
-(M12+).
+**M12 — Reporting**
+- Four report types (`src/reports/builders.js`), each pulling from data
+  already built in earlier milestones rather than duplicating logic:
+  **Executive** (security/coverage score, KEV exposure, top risks),
+  **Technical** (every finding plus which engines corroborated it),
+  **Remediation** (findings joined to their remediation status, sorted by
+  priority), **Audit** (the audit ledger itself, for a time window — this
+  report *is* the compliance evidence, not a summary of it)
+- Integrity metadata on every report (spec section 46): a canonical-JSON
+  SHA-256 content hash, the BCI version, and the exact version of every
+  scoring model (`risk`, `confidence`, `verification`, `securityScore`,
+  `coverageScore`) that could have shaped the content — so a report stays
+  reproducible/explainable even after those models have since changed
+- `getReport()` recomputes the hash on every read and reports
+  `integrityValid` — tampering (even a direct DB edit) is detected, not
+  silently trusted
+- `POST /api/v1/reports` (`report:export` — generating is the
+  exportable-artifact action); `GET /api/v1/reports` and `GET
+  /api/v1/reports/:id` (`report:view`)
+
+Wiring engines into job execution (the Analysis Planner), AI decision
+support, ANATOLIA-Q integration, the standalone UI, enterprise/sovereign
+deployment, etc. land in later milestones (M13+).
 
 ## Development
 

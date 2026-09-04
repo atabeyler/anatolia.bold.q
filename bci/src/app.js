@@ -17,6 +17,7 @@ import { findingsRouter } from './routes/findings.js';
 import { intelligenceRouter } from './routes/intelligence.js';
 import { riskRouter } from './routes/risk.js';
 import { graphRouter } from './routes/graph.js';
+import { reportsRouter } from './routes/reports.js';
 
 export function createApp() {
   const app = express();
@@ -63,6 +64,7 @@ export function createApp() {
   app.use('/api/v1/intelligence', intelligenceRouter);
   app.use('/api/v1/risk', riskRouter);
   app.use('/api/v1/graph', graphRouter);
+  app.use('/api/v1/reports', reportsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'not_found', requestId: req.id });
