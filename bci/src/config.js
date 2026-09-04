@@ -13,6 +13,13 @@ export const config = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   logLevel: process.env.LOG_LEVEL || 'info',
+  jwtSecret: process.env.BCI_JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-only-insecure-secret' : ''),
+  jwtTtlSeconds: Number(process.env.BCI_JWT_TTL_SECONDS) || 14400,
+  bootstrap: {
+    orgName: process.env.BCI_BOOTSTRAP_ORG_NAME || '',
+    adminEmail: process.env.BCI_BOOTSTRAP_ADMIN_EMAIL || '',
+    adminPassword: process.env.BCI_BOOTSTRAP_ADMIN_PASSWORD || '',
+  },
 };
 
 export const isProduction = config.nodeEnv === 'production';

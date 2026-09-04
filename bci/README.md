@@ -5,17 +5,34 @@ directory does not depend on ANATOLIA-Q's `server/` or `client/`; it has its
 own `package.json`, its own database connection, and its own Docker image.
 ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 
-## Scope (M1)
+## Scope
 
+**M1 — Foundation**
 - Express API skeleton, request-id + structured (pino) logging
-- Fail-closed env validation (`BCI_DATABASE_URL` required in production)
+- Fail-closed env validation (`BCI_DATABASE_URL`, `BCI_JWT_SECRET` required in production)
 - Own PostgreSQL connection + a plain SQL-file migration runner
 - Liveness/readiness health endpoints (`/api/v1/health/live`, `/ready`)
-- Unit tests with Vitest
 - Standalone Dockerfile
 
-RBAC, the organization/tenant model, asset inventory, job queue, engine
-adapters, etc. land in later milestones (M2+) — none of that exists here
+**M2 — Identity / RBAC / Scope / Policy**
+- Multi-tenant `organizations` + `users`, JWT auth (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`)
+- Static role/permission catalog (six roles: viewer, analyst, operator,
+  security_admin, auditor, system_admin) enforced server-side via
+  `requirePermission(...)` middleware — never trust a hidden UI button
+- `authorized_scopes` + a deny-by-default Policy Engine
+  (`POST /api/v1/scopes/evaluate`): no matching **approved**, non-expired,
+  class-matching, non-excluded scope means DENY, unconditionally
+- Propose/approve separation: `scope:create` only produces a `PENDING`
+  record; a distinct `scope:approve` permission is required to activate it
+- Append-only audit ledger (`GET /api/v1/audit`), one write path
+  (`services/audit.js`), every policy decision and auth/scope action logged
+- First-boot bootstrap (`BCI_BOOTSTRAP_*` env vars) creates exactly one
+  organization + system_admin user, and only if none exists yet
+- Cross-tenant isolation tests: org A can never see, approve, or forge its
+  way into org B's data
+
+Asset inventory, job queue, engine adapters, findings, risk/confidence
+scoring, etc. land in later milestones (M3+) — none of that exists here
 yet.
 
 ## Development

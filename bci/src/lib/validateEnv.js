@@ -1,4 +1,4 @@
-const REQUIRED_IN_PRODUCTION = ['BCI_DATABASE_URL'];
+const REQUIRED_IN_PRODUCTION = ['BCI_DATABASE_URL', 'BCI_JWT_SECRET'];
 
 export function validateEnv(env = process.env) {
   const errors = [];
