@@ -1,0 +1,99 @@
+import { randomUUID, createHash } from 'node:crypto';
+import os from 'node:os';
+import { query } from '../db/client.js';
+import { getQuantumProvider } from './registry.js';
+import { resolveExecutionMode } from './executionPolicy.js';
+import { COMPUTE_MODES } from './QuantumComputeGateway.js';
+
+function canonicalHash(value) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function environmentFingerprint() {
+  return createHash('sha256').update(`${process.version}|${os.platform()}|${os.arch()}`).digest('hex').slice(0, 16);
+}
+
+async function runProvider(providerId, mode, problem, options) {
+  const provider = getQuantumProvider(providerId);
+  const startedAt = Date.now();
+  try {
+    const result = await provider.submitOptimizationProblem(problem, options);
+    return { ok: true, mode, providerId, result, wallTimeMs: Date.now() - startedAt };
+  } catch (err) {
+    return { ok: false, mode, providerId, error: String(err.message || err), wallTimeMs: Date.now() - startedAt };
+  }
+}
+
+// BCI Quantum Benchmark Engine (spec section 8): "BCI hiçbir zaman sadece
+// 'quantum kullandık' diye quantum sonucu tercih etmemelidir." Always runs
+// the classical baseline; runs quantum-inspired unconditionally too (it's
+// free/local); only adds the simulator/hardware attempt the execution
+// policy actually resolved to. QUANTUM_BENEFIT_OBSERVED requires a
+// STRICTLY better feasible objective than the classical baseline -- an
+// equal or worse result is NO_QUANTUM_ADVANTAGE_DEMONSTRATED, full stop,
+// regardless of which provider produced it.
+export async function runBenchmark({ orgId, actorUserId, workloadSource, problem, dataClassification = 'INTERNAL' }) {
+  const benchmarkId = randomUUID();
+  const inputHash = canonicalHash(problem);
+  const fingerprint = environmentFingerprint();
+  const problemSize = problem.items.length;
+
+  const decision = await resolveExecutionMode({ orgId, problemSize, dataClassification });
+
+  const attempts = [await runProvider('classical', COMPUTE_MODES.CLASSICAL, problem, {})];
+  attempts.push(await runProvider('quantum_inspired', COMPUTE_MODES.QUANTUM_INSPIRED, problem, {}));
+
+  if (decision.mode === COMPUTE_MODES.QUANTUM_SIMULATOR) {
+    attempts.push(await runProvider('quantum_simulator', COMPUTE_MODES.QUANTUM_SIMULATOR, problem, {}));
+  } else if (decision.mode === COMPUTE_MODES.QUANTUM_HARDWARE) {
+    attempts.push(await runProvider('ibm_quantum', COMPUTE_MODES.QUANTUM_HARDWARE, problem, {}));
+  }
+
+  for (const attempt of attempts) {
+    await query(
+      `INSERT INTO quantum_jobs (
+         org_id, requested_by, benchmark_id, workload_source, algorithm, provider, mode, status,
+         qubits, shots, circuit_depth, fallback_reason, result, input_hash, output_hash,
+         environment_fingerprint, completed_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now())`,
+      [
+        orgId, actorUserId, benchmarkId, workloadSource,
+        attempt.result?.provenance?.algorithm ?? null,
+        attempt.providerId, attempt.mode, attempt.ok ? 'COMPLETED' : 'FAILED',
+        attempt.result?.provenance?.qubits ?? null,
+        attempt.result?.provenance?.shots ?? null,
+        attempt.result?.provenance?.circuitDepth ?? null,
+        attempt.ok ? null : attempt.error,
+        attempt.ok ? JSON.stringify(attempt.result) : null,
+        inputHash,
+        attempt.ok ? canonicalHash(attempt.result) : null,
+        fingerprint,
+      ]
+    );
+  }
+
+  const classicalAttempt = attempts.find((a) => a.providerId === 'classical');
+  const classicalValue = classicalAttempt?.ok ? classicalAttempt.result.objectiveValue : null;
+
+  let best = null;
+  for (const attempt of attempts) {
+    if (!attempt.ok || !attempt.result.feasible) continue;
+    if (!best || attempt.result.objectiveValue > best.result.objectiveValue) best = attempt;
+  }
+
+  // Strictly greater than the classical baseline -- a tie is NOT an
+  // advantage (spec section 8: advantage must be measured, not assumed).
+  const verdict =
+    best && best.providerId !== 'classical' && classicalValue != null && best.result.objectiveValue > classicalValue
+      ? 'QUANTUM_BENEFIT_OBSERVED'
+      : 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED';
+
+  const results = Object.fromEntries(attempts.map((a) => [a.providerId, a.ok ? { ...a.result, wallTimeMs: a.wallTimeMs } : { error: a.error, wallTimeMs: a.wallTimeMs }]));
+
+  await query(
+    'INSERT INTO quantum_benchmarks (id, org_id, workload_source, results, verdict) VALUES ($1,$2,$3,$4,$5)',
+    [benchmarkId, orgId, workloadSource, JSON.stringify(results), verdict]
+  );
+
+  return { benchmarkId, verdict, executionMode: decision.mode, executionReason: decision.reason, results, best: best ? { providerId: best.providerId, mode: best.mode, ...best.result } : null };
+}

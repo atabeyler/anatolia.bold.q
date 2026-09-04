@@ -35,6 +35,15 @@ export const config = {
   // reserved for a future on-prem/local-model provider, not implemented yet.
   aiMode: process.env.BCI_AI_MODE || 'AI_DISABLED',
   anthropicApiKey: process.env.BCI_ANTHROPIC_API_KEY || '',
+  // Quantum Compute Gateway (spec section 5-6). Quantum is always optional
+  // -- BCI_IBM_QUANTUM_TOKEN unset means the IBM provider reports
+  // NOT_CONFIGURED and every other provider (classical, quantum-inspired,
+  // local simulator) keeps working. The token is read here, from env, and
+  // nowhere else -- never persisted to the database, never logged.
+  quantum: {
+    ibmToken: process.env.BCI_IBM_QUANTUM_TOKEN || '',
+    ibmInstance: process.env.BCI_IBM_QUANTUM_INSTANCE || '',
+  },
   bootstrap: {
     orgName: process.env.BCI_BOOTSTRAP_ORG_NAME || '',
     adminEmail: process.env.BCI_BOOTSTRAP_ADMIN_EMAIL || '',

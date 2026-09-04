@@ -343,8 +343,94 @@ orchestration, five real scanning engines, normalization/correlation/
 verification, a vulnerability intelligence platform, risk/confidence/
 coverage scoring, a security graph, remediation/verify, reporting, AI
 decision support, ANATOLIA-Q integration, a standalone UI, and
-enterprise/sovereign deployment tooling — 171 tests, no regressions
-introduced in ANATOLIA-Q (1127+ of its own tests still green).
+enterprise/sovereign deployment tooling.
+
+## Quantum Compute Gateway (IMPLEMENTED, IBM hardware EXPERIMENTAL)
+
+BCI's value is Discovery + Vulnerability Intelligence + Verification +
+Security Graph + Risk Decisioning + Remediation + AI in one platform —
+**not** using IBM Quantum. Quantum is one optional compute backend behind a
+provider-agnostic gateway, used only where it demonstrably helps; the
+default for every org is CLASSICAL, and BCI is fully functional — including
+in an air-gapped Sovereign deployment — with quantum entirely absent.
+
+- **`src/quantum/QuantumComputeGateway.js`** (IMPLEMENTED) — the contract
+  every provider implements: `submitOptimizationProblem` / `getJobStatus` /
+  `getResult` / `getProviderHealth` / `getCapabilities`, plus the shared
+  enums `COMPUTE_MODES` (CLASSICAL / QUANTUM_INSPIRED / QUANTUM_SIMULATOR /
+  QUANTUM_HARDWARE) and `PROVIDER_HEALTH` (AVAILABLE / DEGRADED /
+  UNAVAILABLE / NOT_CONFIGURED). BCI never embeds IBM-specific code outside
+  its one adapter — swapping or adding a provider never touches policy,
+  benchmarking, or the optimizers built on top
+- **Four providers** (`src/quantum/providers/`), all solving the same 0/1
+  knapsack problem instance so results are actually comparable:
+  - **classical** (IMPLEMENTED) — exact dynamic-programming solver
+    (`src/quantum/knapsack.js`), always AVAILABLE, provably optimal for
+    integer costs. This is the mandatory baseline everything else is
+    measured against
+  - **quantum_inspired** (IMPLEMENTED) — simulated annealing with a seeded
+    PRNG (reproducible runs), always AVAILABLE, no external dependency
+  - **quantum_simulator** (IMPLEMENTED) — real QAOA (Quantum Approximate
+    Optimization Algorithm) run on `qiskit_aer.AerSimulator`
+    (`bci/quantum/optimize_knapsack_qaoa.py`, its own isolated
+    `bci/quantum/requirements.txt`: qiskit 2.5.2, qiskit-aer 0.17.2 —
+    deliberately **not** shared with ANATOLIA-Q's pinned server/quantum
+    stack, so upgrading one can never break the other). The budget
+    constraint is encoded exactly via binary slack qubits, not an
+    approximate penalty. Health = OFFLINE if `qiskit_aer` isn't importable
+  - **ibm_quantum** (EXPERIMENTAL — code complete, never run against a live
+    IBM account: no token available in this environment) —
+    `bci/quantum/ibm_backend.py`, written against the **current** IBM
+    Quantum Platform SDK (`channel="ibm_quantum_platform"`,
+    `SamplerV2(mode=backend)`), not copied from ANATOLIA-Q's older pinned
+    adapter. Fixed-angle QAOA (no classical optimization loop against paid
+    QPU time) as a deliberate cost guard. Reports NOT_CONFIGURED with no
+    token, never crashes the gateway
+- **Execution Policy** (`src/quantum/executionPolicy.js`, IMPLEMENTED) —
+  per-org `quantum_policies` row (`allowQuantumSimulator`,
+  `allowQuantumHardware`, `maxExternalDataClassification`), default
+  denies all quantum. `decideExecutionMode` is a pure function: policy off →
+  CLASSICAL; provider unhealthy or problem too large → fall back one step
+  toward CLASSICAL, never error; data classification above the org's
+  external-quantum ceiling (PUBLIC/INTERNAL/CONFIDENTIAL/SECRET) blocks IBM
+  even when the org policy allows quantum hardware generally, falling back
+  to the local simulator instead — SECRET data never leaves the machine.
+  An unrecognized classification fails closed (never treated as
+  low-sensitivity)
+- **Benchmark Engine** (`src/quantum/benchmark.js`, IMPLEMENTED) — always
+  runs classical + quantum-inspired, adds simulator/IBM only when policy
+  and health allow. Records one `quantum_jobs` row per provider attempt
+  (status, input/output hash, timestamps — provenance, never credentials)
+  and one `quantum_benchmarks` row with a verdict of
+  `QUANTUM_BENEFIT_OBSERVED` only when a quantum method's feasible
+  objective value is **strictly greater** than the classical baseline's —
+  otherwise `NO_QUANTUM_ADVANTAGE_DEMONSTRATED`. A failed provider attempt
+  is recorded as FAILED, never silently dropped
+- **Remediation Optimizer** (`src/services/remediationOptimizer.js`,
+  IMPLEMENTED) — turns open findings into knapsack items (value from the
+  existing deterministic Risk Score × a blast-radius multiplier from the
+  Security Graph, cost from a documented category-based effort heuristic —
+  not a precise cost model BCI has no basis to claim) and runs them through
+  the Benchmark Engine to propose a remediation set under an effort budget.
+  This is an advisory layer on top of the M9 Risk Score, which stays
+  deterministic and explainable regardless of what the optimizer suggests
+- **`GET/PUT /api/v1/quantum/policy`, `GET /api/v1/quantum/providers`,
+  `POST /api/v1/quantum/remediation-optimize`, `GET /api/v1/quantum/benchmarks(/:id)`,
+  `GET /api/v1/quantum/jobs`** — RBAC-gated (`system:manage` to change
+  policy, `remediation:propose` to run the optimizer), cross-tenant
+  isolation enforced (org A gets 404 on org B's benchmark)
+- **Not yet built** (PLANNED): Post-Quantum Security Engine (crypto
+  discovery/inventory, CBOM, harvest-now-decrypt-later migration
+  readiness), a dedicated Security Graph attack-path/patch-ordering
+  optimizer beyond the blast-radius weighting above, a Quantum
+  Intelligence page in `bci/ui/`, and closer ANATOLIA-Q gateway
+  convergence (today ANATOLIA-Q and BCI intentionally run fully separate
+  quantum stacks — BCI never depends on ANATOLIA-Q's)
+
+36 new tests (knapsack, all four providers, execution policy including the
+data-classification and fail-closed edge cases, benchmark integration
+against a real database, remediation optimizer, and API RBAC/isolation),
+234/234 total BCI tests green, no ANATOLIA-Q files touched.
 
 ## Development
 
