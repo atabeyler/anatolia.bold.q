@@ -31,9 +31,18 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - Cross-tenant isolation tests: org A can never see, approve, or forge its
   way into org B's data
 
-Asset inventory, job queue, engine adapters, findings, risk/confidence
-scoring, etc. land in later milestones (M3+) — none of that exists here
-yet.
+**M3 — Asset Inventory**
+- `assets` (typed: DOMAIN/HOST/WEB_APP/API/REPOSITORY/CONTAINER/CLOUD_RESOURCE/IDENTITY/SERVICE,
+  with a LOW..CRITICAL criticality) under `/api/v1/assets`
+- `asset_identifiers` (domain/IP/CIDR/repo URL/...) and `asset_technologies`
+  (detected tech + version) as sub-resources of an asset
+- `asset_relationships` (HOSTS/DEPENDS_ON/CONNECTS_TO/CONTAINS/RUNS/EXPOSES)
+  — a minimal precursor to the full Security Graph (M10)
+- Every read/write is scoped by `org_id`; an id from another tenant returns
+  404, not 403, and cross-org relationships are rejected
+
+Job queue, engine adapters, findings, risk/confidence scoring, etc. land in
+later milestones (M4+) — none of that exists here yet.
 
 ## Development
 

@@ -11,6 +11,10 @@ export async function resetDatabase() {
       scope_exclusions,
       authorized_scopes,
       scan_policies,
+      asset_relationships,
+      asset_technologies,
+      asset_identifiers,
+      assets,
       user_roles,
       users,
       organizations
