@@ -12,6 +12,7 @@ import { auditRouter } from './routes/audit.js';
 import { assetsRouter } from './routes/assets.js';
 import { scansRouter } from './routes/scans.js';
 import { enginesRouter } from './routes/engines.js';
+import { observationsRouter } from './routes/observations.js';
 
 export function createApp() {
   const app = express();
@@ -53,6 +54,7 @@ export function createApp() {
   app.use('/api/v1/assets', assetsRouter);
   app.use('/api/v1/scans', scansRouter);
   app.use('/api/v1/engines', enginesRouter);
+  app.use('/api/v1/observations', observationsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'not_found', requestId: req.id });

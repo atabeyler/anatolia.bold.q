@@ -83,8 +83,28 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   a given target is the Analysis Planner's job (spec section 9), a
   separate concern from "does the adapter itself work"
 
-Wiring engines into job execution, normalization/correlation, findings,
-risk/confidence scoring, etc. land in later milestones (M6+).
+**M6 — Normalization**
+- One normalizer per engine (`src/normalization/normalizers/`), each a pure
+  function mapping that engine's real, captured JSON shape into BCI's
+  common `normalized_observations` schema (spec section 16: category,
+  title, severity, cve_ids/cwe_ids, cvss, component, location, evidence,
+  references, ...) — an external engine's severity string is kept as
+  `engine_severity` for explainability, never used as BCI's own severity
+- `services/normalization.js`: `storeRawObservation()` writes the engine's
+  output byte-for-byte into `raw_observations` first; `normalizeStoredObservation()`
+  reads it back and writes the normalized rows — two steps on purpose, so a
+  normalizer bug can never mean the original engine output is lost
+- Evidence redaction (`src/normalization/redact.js`): `Authorization`/
+  `Cookie`/`Set-Cookie`/`X-Api-Key` lines in Nuclei's raw request/response
+  text are stripped before anything is stored as evidence (spec section 36)
+- Normalizer unit tests run against real captured tool output
+  (`test/fixtures/normalization/`) — no scanner binaries needed to run them,
+  unlike M5's adapter tests
+- `GET /api/v1/observations?jobId=...` — read-only view onto normalized
+  output; still not a Finding (that's Correlation/Verification, M7)
+
+Wiring engines into job execution (the Analysis Planner), correlation,
+findings, risk/confidence scoring, etc. land in later milestones (M7+).
 
 ## Development
 
