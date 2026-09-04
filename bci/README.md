@@ -103,8 +103,32 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - `GET /api/v1/observations?jobId=...` — read-only view onto normalized
   output; still not a Finding (that's Correlation/Verification, M7)
 
-Wiring engines into job execution (the Analysis Planner), correlation,
-findings, risk/confidence scoring, etc. land in later milestones (M7+).
+**M7 — Correlation & Verification**
+- `findings` + `finding_sources`: Correlation groups `normalized_observations`
+  by a correlation key (shared CVE first, then rule+location, then
+  category+location) and upserts one Finding per key — `UNIQUE(org_id,
+  correlation_key)` plus `ON CONFLICT` merging makes re-running correlation
+  idempotent; it never creates a duplicate Finding or double-counts a source
+- **Verification Engine v1** (`services/verification.js`): WEB/API/
+  NETWORK_DISCOVERY observations are CONFIRMED on the spot (the engine
+  already did a live, safe check as part of detecting them); 2+ distinct
+  engines agreeing on a static finding is also CONFIRMED; a lone SECRETS hit
+  is MANUAL_REVIEW_REQUIRED (spec section 18 calls this out as a
+  false-positive-prone category); anything else is LIKELY
+- **Confidence Engine v1** (`services/confidence.js`): independent of Risk —
+  a base score from distinct-source count, a bump for CONFIRMED
+  verification and for a concrete CVSS score, capped at 50 whenever manual
+  review is required. Both engines are pure functions, versioned
+  (`VERIFICATION_MODEL_VERSION` / `CONFIDENCE_MODEL_VERSION`) so an old
+  Finding's scores stay explainable against the model that produced them
+- Finding lifecycle (`/api/v1/findings`): general workflow transitions
+  (ASSIGNED/IN_REMEDIATION/READY_FOR_VERIFICATION/MITIGATED/DEFERRED) need
+  `finding:update`; the verification decisions (confirm/false-positive/
+  accept-risk) need the stronger `finding:verify` — every change is audited
+
+Wiring engines into job execution (the Analysis Planner), vulnerability
+intelligence, risk/priority scoring, the Security Graph, etc. land in later
+milestones (M8+).
 
 ## Development
 
