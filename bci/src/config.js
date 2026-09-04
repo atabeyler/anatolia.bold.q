@@ -22,6 +22,12 @@ export const config = {
     nuclei: process.env.BCI_NUCLEI_BIN || 'nuclei',
     naabu: process.env.BCI_NAABU_BIN || 'naabu',
   },
+  // AI Decision Support (spec section 41-43): AI_DISABLED is the safe
+  // default -- BCI's own security analysis never depends on it being
+  // configured. EXTERNAL_AI requires an API key; LOCAL_AI/PRIVATE_AI are
+  // reserved for a future on-prem/local-model provider, not implemented yet.
+  aiMode: process.env.BCI_AI_MODE || 'AI_DISABLED',
+  anthropicApiKey: process.env.BCI_ANTHROPIC_API_KEY || '',
   bootstrap: {
     orgName: process.env.BCI_BOOTSTRAP_ORG_NAME || '',
     adminEmail: process.env.BCI_BOOTSTRAP_ADMIN_EMAIL || '',

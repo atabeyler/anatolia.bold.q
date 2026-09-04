@@ -6,6 +6,7 @@ import { requirePermission } from '../lib/rbac.js';
 import { recordAuditEvent } from '../services/audit.js';
 import { createRemediation, listRemediationsForFinding, updateRemediationStatus } from '../services/remediation.js';
 import { verifyFix } from '../services/verify.js';
+import { explainFinding } from '../services/decisionSupport.js';
 
 export const findingsRouter = Router();
 
@@ -143,5 +144,17 @@ findingsRouter.post('/:id/verify-fix', requirePermission('finding:verify'), asyn
   if (!finding) return res.status(404).json({ error: 'finding_not_found', requestId: req.id });
 
   const outcome = await verifyFix(req.auth.orgId, req.auth.userId, req.params.id);
+  res.json(outcome);
+});
+
+// AI Decision Support (spec section 41) -- an explanation, never a
+// decision. Always returns something: a real AI explanation when
+// available, a deterministic plain-language summary otherwise (spec
+// section 62, AI unavailable never blocks the base analysis).
+findingsRouter.get('/:id/explain', requirePermission('finding:view'), async (req, res) => {
+  const finding = await loadOwnedFinding(req.auth.orgId, req.params.id);
+  if (!finding) return res.status(404).json({ error: 'finding_not_found', requestId: req.id });
+
+  const outcome = await explainFinding(req.auth.orgId, req.auth.userId, finding);
   res.json(outcome);
 });

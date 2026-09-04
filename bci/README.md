@@ -239,9 +239,34 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   exportable-artifact action); `GET /api/v1/reports` and `GET
   /api/v1/reports/:id` (`report:view`)
 
-Wiring engines into job execution (the Analysis Planner), AI decision
-support, ANATOLIA-Q integration, the standalone UI, enterprise/sovereign
-deployment, etc. land in later milestones (M13+).
+**M13 — AI Decision Support**
+- Provider abstraction (`src/ai/`): `AI_DISABLED` is the default and the
+  only mode implemented besides `EXTERNAL_AI` (an Anthropic provider) —
+  `LOCAL_AI`/`PRIVATE_AI` fall back to disabled rather than throwing, since
+  they aren't built yet (spec section 43's four modes)
+- **AI is never on the path that makes a security decision** — it only
+  explains a Finding whose risk/confidence/priority were already computed
+  deterministically (M7/M9). `explainFinding()` always returns something: a
+  real AI explanation when a provider is healthy, otherwise a deterministic
+  plain-language summary built from the Finding's own fields — spec section
+  62's "AI unavailable → base analysis continues" is enforced by construction
+  here, not by hoping the provider stays up
+- **DLP layer** (`src/ai/dlp.js`): redacts AWS keys, bearer tokens, generic
+  `password=`/`api_key=` assignments, and PEM private-key blocks from any
+  text before it would reach an external provider — independent of and in
+  addition to M6's HTTP-evidence redaction
+- **Hallucination control** (spec section 42, "AI yorumlar; kanıt
+  doğrular"): `verifyExploitationClaim()` never takes an "actively
+  exploited" claim on its own word — it's checked against the M8
+  intelligence knowledge base and only reported `CONFIRMED` when CISA KEV
+  actually backs it up, `UNVERIFIED` otherwise
+- `GET /api/v1/findings/:id/explain` (`finding:view`),
+  `GET /api/v1/intelligence/vulnerabilities/:cveId/exploitation-claim`
+  (`intel:view`) — both audited, including provider failures, not just successes
+
+Wiring engines into job execution (the Analysis Planner), ANATOLIA-Q
+integration, the standalone UI, enterprise/sovereign deployment, etc. land
+in later milestones (M14+).
 
 ## Development
 
