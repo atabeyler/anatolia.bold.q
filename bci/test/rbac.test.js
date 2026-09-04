@@ -22,7 +22,7 @@ describe('RBAC permission catalog', () => {
     const create = await request(app)
       .post('/api/v1/scopes')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'x', target: 'example.com', allowedScanClasses: ['PASSIVE'] });
+      .send({ name: 'x', target: 'example.com', allowedScanClasses: ['PASSIVE'], targetType: 'DOMAIN' });
     expect(create.status).toBe(403);
 
     const list = await request(app).get('/api/v1/scopes').set('Authorization', `Bearer ${token}`);
@@ -36,7 +36,7 @@ describe('RBAC permission catalog', () => {
     const create = await request(app)
       .post('/api/v1/scopes')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'x', target: 'example.com', allowedScanClasses: ['PASSIVE'] });
+      .send({ name: 'x', target: 'example.com', allowedScanClasses: ['PASSIVE'], targetType: 'DOMAIN' });
     expect(create.status).toBe(201);
 
     const approve = await request(app)
@@ -53,7 +53,7 @@ describe('RBAC permission catalog', () => {
     const create = await request(app)
       .post('/api/v1/scopes')
       .set('Authorization', `Bearer ${operatorToken}`)
-      .send({ name: 'x', target: 'example.com', allowedScanClasses: ['PASSIVE'] });
+      .send({ name: 'x', target: 'example.com', allowedScanClasses: ['PASSIVE'], targetType: 'DOMAIN' });
 
     const approve = await request(app)
       .post(`/api/v1/scopes/${create.body.scope.id}/approve`)

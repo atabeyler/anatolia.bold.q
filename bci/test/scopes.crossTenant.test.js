@@ -18,7 +18,7 @@ describe('cross-tenant isolation on /api/v1/scopes', () => {
     await request(app)
       .post('/api/v1/scopes')
       .set('Authorization', `Bearer ${bToken}`)
-      .send({ name: 'b-scope', target: 'b-internal.example', allowedScanClasses: ['PASSIVE'] });
+      .send({ name: 'b-scope', target: 'b-internal.example', allowedScanClasses: ['PASSIVE'], targetType: 'DOMAIN' });
 
     const aOperatorId = await createUser(orgA, { email: 'op@a.test', roleId: 'operator' });
     const aToken = signAccessToken({ userId: aOperatorId, orgId: orgA });
@@ -51,7 +51,7 @@ describe('cross-tenant isolation on /api/v1/scopes', () => {
     const created = await request(app)
       .post('/api/v1/scopes')
       .set('Authorization', `Bearer ${bToken}`)
-      .send({ name: 'b-scope', target: 'b-internal.example', allowedScanClasses: ['PASSIVE'] });
+      .send({ name: 'b-scope', target: 'b-internal.example', allowedScanClasses: ['PASSIVE'], targetType: 'DOMAIN' });
 
     const aAdminId = await createUser(orgA, { email: 'admin@a.test', roleId: 'security_admin' });
     const aToken = signAccessToken({ userId: aAdminId, orgId: orgA });

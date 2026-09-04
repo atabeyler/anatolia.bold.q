@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
 import { recordAuditEvent } from '../services/audit.js';
 import { evaluateScopeAuthorization } from '../services/policyEngine.js';
+import { TARGET_TYPES } from '../lib/targetMatcher.js';
 
 export const scopesRouter = Router();
 
@@ -13,6 +14,7 @@ scopesRouter.use(requireAuth);
 const createScopeSchema = z.object({
   name: z.string().min(1),
   target: z.string().min(1),
+  targetType: z.enum(TARGET_TYPES),
   allowedScanClasses: z.array(z.enum(['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED'])).min(1),
   intrusiveness: z.enum(['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED']).default('PASSIVE'),
   validUntil: z.string().datetime().optional(),
@@ -20,7 +22,7 @@ const createScopeSchema = z.object({
 
 scopesRouter.get('/', requirePermission('scope:view'), async (req, res) => {
   const { rows } = await query(
-    `SELECT id, name, target, allowed_scan_classes, intrusiveness, status,
+    `SELECT id, name, target, target_type, allowed_scan_classes, intrusiveness, status,
             valid_from, valid_until, created_by, approved_by, approved_at, created_at
        FROM authorized_scopes
       WHERE org_id = $1
@@ -39,13 +41,13 @@ scopesRouter.post('/', requirePermission('scope:create'), async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten(), requestId: req.id });
   }
-  const { name, target, allowedScanClasses, intrusiveness, validUntil } = parsed.data;
+  const { name, target, targetType, allowedScanClasses, intrusiveness, validUntil } = parsed.data;
 
   const { rows } = await query(
-    `INSERT INTO authorized_scopes (org_id, name, target, allowed_scan_classes, intrusiveness, valid_until, created_by, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')
+    `INSERT INTO authorized_scopes (org_id, name, target, target_type, allowed_scan_classes, intrusiveness, valid_until, created_by, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')
      RETURNING id, status`,
-    [req.auth.orgId, name, target, allowedScanClasses, intrusiveness, validUntil ?? null, req.auth.userId]
+    [req.auth.orgId, name, target, targetType, allowedScanClasses, intrusiveness, validUntil ?? null, req.auth.userId]
   );
 
   await recordAuditEvent({
