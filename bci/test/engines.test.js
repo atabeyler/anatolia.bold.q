@@ -1,0 +1,77 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resetDatabase } from './helpers/db.js';
+import { listAdapters, runHealthChecks, getEngineStatus } from '../src/engines/registry.js';
+import { assertValidAdapter } from '../src/engines/EngineAdapter.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SAST_FIXTURE = path.join(__dirname, 'fixtures/sast-sample');
+const SCA_FIXTURE = path.join(__dirname, 'fixtures/sca-sample');
+
+beforeEach(resetDatabase);
+
+describe('engine registry', () => {
+  it('registers exactly the five M5 adapters, each conforming to the adapter contract', () => {
+    const adapters = listAdapters();
+    const ids = adapters.map((a) => a.id).sort();
+    expect(ids).toEqual(['naabu', 'nuclei', 'osv-scanner', 'semgrep', 'trivy']);
+    adapters.forEach((a) => expect(() => assertValidAdapter(a)).not.toThrow());
+  });
+
+  it('healthCheck() never throws, even if a binary is missing (fail visible, not fail crash)', async () => {
+    const results = await runHealthChecks();
+    expect(results).toHaveLength(5);
+    for (const r of results) {
+      expect(['HEALTHY', 'DEGRADED', 'OFFLINE']).toContain(r.status);
+    }
+  });
+
+  it('persists registry + health so GET /api/v1/engines has something to read', async () => {
+    await runHealthChecks();
+    const status = await getEngineStatus();
+    expect(status).toHaveLength(5);
+    expect(status.every((e) => e.last_checked_at)).toBe(true);
+  });
+});
+
+// These exercise the real, locally-installed binaries. They degrade
+// gracefully (skip, not fail) when a given engine isn't installed in this
+// environment -- CI or a fresh dev machine won't have every scanner
+// pre-installed, and that's an OFFLINE engine-health fact (spec section 62),
+// not a broken test suite.
+async function ifHealthy(id) {
+  const adapters = listAdapters();
+  const adapter = adapters.find((a) => a.id === id);
+  const health = await adapter.healthCheck();
+  return { adapter, healthy: health.status === 'HEALTHY' };
+}
+
+describe('real engine execution (skips if the binary is not installed)', () => {
+  it('Trivy fs-scans a local directory and returns parseable JSON', async () => {
+    const { adapter, healthy } = await ifHealthy('trivy');
+    if (!healthy) return;
+    const { raw } = await adapter.execute({ target: SAST_FIXTURE, timeoutMs: 60_000 });
+    expect(raw).toBeTypeOf('object');
+  }, 60_000);
+
+  it('OSV-Scanner scans a real lockfile and returns parseable JSON', async () => {
+    const { adapter, healthy } = await ifHealthy('osv-scanner');
+    if (!healthy) return;
+    const { raw } = await adapter.execute({ target: SCA_FIXTURE, timeoutMs: 60_000 });
+    expect(raw).toBeTypeOf('object');
+  }, 60_000);
+
+  it('Semgrep scans a real source file and returns parseable JSON', async () => {
+    // Not asserting a specific finding count: which rules the `auto`
+    // registry config pulls in varies by network/cache state, and pinning
+    // this test to "the eval() in the fixture gets flagged" would make it
+    // flaky for reasons that have nothing to do with the adapter's own
+    // correctness (argv construction, exit-code handling, JSON parsing).
+    const { adapter, healthy } = await ifHealthy('semgrep');
+    if (!healthy) return;
+    const { raw } = await adapter.execute({ target: SAST_FIXTURE, timeoutMs: 90_000 });
+    expect(Array.isArray(raw.results)).toBe(true);
+    expect(Array.isArray(raw.errors)).toBe(true);
+  }, 90_000);
+});

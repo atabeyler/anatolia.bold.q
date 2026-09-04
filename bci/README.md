@@ -57,9 +57,34 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - No engine adapters exist yet (M5), so the worker currently runs a stub
   analysis — that stub is exactly the seam M5's real adapters plug into
 
-Engine adapters, findings, normalization/correlation, risk/confidence
-scoring, etc. land in later milestones (M5+) — none of that exists here
-yet.
+**M5 — Hybrid Engine Adapters**
+- `src/engines/EngineAdapter.js` — the adapter contract (duck-typed:
+  `id`, `intrusiveness`, `supportedTargetTypes`, `healthCheck()`,
+  `execute()`); today's engine can be swapped for tomorrow's without
+  touching anything outside its own adapter module
+- Five adapters, each a thin wrapper around a real CLI via `execFile`-style
+  `spawn` (argv array, never a shell string — no command injection surface):
+  - **Trivy** (Apache-2.0) — filesystem/container SCA + secrets + IaC, PASSIVE
+  - **OSV-Scanner** (Apache-2.0) — lockfile/SBOM vulnerability matching, PASSIVE
+  - **Semgrep** (LGPL-2.1) — SAST, PASSIVE
+  - **Nuclei** (MIT) — template-based HTTP probing, SAFE_ACTIVE; ships a
+    bundled BCI-native template (`src/engines/templates/nuclei/`) instead of
+    depending on `nuclei -update-templates`, which needs the internet and
+    can't work in a Sovereign/air-gapped deployment (spec section 52)
+  - **naabu** (MIT) — TCP port discovery, SAFE_ACTIVE; used **instead of
+    Nmap**, whose license restricts bundling into a redistributed product
+    without a separate license from Insecure.Com LLC (spec section 68)
+- `engine_registry` + `engine_health` (`GET /api/v1/engines`) — an engine
+  that isn't installed reports OFFLINE, not a crash; a dead engine must
+  never make a run silently look fully covered (spec section 48)
+- `raw_observations` — engine-native output, stored as-is; turning this
+  into BCI's common schema is Normalization's job (M6), not an adapter's
+- Not yet wired into `scan_jobs` execution — picking which engines run for
+  a given target is the Analysis Planner's job (spec section 9), a
+  separate concern from "does the adapter itself work"
+
+Wiring engines into job execution, normalization/correlation, findings,
+risk/confidence scoring, etc. land in later milestones (M6+).
 
 ## Development
 

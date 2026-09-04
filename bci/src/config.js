@@ -15,6 +15,13 @@ export const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   jwtSecret: process.env.BCI_JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-only-insecure-secret' : ''),
   jwtTtlSeconds: Number(process.env.BCI_JWT_TTL_SECONDS) || 14400,
+  engineBins: {
+    trivy: process.env.BCI_TRIVY_BIN || 'trivy',
+    osvScanner: process.env.BCI_OSV_SCANNER_BIN || 'osv-scanner',
+    semgrep: process.env.BCI_SEMGREP_BIN || 'semgrep',
+    nuclei: process.env.BCI_NUCLEI_BIN || 'nuclei',
+    naabu: process.env.BCI_NAABU_BIN || 'naabu',
+  },
   bootstrap: {
     orgName: process.env.BCI_BOOTSTRAP_ORG_NAME || '',
     adminEmail: process.env.BCI_BOOTSTRAP_ADMIN_EMAIL || '',
