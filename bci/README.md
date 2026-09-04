@@ -293,9 +293,20 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   589/589, both green; `server/tsc --noEmit` and both projects' `eslint`
   clean
 
-The standalone BCI UI and enterprise/sovereign deployment hardening
-(air-gapped intelligence bundles, HA, signed releases) land in the
-remaining milestones (M15-M16).
+**M15 — Standalone BCI UI**
+- A minimal but real React frontend under `bci/ui/` (its own Vite app,
+  own tests) — see [`bci/ui/README.md`](./ui/README.md) for the page list.
+  Not the full 17-area surface from the long-term spec, but every page that
+  exists is wired to a live endpoint and does what it says, verified
+  end-to-end during development against a real running BCI API with a
+  headless browser (login → dashboard scores → creating an asset through
+  the UI and seeing it land in the database → logout)
+- RBAC stays server-side: the UI only hides actions a token lacks
+  permission for, never the only check
+
+Enterprise/sovereign deployment hardening (signed offline intelligence
+bundles, HA, backup/restore, signed releases) is the remaining milestone
+(M16).
 
 ## Development
 
