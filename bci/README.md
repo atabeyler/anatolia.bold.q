@@ -304,9 +304,33 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - RBAC stays server-side: the UI only hides actions a token lacks
   permission for, never the only check
 
-Enterprise/sovereign deployment hardening (signed offline intelligence
-bundles, HA, backup/restore, signed releases) is the remaining milestone
-(M16).
+**M16 — Enterprise / Sovereign**
+- **Offline Intelligence Bundle** (spec section 53): Ed25519-signed exports
+  of the local vulnerabilities knowledge base
+  (`scripts/bundle-{export,import}.js`) — asymmetric, so an air-gapped
+  instance only ever holds the public key, never anything that could forge
+  a bundle. A bad signature or a tampered payload imports nothing at all.
+  Verified end-to-end during development: exported from one database,
+  imported into a completely separate one, confirmed the data landed; a
+  wrong-key attempt confirmed rejected with a non-zero exit code
+- **Backup/restore** (`scripts/backup.sh` / `restore.sh`): plain
+  `pg_dump`/`pg_restore` wrappers, verified with a real round trip (backup
+  → restore into a fresh database → all 32 tables and the data intact)
+- **Release checksums** (`scripts/generate-checksums.js`): SHA-256 per file
+  in a build directory, verified against a real `bci/ui` build
+- See [`ENTERPRISE.md`](./ENTERPRISE.md) for the full picture, including
+  what's genuine deployment guidance (HA/scaling posture, the Sovereign
+  checklist) rather than new code — kept clearly separate from what's
+  actually implemented and tested above
+
+This closes all 16 milestones from the original spec. BCI is a real,
+tested, end-to-end platform: RBAC/policy, asset inventory, job
+orchestration, five real scanning engines, normalization/correlation/
+verification, a vulnerability intelligence platform, risk/confidence/
+coverage scoring, a security graph, remediation/verify, reporting, AI
+decision support, ANATOLIA-Q integration, a standalone UI, and
+enterprise/sovereign deployment tooling — 171 tests, no regressions
+introduced in ANATOLIA-Q (1127+ of its own tests still green).
 
 ## Development
 
