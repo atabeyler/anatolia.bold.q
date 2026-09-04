@@ -197,9 +197,31 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
 - `POST /api/v1/graph/sync` (`asset:update` — it writes derived data),
   `GET /api/v1/graph/assets/:assetId/reachable` (`asset:view` — read-only)
 
-Wiring engines into job execution (the Analysis Planner), remediation
-lifecycle, reporting, AI decision support, etc. land in later milestones
-(M11+).
+**M11 — Remediation & Verify**
+- `remediations`: assigning one moves a `NEW` finding to `ASSIGNED`;
+  marking it `DONE` moves the finding to `READY_FOR_VERIFICATION` — the
+  finding's own status lifecycle stays the single source of truth, this
+  just drives it
+- **BCI Verify** (`services/verify.js`, spec section 35): a *targeted*
+  re-check, never a full re-scan. Only re-checkable when the original
+  detection was itself a live probe: a WEB finding re-runs Nuclei with
+  `-template-id <the original rule>` against just that target; a
+  NETWORK_DISCOVERY finding re-runs naabu against just that port. A static
+  SAST/SCA/SECRETS finding has no live signal to re-observe without a fresh
+  checkout this milestone doesn't have, so it's honestly `INCONCLUSIVE`
+  rather than guessed at — and a re-check is still policy-gated through the
+  same `evaluateScopeAuthorization` as any other active probe: no approved
+  SAFE_ACTIVE scope means `INCONCLUSIVE`, never a silent bypass
+- `FIX_VERIFIED` moves the finding to `VERIFIED_FIXED`; every attempt
+  (including `INCONCLUSIVE`) is kept in `verification_runs`, append-only
+- Real end-to-end tests against a self-owned local target: a missing-HSTS
+  Nuclei finding is `VULNERABILITY_REMAINS` while unfixed and
+  `FIX_VERIFIED` the moment the header is added; an open-port naabu finding
+  the same way once the port is closed
+
+Wiring engines into job execution (the Analysis Planner), reporting, AI
+decision support, ANATOLIA-Q integration, etc. land in later milestones
+(M12+).
 
 ## Development
 

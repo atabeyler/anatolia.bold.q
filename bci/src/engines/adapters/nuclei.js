@@ -38,21 +38,23 @@ export const nucleiAdapter = {
   // SAFE_ACTIVE (or higher) before ever calling execute() -- the adapter
   // itself has no scope awareness, by design (that decision lives only in
   // the policy engine, see services/policyEngine.js).
-  async execute({ target, timeoutMs = 120_000, rateLimit = 10, templatesDir = BUNDLED_TEMPLATES_DIR }) {
-    const { stdout } = await runBinary(
-      BIN,
-      [
-        '-target', target,
-        '-templates', templatesDir,
-        '-jsonl',
-        '-silent',
-        '-etags', 'dos,fuzz,intrusive',
-        '-rate-limit', String(rateLimit),
-        '-no-interactsh',
-        '-disable-update-check',
-      ],
-      { timeoutMs, allowedExitCodes: [0] }
-    );
+  // templateId: for a targeted re-check (spec section 35's "BCI Verify" --
+  // re-probe just the one rule that originally fired, not the whole
+  // template set) rather than a full re-scan.
+  async execute({ target, timeoutMs = 120_000, rateLimit = 10, templatesDir = BUNDLED_TEMPLATES_DIR, templateId }) {
+    const args = [
+      '-target', target,
+      '-templates', templatesDir,
+      '-jsonl',
+      '-silent',
+      '-etags', 'dos,fuzz,intrusive',
+      '-rate-limit', String(rateLimit),
+      '-no-interactsh',
+      '-disable-update-check',
+    ];
+    if (templateId) args.push('-template-id', templateId);
+
+    const { stdout } = await runBinary(BIN, args, { timeoutMs, allowedExitCodes: [0] });
     const raw = stdout
       .split('\n')
       .filter(Boolean)

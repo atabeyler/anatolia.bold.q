@@ -4,6 +4,8 @@ import { query } from '../db/client.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
 import { recordAuditEvent } from '../services/audit.js';
+import { createRemediation, listRemediationsForFinding, updateRemediationStatus } from '../services/remediation.js';
+import { verifyFix } from '../services/verify.js';
 
 export const findingsRouter = Router();
 
@@ -89,3 +91,57 @@ findingsRouter.post('/:id/false-positive', requirePermission('finding:verify'), 
 findingsRouter.post('/:id/accept-risk', requirePermission('finding:verify'), (req, res) =>
   setStatus(req, res, req.params.id, 'ACCEPTED_RISK', null)
 );
+
+const createRemediationSchema = z.object({
+  recommendation: z.string().min(1),
+  assigneeUserId: z.string().uuid().optional(),
+});
+
+findingsRouter.post('/:id/remediations', requirePermission('finding:update'), async (req, res) => {
+  const finding = await loadOwnedFinding(req.auth.orgId, req.params.id);
+  if (!finding) return res.status(404).json({ error: 'finding_not_found', requestId: req.id });
+
+  const parsed = createRemediationSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_request', requestId: req.id });
+
+  const remediation = await createRemediation({
+    orgId: req.auth.orgId,
+    actorUserId: req.auth.userId,
+    findingId: req.params.id,
+    recommendation: parsed.data.recommendation,
+    assigneeUserId: parsed.data.assigneeUserId,
+  });
+  res.status(201).json({ remediation });
+});
+
+findingsRouter.get('/:id/remediations', requirePermission('finding:view'), async (req, res) => {
+  const finding = await loadOwnedFinding(req.auth.orgId, req.params.id);
+  if (!finding) return res.status(404).json({ error: 'finding_not_found', requestId: req.id });
+  res.json({ remediations: await listRemediationsForFinding(req.auth.orgId, req.params.id) });
+});
+
+const remediationStatusSchema = z.object({ status: z.enum(['OPEN', 'IN_PROGRESS', 'DONE']) });
+
+findingsRouter.patch('/:id/remediations/:remediationId', requirePermission('finding:update'), async (req, res) => {
+  const parsed = remediationStatusSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid_request', requestId: req.id });
+
+  const remediation = await updateRemediationStatus({
+    orgId: req.auth.orgId,
+    actorUserId: req.auth.userId,
+    remediationId: req.params.remediationId,
+    status: parsed.data.status,
+  });
+  if (!remediation) return res.status(404).json({ error: 'remediation_not_found', requestId: req.id });
+  res.json({ remediation });
+});
+
+// BCI Verify (spec section 35) -- finding:verify, same permission as the
+// other verification decisions above, since this is also a verification act.
+findingsRouter.post('/:id/verify-fix', requirePermission('finding:verify'), async (req, res) => {
+  const finding = await loadOwnedFinding(req.auth.orgId, req.params.id);
+  if (!finding) return res.status(404).json({ error: 'finding_not_found', requestId: req.id });
+
+  const outcome = await verifyFix(req.auth.orgId, req.auth.userId, req.params.id);
+  res.json(outcome);
+});
