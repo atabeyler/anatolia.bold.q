@@ -1,6 +1,7 @@
 import { query } from '../db/client.js';
 import { computeVerificationStatus } from './verification.js';
 import { computeConfidenceScore } from './confidence.js';
+import { recomputeFindingRisk } from './risk.js';
 
 // The correlation key is what makes "Nuclei and BCI Native both flagged the
 // same thing" collapse into one Finding instead of two (spec section 22).
@@ -94,4 +95,10 @@ export async function recomputeFindingScores(findingId) {
     `UPDATE findings SET verification_status = $1, confidence_score = $2, updated_at = now() WHERE id = $3`,
     [verificationStatus, confidenceScore, findingId]
   );
+
+  // Risk depends on confidence (a low-confidence finding must read as lower
+  // risk, spec section 24), so it's recomputed right after confidence is,
+  // every time a source is added -- never left stale from a Finding's
+  // original creation.
+  await recomputeFindingRisk(findingId);
 }

@@ -151,8 +151,36 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   `POST /api/v1/intelligence/sync-kev` (`intel:manage` — an outbound network
   call, gated stronger than a read)
 
-Wiring engines into job execution (the Analysis Planner), risk/priority
-scoring, the Security Graph, etc. land in later milestones (M9+).
+**M9 — Risk / Confidence / Coverage**
+- **BCI Risk Score v1** (`services/risk.js`): CVSS stays the technical
+  reference — this builds on top of it with EPSS, KEV, asset criticality,
+  and confidence, never replacing it. Confidence explicitly *dampens* risk
+  (0.5×–1.0× factor) rather than gating it off, so a high-severity,
+  low-confidence finding reads as lower risk without disappearing — the
+  spec section 24 worked example ("Risk 97, Confidence 41" must not look
+  like "Risk 97, Confidence 99")
+- **BCI Priority** (`computePriority`): a separate axis from the numeric
+  score — KEV listing alone forces IMMEDIATE regardless of exactly where
+  the score landed, because active exploitation is categorical, not a
+  matter of degree
+- Correlation (M7) now calls `recomputeFindingRisk` every time a Finding's
+  sources change, so risk never goes stale from a Finding's original
+  creation; `risk_history` keeps one append-only row per recompute so an
+  old score stays explainable even after the live one has moved on
+- **BCI Security Score** (`services/securityScore.js`): NOT an average — a
+  handful of open critical findings hurt more than many low ones (tiered
+  deduction), and closed/false-positive/accepted-risk findings stop
+  counting entirely
+- **BCI Coverage Score** (`services/coverageScore.js`): per asset type,
+  which analysis categories are expected (a REPOSITORY expects SAST+SCA+
+  SECRETS; a HOST expects NETWORK_DISCOVERY; ...) versus how many have ever
+  actually been observed — an org with a high Security Score and low
+  Coverage Score is flagged as under-analyzed, not falsely "secure"
+- `GET /api/v1/risk/security-score`, `GET /api/v1/risk/coverage-score`
+  (`report:view`)
+
+Wiring engines into job execution (the Analysis Planner), the Security
+Graph, remediation/reporting, etc. land in later milestones (M10+).
 
 ## Development
 
