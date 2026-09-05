@@ -204,10 +204,14 @@ export default function QuantumPage() {
       {optimizeResult && (
         <div className="card">
           <div>
-            Verdict: <span className={`badge ${optimizeResult.verdict === 'QUANTUM_BENEFIT_OBSERVED' ? 'ok' : 'muted'}`}>{optimizeResult.verdict || 'N/A'}</span>
+            Verdict: <span className={`badge ${optimizeResult.verdict === 'QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD' ? 'ok' : 'muted'}`}>{optimizeResult.verdict || 'N/A'}</span>
           </div>
           {optimizeResult.note && <div style={{ color: 'var(--muted)', fontSize: 13 }}>{optimizeResult.note}</div>}
-          {optimizeResult.expectedRiskReduction != null && <div>Expected risk reduction: {optimizeResult.expectedRiskReduction}</div>}
+          {optimizeResult.optimizationObjective != null && (
+            <div title="The optimizer's own objective value for the selected findings -- not a measured real-world risk reduction.">
+              Optimization objective: {optimizeResult.optimizationObjective}
+            </div>
+          )}
           {optimizeResult.selection?.length > 0 && (
             <ul>
               {optimizeResult.selection.map((s) => <li key={s.id || s.title}>{s.title || s.id}</li>)}
@@ -223,7 +227,7 @@ export default function QuantumPage() {
           {benchmarks.map((b) => (
             <tr key={b.id}>
               <td>{b.workload_source}</td>
-              <td><span className={`badge ${b.verdict === 'QUANTUM_BENEFIT_OBSERVED' ? 'ok' : 'muted'}`}>{b.verdict}</span></td>
+              <td><span className={`badge ${b.verdict === 'QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD' ? 'ok' : 'muted'}`}>{b.verdict}</span></td>
               <td>{new Date(b.created_at).toLocaleString()}</td>
             </tr>
           ))}

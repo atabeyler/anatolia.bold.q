@@ -28,10 +28,16 @@ async function runProvider(providerId, mode, problem, options) {
 // 'quantum kullandık' diye quantum sonucu tercih etmemelidir." Always runs
 // the classical baseline; runs quantum-inspired unconditionally too (it's
 // free/local); only adds the simulator/hardware attempt the execution
-// policy actually resolved to. QUANTUM_BENEFIT_OBSERVED requires a
-// STRICTLY better feasible objective than the classical baseline -- an
-// equal or worse result is NO_QUANTUM_ADVANTAGE_DEMONSTRATED, full stop,
-// regardless of which provider produced it.
+// policy actually resolved to.
+//
+// The verdict is deliberately named QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD
+// rather than a bare "QUANTUM_ADVANTAGE" or "QUANTUM_BENEFIT_OBSERVED": one
+// knapsack instance beating the classical baseline on objective value is
+// not a general scientific claim of quantum advantage, and must never be
+// presented as one -- it is a workload-scoped, single-run observation.
+// Requires a STRICTLY better feasible objective than the classical
+// baseline -- an equal or worse result is NO_QUANTUM_ADVANTAGE_DEMONSTRATED,
+// full stop, regardless of which provider produced it.
 export async function runBenchmark({ orgId, actorUserId, workloadSource, problem, dataClassification = 'INTERNAL' }) {
   const benchmarkId = randomUUID();
   const inputHash = canonicalHash(problem);
@@ -85,7 +91,7 @@ export async function runBenchmark({ orgId, actorUserId, workloadSource, problem
   // advantage (spec section 8: advantage must be measured, not assumed).
   const verdict =
     best && best.providerId !== 'classical' && classicalValue != null && best.result.objectiveValue > classicalValue
-      ? 'QUANTUM_BENEFIT_OBSERVED'
+      ? 'QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD'
       : 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED';
 
   const results = Object.fromEntries(attempts.map((a) => [a.providerId, a.ok ? { ...a.result, wallTimeMs: a.wallTimeMs } : { error: a.error, wallTimeMs: a.wallTimeMs }]));

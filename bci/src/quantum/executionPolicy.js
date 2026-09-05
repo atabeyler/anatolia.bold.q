@@ -47,58 +47,89 @@ function classificationAllowed(dataClassification, maxAllowed) {
 // this workload -- never "quantum because it's available", only "quantum
 // because policy explicitly allows it, the data is allowed to leave (for
 // hardware), and the provider is actually usable."
-export function decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize }) {
+// Official fallback chain (spec section 6):
+//   IBM QUANTUM HARDWARE -> LOCAL QUANTUM SIMULATOR -> QUANTUM-INSPIRED -> CLASSICAL
+// Quantum-inspired has no external dependency and no policy gate of its own
+// (it never leaves the machine, same as classical) -- it is the last rung
+// before classical, not a step that can itself be "denied". Every fallback
+// carries the real reason the step above it wasn't used, so a resolved
+// mode is never mislabeled as CLASSICAL when quantum-inspired was actually
+// what ran.
+export function decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize, quantumInspiredMaxSize }) {
   if (!policy.allowQuantumSimulator && !policy.allowQuantumHardware) {
     return { mode: COMPUTE_MODES.CLASSICAL, reason: 'org_policy_denies_quantum' };
   }
 
+  const ctx = { policy, problemSize, providerHealthById, simulatorMaxSize, quantumInspiredMaxSize };
+
   // Real IBM hardware is tried first (when allowed) since it's the only
   // mode that actually runs on a physical QPU -- but a block at any one of
-  // these checks falls through to try the local simulator, never straight
-  // to an error: a data-classification denial or a down provider is a
-  // reason to stay local, never a reason to refuse the analysis outright
-  // (spec section 62).
+  // these checks falls through the chain, never straight to an error: a
+  // data-classification denial or a down provider is a reason to fall back
+  // a step, never a reason to refuse the analysis outright (spec section 62).
   if (policy.allowQuantumHardware) {
     if (!classificationAllowed(dataClassification, policy.maxExternalDataClassification)) {
-      return fallBackToLocal(policy, problemSize, simulatorMaxSize, providerHealthById, 'data_classification_denies_external_quantum');
+      return fallBackFromHardware(ctx, 'data_classification_denies_external_quantum');
     }
 
     const health = providerHealthById.ibm_quantum;
     const hardwareHealthy = health && (health.status === PROVIDER_HEALTH.AVAILABLE || health.status === PROVIDER_HEALTH.DEGRADED);
     if (!hardwareHealthy) {
-      return fallBackToLocal(policy, problemSize, simulatorMaxSize, providerHealthById, `ibm_provider_${health?.status?.toLowerCase() || 'unavailable'}`);
+      return fallBackFromHardware(ctx, `ibm_provider_${health?.status?.toLowerCase() || 'unavailable'}`);
     }
 
     if (hardwareMaxSize != null && problemSize > hardwareMaxSize) {
-      return fallBackToLocal(policy, problemSize, simulatorMaxSize, providerHealthById, 'problem_too_large_for_hardware');
+      return fallBackFromHardware(ctx, 'problem_too_large_for_hardware');
     }
 
     return { mode: COMPUTE_MODES.QUANTUM_HARDWARE, reason: 'policy_allows_and_provider_available' };
   }
 
-  return fallBackToLocal(policy, problemSize, simulatorMaxSize, providerHealthById, 'hardware_not_allowed_by_policy');
+  return fallBackFromHardware(ctx, 'hardware_not_allowed_by_policy');
 }
 
-function fallBackToLocal(policy, problemSize, simulatorMaxSize, providerHealthById, fallbackReason) {
+// `hardwareReason` is why hardware itself wasn't used -- preserved as the
+// decision's reason if the simulator is what actually runs (an org reading
+// "why did this land on the simulator" wants to know about hardware, not
+// about the simulator that succeeded). If the simulator ALSO can't run,
+// though, hardwareReason stops being the interesting fact -- the simulator
+// failure becomes the new, more proximate reason carried further down.
+function fallBackFromHardware(ctx, hardwareReason) {
+  const { policy, problemSize, providerHealthById, simulatorMaxSize } = ctx;
   if (policy.allowQuantumSimulator) {
     const health = providerHealthById.quantum_simulator;
     const healthy = health && health.status === PROVIDER_HEALTH.AVAILABLE;
     const sizeOk = simulatorMaxSize == null || problemSize <= simulatorMaxSize;
     if (healthy && sizeOk) {
-      return { mode: COMPUTE_MODES.QUANTUM_SIMULATOR, reason: fallbackReason };
+      return { mode: COMPUTE_MODES.QUANTUM_SIMULATOR, reason: hardwareReason };
     }
+    const simulatorReason = !healthy ? `simulator_${health?.status?.toLowerCase() || 'unavailable'}` : 'problem_too_large_for_simulator';
+    return fallBackFromSimulator(ctx, simulatorReason);
   }
-  return { mode: COMPUTE_MODES.CLASSICAL, reason: fallbackReason };
+  return fallBackFromSimulator(ctx, hardwareReason);
+}
+
+function fallBackFromSimulator(ctx, reasonIfQuantumInspiredUsed) {
+  const { problemSize, providerHealthById, quantumInspiredMaxSize } = ctx;
+  const health = providerHealthById.quantum_inspired;
+  const healthy = health && health.status === PROVIDER_HEALTH.AVAILABLE;
+  const sizeOk = quantumInspiredMaxSize == null || problemSize <= quantumInspiredMaxSize;
+  if (healthy && sizeOk) {
+    return { mode: COMPUTE_MODES.QUANTUM_INSPIRED, reason: reasonIfQuantumInspiredUsed };
+  }
+  const classicalReason = !healthy ? `quantum_inspired_${health?.status?.toLowerCase() || 'unavailable'}` : 'problem_too_large_for_quantum_inspired';
+  return { mode: COMPUTE_MODES.CLASSICAL, reason: classicalReason };
 }
 
 export async function resolveExecutionMode({ orgId, problemSize, dataClassification = 'INTERNAL' }) {
   const policy = await getQuantumPolicy(orgId);
   const providerHealthById = {};
-  for (const id of ['quantum_simulator', 'ibm_quantum']) {
+  for (const id of ['quantum_simulator', 'ibm_quantum', 'quantum_inspired']) {
     providerHealthById[id] = await getQuantumProvider(id).getProviderHealth();
   }
   const simulatorMaxSize = getQuantumProvider('quantum_simulator').getCapabilities().maxProblemSize;
   const hardwareMaxSize = getQuantumProvider('ibm_quantum').getCapabilities().maxProblemSize;
+  const quantumInspiredMaxSize = getQuantumProvider('quantum_inspired').getCapabilities().maxProblemSize;
 
-  return decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize });
+  return decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize, quantumInspiredMaxSize });
 }

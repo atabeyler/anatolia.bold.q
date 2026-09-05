@@ -30,22 +30,49 @@ describe('decideExecutionMode (pure) — spec section 7', () => {
     expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_SIMULATOR);
   });
 
-  it('falls back to CLASSICAL when the simulator is allowed but NOT_CONFIGURED', () => {
+  // Explicitly marking quantum_inspired UNAVAILABLE here (rather than
+  // omitting it) makes clear these two are testing "nothing at all is
+  // usable, all the way down the chain" -- not accidentally passing
+  // because a lower rung was never checked.
+  it('falls back to CLASSICAL when the simulator is NOT_CONFIGURED and quantum-inspired is also unavailable', () => {
     const decision = decideExecutionMode({
       problemSize: 4, policy: SIM_ONLY_POLICY, dataClassification: 'PUBLIC',
-      providerHealthById: { quantum_simulator: NOT_CONFIGURED, ibm_quantum: NOT_CONFIGURED },
-      simulatorMaxSize: 10, hardwareMaxSize: 12,
+      providerHealthById: { quantum_simulator: NOT_CONFIGURED, ibm_quantum: NOT_CONFIGURED, quantum_inspired: { status: PROVIDER_HEALTH.UNAVAILABLE } },
+      simulatorMaxSize: 10, hardwareMaxSize: 12, quantumInspiredMaxSize: 500,
     });
     expect(decision.mode).toBe(COMPUTE_MODES.CLASSICAL);
   });
 
-  it('falls back to CLASSICAL when the problem exceeds the simulator qubit ceiling', () => {
+  it('falls back to CLASSICAL when the problem exceeds both the simulator and quantum-inspired ceilings', () => {
     const decision = decideExecutionMode({
-      problemSize: 50, policy: SIM_ONLY_POLICY, dataClassification: 'PUBLIC',
-      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: NOT_CONFIGURED },
-      simulatorMaxSize: 10, hardwareMaxSize: 12,
+      problemSize: 1000, policy: SIM_ONLY_POLICY, dataClassification: 'PUBLIC',
+      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: NOT_CONFIGURED, quantum_inspired: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12, quantumInspiredMaxSize: 500,
     });
     expect(decision.mode).toBe(COMPUTE_MODES.CLASSICAL);
+  });
+
+  // The fallback chain this whole test suite exists to enforce (spec
+  // section 6): IBM HARDWARE -> LOCAL SIMULATOR -> QUANTUM-INSPIRED ->
+  // CLASSICAL. Quantum-inspired must be tried before giving up to
+  // classical, not skipped straight past.
+  it('falls back to QUANTUM_INSPIRED (not straight to CLASSICAL) when the simulator is unavailable but quantum-inspired is healthy', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: SIM_ONLY_POLICY, dataClassification: 'PUBLIC',
+      providerHealthById: { quantum_simulator: NOT_CONFIGURED, ibm_quantum: NOT_CONFIGURED, quantum_inspired: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12, quantumInspiredMaxSize: 500,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_INSPIRED);
+    expect(decision.reason).toBe('simulator_not_configured');
+  });
+
+  it('falls back to QUANTUM_INSPIRED when IBM hardware is unavailable and the simulator is also unavailable', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'INTERNAL',
+      providerHealthById: { quantum_simulator: NOT_CONFIGURED, ibm_quantum: { status: PROVIDER_HEALTH.UNAVAILABLE }, quantum_inspired: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12, quantumInspiredMaxSize: 500,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_INSPIRED);
   });
 
   it('uses IBM hardware when policy allows it, data classification permits, and it is available', () => {
@@ -75,6 +102,16 @@ describe('decideExecutionMode (pure) — spec section 7', () => {
       simulatorMaxSize: 10, hardwareMaxSize: 12,
     });
     expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_SIMULATOR);
+  });
+
+  it('the CLASSICAL fallback reason names quantum-inspired specifically when even that is unavailable', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: SIM_ONLY_POLICY, dataClassification: 'PUBLIC',
+      providerHealthById: { quantum_simulator: NOT_CONFIGURED, ibm_quantum: NOT_CONFIGURED, quantum_inspired: { status: PROVIDER_HEALTH.UNAVAILABLE } },
+      simulatorMaxSize: 10, hardwareMaxSize: 12, quantumInspiredMaxSize: 500,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.CLASSICAL);
+    expect(decision.reason).toBe('quantum_inspired_unavailable');
   });
 
   it('an unrecognized data classification fails closed (never treated as low-sensitivity)', () => {

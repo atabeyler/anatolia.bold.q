@@ -59,7 +59,7 @@ export async function buildRemediationProblem(orgId) {
 export async function optimizeRemediation({ orgId, actorUserId, effortBudget, dataClassification = 'INTERNAL' }) {
   const items = await buildRemediationProblem(orgId);
   if (items.length === 0) {
-    return { benchmarkId: null, verdict: 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED', selectedFindingIds: [], expectedRiskReduction: 0, note: 'no open findings with a computed risk score' };
+    return { benchmarkId: null, verdict: 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED', selectedFindingIds: [], optimizationObjective: 0, note: 'no open findings with a computed risk score' };
   }
 
   const problem = { items: items.map(({ title: _title, ...rest }) => rest), budget: effortBudget };
@@ -76,7 +76,11 @@ export async function optimizeRemediation({ orgId, actorUserId, effortBudget, da
     executionMode: benchmark.executionMode,
     selectedFindingIds: selection.map((s) => s.findingId),
     selection,
-    expectedRiskReduction: benchmark.best?.objectiveValue ?? 0,
+    // The knapsack's summed value (risk_score x blast-radius multiplier) of
+    // the selected findings -- the optimizer's own objective function, NOT
+    // a measured or validated real-world enterprise risk reduction. Named
+    // for what it actually is; see spec section 10's terminology note.
+    optimizationObjective: benchmark.best?.objectiveValue ?? 0,
     results: benchmark.results,
   };
 }

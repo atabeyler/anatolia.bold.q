@@ -48,9 +48,9 @@ describe('optimizeRemediation (integration, real benchmark)', () => {
     const result = await optimizeRemediation({ orgId, actorUserId: userId, effortBudget: 2 });
 
     expect(result.benchmarkId).toBeDefined();
-    expect(result.expectedRiskReduction).toBeGreaterThan(0);
+    expect(result.optimizationObjective).toBeGreaterThan(0);
     expect(result.selection.length).toBeGreaterThan(0);
-    expect(['QUANTUM_BENEFIT_OBSERVED', 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED']).toContain(result.verdict);
+    expect(['QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD', 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED']).toContain(result.verdict);
   });
 
   it('reports honestly when there is nothing to optimize', async () => {

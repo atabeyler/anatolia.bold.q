@@ -409,7 +409,7 @@ in an air-gapped Sovereign deployment — with quantum entirely absent.
   and health allow. Records one `quantum_jobs` row per provider attempt
   (status, input/output hash, timestamps — provenance, never credentials)
   and one `quantum_benchmarks` row with a verdict of
-  `QUANTUM_BENEFIT_OBSERVED` only when a quantum method's feasible
+  `QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD` only when a quantum method's feasible
   objective value is **strictly greater** than the classical baseline's —
   otherwise `NO_QUANTUM_ADVANTAGE_DEMONSTRATED`. A failed provider attempt
   is recorded as FAILED, never silently dropped
