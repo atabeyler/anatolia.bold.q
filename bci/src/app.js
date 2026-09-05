@@ -1,4 +1,13 @@
 import express from 'express';
+// Patches Express 4's router so a rejected promise from an async route
+// handler reaches the error-handling middleware (app.use((err, req, res,
+// next) => ...) below) instead of becoming an unhandled rejection that
+// hangs the request and, on some Node versions, crashes the whole process.
+// Must be imported before any router/route is registered. Fixes a real,
+// verified crash: GET /api/v1/scans/:id with a malformed id previously hung
+// the request and surfaced as an unhandled promise rejection in the pg
+// driver (see test/secretSecurity.test.js).
+import 'express-async-errors';
 import cors from 'cors';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
@@ -76,7 +85,6 @@ export function createApp() {
     res.status(404).json({ error: 'not_found', requestId: req.id });
   });
 
-  // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, _next) => {
     req.log?.error({ err }, 'Unhandled error');
     res.status(500).json({ error: 'internal_error', requestId: req.id });
