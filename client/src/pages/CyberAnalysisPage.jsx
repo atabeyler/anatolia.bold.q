@@ -1,15 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import CyberAnalysisWizard from '../components/CyberAnalysisWizard.jsx';
+import CyberAnalysisContent from '../components/CyberAnalysisContent.jsx';
 
-// Standalone route for Cyber Analysis (see App.jsx). The same wizard also
+// Standalone route for Cyber Analysis (see App.jsx). The same content also
 // renders inline as the "siber" analysis category in AnalysisView.jsx --
-// see CyberAnalysisWizard.jsx.
+// see CyberAnalysisContent.jsx.
 export default function CyberAnalysisPage() {
   return (
     <div className="quantum-bg min-h-screen relative p-4 sm:p-6">
-      <div className="relative z-10 max-w-3xl mx-auto space-y-4">
+      <div className="relative z-10 max-w-5xl mx-auto space-y-4">
         <div className="flex justify-end">
           <Link
             to="/"
@@ -19,7 +19,7 @@ export default function CyberAnalysisPage() {
             Dashboard
           </Link>
         </div>
-        <CyberAnalysisWizard />
+        <CyberAnalysisContent />
       </div>
     </div>
   );

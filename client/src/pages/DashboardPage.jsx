@@ -523,10 +523,14 @@ export default function DashboardPage({ user, onLogout }) {
     return () => window.removeEventListener('aq:logout', onLogoutCmd);
   }, []);
 
-  // "siber" opens a dedicated, in-app BCI wizard (CyberAnalysisWizard.jsx)
-  // rather than the generic analysis wizard -- routed to its own full-width
-  // /cyber-analysis screen instead of AnalysisView's centered container,
-  // never a new tab/window and never BCI's separate standalone UI.
+  // "siber" is the one category whose content is a full admin panel
+  // (Assets/Scans/Findings/Reports/Engines/Quantum tabs, see
+  // CyberAnalysisContent.jsx) rather than the generic analysis wizard --
+  // too much for AnalysisView's centered, narrower container, so it
+  // navigates to the full-width standalone /cyber-analysis route instead
+  // of rendering inline like every other category. Never a new tab/window
+  // and never BCI's separate standalone UI (bci/ui) -- the browser stays in
+  // ANATOLIA-Q the whole time, using the same ANATOLIA-Q session (SSO).
   const startAnalysis = (cat) => {
     if (cat === 'siber') { navigate('/cyber-analysis'); return; }
     setActiveCategory(cat);

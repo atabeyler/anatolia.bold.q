@@ -321,13 +321,16 @@ export const api = {
   cyberAnalysisFindings: () => req('/api/cyber-analysis/findings'),
 };
 
-// Cyber Analysis (BCI) -- the handful of BCI endpoints CyberAnalysisWizard.jsx
-// actually drives (scope authorization + scan lifecycle + report generation),
-// reached through ANATOLIA-Q's own generic proxy (server/src/routes/
-// cyberAnalysis.js's /proxy/* route) rather than one bespoke server route
-// per BCI endpoint. BCI's own fail-closed scope authorization is enforced
-// entirely server-side (bci/src/services/policyEngine.js) -- evaluateScope
-// only ever reflects that real decision back, never substitutes for it.
+// Cyber Analysis (BCI) -- the rest of BCI's API surface (assets, scopes,
+// scans, findings actions, reports, engines, quantum, crypto), reached
+// through ANATOLIA-Q's own generic proxy (server/src/routes/cyberAnalysis.js's
+// /proxy/* route) rather than one bespoke server route per BCI endpoint.
+// Method names and argument shapes mirror bci/ui/src/api.js's own `api`
+// object -- CyberAnalysisContent.jsx is a faithful, in-app port of BCI's own
+// standalone admin UI (bci/ui), not a redesign, so the two stay easy to
+// compare. BCI's own fail-closed scope authorization is enforced entirely
+// server-side (bci/src/services/policyEngine.js) -- evaluateScope only ever
+// reflects that real decision back, never substitutes for it.
 function bciProxy(path, options = {}) {
   return req(`/api/v1/cyber-analysis/proxy${path}`, {
     ...options,
@@ -336,13 +339,41 @@ function bciProxy(path, options = {}) {
 }
 
 export const cyberAnalysisApi = {
+  listAssets: () => bciProxy('/assets'),
+  createAsset: (asset) => bciProxy('/assets', { method: 'POST', body: asset }),
+
   createScope: (scope) => bciProxy('/scopes', { method: 'POST', body: scope }),
   evaluateScope: (target, requestedClass) => bciProxy('/scopes/evaluate', { method: 'POST', body: { target, requestedClass } }),
 
+  listScans: () => bciProxy('/scans'),
   createScan: (scan) => bciProxy('/scans', { method: 'POST', body: scan }),
   getScan: (id) => bciProxy(`/scans/${id}`),
 
+  getFinding: (id) => bciProxy(`/findings/${id}`),
+  explainFinding: (id) => bciProxy(`/findings/${id}/explain`),
+  verifyFindingFix: (id) => bciProxy(`/findings/${id}/verify-fix`, { method: 'POST' }),
+  confirmFinding: (id) => bciProxy(`/findings/${id}/confirm`, { method: 'POST' }),
+  markFalsePositive: (id) => bciProxy(`/findings/${id}/false-positive`, { method: 'POST' }),
+
+  listReports: () => bciProxy('/reports'),
   generateReport: (reportType) => bciProxy('/reports', { method: 'POST', body: { reportType } }),
+  getReport: (id) => bciProxy(`/reports/${id}`),
+
+  listEngines: () => bciProxy('/engines'),
+  runEngineHealthCheck: () => bciProxy('/engines/health-check', { method: 'POST' }),
+
+  listQuantumProviders: () => bciProxy('/quantum/providers'),
+  getQuantumPolicy: () => bciProxy('/quantum/policy'),
+  setQuantumPolicy: (policy) => bciProxy('/quantum/policy', { method: 'PUT', body: policy }),
+  runRemediationOptimize: (effortBudget) => bciProxy('/quantum/remediation-optimize', { method: 'POST', body: { effortBudget } }),
+  listQuantumBenchmarks: () => bciProxy('/quantum/benchmarks'),
+  listQuantumJobs: () => bciProxy('/quantum/jobs'),
+
+  discoverCrypto: (target, port, protocol = 'TLS') => bciProxy('/crypto/discover', { method: 'POST', body: { target, protocol, ...(port ? { port } : {}) } }),
+  discoverJwtCrypto: (token, label) => bciProxy('/crypto/discover/jwt', { method: 'POST', body: { token, ...(label ? { label } : {}) } }),
+  listCryptoInventory: () => bciProxy('/crypto/inventory'),
+  getCbom: () => bciProxy('/crypto/cbom'),
+  getPqcReadiness: () => bciProxy('/crypto/readiness'),
 };
 
 export const adminApi = {
