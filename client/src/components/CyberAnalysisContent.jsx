@@ -457,6 +457,11 @@ function ScansTab({ t, onScanCompleted, onValidityChange, initialTarget, onIniti
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingJobId, setPendingJobId] = useState(null);
+  // onCreate() clears the target input right after a successful submit
+  // (below) -- without this flag, that would immediately re-trigger the
+  // validity effect with an now-empty field and disable Next/Enter right
+  // after the user just completed the step's real action.
+  const [hasSubmittedOnce, setHasSubmittedOnce] = useState(false);
 
   useEffect(() => {
     if (initialTarget) onInitialTargetConsumed?.();
@@ -469,8 +474,9 @@ function ScansTab({ t, onScanCompleted, onValidityChange, initialTarget, onIniti
   useEffect(load, []);
 
   // The wizard's Next/Enter only unlocks once this step's required field
-  // (the scan target) is actually filled in.
-  useEffect(() => { onValidityChange?.(target.trim().length > 0); }, [target]);
+  // (the scan target) is actually filled in -- or a scan has already been
+  // started this visit, since that's the step's real completion condition.
+  useEffect(() => { onValidityChange?.(target.trim().length > 0 || hasSubmittedOnce); }, [target, hasSubmittedOnce]);
 
   // Only real backend statuses drive this -- no fabricated progress bars.
   // Polling (and the eventual auto-advance to Findings) stops the moment
@@ -507,6 +513,7 @@ function ScansTab({ t, onScanCompleted, onValidityChange, initialTarget, onIniti
     try {
       const { job } = await cyberAnalysisApi.createScan({ target: target.trim(), requestedClass });
       setTarget('');
+      setHasSubmittedOnce(true);
       load();
       if (job && !SCAN_TERMINAL_STATUSES.includes(job.status)) setPendingJobId(job.id);
     } catch (err) {

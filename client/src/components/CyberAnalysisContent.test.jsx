@@ -219,4 +219,23 @@ describe('CyberAnalysisContent', () => {
     await waitFor(() => expect(cyberAnalysisApi.getScan).toHaveBeenCalledWith('job-1'), { timeout: 6000 });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Findings' })).toHaveClass('bg-cyan-400/15'), { timeout: 6000 });
   }, 10000);
+
+  it('keeps Next enabled right after starting a scan, even though the target input clears itself', async () => {
+    cyberAnalysisApi.createScan.mockResolvedValue({ job: { id: 'job-1', status: 'QUEUED' } });
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    fireEvent.click(screen.getByRole('button', { name: 'Scans' }));
+    await waitFor(() => expect(cyberAnalysisApi.listScans).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText(/example.com/i), { target: { value: 'example.com' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).not.toBeDisabled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+    await waitFor(() => expect(cyberAnalysisApi.createScan).toHaveBeenCalled());
+    // The input clears itself on a successful submit -- Next must not
+    // re-disable just because the field is now empty; the scan was
+    // actually started, which is the step's real completion condition.
+    expect(screen.getByPlaceholderText(/example.com/i)).toHaveValue('');
+    expect(screen.getByRole('button', { name: /Next/ })).not.toBeDisabled();
+  });
 });
