@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Zap, Target, TrendingUp, Users, MessageSquare, HeartPulse, Layers, Landmark, Radio, Home, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, Zap, Target, TrendingUp, Users, MessageSquare, HeartPulse, Layers, Landmark, Radio, ShieldAlert, Home, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLang } from '../services/langContext.jsx';
 
 export const CATEGORIES = [
@@ -32,7 +32,10 @@ export const CATEGORIES = [
     desc: { tr: 'Bankacılık/finans işlem denetimi ve anomali tespiti', en: 'Banking/finance transaction audit and anomaly detection', de: 'Bank-/Finanztransaktionsprüfung und Anomalieerkennung', fr: 'Audit des transactions bancaires/financières et détection d\'anomalies', ar: 'تدقيق المعاملات المصرفية/المالية وكشف الحالات الشاذة' } },
   { id: 'btk',        nameKey: 'cat_btk',        icon: Radio,         color: '#ff9f6e', tone: 'bg-orange-500/15 border-orange-300/35',
     status: { tr: 'Kuantum', en: 'Quantum', de: 'Quanten', fr: 'Quantique', ar: 'كمي' },
-    desc: { tr: 'Haberleşme ağı denetimi ve anomali tespiti', en: 'Telecom network audit and anomaly detection', de: 'Telekommunikationsnetzprüfung und Anomalieerkennung', fr: 'Audit du réseau télécom et détection d\'anomalies', ar: 'تدقيق شبكة الاتصالات وكشف الحالات الشاذة' } }
+    desc: { tr: 'Haberleşme ağı denetimi ve anomali tespiti', en: 'Telecom network audit and anomaly detection', de: 'Telekommunikationsnetzprüfung und Anomalieerkennung', fr: 'Audit du réseau télécom et détection d\'anomalies', ar: 'تدقيق شبكة الاتصالات وكشف الحالات الشاذة' } },
+  { id: 'siber',      nameKey: 'cat_siber',      icon: ShieldAlert,   color: '#7dd3fc', tone: 'bg-sky-600/15 border-sky-400/35',
+    status: { tr: 'BCI', en: 'BCI', de: 'BCI', fr: 'BCI', ar: 'BCI' },
+    desc: { tr: 'Siber risk skoru, tarama bulguları ve saldırı yüzeyi', en: 'Cyber risk score, scan findings and attack surface', de: 'Cyberrisikobewertung, Scan-Ergebnisse und Angriffsfläche', fr: 'Score de risque cyber, résultats d\'analyse et surface d\'attaque', ar: 'درجة المخاطر السيبرانية ونتائج الفحص وسطح الهجوم' } }
 ];
 
 export default function CategorySidebar({ activeCategory, onSelect, onHome, collapsed = false, onToggleCollapse = null }) {

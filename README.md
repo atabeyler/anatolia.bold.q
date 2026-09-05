@@ -1,6 +1,6 @@
 # ANATOLIA-Q
 
-![Version](https://img.shields.io/badge/version-3.2.67-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
+![Version](https://img.shields.io/badge/version-3.2.68-blue) ![License](https://img.shields.io/badge/license-Proprietary-lightgrey)
 
 **Quantum-Based National Decision Support System**  
 Bold Askeri Teknoloji ve Savunma Sanayi A.Ş.
@@ -86,7 +86,7 @@ This project sits at the intersection of applied AI, decision intelligence, and 
 
 ### AI & Reporting
 
-- **10 Analysis Categories** — Defense, Energy, Offensive, Economy, Social, Consultation, Health, Multi-Domain Synthesis, BDDK, BTK
+- **11 Analysis Categories** — Defense, Energy, Offensive, Economy, Social, Consultation, Health, Multi-Domain Synthesis, BDDK, BTK, Cyber Intelligence (BCI-backed security posture, findings, and risk scoring)
 - **Multi-Provider AI Assurance** — provider-independent orchestration with automatic fallback
 - **Fixed-Format Reports** — DOCX/PDF generation, report history, and central-mail delivery
 - **Voice Assistant** — transcription, TTS, and natural-language command handling

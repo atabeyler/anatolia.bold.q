@@ -15,6 +15,7 @@ import { base64ToBlob, downloadBlob, shareOrDownloadBlob } from '../services/sha
 import { buildLocalDocxBlob, buildLocalPdfBlob } from '../services/localExport.js';
 import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
+import CyberAnalysisContent from './CyberAnalysisContent.jsx';
 import FileAttach, { describeStructuredUpload } from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
 import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
@@ -189,6 +190,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   const cat = CATEGORIES.find(c => c.id === category);
   const isConsult = category === 'danisma';
+  const isCyber = category === 'siber';
   const isFraudCategory = category === 'bddk' || category === 'btk';
   const categoryLabel = cat ? t(cat.nameKey) : '';
   // Informational only -- the server's own classifyData() re-derives and
@@ -399,6 +401,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;
   if (isConsult) return <div className="max-w-4xl mx-auto"><ConsultChat /></div>;
+  if (isCyber) return <div className="max-w-5xl mx-auto"><CyberAnalysisContent /></div>;
 
   const sourceCount = documentContexts.length + imageFiles.length + (realTransactions ? 1 : 0) + (realScenarios ? 1 : 0) + (realOptimization ? 1 : 0);
   const hasData = sourceCount > 0;

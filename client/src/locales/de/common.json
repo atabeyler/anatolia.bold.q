@@ -308,7 +308,7 @@
       "Einstellungen > Darstellung bietet die Designs DUNKEL, HELL und SYSTEM; SYSTEM folgt automatisch der Geräteanzeige, und die Wahl wird gespeichert.|READY/ONLINE bedeutet verfügbar; LIMITED/CHECK bedeutet eingeschränkt oder wird geprüft; LOCAL/MEMORY bedeutet, dass ein Fallback aktiv ist; OFF/N/A bedeutet nicht verfügbar oder nicht konfiguriert (siehe Startseite & Systemstatus).|Bei einem Fehler das Briefing sichern, den Systemstatus prüfen und einmal erneut versuchen.|Wird offline eine erneute Anmeldung angefordert, mit \"Erneut anmelden\" fortfahren — Ihre lokalen Daten gehen nie verloren."
     ]
   ],
-  "voiceClarifyCategory": "Welche Kategorie möchten Sie analysieren: Verteidigung, Energie, Angriff, Wirtschaft, Gesellschaft, Beratung, Gesundheit, bereichsübergreifend, BDDK oder BTK?",
+  "voiceClarifyCategory": "Welche Kategorie möchten Sie analysieren: Verteidigung, Energie, Angriff, Wirtschaft, Gesellschaft, Beratung, Gesundheit, bereichsübergreifend, BDDK, BTK oder Cyber?",
   "voiceAnalysisCreatedNeedTopic": "{{category}}-Analyse erstellt. Bitte geben Sie das Analysethema an.",
   "voiceAnalysisStarted": "{{category}}-Analyse wird gestartet.",
   "voiceClarifyAmbiguous": "Ich habe diesen Befehl nicht vollständig verstanden, können Sie ihn wiederholen?",

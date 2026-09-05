@@ -308,7 +308,7 @@
       "Paramètres > Apparence propose les thèmes SOMBRE, CLAIR et SYSTÈME ; SYSTÈME suit automatiquement l'apparence de l'appareil et le choix est mémorisé.|READY/ONLINE signifie disponible ; LIMITED/CHECK signifie que la capacité est dégradée ou en cours de vérification ; LOCAL/MEMORY signifie qu'un repli est actif ; OFF/N/A signifie indisponible ou non configuré (voir Accueil & état du système).|En cas d'échec, conservez le brief, vérifiez l'état du système et réessayez une fois.|Si une nouvelle authentification est demandée hors ligne, utilisez « Se reconnecter » pour continuer — vos données locales ne sont jamais perdues."
     ]
   ],
-  "voiceClarifyCategory": "Quelle catégorie souhaitez-vous analyser : défense, énergie, attaque, économie, social, consultation, santé, multi-domaine, BDDK ou BTK ?",
+  "voiceClarifyCategory": "Quelle catégorie souhaitez-vous analyser : défense, énergie, attaque, économie, social, consultation, santé, multi-domaine, BDDK, BTK ou cyber ?",
   "voiceAnalysisCreatedNeedTopic": "Analyse {{category}} créée. Veuillez préciser le sujet de l'analyse.",
   "voiceAnalysisStarted": "Démarrage de l'analyse {{category}}.",
   "voiceClarifyAmbiguous": "Je n'ai pas bien compris cette commande, pouvez-vous répéter ?",

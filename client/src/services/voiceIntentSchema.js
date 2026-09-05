@@ -64,6 +64,7 @@ export const CATEGORY_SYNONYMS = {
   'cok-alanli': { tr: ['çok alanlı', 'cok alanli', 'çoklu alan', 'coklu alan'], en: ['multi-domain', 'multi domain', 'cross-domain'], de: ['multidomäne', 'bereichsübergreifend'], fr: ['multi-domaine', 'multidomaine'], ar: ['متعدد المجالات'] },
   bddk:         { tr: ['bddk', 'bankacılık', 'bankacilik'], en: ['bddk', 'banking'], de: ['bddk', 'bankwesen'], fr: ['bddk', 'bancaire'], ar: ['bddk', 'مصرفي'] },
   btk:          { tr: ['btk', 'haberleşme', 'haberlesme', 'telekom'], en: ['btk', 'telecom'], de: ['btk', 'telekom'], fr: ['btk', 'télécom'], ar: ['btk', 'اتصالات'] },
+  siber:        { tr: ['siber', 'siber güvenlik', 'siber guvenlik', 'siber istihbarat'], en: ['cyber', 'cybersecurity', 'cyber intelligence'], de: ['cyber', 'cybersicherheit'], fr: ['cyber', 'cybersécurité', 'cybersecurite'], ar: ['سيبراني', 'الأمن السيبراني'] },
 };
 
 export const DEPTH_SYNONYMS = {

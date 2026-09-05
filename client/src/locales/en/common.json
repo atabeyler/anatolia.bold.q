@@ -308,7 +308,7 @@
       "Settings > Appearance offers DARK, LIGHT and SYSTEM themes; SYSTEM follows the device appearance automatically and the choice is remembered.|READY/ONLINE means available; LIMITED/CHECK means the capability is degraded or being checked; LOCAL/MEMORY means a fallback is active; OFF/N/A means unavailable or not configured (see Home & System Status).|If generation fails, preserve the brief, check System Status and retry once.|If asked to re-authenticate while offline, use \"Log In Again\" to continue — your local data is never lost."
     ]
   ],
-  "voiceClarifyCategory": "Which category would you like to analyze: defense, energy, attack, economy, social, advisory, health, multi-domain, BDDK, or BTK?",
+  "voiceClarifyCategory": "Which category would you like to analyze: defense, energy, attack, economy, social, advisory, health, multi-domain, BDDK, BTK, or cyber?",
   "voiceAnalysisCreatedNeedTopic": "{{category}} analysis created. Please specify the analysis topic.",
   "voiceAnalysisStarted": "Starting {{category}} analysis.",
   "voiceClarifyAmbiguous": "I did not fully understand that command, could you repeat it?",
