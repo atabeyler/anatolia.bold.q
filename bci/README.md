@@ -471,9 +471,7 @@ a version-stamped classification table instead of a hardcoded judgment.
   criticality-as-proxy basis stated plainly since BCI has no direct
   data-retention signal from a bare TLS probe
 - **Not yet built** (PLANNED): SSH/code-signing/JWT crypto discovery
-  (today: TLS only), a dedicated Security Graph attack-path/patch-ordering
-  optimizer beyond the blast-radius weighting in the Remediation
-  Optimizer above, a Quantum Intelligence / PQC page in `bci/ui/`, and
+  (today: TLS only), a Quantum Intelligence / PQC page in `bci/ui/`, and
   closer ANATOLIA-Q gateway convergence (today ANATOLIA-Q and BCI
   intentionally run fully separate quantum stacks — BCI never depends on
   ANATOLIA-Q's)
@@ -483,9 +481,49 @@ cases, real-TLS-handshake discovery against two live local servers, CBOM,
 readiness scoring and prioritization, harvest-now-decrypt-later, and API
 RBAC/cross-tenant isolation).
 
-**254/254 total BCI tests green** (2 unrelated `engines.test.js` timeouts
-seen once under load, confirmed as pre-existing system-load flakiness by
-rerunning that file alone: 6/6 clean), no ANATOLIA-Q files touched.
+### Security Graph Optimizer (IMPLEMENTED)
+
+Defensive graph analysis on top of the existing Security Graph (M10) —
+read-only ranking/recommendation, never automatic exploitation and never a
+graph mutation.
+
+- **Attack-Path Prioritization** (`src/services/securityGraphOptimizer.js#computeAttackPathPriorities`,
+  `GET /api/v1/graph/attack-paths`) — for every real `AFFECTED_BY` edge
+  (a CVE actually correlated to an asset, M7), a real BFS over the graph's
+  structural edges (reusing the same traversal `findReachableAssets`
+  already uses) finds every asset reachable from a compromise there, and
+  how many of those are CRITICAL/HIGH criticality. `priorityScore` is the
+  finding's existing risk score weighted by that critical blast radius —
+  a documented heuristic, not a calibrated probability, held to the same
+  honesty bar as the M9 Risk Score itself
+- **Patch Ordering** (`#computePatchOrder`, `GET /api/v1/graph/patch-order`)
+  — the same analysis as a ranked list with a plain-language reason per
+  item ("reachable... to N critical/high-criticality asset(s)") instead of
+  a bare score
+- **Defensive Control Placement** (`#identifyDefensiveControlPlacements`,
+  `GET /api/v1/graph/defensive-controls`) — a path-centrality heuristic:
+  for every vulnerable entry point, reconstructs the real shortest path
+  (BFS with parent-pointers) to every reachable critical/high asset, and
+  tallies which intermediate nodes those paths actually pass through. A
+  node several real attack paths converge on is a candidate point for one
+  control (segmentation, monitoring, WAF) to protect several paths at
+  once — never presented as sufficient on its own, and a vulnerable entry
+  point or the critical destination itself is never proposed as its own
+  "placement" (verified directly: a graph with only a direct edge and no
+  intermediate hop returns an empty placement list)
+- Budget-constrained remediation allocation (spec section 9's fourth item)
+  already existed from the prior milestone — `services/remediationOptimizer.js`
+  — and is unchanged here
+
+14 new tests (priority ranking incl. a zero-critical-blast-radius control
+case, patch-order reason text, converging-path centrality scoring, and the
+never-propose-an-endpoint guarantee), all read-only endpoints gated at
+`finding:view`.
+
+**260/260 total BCI tests green** (an earlier, isolated `engines.test.js`
+timeout under system load was confirmed as pre-existing flakiness by
+rerunning that file alone, clean both before and after this change), no
+ANATOLIA-Q files touched.
 
 ## Development
 

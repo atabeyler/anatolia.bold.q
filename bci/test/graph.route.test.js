@@ -31,4 +31,22 @@ describe('graph API RBAC', () => {
     expect(sync.status).toBe(200);
     expect(sync.body).toMatchObject({ assetNodes: 0, vulnerabilityNodes: 0 });
   });
+
+  it('viewer can read attack-paths, patch-order, and defensive-controls (read-only Security Graph Optimizer)', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'viewer' });
+    const token = signAccessToken({ userId, orgId });
+
+    const attackPaths = await request(app).get('/api/v1/graph/attack-paths').set('Authorization', `Bearer ${token}`);
+    expect(attackPaths.status).toBe(200);
+    expect(attackPaths.body.attackPaths).toEqual([]);
+
+    const patchOrder = await request(app).get('/api/v1/graph/patch-order').set('Authorization', `Bearer ${token}`);
+    expect(patchOrder.status).toBe(200);
+    expect(patchOrder.body.patchOrder).toEqual([]);
+
+    const placements = await request(app).get('/api/v1/graph/defensive-controls').set('Authorization', `Bearer ${token}`);
+    expect(placements.status).toBe(200);
+    expect(placements.body.placements).toEqual([]);
+  });
 });

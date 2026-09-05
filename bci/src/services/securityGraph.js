@@ -88,6 +88,46 @@ export async function syncSecurityGraph(orgId) {
 // being asked about, not something to traverse further through.
 const STRUCTURAL_EDGE_TYPES = new Set(['HOSTS', 'DEPENDS_ON', 'CONNECTS_TO', 'CONTAINS', 'RUNS', 'EXPOSES']);
 
+// Shared read of the graph's structural adjacency + every ASSET node's
+// identity/criticality, for anything that needs to walk the graph itself
+// rather than ask a single reachability question (securityGraphOptimizer.js).
+// Kept separate from findReachableAssets below so that function's existing
+// callers/behavior are untouched.
+export async function loadStructuralGraph(orgId) {
+  const { rows: nodes } = await query(
+    `SELECT n.id, n.ref_id AS asset_id, n.label, a.criticality
+       FROM security_graph_nodes n
+       JOIN assets a ON a.id = n.ref_id::uuid
+      WHERE n.org_id = $1 AND n.node_type = 'ASSET'`,
+    [orgId]
+  );
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+
+  const { rows: edges } = await query(
+    'SELECT source_node_id, target_node_id, edge_type FROM security_graph_edges WHERE org_id = $1',
+    [orgId]
+  );
+  const adjacency = new Map();
+  for (const edge of edges) {
+    if (!STRUCTURAL_EDGE_TYPES.has(edge.edge_type)) continue;
+    if (!adjacency.has(edge.source_node_id)) adjacency.set(edge.source_node_id, []);
+    adjacency.get(edge.source_node_id).push(edge.target_node_id);
+  }
+
+  // Asset -[AFFECTED_BY]-> Vulnerability edges, resolved back to the asset
+  // node and the CVE label -- the entry points an attack-path analysis
+  // starts from.
+  const { rows: vulnEdges } = await query(
+    `SELECT e.source_node_id AS asset_node_id, v.label AS cve_id, (e.metadata->>'riskScore')::numeric AS risk_score
+       FROM security_graph_edges e
+       JOIN security_graph_nodes v ON v.id = e.target_node_id AND v.node_type = 'VULNERABILITY'
+      WHERE e.org_id = $1 AND e.edge_type = 'AFFECTED_BY'`,
+    [orgId]
+  );
+
+  return { nodesById, adjacency, vulnEdges };
+}
+
 export async function findReachableAssets(orgId, startAssetId) {
   const { rows: startNodeRows } = await query(
     "SELECT id FROM security_graph_nodes WHERE org_id = $1 AND node_type = 'ASSET' AND ref_id = $2",
