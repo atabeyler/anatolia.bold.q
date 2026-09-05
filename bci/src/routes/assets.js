@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
 import { recordAuditEvent } from '../services/audit.js';
 import { computeAssetSummary } from '../services/assetSummary.js';
+import { listAssetRiskHistory } from '../services/assetRiskHistory.js';
 
 export const assetsRouter = Router();
 
@@ -181,6 +182,18 @@ assetsRouter.get('/:id/summary', requirePermission('asset:view'), async (req, re
 
   const summary = await computeAssetSummary(req.auth.orgId, req.params.id);
   res.json({ summary });
+});
+
+// Real, append-only point-in-time history (asset_risk_snapshots) -- one
+// row per scan that actually completed for this asset's target, written
+// by the worker (services/assetRiskHistory.js), never recomputed/faked
+// on read.
+assetsRouter.get('/:id/history', requirePermission('asset:view'), async (req, res) => {
+  const asset = await loadOwnedAsset(req.auth.orgId, req.params.id);
+  if (!asset) return res.status(404).json({ error: 'asset_not_found', requestId: req.id });
+
+  const history = await listAssetRiskHistory(req.auth.orgId, req.params.id);
+  res.json({ history });
 });
 
 const identifierSchema = z.object({

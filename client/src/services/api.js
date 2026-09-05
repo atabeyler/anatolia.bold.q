@@ -362,9 +362,10 @@ export const cyberAnalysisApi = {
   confirmFinding: (id) => bciProxy(`/findings/${id}/confirm`, { method: 'POST' }),
   markFalsePositive: (id) => bciProxy(`/findings/${id}/false-positive`, { method: 'POST' }),
 
-  listReports: () => bciProxy('/reports'),
-  generateReport: (reportType) => bciProxy('/reports', { method: 'POST', body: { reportType } }),
+  listReports: (assetId) => bciProxy(assetId ? `/reports?assetId=${encodeURIComponent(assetId)}` : '/reports'),
+  generateReport: (reportType, options = {}) => bciProxy('/reports', { method: 'POST', body: { reportType, ...options } }),
   getReport: (id) => bciProxy(`/reports/${id}`),
+  getAssetHistory: (id) => bciProxy(`/assets/${id}/history`),
 
   listEngines: () => bciProxy('/engines'),
   runEngineHealthCheck: () => bciProxy('/engines/health-check', { method: 'POST' }),

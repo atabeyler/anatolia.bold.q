@@ -499,5 +499,11 @@
   "cyberWizOutcomeSuccess": "التحليل ناجح",
   "cyberWizOutcomePartial": "تحليل جزئي",
   "cyberWizOutcomeFailed": "تعذر إجراء التحليل",
-  "cyberWizObservations": "الملاحظات"
+  "cyberWizObservations": "الملاحظات",
+  "cyberColAsset": "الأصل",
+  "cyberAllAssets": "جميع الأصول",
+  "cyberAnalysisHistory": "سجل التحليل",
+  "cyberNoHistoryYet": "لا توجد تحليلات مكتملة بعد",
+  "cyberColReportsForAsset": "التقارير",
+  "cyberGenerateReportForAsset": "إنشاء تقرير لهذا الأصل"
 }

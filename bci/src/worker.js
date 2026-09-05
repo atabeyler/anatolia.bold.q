@@ -9,6 +9,7 @@ import { pool } from './db/client.js';
 import { logger } from './logger.js';
 import { claimNextJob, completeJob, markNoCoverage, failJob, sweepTimedOutJobs, heartbeatWorker } from './services/jobQueue.js';
 import { runAnalysisPipeline } from './services/analysisPipeline.js';
+import { recordAssetRiskSnapshotsForTarget } from './services/assetRiskHistory.js';
 
 const POLL_INTERVAL_MS = Number(process.env.BCI_WORKER_POLL_MS) || 1000;
 const SWEEP_INTERVAL_MS = Number(process.env.BCI_WORKER_SWEEP_MS) || 30_000;
@@ -40,6 +41,11 @@ async function workerLoop(workerId, signal) {
       } else {
         await completeJob(job.id, result);
         logger.info({ workerId, jobId: job.id, ...result }, 'Job completed');
+        // Only a real, engines-actually-ran completion is a new risk-posture
+        // event worth a history entry -- NO_COVERAGE/FAILED/TIMED_OUT/
+        // CANCELLED never reach this branch, so they never write one.
+        await recordAssetRiskSnapshotsForTarget(job.org_id, job.target, job.id)
+          .catch((err) => logger.warn({ err, jobId: job.id }, 'Asset risk snapshot failed'));
       }
     } catch (err) {
       await failJob(job.id, String(err?.message || err));

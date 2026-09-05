@@ -499,5 +499,11 @@
   "cyberWizOutcomeSuccess": "Analysis Successful",
   "cyberWizOutcomePartial": "Partial Analysis",
   "cyberWizOutcomeFailed": "Analysis Could Not Be Performed",
-  "cyberWizObservations": "Observations"
+  "cyberWizObservations": "Observations",
+  "cyberColAsset": "Asset",
+  "cyberAllAssets": "All Assets",
+  "cyberAnalysisHistory": "Analysis History",
+  "cyberNoHistoryYet": "No completed analyses yet",
+  "cyberColReportsForAsset": "Reports",
+  "cyberGenerateReportForAsset": "Generate Report for This Asset"
 }

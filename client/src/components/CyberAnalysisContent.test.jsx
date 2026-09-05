@@ -17,6 +17,7 @@ vi.mock('../services/api.js', () => ({
     updateAsset: vi.fn(),
     getAssetSummary: vi.fn(),
     addAssetIdentifier: vi.fn(),
+    getAssetHistory: vi.fn(async () => ({ history: [] })),
     listScans: vi.fn(async () => ({ jobs: [] })),
     createScan: vi.fn(),
     getScan: vi.fn(),
@@ -144,6 +145,36 @@ describe('CyberAnalysisContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
     fireEvent.click(screen.getByRole('button', { name: /Yes, archive/i }));
     await waitFor(() => expect(cyberAnalysisApi.updateAsset).toHaveBeenCalledWith('asset-1', { status: 'ARCHIVED' }));
+  });
+
+  it('shows real analysis history and lets the user generate an asset-scoped report from the asset detail view', async () => {
+    cyberAnalysisApi.listAssets.mockResolvedValue({
+      assets: [{ id: 'asset-1', name: 'prod-web', asset_type: 'DOMAIN', criticality: 'HIGH', status: 'ACTIVE', target: 'prod.example.com' }],
+    });
+    cyberAnalysisApi.getAsset.mockResolvedValue({
+      asset: { id: 'asset-1', name: 'prod-web', asset_type: 'DOMAIN', criticality: 'HIGH', status: 'ACTIVE', created_at: new Date().toISOString() },
+      identifiers: [{ id: 'i1', identifier_type: 'DOMAIN', value: 'prod.example.com' }],
+      technologies: [],
+      relationships: [],
+    });
+    cyberAnalysisApi.getAssetSummary.mockResolvedValue({
+      summary: { targets: ['prod.example.com'], lastScan: null, findingCount: 0, openFindingCount: 0, priorityBreakdown: {}, riskScore: null },
+    });
+    cyberAnalysisApi.getAssetHistory.mockResolvedValue({
+      history: [{ id: 'h1', scan_job_id: 'job-1', risk_score: 60, open_finding_count: 2, computed_at: new Date().toISOString() }],
+    });
+
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    fireEvent.click(screen.getByRole('button', { name: 'Assets' }));
+    await waitFor(() => screen.getByText('prod-web'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+
+    await waitFor(() => expect(cyberAnalysisApi.getAssetHistory).toHaveBeenCalledWith('asset-1'));
+    await waitFor(() => expect(screen.getByText('60')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate EXECUTIVE/i }));
+    await waitFor(() => expect(cyberAnalysisApi.generateReport).toHaveBeenCalledWith('EXECUTIVE', { assetId: 'asset-1' }));
   });
 
   it('never opens a new tab/window anywhere in the tab flow', async () => {
@@ -277,5 +308,22 @@ describe('CyberAnalysisContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Scans' }));
     await waitFor(() => expect(screen.getByText('NO COVERAGE')).toBeInTheDocument());
     expect(screen.queryByText('COMPLETED')).not.toBeInTheDocument();
+  });
+
+  it('Reports tab offers the FULL type alongside the original four, and scopes generation to the selected asset', async () => {
+    cyberAnalysisApi.listAssets.mockResolvedValue({
+      assets: [{ id: 'asset-1', name: 'prod-web', asset_type: 'DOMAIN', criticality: 'HIGH', status: 'ACTIVE', target: 'prod.example.com' }],
+    });
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
+    await waitFor(() => expect(cyberAnalysisApi.listReports).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: /Generate FULL/i })).toBeInTheDocument();
+
+    const assetSelects = screen.getAllByDisplayValue('All Assets');
+    fireEvent.change(assetSelects[0], { target: { value: 'asset-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate EXECUTIVE/i }));
+    await waitFor(() => expect(cyberAnalysisApi.generateReport).toHaveBeenCalledWith('EXECUTIVE', { assetId: 'asset-1' }));
   });
 });

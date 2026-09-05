@@ -499,5 +499,11 @@
   "cyberWizOutcomeSuccess": "Analiz Başarılı",
   "cyberWizOutcomePartial": "Kısmi Analiz",
   "cyberWizOutcomeFailed": "Analiz Gerçekleştirilemedi",
-  "cyberWizObservations": "Gözlemler"
+  "cyberWizObservations": "Gözlemler",
+  "cyberColAsset": "Varlık",
+  "cyberAllAssets": "Tüm Varlıklar",
+  "cyberAnalysisHistory": "Analiz Geçmişi",
+  "cyberNoHistoryYet": "Henüz tamamlanmış analiz yok",
+  "cyberColReportsForAsset": "Raporlar",
+  "cyberGenerateReportForAsset": "Bu Varlık İçin Rapor Oluştur"
 }

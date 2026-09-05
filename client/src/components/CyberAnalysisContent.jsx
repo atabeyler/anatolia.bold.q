@@ -244,11 +244,14 @@ function ConfirmBar({ body, confirmLabel, cancelLabel, onConfirm, onCancel }) {
 function AssetDetail({ id, t, onClose, onChanged, onStartScan }) {
   const [asset, setAsset] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [history, setHistory] = useState(null);
+  const [reports, setReports] = useState(null);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editCriticality, setEditCriticality] = useState('MEDIUM');
   const [saving, setSaving] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [confirmingStatus, setConfirmingStatus] = useState(null); // 'ARCHIVED' | 'ACTIVE' | null
 
   function load() {
@@ -260,8 +263,23 @@ function AssetDetail({ id, t, onClose, onChanged, onStartScan }) {
         setEditCriticality(a.asset.criticality);
       })
       .catch((err) => setError(err.message));
+    cyberAnalysisApi.getAssetHistory(id).then((r) => setHistory(r.history)).catch(() => {});
+    cyberAnalysisApi.listReports(id).then((r) => setReports(r.reports)).catch(() => {});
   }
   useEffect(load, [id]);
+
+  async function onGenerateReport(reportType) {
+    setGeneratingReport(true);
+    setError(null);
+    try {
+      await cyberAnalysisApi.generateReport(reportType, { assetId: id });
+      cyberAnalysisApi.listReports(id).then((r) => setReports(r.reports));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGeneratingReport(false);
+    }
+  }
 
   async function saveEdit() {
     if (!editName.trim()) return;
@@ -370,6 +388,56 @@ function AssetDetail({ id, t, onClose, onChanged, onStartScan }) {
           <p className="text-cyan-100/80 text-[13px]">{technologies.map((tc) => tc.version ? `${tc.name} ${tc.version}` : tc.name).join(' · ')}</p>
         </div>
       )}
+
+      <div>
+        <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-1">{t('cyberAnalysisHistory')}</h4>
+        {history && (history.length === 0 ? (
+          <p className="text-cyan-100/40 text-[13px]">{t('cyberNoHistoryYet')}</p>
+        ) : (
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead><tr><th className={th}>{t('cyberColCreated')}</th><th className={th}>{t('cyberRiskScoreLabel')}</th><th className={th}>{t('cyberOpenFindings')}</th></tr></thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id}>
+                    <td className={td}>{new Date(h.computed_at).toLocaleString()}</td>
+                    <td className={td}><span className={scoreTone(h.risk_score)}>{h.risk_score ?? '—'}</span></td>
+                    <td className={td}>{h.open_finding_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase">{t('cyberColReportsForAsset')}</h4>
+        </div>
+        <div className="flex gap-1.5 flex-wrap mb-2">
+          {REPORT_TYPES.filter((rt) => rt !== 'AUDIT').map((rt) => (
+            <button key={rt} className={btnCls} disabled={generatingReport} onClick={() => onGenerateReport(rt)}>{t('cyberGenerateBtn', { type: rt })}</button>
+          ))}
+        </div>
+        {reports && (reports.length === 0 ? (
+          <p className="text-cyan-100/40 text-[13px]">{t('cyberNoneYet')}</p>
+        ) : (
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead><tr><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColGenerated')}</th></tr></thead>
+              <tbody>
+                {reports.map((r) => (
+                  <tr key={r.id}>
+                    <td className={td}>{r.report_type}</td>
+                    <td className={td}>{new Date(r.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
 
       {confirmingStatus && (
         <ConfirmBar
@@ -777,24 +845,36 @@ function FindingsTab({ t }) {
 }
 
 // ─── Reports ────────────────────────────────────────────────────────────
-const REPORT_TYPES = ['EXECUTIVE', 'TECHNICAL', 'REMEDIATION', 'AUDIT'];
+const REPORT_TYPES = ['EXECUTIVE', 'TECHNICAL', 'REMEDIATION', 'AUDIT', 'FULL'];
 
 function ReportsTab({ t }) {
   const [reports, setReports] = useState(null);
+  const [assets, setAssets] = useState(null);
+  const [assetFilter, setAssetFilter] = useState('');
+  const [generateAssetId, setGenerateAssetId] = useState('');
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState(null);
   const [generating, setGenerating] = useState(false);
 
   function load() {
-    cyberAnalysisApi.listReports().then((r) => setReports(r.reports)).catch((err) => setError(err.message));
+    cyberAnalysisApi.listReports(assetFilter || undefined).then((r) => setReports(r.reports)).catch((err) => setError(err.message));
   }
-  useEffect(load, []);
+  useEffect(load, [assetFilter]);
+  useEffect(() => { cyberAnalysisApi.listAssets().then((r) => setAssets(r.assets)).catch(() => {}); }, []);
+
+  function assetName(assetId) {
+    if (!assetId) return '—';
+    return assets?.find((a) => a.id === assetId)?.name || assetId;
+  }
 
   async function onGenerate(reportType) {
     setGenerating(true);
     setError(null);
     try {
-      await cyberAnalysisApi.generateReport(reportType);
+      // AUDIT is deliberately never asset-scoped (see reports/builders.js) --
+      // its own ledger covers org-level activity a single asset can't
+      // meaningfully narrow.
+      await cyberAnalysisApi.generateReport(reportType, reportType !== 'AUDIT' && generateAssetId ? { assetId: generateAssetId } : {});
       load();
     } catch (err) {
       setError(err.message);
@@ -812,6 +892,13 @@ function ReportsTab({ t }) {
       <PageTitle>{t('cyberNavReports')}</PageTitle>
       <ErrorNote error={error} />
       <Panel title={t('cyberGenerateReport')}>
+        <div className="mb-2">
+          <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberColAsset')}</label>
+          <select className={inputCls} value={generateAssetId} onChange={(e) => setGenerateAssetId(e.target.value)}>
+            <option value="">{t('cyberAllAssets')}</option>
+            {assets?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
         <div className="flex gap-2 flex-wrap">
           {REPORT_TYPES.map((rt) => (
             <button key={rt} className={btnCls} disabled={generating} onClick={() => onGenerate(rt)}>{t('cyberGenerateBtn', { type: rt })}</button>
@@ -824,6 +911,7 @@ function ReportsTab({ t }) {
           <p className="text-cyan-100/50 text-xs mb-2">
             {t('cyberHashLabel')} {selected.report.content_hash.slice(0, 16)}… · {t('cyberIntegrityLabel')}{' '}
             <Badge tone={selected.report.integrityValid ? 'ok' : 'danger'}>{selected.report.integrityValid ? t('cyberIntegrityValid') : t('cyberIntegrityTampered')}</Badge>
+            {selected.report.asset_id && <> · {t('cyberColAsset')}: {assetName(selected.report.asset_id)}</>}
           </p>
           <pre className="whitespace-pre-wrap text-[11px] max-h-[300px] overflow-auto text-cyan-100/70 border border-cyan-300/15 rounded p-2">
             {JSON.stringify(selected.report.content, null, 2)}
@@ -831,15 +919,24 @@ function ReportsTab({ t }) {
         </Panel>
       )}
 
-      <Panel title={t('cyberReportsPanelTitle')}>
+      <Panel
+        title={t('cyberReportsPanelTitle')}
+        actions={
+          <select className={`${inputCls} w-auto`} value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}>
+            <option value="">{t('cyberAllAssets')}</option>
+            {assets?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        }
+      >
         {reports && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColGenerated')}</th><th className={th}>{t('cyberColBciVersion')}</th><th className={th}></th></tr></thead>
+              <thead><tr><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColAsset')}</th><th className={th}>{t('cyberColGenerated')}</th><th className={th}>{t('cyberColBciVersion')}</th><th className={th}></th></tr></thead>
               <tbody>
                 {reports.map((r) => (
                   <tr key={r.id}>
                     <td className={td}>{r.report_type}</td>
+                    <td className={`${td} text-cyan-100/60`}>{assetName(r.asset_id)}</td>
                     <td className={td}>{new Date(r.created_at).toLocaleString()}</td>
                     <td className={td}>{r.bci_version}</td>
                     <td className={td}><button className={btnCls} onClick={() => view(r.id)}>{t('cyberView')}</button></td>

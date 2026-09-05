@@ -63,6 +63,81 @@ describe('report integrity', () => {
   });
 });
 
+describe('asset-scoped reports (real identifier matching, no fabricated per-asset score)', () => {
+  it('scopes EXECUTIVE finding counts to one asset while leaving securityScore/coverageScore org-wide and labeled as such', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+
+    // Asset A's target has the KEV finding; a second, unrelated target
+    // (no asset) also has an open finding that must not count toward A.
+    const jobA = (await query(`INSERT INTO scan_jobs (org_id, requested_by, target, requested_class) VALUES ($1,$2,'a.example','PASSIVE') RETURNING id`, [orgId, userId])).rows[0].id;
+    await upsertVulnerability({ cveId: 'CVE-2099-30002', cvssScore: 9.1, kev: true });
+    await insertNormalizedObservation(orgId, jobA, { engineId: 'trivy', cveIds: ['CVE-2099-30002'], target: 'a.example' });
+    await correlateJobObservations(orgId, jobA);
+    await query(
+      `INSERT INTO findings (org_id, correlation_key, category, title, target, status, priority, risk_score)
+       VALUES ($1, 'other-key', 'WEB', 'unrelated', 'b.example', 'NEW', 'IMMEDIATE', 95)`,
+      [orgId]
+    );
+
+    const assetRes = await query(
+      `INSERT INTO assets (org_id, name, asset_type, created_by) VALUES ($1, 'Asset A', 'DOMAIN', $2) RETURNING id`,
+      [orgId, userId]
+    );
+    const assetId = assetRes.rows[0].id;
+    await query(`INSERT INTO asset_identifiers (asset_id, identifier_type, value) VALUES ($1, 'DOMAIN', 'a.example')`, [assetId]);
+
+    const report = await generateReport(orgId, userId, 'EXECUTIVE', { assetId });
+    expect(report.asset_id).toBe(assetId);
+    expect(report.content.scopedToTargets).toEqual(['a.example']);
+    expect(report.content.criticalFindingCount).toBe(1); // only a.example's finding
+    expect(report.content.securityCoverageScoreScope).toBe('ORG_WIDE');
+  });
+
+  it('never leaks another org\'s asset identifiers into a scoped report', async () => {
+    const orgA = await createOrg('A', 'org-a');
+    const orgB = await createOrg('B', 'org-b');
+    const userA = await createUser(orgA, { email: 'a@test.local', roleId: 'operator' });
+    const bAssetRes = await query(`INSERT INTO assets (org_id, name, asset_type, created_by) VALUES ($1,'b-asset','DOMAIN',$2) RETURNING id`, [orgB, await createUser(orgB, { email: 'b@test.local', roleId: 'operator' })]);
+    await query(`INSERT INTO asset_identifiers (asset_id, identifier_type, value) VALUES ($1,'DOMAIN','b-secret.example')`, [bAssetRes.rows[0].id]);
+
+    const report = await generateReport(orgA, userA, 'EXECUTIVE', { assetId: bAssetRes.rows[0].id });
+    // Org B's asset resolves to zero targets from org A's perspective --
+    // the report is scoped to nothing, never silently falls back to org-wide.
+    expect(report.content.scopedToTargets).toEqual([]);
+  });
+
+  it('listReports filters by assetId', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const assetRes = await query(`INSERT INTO assets (org_id, name, asset_type, created_by) VALUES ($1,'x','DOMAIN',$2) RETURNING id`, [orgId, userId]);
+    const assetId = assetRes.rows[0].id;
+
+    await generateReport(orgId, userId, 'AUDIT'); // unscoped
+    await generateReport(orgId, userId, 'EXECUTIVE', { assetId });
+
+    const scoped = await listReports(orgId, { assetId });
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0].asset_id).toBe(assetId);
+  });
+});
+
+describe('FULL report', () => {
+  it('bundles all four report builders without disturbing their independent generation', async () => {
+    const { orgId, userId } = await seedOrgWithOneKevFinding();
+    await generateReport(orgId, userId, 'EXECUTIVE'); // seeds a report.generate audit event for FULL's own audit builder to read
+    const full = await generateReport(orgId, userId, 'FULL');
+    expect(full.content.executive.kevExposureCount).toBe(1);
+    expect(full.content.technical.findingCount).toBe(1);
+    expect(full.content.remediation.items.length).toBeGreaterThan(0);
+    expect(full.content.audit.eventCount).toBeGreaterThan(0);
+
+    // The standalone types still work exactly as before.
+    const standaloneExec = await generateReport(orgId, userId, 'EXECUTIVE');
+    expect(standaloneExec.content.kevExposureCount).toBe(1);
+  });
+});
+
 describe('AUDIT report', () => {
   it('is itself built from the audit ledger', async () => {
     const { orgId, userId } = await seedOrgWithOneKevFinding();
