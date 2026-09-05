@@ -328,7 +328,7 @@ export async function discoverCodeSigningCertificate({ orgId, actorUserId, pem, 
   try {
     x509 = new crypto.X509Certificate(pem);
   } catch (err) {
-    throw new Error(`not a valid X.509 certificate: ${err.message}`);
+    throw new Error(`not a valid X.509 certificate: ${err.message}`, { cause: err });
   }
 
   const keyType = x509.publicKey?.asymmetricKeyType ?? null;

@@ -38,7 +38,7 @@ describe('computeAttackPathPriorities', () => {
     const criticalApp = await makeAsset(orgId, userId, 'payments', 'WEB_APP', 'CRITICAL');
     await query("INSERT INTO asset_relationships (org_id, source_asset_id, target_asset_id, relationship_type) VALUES ($1,$2,$3,'HOSTS')", [orgId, dangerousEntry, criticalApp]);
 
-    const isolatedEntry = await makeVulnerableAsset(orgId, userId, 'isolated-1', 'MEDIUM', 'CVE-2099-30002', 9.5, 't-isolated-1');
+    await makeVulnerableAsset(orgId, userId, 'isolated-1', 'MEDIUM', 'CVE-2099-30002', 9.5, 't-isolated-1');
 
     await syncSecurityGraph(orgId);
     const priorities = await computeAttackPathPriorities(orgId);

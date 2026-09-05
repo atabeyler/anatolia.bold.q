@@ -16,7 +16,6 @@ export const pool = new Pool({
 pool.on('error', (err) => {
   // A broken idle client must not crash the process — log and let the pool
   // recycle the connection on next checkout.
-  // eslint-disable-next-line no-console
   console.error('BCI database pool error on idle client', err);
 });
 

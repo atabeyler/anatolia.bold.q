@@ -19,20 +19,27 @@ describe('engine registry', () => {
     adapters.forEach((a) => expect(() => assertValidAdapter(a)).not.toThrow());
   });
 
+  // runHealthChecks() spawns all 5 adapters' version-check subprocesses in
+  // sequence (each with its own up-to-10s internal timeout) -- vitest's
+  // default 5s per-test timeout is too tight for that under real system
+  // load, and was previously unset here, making this test spuriously flaky
+  // rather than actually broken. Fixing the timeout (not loosening any
+  // assertion) is the correct fix, matching the explicit timeouts already
+  // used below for the real-engine-execution tests.
   it('healthCheck() never throws, even if a binary is missing (fail visible, not fail crash)', async () => {
     const results = await runHealthChecks();
     expect(results).toHaveLength(5);
     for (const r of results) {
       expect(['HEALTHY', 'DEGRADED', 'OFFLINE']).toContain(r.status);
     }
-  });
+  }, 60_000);
 
   it('persists registry + health so GET /api/v1/engines has something to read', async () => {
     await runHealthChecks();
     const status = await getEngineStatus();
     expect(status).toHaveLength(5);
     expect(status.every((e) => e.last_checked_at)).toBe(true);
-  });
+  }, 60_000);
 });
 
 // These exercise the real, locally-installed binaries. They degrade

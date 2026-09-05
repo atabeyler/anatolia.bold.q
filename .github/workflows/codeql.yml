@@ -3,12 +3,14 @@ name: CodeQL
 # Static analysis (SAST, AQ-015). Findings are published to the repo's
 # Security tab as code-scanning alerts -- this workflow does NOT fail on
 # findings (GitHub's default `github/codeql-action` behavior), so it never
-# blocks a push/PR the way ci.yml's required checks do. Scans server/ and
-# client/ (both plain JS/TS, one CodeQL language covers both) on every push
-# to any branch (matching ci.yml's own push trigger, since this repo's
-# normal workflow is a direct push rather than a PR) and
-# weekly on a schedule, so drift between dependency updates still gets
-# re-scanned even with no code changes.
+# blocks a push/PR the way ci.yml's required checks do. No `paths`/
+# `paths-ignore` filter is configured, so the single javascript-typescript
+# language scan covers the ENTIRE checked-out tree -- server/, client/, and
+# bci/ (both the API and its bci/ui frontend) alike -- on every push to any
+# branch (matching ci.yml's own push trigger, since this repo's normal
+# workflow is a direct push rather than a PR) and weekly on a schedule, so
+# drift between dependency updates still gets re-scanned even with no code
+# changes.
 on:
   push:
     branches: ['**']

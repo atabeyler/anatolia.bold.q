@@ -50,7 +50,7 @@ async function verifyWebFinding({ orgId, actorUserId, finding, source }) {
     : { result: 'FIX_VERIFIED', detail: 'the original template no longer matches' };
 }
 
-async function verifyNetworkFinding({ orgId, actorUserId, finding, source }) {
+async function verifyNetworkFinding({ orgId, actorUserId, source }) {
   const [host, portStr] = source.location.split(':');
   const port = Number(portStr);
   if (!host || !port) return { result: 'INCONCLUSIVE', detail: 'could not parse host:port from location' };

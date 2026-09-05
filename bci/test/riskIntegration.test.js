@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { query } from '../src/db/client.js';
-import { resetDatabase, createOrg, createUser, insertNormalizedObservation } from './helpers/db.js';
+import { resetDatabase, createOrg, insertNormalizedObservation } from './helpers/db.js';
 import { correlateJobObservations } from '../src/services/correlation.js';
 import { upsertVulnerability } from '../src/services/intelligence.js';
 import { computeSecurityScore } from '../src/services/securityScore.js';
