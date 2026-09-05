@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { LangProvider } from './services/langContext.jsx';
 import { resolveCurrentUser, AUTH_CHANGED_EVENT } from './services/api.js';
+import { fullLogout } from './services/fullLogout.js';
+import { wasBrowserFullyClosedRecently } from './services/tabPresence.js';
 
 vi.mock('./services/api.js', () => ({
   resolveCurrentUser: vi.fn(),
@@ -15,7 +17,15 @@ vi.mock('./services/api.js', () => ({
 // just needs to exist as an importable shape, not do anything real.
 vi.mock('./services/nativeBridge.js', () => ({
   nativeAuth: { getSession: vi.fn() },
+  isNativeApp: false,
 }));
+vi.mock('./services/fullLogout.js', () => ({ fullLogout: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('./services/tabPresence.js', () => ({
+  startTabHeartbeat: vi.fn(),
+  stopTabHeartbeat: vi.fn(),
+  wasBrowserFullyClosedRecently: vi.fn().mockReturnValue(false),
+}));
+vi.mock('./components/IdleLogoutGuard.jsx', () => ({ default: () => null }));
 
 vi.mock('./pages/LoginPage.jsx', () => ({ default: ({ onLogin }) => <button onClick={() => onLogin({ userCode: 'U1', nickname: 'BOLD-001', isAdmin: false })}>login-stub</button> }));
 vi.mock('./pages/DashboardPage.jsx', () => ({ default: ({ user }) => <div>dashboard-stub-{user?.userCode}</div> }));
@@ -73,5 +83,20 @@ describe('App', () => {
     resolveCurrentUser.mockResolvedValueOnce(null);
     window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
     await waitFor(() => expect(screen.getByText('login-stub')).toBeInTheDocument());
+  });
+
+  it('ends a still-valid session cookie before resolving the user when no tab has been open recently (browser was actually closed)', async () => {
+    wasBrowserFullyClosedRecently.mockReturnValue(true);
+    resolveCurrentUser.mockResolvedValue({ userCode: 'U9', nickname: 'BOLD-009', isAdmin: false });
+    renderApp();
+    await waitFor(() => expect(fullLogout).toHaveBeenCalled());
+  });
+
+  it('does not force a logout on an ordinary refresh (another/this tab was open recently)', async () => {
+    wasBrowserFullyClosedRecently.mockReturnValue(false);
+    resolveCurrentUser.mockResolvedValue({ userCode: 'U9', nickname: 'BOLD-009', isAdmin: false });
+    renderApp();
+    await waitFor(() => expect(screen.getByText('dashboard-stub-U9')).toBeInTheDocument());
+    expect(fullLogout).not.toHaveBeenCalled();
   });
 });

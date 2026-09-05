@@ -432,5 +432,8 @@
   "cyberPrevTab": "Previous",
   "cyberNextTab": "Next",
   "cyberScanWatching": "Watching this scan — Findings will open automatically when it completes.",
-  "cyberKeyboardHint": "Enter: next step (once required fields are filled) · Esc: previous step"
+  "cyberKeyboardHint": "Enter: next step (once required fields are filled) · Esc: previous step",
+  "idleLogoutWarningTitle": "Are you still there?",
+  "idleLogoutWarningBody": "You'll be logged out in {{seconds}}s due to inactivity, to protect your session if you've stepped away.",
+  "idleLogoutStayBtn": "I'm still here"
 }

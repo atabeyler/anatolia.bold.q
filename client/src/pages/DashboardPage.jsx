@@ -19,6 +19,7 @@ import DesktopSyncBadge from '../components/DesktopSyncBadge.jsx';
 import DesktopConflictModal from '../components/DesktopConflictModal.jsx';
 import ReauthBanner from '../components/ReauthBanner.jsx';
 import { api, setJWT, setLocalAuthUser, getToken, logoutRequest, clearLocalChatHistory } from '../services/api.js';
+import { fullLogout } from '../services/fullLogout.js';
 import { registerActions, unregisterActions } from '../services/voiceActionRegistry.js';
 import { buildDashboardVoiceActions } from '../services/dashboardVoiceActions.js';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket.js';
@@ -550,12 +551,7 @@ export default function DashboardPage({ user, onLogout }) {
   // authorization -- the same account can offline-login again on this
   // device without a fresh online round-trip.
   const logout = () => {
-    logoutRequest();
-    if (isNativeApp) nativeAuth.logoutSession().catch(() => {});
-    setJWT(null);
-    setLocalAuthUser(null);
-    clearLocalChatHistory();
-    disconnectSocket();
+    fullLogout();
     onLogout();
   };
 

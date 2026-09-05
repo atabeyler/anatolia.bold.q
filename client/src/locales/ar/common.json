@@ -432,5 +432,8 @@
   "cyberPrevTab": "السابق",
   "cyberNextTab": "التالي",
   "cyberScanWatching": "تتم مراقبة هذا الفحص — سيتم فتح النتائج تلقائياً عند الانتهاء.",
-  "cyberKeyboardHint": "Enter: الخطوة التالية (بعد ملء الحقول المطلوبة) · Esc: الخطوة السابقة"
+  "cyberKeyboardHint": "Enter: الخطوة التالية (بعد ملء الحقول المطلوبة) · Esc: الخطوة السابقة",
+  "idleLogoutWarningTitle": "هل ما زلت هناك؟",
+  "idleLogoutWarningBody": "سيتم تسجيل خروجك خلال {{seconds}} ثانية بسبب عدم النشاط، لحماية جلستك في حال ابتعادك.",
+  "idleLogoutStayBtn": "ما زلت هنا"
 }

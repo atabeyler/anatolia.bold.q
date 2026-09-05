@@ -432,5 +432,8 @@
   "cyberPrevTab": "Précédent",
   "cyberNextTab": "Suivant",
   "cyberScanWatching": "Analyse en cours de surveillance — les résultats s'ouvriront automatiquement à la fin.",
-  "cyberKeyboardHint": "Entrée : étape suivante (une fois les champs requis remplis) · Échap : étape précédente"
+  "cyberKeyboardHint": "Entrée : étape suivante (une fois les champs requis remplis) · Échap : étape précédente",
+  "idleLogoutWarningTitle": "Êtes-vous toujours là ?",
+  "idleLogoutWarningBody": "Vous serez déconnecté dans {{seconds}}s pour cause d'inactivité, afin de protéger votre session si vous vous êtes absenté.",
+  "idleLogoutStayBtn": "Je suis toujours là"
 }

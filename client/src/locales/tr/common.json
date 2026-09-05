@@ -432,5 +432,8 @@
   "cyberPrevTab": "Önceki",
   "cyberNextTab": "Sonraki",
   "cyberScanWatching": "Bu tarama izleniyor — tamamlanınca Bulgular paneli otomatik açılacak.",
-  "cyberKeyboardHint": "Enter: sonraki adım (gerekli alanlar doldurulunca) · Esc: önceki adım"
+  "cyberKeyboardHint": "Enter: sonraki adım (gerekli alanlar doldurulunca) · Esc: önceki adım",
+  "idleLogoutWarningTitle": "Hâlâ orada mısın?",
+  "idleLogoutWarningBody": "Hareketsizlik nedeniyle {{seconds}} saniye içinde oturumun kapatılacak -- masadan uzaklaştıysan hesabını korumak için.",
+  "idleLogoutStayBtn": "Hâlâ buradayım"
 }

@@ -432,5 +432,8 @@
   "cyberPrevTab": "Zurück",
   "cyberNextTab": "Weiter",
   "cyberScanWatching": "Dieser Scan wird überwacht — Befunde öffnen sich automatisch, sobald er abgeschlossen ist.",
-  "cyberKeyboardHint": "Enter: nächster Schritt (sobald Pflichtfelder ausgefüllt sind) · Esc: vorheriger Schritt"
+  "cyberKeyboardHint": "Enter: nächster Schritt (sobald Pflichtfelder ausgefüllt sind) · Esc: vorheriger Schritt",
+  "idleLogoutWarningTitle": "Bist du noch da?",
+  "idleLogoutWarningBody": "Aus Inaktivität wirst du in {{seconds}}s abgemeldet -- zum Schutz deiner Sitzung, falls du weg warst.",
+  "idleLogoutStayBtn": "Ich bin noch da"
 }

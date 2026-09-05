@@ -5,8 +5,11 @@ import GlobalVoiceAssistant from './components/GlobalVoiceAssistant.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import QuantumLogo from './components/QuantumLogo.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
+import IdleLogoutGuard from './components/IdleLogoutGuard.jsx';
 import { resolveCurrentUser, AUTH_CHANGED_EVENT, hydrateNativeSession } from './services/api.js';
-import { nativeAuth } from './services/nativeBridge.js';
+import { fullLogout } from './services/fullLogout.js';
+import { startTabHeartbeat, stopTabHeartbeat, wasBrowserFullyClosedRecently } from './services/tabPresence.js';
+import { nativeAuth, isNativeApp } from './services/nativeBridge.js';
 import { isDesktop, desktopAppMode } from './services/desktopBridge.js';
 import { getAppMode, subscribeAppModePreference } from './services/appModePreference.js';
 import { useLang } from './services/langContext.jsx';
@@ -65,11 +68,30 @@ export default function App() {
     // setJWT/hydrateNativeSession comments) -- restore it from the platform's
     // secure session store before the first resolveCurrentUser() call, or
     // every launch would otherwise look logged-out until the next login.
-    hydrateNativeSession(nativeAuth.getSession).then(() =>
-      resolveCurrentUser().then((u) => { if (alive) setUser(u); })
-    );
+    hydrateNativeSession(nativeAuth.getSession).then(async () => {
+      // Web only: the session cookie itself stays valid for hours (see
+      // server/src/lib/cookies.js) regardless of whether the tab/browser
+      // that logged in is still open -- so on its own it would let anyone
+      // who opens a brand-new tab days later walk straight into whoever
+      // last used this browser with no password prompt. Ending that stale
+      // server-side session the moment a genuinely fresh tab detects no
+      // other tab is still open (see tabPresence.js) closes that window
+      // down to well under a minute; native keeps its own separate
+      // "remember this device" model untouched.
+      if (!isNativeApp && wasBrowserFullyClosedRecently()) {
+        await fullLogout();
+      }
+      const u = await resolveCurrentUser();
+      if (alive) setUser(u);
+    });
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    if (isNativeApp || !user) return undefined;
+    startTabHeartbeat();
+    return () => stopTabHeartbeat();
+  }, [user]);
 
   // Pushes the renderer's localStorage Offline Mode preference into
   // desktop/appMode.js's main-process copy -- appModePreference.js itself
@@ -138,6 +160,7 @@ export default function App() {
     <>
       {showSplash && <SplashScreen />}
       <UpdateBanner />
+      {user && <IdleLogoutGuard onIdleLogout={() => { fullLogout(); setUser(null); }} />}
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />} />
