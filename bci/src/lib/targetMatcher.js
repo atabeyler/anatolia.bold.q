@@ -46,6 +46,7 @@ function normalizeRepository(repo) {
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, '')
+    .replace(/^ssh:\/\/git@/, '')
     .replace(/^git@([^:]+):/, '$1/')
     .replace(/\.git$/, '');
 }
@@ -58,9 +59,23 @@ function parseUrlSafe(value) {
   }
 }
 
+// "registry[:port]/image[:tag]" or "registry[:port]/image@sha256:..." ->
+// "registry[:port]/image". A naive split on every ':' or '@' previously
+// collapsed a registry port into the split too (e.g. "localhost:5000/app"
+// -> "localhost"), which meant two scopes for DIFFERENT images on
+// DIFFERENT ports of the same registry host both normalized to the same
+// base name and matched each other -- a real scope-escape bug. Docker's
+// own reference grammar is unambiguous about this: a colon before the
+// first/only slash is a registry port, never a tag delimiter; a tag's
+// colon always comes after the last slash.
 function containerBaseName(ref) {
-  // "registry/image:tag" or "registry/image@sha256:..." -> "registry/image"
-  return ref.trim().toLowerCase().split(/[:@]/)[0];
+  let name = ref.trim().toLowerCase();
+  const atIdx = name.lastIndexOf('@');
+  if (atIdx !== -1) name = name.slice(0, atIdx); // strip a @sha256:... digest
+  const lastSlash = name.lastIndexOf('/');
+  const lastColon = name.lastIndexOf(':');
+  if (lastColon > lastSlash) name = name.slice(0, lastColon); // strip a :tag, never a :port
+  return name;
 }
 
 const MATCHERS = {

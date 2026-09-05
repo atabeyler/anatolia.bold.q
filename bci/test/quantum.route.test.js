@@ -2,11 +2,29 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { signAccessToken } from '../src/lib/jwt.js';
-import { resetDatabase, createOrg, createUser } from './helpers/db.js';
+import { query } from '../src/db/client.js';
+import { resetDatabase, createOrg, createUser, insertNormalizedObservation } from './helpers/db.js';
+import { correlateJobObservations } from '../src/services/correlation.js';
+import { upsertVulnerability } from '../src/services/intelligence.js';
 
 const app = createApp();
 
 beforeEach(resetDatabase);
+
+// A real open, risk-scored finding -- without one, optimizeRemediation
+// returns its early "nothing to optimize" branch (benchmarkId: null) and
+// never actually creates a benchmark/job row at all, which would make any
+// cross-tenant assertion built on top of it a no-op that always "passes"
+// without testing anything.
+async function seedOpenFinding(orgId, userId, cveId, cvssScore = 9.0) {
+  const jobId = (await query(
+    `INSERT INTO scan_jobs (org_id, requested_by, target, requested_class) VALUES ($1,$2,$3,'PASSIVE') RETURNING id`,
+    [orgId, userId, `t-${cveId}`]
+  )).rows[0].id;
+  await upsertVulnerability({ cveId, cvssScore });
+  await insertNormalizedObservation(orgId, jobId, { engineId: 'trivy', category: 'SCA', cveIds: [cveId], target: `t-${cveId}` });
+  return correlateJobObservations(orgId, jobId);
+}
 
 describe('quantum API', () => {
   it('viewer can read provider health and policy', async () => {
@@ -72,13 +90,38 @@ describe('quantum API', () => {
   it("org A cannot read org B's quantum benchmark", async () => {
     const orgA = await createOrg('A', 'org-a');
     const orgB = await createOrg('B', 'org-b');
-    const bToken = signAccessToken({ userId: await createUser(orgB, { email: 'b@x.com', roleId: 'operator' }), orgId: orgB });
+    const bUserId = await createUser(orgB, { email: 'b@x.com', roleId: 'operator' });
+    await seedOpenFinding(orgB, bUserId, 'CVE-2099-90001', 9.0);
+    const bToken = signAccessToken({ userId: bUserId, orgId: orgB });
+
     const gen = await request(app).post('/api/v1/quantum/remediation-optimize').set('Authorization', `Bearer ${bToken}`).send({ effortBudget: 5 });
+    expect(gen.body.benchmarkId).toBeDefined(); // a real benchmark must actually exist, or this test proves nothing
 
     const aToken = signAccessToken({ userId: await createUser(orgA, { email: 'a@x.com', roleId: 'operator' }), orgId: orgA });
-    if (gen.body.benchmarkId) {
-      const res = await request(app).get(`/api/v1/quantum/benchmarks/${gen.body.benchmarkId}`).set('Authorization', `Bearer ${aToken}`);
-      expect(res.status).toBe(404);
-    }
+    const res = await request(app).get(`/api/v1/quantum/benchmarks/${gen.body.benchmarkId}`).set('Authorization', `Bearer ${aToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("org A's own benchmark list and job list never include org B's rows", async () => {
+    const orgA = await createOrg('A', 'org-a');
+    const orgB = await createOrg('B', 'org-b');
+    const bUserId = await createUser(orgB, { email: 'b2@x.com', roleId: 'operator' });
+    await seedOpenFinding(orgB, bUserId, 'CVE-2099-90002', 8.5);
+    const bToken = signAccessToken({ userId: bUserId, orgId: orgB });
+    const gen = await request(app).post('/api/v1/quantum/remediation-optimize').set('Authorization', `Bearer ${bToken}`).send({ effortBudget: 5 });
+    expect(gen.body.benchmarkId).toBeDefined();
+
+    const aUserId = await createUser(orgA, { email: 'a2@x.com', roleId: 'operator' });
+    await seedOpenFinding(orgA, aUserId, 'CVE-2099-90003', 7.0);
+    const aToken = signAccessToken({ userId: aUserId, orgId: orgA });
+    const genA = await request(app).post('/api/v1/quantum/remediation-optimize').set('Authorization', `Bearer ${aToken}`).send({ effortBudget: 5 });
+    expect(genA.body.benchmarkId).toBeDefined();
+
+    const benchmarks = await request(app).get('/api/v1/quantum/benchmarks').set('Authorization', `Bearer ${aToken}`);
+    expect(benchmarks.body.benchmarks.map((b) => b.id)).toEqual([genA.body.benchmarkId]);
+    expect(benchmarks.body.benchmarks.map((b) => b.id)).not.toContain(gen.body.benchmarkId);
+
+    const jobs = await request(app).get('/api/v1/quantum/jobs').set('Authorization', `Bearer ${aToken}`);
+    expect(jobs.body.jobs.every((j) => j.benchmark_id === genA.body.benchmarkId)).toBe(true);
   });
 });

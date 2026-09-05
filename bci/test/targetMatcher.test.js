@@ -65,16 +65,30 @@ describe('targetMatchesTyped — URL', () => {
     expect(targetMatchesTyped('URL', 'https://example.com', 'https://example.com:8443')).toBe(false);
     expect(targetMatchesTyped('URL', 'https://example.com', 'https://evil.com')).toBe(false);
   });
+
+  it('is not fooled by a userinfo trick (https://example.com@evil.com/ is evil.com, not example.com)', () => {
+    expect(targetMatchesTyped('URL', 'https://example.com', 'https://example.com@evil.com/')).toBe(false);
+  });
+
+  it('resolves ../ path traversal before comparing, so it never escapes a path-scoped prefix', () => {
+    expect(targetMatchesTyped('URL', 'https://example.com/api', 'https://example.com/api/../admin')).toBe(false);
+  });
+
+  it('treats the scheme default port as equivalent to an explicit one', () => {
+    expect(targetMatchesTyped('URL', 'https://example.com', 'https://example.com:443/')).toBe(true);
+  });
 });
 
 describe('targetMatchesTyped — REPOSITORY', () => {
-  it('treats https and git@ forms of the same repo, with or without .git, as identical', () => {
+  it('treats https, git@, and ssh:// forms of the same repo, with or without .git, as identical', () => {
     expect(targetMatchesTyped('REPOSITORY', 'https://github.com/org/repo.git', 'github.com/org/repo')).toBe(true);
     expect(targetMatchesTyped('REPOSITORY', 'git@github.com:org/repo.git', 'github.com/org/repo')).toBe(true);
+    expect(targetMatchesTyped('REPOSITORY', 'ssh://git@github.com/org/repo.git', 'github.com/org/repo')).toBe(true);
   });
 
-  it('does not match a different repository', () => {
+  it('does not match a different repository, even one with a similar name', () => {
     expect(targetMatchesTyped('REPOSITORY', 'github.com/org/repo', 'github.com/org/other-repo')).toBe(false);
+    expect(targetMatchesTyped('REPOSITORY', 'github.com/org/repo', 'github.com/other-org/repo')).toBe(false);
   });
 });
 
@@ -86,6 +100,17 @@ describe('targetMatchesTyped — CONTAINER', () => {
 
   it('does not match a different image', () => {
     expect(targetMatchesTyped('CONTAINER', 'registry.example.com/app', 'registry.example.com/other:v1')).toBe(false);
+  });
+
+  // Regression: a naive split on every ':' or '@' previously collapsed a
+  // registry port into the split too ("localhost:5000/app" -> "localhost"),
+  // so two scopes for DIFFERENT images on DIFFERENT ports of the same
+  // registry host both normalized to the same base name and matched each
+  // other -- a real scope-escape bug, not just a cosmetic one.
+  it('does not confuse a registry port with a tag delimiter (scope-escape regression)', () => {
+    expect(targetMatchesTyped('CONTAINER', 'registry.internal:5000/payments-app', 'registry.internal:9999/attacker-app:latest')).toBe(false);
+    expect(targetMatchesTyped('CONTAINER', 'registry.internal:5000/payments-app', 'registry.internal:5000/other-app:v1')).toBe(false);
+    expect(targetMatchesTyped('CONTAINER', 'registry.internal:5000/payments-app', 'registry.internal:5000/payments-app:v2')).toBe(true);
   });
 });
 

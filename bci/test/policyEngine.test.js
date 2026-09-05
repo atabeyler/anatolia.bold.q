@@ -96,6 +96,50 @@ describe('policy engine (deny-by-default)', () => {
     expect(decision.reason).toBe('target_excluded');
   });
 
+  it('an exclusion bypass attempt via a deeper sub-subdomain is still caught (exclusion inherits DOMAIN subdomain semantics)', async () => {
+    const orgId = await createOrg();
+    const scopeId = await insertScope(orgId, { target: 'example.com' });
+    await query('INSERT INTO scope_exclusions (scope_id, pattern) VALUES ($1, $2)', [scopeId, 'admin.example.com']);
+
+    const decision = await evaluateScopeAuthorization({ orgId, target: 'internal.admin.example.com', requestedClass: 'PASSIVE' });
+    expect(decision.decision).toBe('DENY');
+    expect(decision.reason).toBe('target_excluded');
+  });
+
+  it('an exclusion is not defeated by case differences', async () => {
+    const orgId = await createOrg();
+    const scopeId = await insertScope(orgId, { target: 'example.com' });
+    await query('INSERT INTO scope_exclusions (scope_id, pattern) VALUES ($1, $2)', [scopeId, 'admin.example.com']);
+
+    const decision = await evaluateScopeAuthorization({ orgId, target: 'ADMIN.example.com', requestedClass: 'PASSIVE' });
+    expect(decision.decision).toBe('DENY');
+    expect(decision.reason).toBe('target_excluded');
+  });
+
+  it('denies a scope that has not started yet (validFrom in the future)', async () => {
+    const orgId = await createOrg();
+    const { rows: userRows } = await query(
+      'INSERT INTO users (org_id, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
+      [orgId, `future-${Math.random()}@test.local`, 'irrelevant']
+    );
+    await query(
+      `INSERT INTO authorized_scopes (org_id, name, target, allowed_scan_classes, status, valid_from, created_by)
+       VALUES ($1, 'future scope', 'example.com', $2, 'APPROVED', $3, $4)`,
+      [orgId, ['PASSIVE'], new Date(Date.now() + 60_000).toISOString(), userRows[0].id]
+    );
+
+    const decision = await evaluateScopeAuthorization({ orgId, target: 'example.com', requestedClass: 'PASSIVE' });
+    expect(decision.decision).toBe('DENY');
+  });
+
+  it('denies an empty or whitespace-only target rather than matching anything', async () => {
+    const orgId = await createOrg();
+    await insertScope(orgId, { target: 'example.com' });
+
+    const decision = await evaluateScopeAuthorization({ orgId, target: '   ', requestedClass: 'PASSIVE' });
+    expect(decision.decision).toBe('DENY');
+  });
+
   it('records an audit event for every evaluation, allow or deny', async () => {
     const orgId = await createOrg();
     await evaluateScopeAuthorization({ orgId, target: 'example.com', requestedClass: 'PASSIVE' });
