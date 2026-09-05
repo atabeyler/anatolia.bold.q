@@ -114,7 +114,7 @@ function DashboardTab({ t }) {
 // ─── Assets ─────────────────────────────────────────────────────────────
 const ASSET_TYPES = ['DOMAIN', 'HOST', 'WEB_APP', 'API', 'REPOSITORY', 'CONTAINER', 'CLOUD_RESOURCE', 'IDENTITY', 'SERVICE'];
 
-function AssetsTab({ t }) {
+function AssetsTab({ t, onValidityChange }) {
   const [assets, setAssets] = useState(null);
   const [error, setError] = useState(null);
   const [name, setName] = useState('');
@@ -125,6 +125,10 @@ function AssetsTab({ t }) {
     cyberAnalysisApi.listAssets().then((r) => setAssets(r.assets)).catch((err) => setError(err.message));
   }
   useEffect(load, []);
+
+  // The wizard's Next/Enter only unlocks once this step's required field
+  // (the asset name) is actually filled in.
+  useEffect(() => { onValidityChange?.(name.trim().length > 0); }, [name]);
 
   async function onCreate() {
     if (!name.trim()) return;
@@ -189,7 +193,7 @@ const SCAN_TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED']
 const SCAN_POLL_INTERVAL_MS = 3000;
 const SCAN_POLL_MAX_ATTEMPTS = 60; // ~3 minutes
 
-function ScansTab({ t, onScanCompleted }) {
+function ScansTab({ t, onScanCompleted, onValidityChange }) {
   const [jobs, setJobs] = useState(null);
   const [target, setTarget] = useState('');
   const [requestedClass, setRequestedClass] = useState('PASSIVE');
@@ -201,6 +205,10 @@ function ScansTab({ t, onScanCompleted }) {
     cyberAnalysisApi.listScans().then((r) => setJobs(r.jobs)).catch((err) => setError(err.message));
   }
   useEffect(load, []);
+
+  // The wizard's Next/Enter only unlocks once this step's required field
+  // (the scan target) is actually filled in.
+  useEffect(() => { onValidityChange?.(target.trim().length > 0); }, [target]);
 
   // Only real backend statuses drive this -- no fabricated progress bars.
   // Polling (and the eventual auto-advance to Findings) stops the moment
@@ -828,36 +836,52 @@ export default function CyberAnalysisContent() {
     quantum: QuantumTab,
   }[tab];
 
-  const activeIndex = TABS.findIndex((tb) => tb.id === tab);
-  const goPrev = () => { if (activeIndex > 0) setTab(TABS[activeIndex - 1].id); };
-  const goNext = () => { if (activeIndex < TABS.length - 1) setTab(TABS[activeIndex + 1].id); };
-  const activeTabProps = tab === 'scans' ? { t, onScanCompleted: () => setTab('findings') } : { t };
+  // Whether the active tab's own required field(s) are filled in -- gates
+  // both the Next button and the Enter key. Reset to true synchronously by
+  // changeTab (below) whenever the tab changes -- not via a useEffect keyed
+  // on `tab`, since that would fire after the newly-mounted tab's own
+  // validity effect and stomp its (possibly false) value back to true. A
+  // tab with a required field (Assets, Scans) then overrides it to false
+  // via onValidityChange until that field has a value. Tabs with nothing to
+  // fill in (Dashboard, Findings, Reports, Engines, Quantum) never call
+  // onValidityChange, so they stay advanceable.
+  const [canAdvance, setCanAdvance] = useState(true);
+  function changeTab(id) {
+    setCanAdvance(true);
+    setTab(id);
+  }
 
-  // Enter = next tab, Backspace = previous tab, same physical keys on every
-  // desktop OS/keyboard layout (unlike PageUp/PageDown or Alt+Arrow, which
-  // vary or collide with browser/OS bindings). Guarded so typing, submitting
-  // a form with Enter, deleting text with Backspace, or activating a
-  // focused button/link with Enter (e.g. "Start scan") never also triggers
-  // tab navigation on top of its own action -- only unmodified keypresses
-  // outside any interactive control step the wizard.
+  const activeIndex = TABS.findIndex((tb) => tb.id === tab);
+  const goPrev = () => { if (activeIndex > 0) changeTab(TABS[activeIndex - 1].id); };
+  const goNext = () => { if (activeIndex < TABS.length - 1 && canAdvance) changeTab(TABS[activeIndex + 1].id); };
+  const activeTabProps = {
+    t,
+    onValidityChange: setCanAdvance,
+    ...(tab === 'scans' ? { onScanCompleted: () => changeTab('findings') } : {}),
+  };
+
+  // Esc = previous step, Enter = next step -- the same physical keys on
+  // every desktop OS/keyboard layout, and neither has a native meaning
+  // inside these single-line inputs (no textarea, no native form submit),
+  // so both work everywhere with no need to click an empty area first.
+  // Enter still respects canAdvance -- pressing it while a required field
+  // is empty does nothing, same as the disabled Next button.
   useEffect(() => {
     if (!status?.available) return undefined;
     function onKeyDown(e) {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-      const el = e.target;
-      const isInteractive = el?.closest?.('input, textarea, select, button, a, [role="button"], [contenteditable="true"]');
-      if (isInteractive) return;
       if (e.key === 'Enter') {
+        if (!canAdvance) return;
         e.preventDefault();
         goNext();
-      } else if (e.key === 'Backspace') {
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         goPrev();
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [status?.available, activeIndex, TABS.length]);
+  }, [status?.available, activeIndex, TABS.length, canAdvance]);
 
   return (
     <div className="space-y-4">
@@ -890,7 +914,7 @@ export default function CyberAnalysisContent() {
             {TABS.map((tb) => (
               <button
                 key={tb.id}
-                onClick={() => setTab(tb.id)}
+                onClick={() => changeTab(tb.id)}
                 className={`px-3 py-2 rounded text-[12px] tracking-wide uppercase transition text-left whitespace-nowrap ${
                   tab === tb.id ? 'bg-cyan-400/15 text-cyan-100 border border-cyan-300/40' : 'text-cyan-100/50 hover:text-cyan-100/80'
                 }`}
@@ -911,12 +935,13 @@ export default function CyberAnalysisContent() {
               </button>
               <button
                 onClick={goNext}
-                disabled={activeIndex >= TABS.length - 1}
+                disabled={activeIndex >= TABS.length - 1 || !canAdvance}
                 className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {t('cyberNextTab')} <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
+            <p className="text-cyan-100/30 text-[11px] text-right -mt-2">{t('cyberKeyboardHint')}</p>
             <ActiveTab {...activeTabProps} />
           </div>
         </div>

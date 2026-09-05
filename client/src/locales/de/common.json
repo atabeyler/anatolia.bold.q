@@ -431,5 +431,6 @@
   "cyberUnknown": "UNBEKANNT",
   "cyberPrevTab": "Zurück",
   "cyberNextTab": "Weiter",
-  "cyberScanWatching": "Dieser Scan wird überwacht — Befunde öffnen sich automatisch, sobald er abgeschlossen ist."
+  "cyberScanWatching": "Dieser Scan wird überwacht — Befunde öffnen sich automatisch, sobald er abgeschlossen ist.",
+  "cyberKeyboardHint": "Enter: nächster Schritt (sobald Pflichtfelder ausgefüllt sind) · Esc: vorheriger Schritt"
 }

@@ -431,5 +431,6 @@
   "cyberUnknown": "INCONNU",
   "cyberPrevTab": "Précédent",
   "cyberNextTab": "Suivant",
-  "cyberScanWatching": "Analyse en cours de surveillance — les résultats s'ouvriront automatiquement à la fin."
+  "cyberScanWatching": "Analyse en cours de surveillance — les résultats s'ouvriront automatiquement à la fin.",
+  "cyberKeyboardHint": "Entrée : étape suivante (une fois les champs requis remplis) · Échap : étape précédente"
 }

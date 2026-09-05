@@ -431,5 +431,6 @@
   "cyberUnknown": "BİLİNMİYOR",
   "cyberPrevTab": "Önceki",
   "cyberNextTab": "Sonraki",
-  "cyberScanWatching": "Bu tarama izleniyor — tamamlanınca Bulgular paneli otomatik açılacak."
+  "cyberScanWatching": "Bu tarama izleniyor — tamamlanınca Bulgular paneli otomatik açılacak.",
+  "cyberKeyboardHint": "Enter: sonraki adım (gerekli alanlar doldurulunca) · Esc: önceki adım"
 }

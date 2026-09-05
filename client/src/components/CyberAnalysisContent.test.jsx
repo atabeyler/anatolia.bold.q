@@ -90,21 +90,34 @@ describe('CyberAnalysisContent', () => {
     expect(screen.getByRole('button', { name: /Previous/ })).toBeDisabled();
   });
 
-  it('steps to the next tab on Enter and back on Backspace, but not while focus is inside a form field', async () => {
+  it('steps forward on Enter and back on Esc, working everywhere (no need to click an empty area first)', async () => {
     renderContent();
     await waitFor(() => screen.getByText('82'));
 
+    // Dashboard has nothing required to fill in, so Enter advances immediately.
     fireEvent.keyDown(window, { key: 'Enter' });
     await waitFor(() => expect(cyberAnalysisApi.listAssets).toHaveBeenCalled());
 
+    // Esc goes back even while focus is inside a text field.
     const nameInput = screen.getByPlaceholderText('Name');
-    fireEvent.keyDown(nameInput, { key: 'Backspace' });
-    // Still on Assets -- Backspace inside a text field must never navigate away.
-    expect(screen.getByPlaceholderText('Name')).toBeInTheDocument();
+    fireEvent.keyDown(nameInput, { key: 'Escape' });
+    await waitFor(() => screen.getByText('82'));
+  });
+
+  it('keeps Enter (and the Next button) disabled on a step with a required field until it is filled in', async () => {
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    fireEvent.click(screen.getByRole('button', { name: 'Assets' }));
+    await waitFor(() => expect(cyberAnalysisApi.listAssets).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
+    fireEvent.keyDown(window, { key: 'Enter' });
     expect(cyberAnalysisApi.listScans).not.toHaveBeenCalled();
 
-    fireEvent.keyDown(window, { key: 'Backspace' });
-    await waitFor(() => screen.getByText('82'));
+    fireEvent.change(screen.getByPlaceholderText('Name'), { target: { value: 'example.com' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).not.toBeDisabled());
+    fireEvent.keyDown(window, { key: 'Enter' });
+    await waitFor(() => expect(cyberAnalysisApi.listScans).toHaveBeenCalled());
   });
 
   it('auto-advances from Scans to Findings once a started scan actually reaches COMPLETED on the backend', async () => {
