@@ -36,7 +36,9 @@ function renderContent() {
 beforeEach(() => {
   vi.clearAllMocks();
   api.cyberAnalysisStatus.mockResolvedValue({ available: true });
-  localStorage.removeItem('anatolia_lang');
+  // All labels now route through i18n (t()) instead of hardcoded English;
+  // pin the language so the assertions below stay deterministic.
+  localStorage.setItem('anatolia_lang', 'en');
 });
 
 describe('CyberAnalysisContent', () => {

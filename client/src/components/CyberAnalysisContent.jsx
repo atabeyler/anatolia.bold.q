@@ -5,23 +5,28 @@ import { useLang } from '../services/langContext.jsx';
 
 // Cyber Analysis content -- a faithful, in-app port of BCI's own standalone
 // admin UI (bci/ui: Dashboard/Assets/Scans/Findings/Reports/Engines/
-// Quantum & PQC -- there is no separate "Scopes" page there either) into
-// ANATOLIA-Q's own visual language, rather than a redesign or a link out to
-// a separate app. Every tab goes through ANATOLIA-Q's server, which proxies
-// to BCI (services/bciClient.js, api.js's cyberAnalysisApi) using the
-// user's own ANATOLIA-Q session (SSO -- no separate BCI login); the browser
-// never talks to BCI directly or holds a BCI token. Never shows the names
-// of the third-party scanners BCI orchestrates underneath (spec section 56).
+// Quantum & PQC -- there is no separate "Scopes" page there either), same
+// sidebar nav + per-page titles as bci/ui/src/components/Layout.jsx and
+// bci/ui/src/pages/*.jsx, restyled in ANATOLIA-Q's own visual language
+// rather than a redesign or a link out to a separate app. Every tab goes
+// through ANATOLIA-Q's server, which proxies to BCI (services/bciClient.js,
+// api.js's cyberAnalysisApi) using the user's own ANATOLIA-Q session (SSO --
+// no separate BCI login); the browser never talks to BCI directly or holds
+// a BCI token. Never shows the names of the third-party scanners BCI
+// orchestrates underneath (spec section 56). All strings route through the
+// existing i18n system (useLang/t) -- no hardcoded text.
 
-const TABS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'assets', label: 'Assets' },
-  { id: 'scans', label: 'Scans' },
-  { id: 'findings', label: 'Findings' },
-  { id: 'reports', label: 'Reports' },
-  { id: 'engines', label: 'Engines' },
-  { id: 'quantum', label: 'Quantum & PQC' },
-];
+function useTabs(t) {
+  return [
+    { id: 'dashboard', navKey: 'cyberNavDashboard', titleKey: 'cyberNavDashboard' },
+    { id: 'assets', navKey: 'cyberNavAssets', titleKey: 'cyberNavAssets' },
+    { id: 'scans', navKey: 'cyberNavScans', titleKey: 'cyberNavScans' },
+    { id: 'findings', navKey: 'cyberNavFindings', titleKey: 'cyberNavFindings' },
+    { id: 'reports', navKey: 'cyberNavReports', titleKey: 'cyberNavReports' },
+    { id: 'engines', navKey: 'cyberNavEngines', titleKey: 'cyberNavEngines' },
+    { id: 'quantum', navKey: 'cyberNavQuantum', titleKey: 'cyberTitleQuantum' },
+  ].map((tb) => ({ ...tb, label: t(tb.navKey), title: t(tb.titleKey) }));
+}
 
 function scoreTone(score) {
   if (score == null) return 'text-cyan-100/40';
@@ -58,6 +63,10 @@ function Panel({ title, children, actions }) {
   );
 }
 
+function PageTitle({ children }) {
+  return <h1 className="text-cyan-100 text-base sm:text-lg tracking-widest uppercase">{children}</h1>;
+}
+
 function ErrorNote({ error }) {
   if (!error) return null;
   return <div className="text-red-300 text-[13px] border border-red-400/30 rounded p-2 mb-3">{error}</div>;
@@ -74,7 +83,7 @@ function Badge({ tone, children }) {
 }
 
 // ─── Dashboard ──────────────────────────────────────────────────────────
-function DashboardTab() {
+function DashboardTab({ t }) {
   const [security, setSecurity] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [error, setError] = useState(null);
@@ -87,15 +96,16 @@ function DashboardTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberNavDashboard')}</PageTitle>
       <ErrorNote error={error} />
       <div className="grid grid-cols-3 gap-4">
-        <Tile label="Security Score" value={security?.score} tone={scoreTone(security?.score)} />
+        <Tile label={t('cyberSecurityScore')} value={security?.score} tone={scoreTone(security?.score)} />
         <div className="hud-panel rounded-xl p-4 flex flex-col items-center gap-1">
-          <span className="text-cyan-100/60 text-xs tracking-widest uppercase">Coverage Score</span>
+          <span className="text-cyan-100/60 text-xs tracking-widest uppercase">{t('cyberCoverageScore')}</span>
           <span className={`text-3xl font-serif ${scoreTone(coverage?.score)}`}>{coverage?.score ?? '—'}</span>
           {coverage?.reason && <span className="text-cyan-100/40 text-[11px]">{coverage.reason}</span>}
         </div>
-        <Tile label="Open Findings" value={security?.openFindingCount} />
+        <Tile label={t('cyberOpenFindings')} value={security?.openFindingCount} />
       </div>
     </div>
   );
@@ -104,7 +114,7 @@ function DashboardTab() {
 // ─── Assets ─────────────────────────────────────────────────────────────
 const ASSET_TYPES = ['DOMAIN', 'HOST', 'WEB_APP', 'API', 'REPOSITORY', 'CONTAINER', 'CLOUD_RESOURCE', 'IDENTITY', 'SERVICE'];
 
-function AssetsTab() {
+function AssetsTab({ t }) {
   const [assets, setAssets] = useState(null);
   const [error, setError] = useState(null);
   const [name, setName] = useState('');
@@ -133,21 +143,22 @@ function AssetsTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberNavAssets')}</PageTitle>
       <ErrorNote error={error} />
-      <Panel title="Add Asset">
+      <Panel title={t('cyberAddAsset')}>
         <div className="grid sm:grid-cols-3 gap-2">
-          <input className={inputCls} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputCls} placeholder={t('cyberNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
           <select className={inputCls} value={assetType} onChange={(e) => setAssetType(e.target.value)}>
-            {ASSET_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            {ASSET_TYPES.map((at) => <option key={at} value={at}>{at}</option>)}
           </select>
-          <button className={btnCls} onClick={onCreate} disabled={creating || !name.trim()}>Add asset</button>
+          <button className={btnCls} onClick={onCreate} disabled={creating || !name.trim()}>{t('cyberAddAssetBtn')}</button>
         </div>
       </Panel>
-      <Panel title="Assets">
+      <Panel title={t('cyberAssetsPanelTitle')}>
         {assets && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>Name</th><th className={th}>Type</th><th className={th}>Criticality</th></tr></thead>
+              <thead><tr><th className={th}>{t('cyberColName')}</th><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColCriticality')}</th></tr></thead>
               <tbody>
                 {assets.map((a) => (
                   <tr key={a.id}>
@@ -174,7 +185,7 @@ function scanStatusTone(status) {
   return 'warn';
 }
 
-function ScansTab() {
+function ScansTab({ t }) {
   const [jobs, setJobs] = useState(null);
   const [target, setTarget] = useState('');
   const [requestedClass, setRequestedClass] = useState('PASSIVE');
@@ -203,22 +214,23 @@ function ScansTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberNavScans')}</PageTitle>
       <ErrorNote error={error} />
-      <Panel title="Start Scan">
+      <Panel title={t('cyberStartScan')}>
         <div className="grid sm:grid-cols-3 gap-2 mb-2">
-          <input className={inputCls} placeholder="Target (e.g. example.com)" value={target} onChange={(e) => setTarget(e.target.value)} />
+          <input className={inputCls} placeholder={t('cyberTargetPlaceholder')} value={target} onChange={(e) => setTarget(e.target.value)} />
           <select className={inputCls} value={requestedClass} onChange={(e) => setRequestedClass(e.target.value)}>
             {SCAN_CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <button className={btnCls} onClick={onCreate} disabled={submitting || !target.trim()}>Start scan</button>
+          <button className={btnCls} onClick={onCreate} disabled={submitting || !target.trim()}>{t('cyberStartScanBtn')}</button>
         </div>
-        <p className="text-cyan-100/40 text-xs">A scan only starts if the target is covered by an APPROVED authorized scope for the requested class.</p>
+        <p className="text-cyan-100/40 text-xs">{t('cyberScanScopeNote')}</p>
       </Panel>
-      <Panel title="Scans">
+      <Panel title={t('cyberScansPanelTitle')}>
         {jobs && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>Target</th><th className={th}>Class</th><th className={th}>Status</th><th className={th}>Attempts</th></tr></thead>
+              <thead><tr><th className={th}>{t('cyberColTarget')}</th><th className={th}>{t('cyberColClass')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberColAttempts')}</th></tr></thead>
               <tbody>
                 {jobs.map((j) => (
                   <tr key={j.id}>
@@ -244,7 +256,7 @@ function priorityTone(priority) {
   return 'muted';
 }
 
-function FindingDetail({ id, onClose, onChanged }) {
+function FindingDetail({ id, onClose, onChanged, t }) {
   const [finding, setFinding] = useState(null);
   const [explanation, setExplanation] = useState(null);
   const [verifyResult, setVerifyResult] = useState(null);
@@ -270,7 +282,7 @@ function FindingDetail({ id, onClose, onChanged }) {
     }
   }
 
-  if (!finding) return <div className="hud-panel rounded-xl p-4 text-cyan-100/60 text-sm">Loading…</div>;
+  if (!finding) return <div className="hud-panel rounded-xl p-4 text-cyan-100/60 text-sm">{t('cyberLoading')}</div>;
   const { finding: f, sources } = finding;
 
   return (
@@ -280,30 +292,29 @@ function FindingDetail({ id, onClose, onChanged }) {
           <h3 className="text-cyan-100 text-sm">{f.title}</h3>
           <p className="text-cyan-100/50 text-xs">{f.target} · {f.category}</p>
         </div>
-        <button className={btnCls} onClick={onClose}>Close</button>
+        <button className={btnCls} onClick={onClose}>{t('cyberClose')}</button>
       </div>
       <ErrorNote error={error} />
       <div className="grid grid-cols-4 gap-2">
-        <Tile label="Risk" value={f.risk_score ?? '—'} />
-        <Tile label="Confidence" value={f.confidence_score} />
-        <Tile label="Status" value={f.status} />
-        <Tile label="Verification" value={f.verification_status} />
+        <Tile label={t('cyberColRisk')} value={f.risk_score ?? '—'} />
+        <Tile label={t('cyberColConfidence')} value={f.confidence_score} />
+        <Tile label={t('cyberColStatus')} value={f.status} />
+        <Tile label={t('cyberColVerification')} value={f.verification_status} />
       </div>
-      <p className="text-cyan-100/70 text-[13px]"><strong>Sources:</strong> {sources.map((s) => s.engine_id).join(', ') || 'none'}</p>
+      <p className="text-cyan-100/70 text-[13px]"><strong>{t('cyberSourcesLabel')}</strong> {sources.map((s) => s.engine_id).join(', ') || t('cyberSourcesNone')}</p>
       <div className="flex gap-2 flex-wrap">
-        <button className={btnCls} disabled={busy} onClick={() => run(async () => setExplanation(await cyberAnalysisApi.explainFinding(id)))}>Explain</button>
-        <button className={btnCls} disabled={busy} onClick={() => run(async () => setVerifyResult(await cyberAnalysisApi.verifyFindingFix(id)))}>Verify fix</button>
-        <button className={btnCls} disabled={busy} onClick={() => run(() => cyberAnalysisApi.confirmFinding(id))}>Confirm</button>
-        <button className={btnCls} disabled={busy} onClick={() => run(() => cyberAnalysisApi.markFalsePositive(id))}>Mark false positive</button>
+        <button className={btnCls} disabled={busy} onClick={() => run(async () => setExplanation(await cyberAnalysisApi.explainFinding(id)))}>{t('cyberExplain')}</button>
+        <button className={btnCls} disabled={busy} onClick={() => run(async () => setVerifyResult(await cyberAnalysisApi.verifyFindingFix(id)))}>{t('cyberVerifyFix')}</button>
+        <button className={btnCls} disabled={busy} onClick={() => run(() => cyberAnalysisApi.confirmFinding(id))}>{t('cyberConfirm')}</button>
+        <button className={btnCls} disabled={busy} onClick={() => run(() => cyberAnalysisApi.markFalsePositive(id))}>{t('cyberMarkFalsePositive')}</button>
       </div>
       {explanation && <p className="text-cyan-100/70 text-[13px] border border-cyan-300/20 rounded p-2">{explanation.text} <em className="text-cyan-100/40">({explanation.source})</em></p>}
-      {verifyResult && <p className="text-cyan-100/70 text-[13px] border border-cyan-300/20 rounded p-2">Verify result: <strong>{verifyResult.result}</strong> — {verifyResult.detail}</p>}
+      {verifyResult && <p className="text-cyan-100/70 text-[13px] border border-cyan-300/20 rounded p-2">{t('cyberVerifyResultLabel')} <strong>{verifyResult.result}</strong> — {verifyResult.detail}</p>}
     </div>
   );
 }
 
-function FindingsTab() {
-  const { t } = useLang();
+function FindingsTab({ t }) {
   const [findings, setFindings] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState(null);
@@ -315,15 +326,16 @@ function FindingsTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberNavFindings')}</PageTitle>
       <ErrorNote error={error} />
-      {selectedId && <FindingDetail id={selectedId} onClose={() => setSelectedId(null)} onChanged={load} />}
-      <Panel title={`Findings (${findings?.length ?? 0})`}>
+      {selectedId && <FindingDetail id={selectedId} onClose={() => setSelectedId(null)} onChanged={load} t={t} />}
+      <Panel title={t('cyberFindingsPanelTitle', { count: findings?.length ?? 0 })}>
         {findings && findings.length === 0 ? (
           <p className="text-cyan-100/50 text-sm">{t('cyberAnalysisNoFindings')}</p>
         ) : findings && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>Title</th><th className={th}>Target</th><th className={th}>Priority</th><th className={th}>Risk</th><th className={th}>Status</th></tr></thead>
+              <thead><tr><th className={th}>{t('cyberColTitle')}</th><th className={th}>{t('cyberColTarget')}</th><th className={th}>{t('cyberColPriority')}</th><th className={th}>{t('cyberColRisk')}</th><th className={th}>{t('cyberColStatus')}</th></tr></thead>
               <tbody>
                 {findings.map((f) => (
                   <tr key={f.id} className="cursor-pointer hover:bg-cyan-400/5" onClick={() => setSelectedId(f.id)}>
@@ -346,7 +358,7 @@ function FindingsTab() {
 // ─── Reports ────────────────────────────────────────────────────────────
 const REPORT_TYPES = ['EXECUTIVE', 'TECHNICAL', 'REMEDIATION', 'AUDIT'];
 
-function ReportsTab() {
+function ReportsTab({ t }) {
   const [reports, setReports] = useState(null);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState(null);
@@ -376,20 +388,21 @@ function ReportsTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberNavReports')}</PageTitle>
       <ErrorNote error={error} />
-      <Panel title="Generate Report">
+      <Panel title={t('cyberGenerateReport')}>
         <div className="flex gap-2 flex-wrap">
           {REPORT_TYPES.map((rt) => (
-            <button key={rt} className={btnCls} disabled={generating} onClick={() => onGenerate(rt)}>Generate {rt}</button>
+            <button key={rt} className={btnCls} disabled={generating} onClick={() => onGenerate(rt)}>{t('cyberGenerateBtn', { type: rt })}</button>
           ))}
         </div>
       </Panel>
 
       {selected && (
-        <Panel title={selected.report.report_type} actions={<button className={btnCls} onClick={() => setSelected(null)}>Close</button>}>
+        <Panel title={selected.report.report_type} actions={<button className={btnCls} onClick={() => setSelected(null)}>{t('cyberClose')}</button>}>
           <p className="text-cyan-100/50 text-xs mb-2">
-            hash: {selected.report.content_hash.slice(0, 16)}… · integrity:{' '}
-            <Badge tone={selected.report.integrityValid ? 'ok' : 'danger'}>{selected.report.integrityValid ? 'valid' : 'TAMPERED'}</Badge>
+            {t('cyberHashLabel')} {selected.report.content_hash.slice(0, 16)}… · {t('cyberIntegrityLabel')}{' '}
+            <Badge tone={selected.report.integrityValid ? 'ok' : 'danger'}>{selected.report.integrityValid ? t('cyberIntegrityValid') : t('cyberIntegrityTampered')}</Badge>
           </p>
           <pre className="whitespace-pre-wrap text-[11px] max-h-[300px] overflow-auto text-cyan-100/70 border border-cyan-300/15 rounded p-2">
             {JSON.stringify(selected.report.content, null, 2)}
@@ -397,18 +410,18 @@ function ReportsTab() {
         </Panel>
       )}
 
-      <Panel title="Reports">
+      <Panel title={t('cyberReportsPanelTitle')}>
         {reports && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>Type</th><th className={th}>Generated</th><th className={th}>BCI Version</th><th className={th}></th></tr></thead>
+              <thead><tr><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColGenerated')}</th><th className={th}>{t('cyberColBciVersion')}</th><th className={th}></th></tr></thead>
               <tbody>
                 {reports.map((r) => (
                   <tr key={r.id}>
                     <td className={td}>{r.report_type}</td>
                     <td className={td}>{new Date(r.created_at).toLocaleString()}</td>
                     <td className={td}>{r.bci_version}</td>
-                    <td className={td}><button className={btnCls} onClick={() => view(r.id)}>View</button></td>
+                    <td className={td}><button className={btnCls} onClick={() => view(r.id)}>{t('cyberView')}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -427,7 +440,7 @@ function engineStatusTone(status) {
   return 'danger';
 }
 
-function EnginesTab() {
+function EnginesTab({ t }) {
   const [engines, setEngines] = useState(null);
   const [error, setError] = useState(null);
   const [checking, setChecking] = useState(false);
@@ -452,21 +465,22 @@ function EnginesTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberNavEngines')}</PageTitle>
       <ErrorNote error={error} />
-      <Panel title="Engines" actions={<button className={btnCls} disabled={checking} onClick={onHealthCheck}>{checking ? 'Checking…' : 'Run health check'}</button>}>
+      <Panel title={t('cyberEnginesPanelTitle')} actions={<button className={btnCls} disabled={checking} onClick={onHealthCheck}>{checking ? t('cyberChecking') : t('cyberRunHealthCheck')}</button>}>
         {engines && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>Engine</th><th className={th}>Status</th><th className={th}>Version</th><th className={th}>Intrusiveness</th><th className={th}>License</th><th className={th}>Last checked</th></tr></thead>
+              <thead><tr><th className={th}>{t('cyberColEngine')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberColVersion')}</th><th className={th}>{t('cyberColIntrusiveness')}</th><th className={th}>{t('cyberColLicense')}</th><th className={th}>{t('cyberColLastChecked')}</th></tr></thead>
               <tbody>
                 {engines.map((e) => (
                   <tr key={e.id}>
                     <td className={td}>{e.name}</td>
-                    <td className={td}><Badge tone={engineStatusTone(e.status)}>{e.status || 'UNKNOWN'}</Badge></td>
+                    <td className={td}><Badge tone={engineStatusTone(e.status)}>{e.status || t('cyberUnknown')}</Badge></td>
                     <td className={td}>{e.version || '—'}</td>
                     <td className={td}>{e.intrusiveness}</td>
                     <td className={td}>{e.license}</td>
-                    <td className={td}>{e.last_checked_at ? new Date(e.last_checked_at).toLocaleString() : 'never'}</td>
+                    <td className={td}>{e.last_checked_at ? new Date(e.last_checked_at).toLocaleString() : t('cyberNever')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -479,7 +493,7 @@ function EnginesTab() {
 }
 
 // ─── Quantum & PQC ──────────────────────────────────────────────────────
-function QuantumTab() {
+function QuantumTab({ t }) {
   const [providers, setProviders] = useState([]);
   const [policy, setPolicy] = useState(null);
   const [benchmarks, setBenchmarks] = useState([]);
@@ -581,18 +595,14 @@ function QuantumTab() {
 
   return (
     <div className="space-y-4">
+      <PageTitle>{t('cyberTitleQuantum')}</PageTitle>
       <ErrorNote error={error} />
-      <p className="text-cyan-100/50 text-[13px]">
-        BCI's value is not "using quantum computers" — it is unifying discovery, risk, and remediation
-        decisions in one platform. Quantum compute is one optional backend, used only where a real,
-        measured benefit exists; every org defaults to classical, and nothing below is styled as more
-        certain than what was actually measured.
-      </p>
+      <p className="text-cyan-100/50 text-[13px]">{t('cyberQuantumIntro')}</p>
 
-      <Panel title="Quantum Compute Gateway">
+      <Panel title={t('cyberQuantumGatewayTitle')}>
         <div className={tableWrap}>
           <table className="w-full">
-            <thead><tr><th className={th}>Provider</th><th className={th}>Health</th><th className={th}>Detail</th></tr></thead>
+            <thead><tr><th className={th}>{t('cyberColProvider')}</th><th className={th}>{t('cyberColHealth')}</th><th className={th}>{t('cyberColDetail')}</th></tr></thead>
             <tbody>
               {providers.map((p) => (
                 <tr key={p.id}>
@@ -609,38 +619,38 @@ function QuantumTab() {
           <div className="flex flex-wrap items-end gap-4 mt-4 pt-4 border-t border-cyan-300/10">
             <label className="flex items-center gap-2 text-[13px] text-cyan-100/80">
               <input type="checkbox" checked={policy.allowQuantumSimulator} onChange={(e) => setPolicy({ ...policy, allowQuantumSimulator: e.target.checked })} />
-              Allow local quantum simulator
+              {t('cyberAllowSimulator')}
             </label>
             <label className="flex items-center gap-2 text-[13px] text-cyan-100/80">
               <input type="checkbox" checked={policy.allowQuantumHardware} onChange={(e) => setPolicy({ ...policy, allowQuantumHardware: e.target.checked })} />
-              Allow external IBM Quantum hardware
+              {t('cyberAllowHardware')}
             </label>
             <div>
-              <label className="block text-cyan-100/50 text-xs mb-1">Max external data classification</label>
+              <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberMaxClassification')}</label>
               <select className={inputCls} value={policy.maxExternalDataClassification} onChange={(e) => setPolicy({ ...policy, maxExternalDataClassification: e.target.value })}>
                 {['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'SECRET'].map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <button className={btnPrimaryCls} onClick={onSavePolicy}>Save policy</button>
+            <button className={btnPrimaryCls} onClick={onSavePolicy}>{t('cyberSavePolicy')}</button>
           </div>
         )}
       </Panel>
 
-      <Panel title="Quantum Optimizations (Remediation)">
+      <Panel title={t('cyberOptimizationsTitle')}>
         <div className="flex items-end gap-2 mb-3">
           <div>
-            <label className="block text-cyan-100/50 text-xs mb-1">Effort budget</label>
+            <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberEffortBudget')}</label>
             <input type="number" min="1" className={inputCls} value={effortBudget} onChange={(e) => setEffortBudget(e.target.value)} />
           </div>
-          <button className={btnCls} disabled={optimizing} onClick={onOptimize}>{optimizing ? 'Running…' : 'Run optimizer'}</button>
+          <button className={btnCls} disabled={optimizing} onClick={onOptimize}>{optimizing ? t('cyberRunning') : t('cyberRunOptimizer')}</button>
         </div>
         {optimizeResult && (
           <div className="border border-cyan-300/20 rounded p-3 text-[13px] space-y-1">
-            <div>Verdict: <Badge tone={optimizeResult.verdict === 'QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD' ? 'ok' : 'muted'}>{optimizeResult.verdict || 'N/A'}</Badge></div>
+            <div>{t('cyberVerdictLabel')} <Badge tone={optimizeResult.verdict === 'QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD' ? 'ok' : 'muted'}>{optimizeResult.verdict || 'N/A'}</Badge></div>
             {optimizeResult.note && <div className="text-cyan-100/40">{optimizeResult.note}</div>}
             {optimizeResult.optimizationObjective != null && (
               <div title="The optimizer's own objective value for the selected findings -- not a measured real-world risk reduction.">
-                Optimization objective: {optimizeResult.optimizationObjective}
+                {t('cyberOptimizationObjectiveLabel')} {optimizeResult.optimizationObjective}
               </div>
             )}
             {optimizeResult.selection?.length > 0 && (
@@ -651,10 +661,10 @@ function QuantumTab() {
           </div>
         )}
 
-        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mt-4 mb-2">Recent Benchmarks</h3>
+        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mt-4 mb-2">{t('cyberRecentBenchmarks')}</h3>
         <div className={tableWrap}>
           <table className="w-full">
-            <thead><tr><th className={th}>Source</th><th className={th}>Verdict</th><th className={th}>Created</th></tr></thead>
+            <thead><tr><th className={th}>{t('cyberColSource')}</th><th className={th}>{t('cyberColVerdict')}</th><th className={th}>{t('cyberColCreated')}</th></tr></thead>
             <tbody>
               {benchmarks.map((b) => (
                 <tr key={b.id}>
@@ -667,10 +677,10 @@ function QuantumTab() {
           </table>
         </div>
 
-        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mt-4 mb-2">Quantum Jobs</h3>
+        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mt-4 mb-2">{t('cyberQuantumJobs')}</h3>
         <div className={tableWrap}>
           <table className="w-full">
-            <thead><tr><th className={th}>Provider</th><th className={th}>Mode</th><th className={th}>Status</th><th className={th}>Fallback reason</th><th className={th}>Submitted</th></tr></thead>
+            <thead><tr><th className={th}>{t('cyberColProvider')}</th><th className={th}>{t('cyberColMode')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberColFallbackReason')}</th><th className={th}>{t('cyberColSubmitted')}</th></tr></thead>
             <tbody>
               {jobs.map((j) => (
                 <tr key={j.id}>
@@ -686,7 +696,7 @@ function QuantumTab() {
         </div>
       </Panel>
 
-      <Panel title="Post-Quantum Security">
+      <Panel title={t('cyberPostQuantumSecurity')}>
         <div className="grid sm:grid-cols-4 gap-2 mb-2">
           <select className={inputCls} value={discoverProtocol} onChange={(e) => setDiscoverProtocol(e.target.value)}>
             <option value="TLS">TLS</option>
@@ -694,36 +704,34 @@ function QuantumTab() {
           </select>
           <input className={inputCls} placeholder="example.com" value={discoverTarget} onChange={(e) => setDiscoverTarget(e.target.value)} />
           <input className={inputCls} type="number" placeholder={discoverProtocol === 'SSH' ? '22' : '443'} value={discoverPort} onChange={(e) => setDiscoverPort(e.target.value)} />
-          <button className={btnCls} disabled={discovering || !discoverTarget.trim()} onClick={onDiscover}>{discovering ? 'Probing…' : 'Discover crypto'}</button>
+          <button className={btnCls} disabled={discovering || !discoverTarget.trim()} onClick={onDiscover}>{discovering ? t('cyberProbing') : t('cyberDiscoverCrypto')}</button>
         </div>
-        <p className="text-cyan-100/40 text-xs mb-3">
-          TLS/SSH discovery only runs against a target covered by an APPROVED authorized scope — the same authorization bar as starting a scan.
-        </p>
+        <p className="text-cyan-100/40 text-xs mb-3">{t('cyberCryptoScopeNote')}</p>
 
         <div className="flex gap-2 mb-4">
-          <input className={inputCls} placeholder="eyJhbGciOi... (JWT header only is decoded, never verified)" value={jwtToken} onChange={(e) => setJwtToken(e.target.value)} />
-          <button className={btnCls} disabled={jwtDiscovering || !jwtToken.trim()} onClick={onDiscoverJwt}>{jwtDiscovering ? 'Decoding…' : 'Discover JWT alg'}</button>
+          <input className={inputCls} placeholder={t('cyberJwtPlaceholder')} value={jwtToken} onChange={(e) => setJwtToken(e.target.value)} />
+          <button className={btnCls} disabled={jwtDiscovering || !jwtToken.trim()} onClick={onDiscoverJwt}>{jwtDiscovering ? t('cyberDecoding') : t('cyberDiscoverJwt')}</button>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <Tile label="PQC Readiness Score" value={readiness?.readinessScore ?? '—'} tone={scoreTone(readiness?.readinessScore)} />
-          <Tile label="Quantum-Vulnerable" value={readiness?.quantumVulnerableCount ?? '—'} />
-          <Tile label="Unclassified" value={readiness?.unclassifiedCount ?? '—'} />
-          <Tile label="CBOM Components" value={cbom?.componentCount ?? '—'} />
+          <Tile label={t('cyberPqcReadinessScore')} value={readiness?.readinessScore ?? '—'} tone={scoreTone(readiness?.readinessScore)} />
+          <Tile label={t('cyberQuantumVulnerable')} value={readiness?.quantumVulnerableCount ?? '—'} />
+          <Tile label={t('cyberUnclassified')} value={readiness?.unclassifiedCount ?? '—'} />
+          <Tile label={t('cyberCbomComponents')} value={cbom?.componentCount ?? '—'} />
         </div>
         {readiness?.note && <p className="text-cyan-100/40 text-xs mb-3">{readiness.note}</p>}
 
-        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-2">Crypto Inventory</h3>
+        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-2">{t('cyberCryptoInventory')}</h3>
         <div className={tableWrap}>
           <table className="w-full">
-            <thead><tr><th className={th}>Target</th><th className={th}>Algorithm</th><th className={th}>Key size</th><th className={th}>Quantum-vulnerable</th><th className={th}>Discovered</th></tr></thead>
+            <thead><tr><th className={th}>{t('cyberColTarget')}</th><th className={th}>{t('cyberColAlgorithm')}</th><th className={th}>{t('cyberColKeySize')}</th><th className={th}>{t('cyberColQuantumVulnerable')}</th><th className={th}>{t('cyberColDiscovered')}</th></tr></thead>
             <tbody>
               {inventory.map((f) => (
                 <tr key={f.id}>
                   <td className={td}>{f.target}</td>
                   <td className={td}>{f.algorithm_id}</td>
                   <td className={td}>{f.key_size_bits ?? '—'}</td>
-                  <td className={td}><Badge tone={f.quantum_vulnerable === true ? 'danger' : f.quantum_vulnerable === false ? 'ok' : 'muted'}>{f.quantum_vulnerable === null ? 'UNKNOWN' : String(f.quantum_vulnerable)}</Badge></td>
+                  <td className={td}><Badge tone={f.quantum_vulnerable === true ? 'danger' : f.quantum_vulnerable === false ? 'ok' : 'muted'}>{f.quantum_vulnerable === null ? t('cyberUnknown') : String(f.quantum_vulnerable)}</Badge></td>
                   <td className={td}>{new Date(f.discovered_at).toLocaleString()}</td>
                 </tr>
               ))}
@@ -731,17 +739,17 @@ function QuantumTab() {
           </table>
         </div>
 
-        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mt-4 mb-2">Migration Roadmap</h3>
+        <h3 className="text-cyan-100/70 text-xs tracking-widest uppercase mt-4 mb-2">{t('cyberMigrationRoadmap')}</h3>
         <div className={tableWrap}>
           <table className="w-full">
-            <thead><tr><th className={th}>Target</th><th className={th}>Algorithm</th><th className={th}>Priority</th><th className={th}>Harvest-now-decrypt-later</th></tr></thead>
+            <thead><tr><th className={th}>{t('cyberColTarget')}</th><th className={th}>{t('cyberColAlgorithm')}</th><th className={th}>{t('cyberColPriority')}</th><th className={th}>{t('cyberColHarvestNowDecryptLater')}</th></tr></thead>
             <tbody>
               {(readiness?.roadmap || []).map((r) => (
                 <tr key={r.target}>
                   <td className={td}>{r.target}</td>
                   <td className={td}>{r.algorithmId}</td>
                   <td className={td}>{r.priority}</td>
-                  <td className={td}>{r.harvestNowDecryptLater ? <Badge tone="warn">future exposure</Badge> : '—'}</td>
+                  <td className={td}>{r.harvestNowDecryptLater ? <Badge tone="warn">{t('cyberFutureExposure')}</Badge> : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -754,6 +762,7 @@ function QuantumTab() {
 
 export default function CyberAnalysisContent() {
   const { t } = useLang();
+  const TABS = useTabs(t);
   const [tab, setTab] = useState('dashboard');
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -773,6 +782,16 @@ export default function CyberAnalysisContent() {
   }
 
   useEffect(() => { loadStatus(); }, []);
+
+  const ActiveTab = {
+    dashboard: DashboardTab,
+    assets: AssetsTab,
+    scans: ScansTab,
+    findings: FindingsTab,
+    reports: ReportsTab,
+    engines: EnginesTab,
+    quantum: QuantumTab,
+  }[tab];
 
   return (
     <div className="space-y-4">
@@ -799,14 +818,14 @@ export default function CyberAnalysisContent() {
           <ShieldAlert className="w-5 h-5 text-gold" />
           <span>{t('cyberAnalysisNotConfigured')}</span>
         </div>
-      ) : (
-        <>
-          <nav className="hud-panel rounded-xl p-2 flex flex-wrap gap-1">
+      ) : status?.available ? (
+        <div className="flex flex-col sm:flex-row gap-4">
+          <nav className="hud-panel rounded-xl p-2 flex sm:flex-col gap-1 sm:w-48 shrink-0 overflow-x-auto sm:overflow-visible">
             {TABS.map((tb) => (
               <button
                 key={tb.id}
                 onClick={() => setTab(tb.id)}
-                className={`px-3 py-1.5 rounded text-[12px] tracking-wide uppercase transition ${
+                className={`px-3 py-2 rounded text-[12px] tracking-wide uppercase transition text-left whitespace-nowrap ${
                   tab === tb.id ? 'bg-cyan-400/15 text-cyan-100 border border-cyan-300/40' : 'text-cyan-100/50 hover:text-cyan-100/80'
                 }`}
               >
@@ -815,15 +834,11 @@ export default function CyberAnalysisContent() {
             ))}
           </nav>
 
-          {tab === 'dashboard' && <DashboardTab />}
-          {tab === 'assets' && <AssetsTab />}
-          {tab === 'scans' && <ScansTab />}
-          {tab === 'findings' && <FindingsTab />}
-          {tab === 'reports' && <ReportsTab />}
-          {tab === 'engines' && <EnginesTab />}
-          {tab === 'quantum' && <QuantumTab />}
-        </>
-      )}
+          <div className="flex-1 min-w-0">
+            <ActiveTab t={t} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
