@@ -13,11 +13,11 @@ import {
 
 beforeEach(resetDatabase);
 
-async function approveScope(orgId, userId, target, allowedScanClasses = ['PASSIVE']) {
+async function approveScope(orgId, userId, target, allowedScanClasses = ['PASSIVE'], targetType = 'DOMAIN') {
   const { rows } = await query(
-    `INSERT INTO authorized_scopes (org_id, name, target, allowed_scan_classes, status, created_by, approved_by, approved_at)
-     VALUES ($1, 'scope', $2, $3, 'APPROVED', $4, $4, now()) RETURNING id`,
-    [orgId, target, allowedScanClasses, userId]
+    `INSERT INTO authorized_scopes (org_id, name, target, target_type, allowed_scan_classes, status, created_by, approved_by, approved_at)
+     VALUES ($1, 'scope', $2, $3, $4, 'APPROVED', $5, $5, now()) RETURNING id`,
+    [orgId, target, targetType, allowedScanClasses, userId]
   );
   return rows[0].id;
 }
@@ -43,6 +43,74 @@ describe('job queue', () => {
     const outcome = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
     expect(outcome.accepted).toBe(true);
     expect(outcome.job.status).toBe('QUEUED');
+  });
+
+  it('with no selectedEngineIds, defaults selected_engine_ids to the full real recommended plan (unchanged pre-existing behavior)', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
+
+    const outcome = await enqueueScan({ orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE' });
+    expect(outcome.accepted).toBe(true);
+    expect(outcome.job.recommended_engine_ids.sort()).toEqual(['osv-scanner', 'semgrep', 'trivy']);
+    expect(outcome.job.selected_engine_ids.sort()).toEqual(['osv-scanner', 'semgrep', 'trivy']);
+  });
+
+  it('accepts a real subset of the recommended engines as selectedEngineIds', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
+
+    const outcome = await enqueueScan({
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['semgrep'],
+    });
+    expect(outcome.accepted).toBe(true);
+    expect(outcome.job.selected_engine_ids).toEqual(['semgrep']);
+    expect(outcome.job.recommended_engine_ids.sort()).toEqual(['osv-scanner', 'semgrep', 'trivy']); // recommendation itself unchanged
+  });
+
+  it('rejects a selectedEngineIds entry that is not compatible/recommended for this target type -- never silently ignored, never allowed to add scope', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
+
+    // nuclei is a DOMAIN/WEB engine, never recommended for REPOSITORY.
+    const outcome = await enqueueScan({
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['nuclei'],
+    });
+    expect(outcome.accepted).toBe(false);
+    expect(outcome.decision.reason).toBe('engine_not_compatible_or_recommended');
+
+    const { rows } = await query('SELECT count(*)::int AS n FROM scan_jobs');
+    expect(rows[0].n).toBe(0); // no job created on rejection
+  });
+
+  it('rejects an empty selectedEngineIds array -- at least one engine is required if a selection is made at all', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
+
+    const outcome = await enqueueScan({
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: [],
+    });
+    expect(outcome.accepted).toBe(false);
+    expect(outcome.decision.reason).toBe('at_least_one_engine_required');
+  });
+
+  it('rejects a selected engine that is compatible/recommended but not actually HEALTHY', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
+    await query(
+      `INSERT INTO engine_health (engine_id, status, last_checked_at) VALUES ('semgrep', 'OFFLINE', now())
+       ON CONFLICT (engine_id) DO UPDATE SET status = 'OFFLINE', last_checked_at = now()`
+    );
+
+    const outcome = await enqueueScan({
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['semgrep'],
+    });
+    expect(outcome.accepted).toBe(false);
+    expect(outcome.decision.reason).toBe('engine_not_healthy');
   });
 
   it('claimNextJob moves a job to ANALYZING and stamps a timeout', async () => {

@@ -23,12 +23,13 @@ function estimateEffort(category) {
 // a finding's asset can reach, from the Security Graph, M10) multiplies a
 // finding's value here, so a medium-risk finding on a heavily-connected
 // asset can outrank a higher-risk but isolated one.
-export async function buildRemediationProblem(orgId) {
+export async function buildRemediationProblem(orgId, { findingIds } = {}) {
   const { rows: findings } = await query(
     `SELECT f.id, f.title, f.category, f.target, f.risk_score
        FROM findings f
-      WHERE f.org_id = $1 AND f.status = ANY($2) AND f.risk_score IS NOT NULL`,
-    [orgId, OPEN_STATUSES]
+      WHERE f.org_id = $1 AND f.status = ANY($2) AND f.risk_score IS NOT NULL
+        ${findingIds?.length ? 'AND f.id = ANY($3)' : ''}`,
+    findingIds?.length ? [orgId, OPEN_STATUSES, findingIds] : [orgId, OPEN_STATUSES]
   );
 
   const items = [];
@@ -56,14 +57,31 @@ export async function buildRemediationProblem(orgId) {
   return items;
 }
 
-export async function optimizeRemediation({ orgId, actorUserId, effortBudget, dataClassification = 'INTERNAL' }) {
-  const items = await buildRemediationProblem(orgId);
+// findingIds (optional) scopes the optimization problem to one scan job's
+// real results (spec flow: TARAMA -> BULGULAR/RİSK -> seçilen Quantum
+// yöntemi -> OPTİMİZASYON) instead of every open finding org-wide -- the
+// existing QuantumTab call (no findingIds) keeps optimizing org-wide,
+// unchanged. preferredMode is the wizard's real per-run compute-method
+// choice, passed straight through to the real fallback chain
+// (executionPolicy.js) -- never bypassing it.
+export async function optimizeRemediation({ orgId, actorUserId, effortBudget, dataClassification = 'INTERNAL', findingIds, preferredMode, scanJobId }) {
+  const items = await buildRemediationProblem(orgId, { findingIds });
   if (items.length === 0) {
-    return { benchmarkId: null, verdict: 'NO_QUANTUM_ADVANTAGE_DEMONSTRATED', selectedFindingIds: [], optimizationObjective: 0, note: 'no open findings with a computed risk score' };
+    // Distinct from NO_QUANTUM_ADVANTAGE_DEMONSTRATED: there was no
+    // optimization problem to run at all, not a benchmark that ran and
+    // came back even/worse than classical. No quantum_benchmarks row is
+    // written -- there was nothing to benchmark.
+    return {
+      benchmarkId: null,
+      verdict: 'NOT_APPLICABLE',
+      selectedFindingIds: [],
+      optimizationObjective: 0,
+      note: findingIds?.length ? 'no risk-scored open findings in this scan\'s results' : 'no open findings with a computed risk score',
+    };
   }
 
   const problem = { items: items.map(({ title: _title, ...rest }) => rest), budget: effortBudget };
-  const benchmark = await runBenchmark({ orgId, actorUserId, workloadSource: 'remediation_optimizer', problem, dataClassification });
+  const benchmark = await runBenchmark({ orgId, actorUserId, workloadSource: 'remediation_optimizer', problem, dataClassification, preferredMode, scanJobId });
 
   const titleById = new Map(items.map((i) => [i.id, i.title]));
   const selection = benchmark.best
@@ -74,6 +92,10 @@ export async function optimizeRemediation({ orgId, actorUserId, effortBudget, da
     benchmarkId: benchmark.benchmarkId,
     verdict: benchmark.verdict,
     executionMode: benchmark.executionMode,
+    recommendedMode: benchmark.recommendedMode,
+    selectedMode: benchmark.selectedMode,
+    actualMode: benchmark.actualMode,
+    fallbackReason: benchmark.fallbackReason,
     selectedFindingIds: selection.map((s) => s.findingId),
     selection,
     // The knapsack's summed value (risk_score x blast-radius multiplier) of

@@ -505,5 +505,20 @@
   "cyberAnalysisHistory": "سجل التحليل",
   "cyberNoHistoryYet": "لا توجد تحليلات مكتملة بعد",
   "cyberColReportsForAsset": "التقارير",
-  "cyberGenerateReportForAsset": "إنشاء تقرير لهذا الأصل"
+  "cyberGenerateReportForAsset": "إنشاء تقرير لهذا الأصل",
+  "cyberWizSelectEngines": "اختر المحركات المطلوب تشغيلها",
+  "cyberWizComputeMethod": "طريقة الحوسبة",
+  "cyberWizNotConfigured": "غير مُهيأ لهذه المؤسسة",
+  "cyberWizPolicyDenied": "معطّل بواسطة سياسة الكم الخاصة بالمؤسسة",
+  "cyberWizOptimizationParams": "معلمات التحسين",
+  "cyberEffortBudgetLabel": "ميزانية الجهد",
+  "cyberDataClassificationLabel": "تصنيف البيانات",
+  "cyberWizProvenanceTitle": "مصدر الاختيار",
+  "cyberWizBciRecommended": "توصية BCI",
+  "cyberWizYouSelected": "اخترت",
+  "cyberWizActuallyUsed": "المستخدم فعليًا",
+  "cyberWizFallbackOccurred": "تم اللجوء إلى بديل",
+  "cyberWizOptimizationVerdict": "نتيجة التحسين",
+  "cyberWizNotApplicable": "غير قابل للتطبيق — لا توجد نتائج مفتوحة للتحسين",
+  "cyberWizEngineRequired": "اختر محركًا واحدًا على الأقل للمتابعة"
 }

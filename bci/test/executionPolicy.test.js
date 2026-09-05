@@ -114,6 +114,68 @@ describe('decideExecutionMode (pure) — spec section 7', () => {
     expect(decision.reason).toBe('quantum_inspired_unavailable');
   });
 
+  it('a byte-identical call with no preferredMode behaves exactly as before this parameter existed', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'INTERNAL',
+      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_HARDWARE);
+  });
+
+  it('preferredMode=CLASSICAL returns immediately, never touching the quantum chain at all', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'INTERNAL',
+      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12,
+      preferredMode: COMPUTE_MODES.CLASSICAL,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.CLASSICAL);
+    expect(decision.reason).toBe('user_selected_classical');
+  });
+
+  it('preferredMode=QUANTUM_SIMULATOR skips hardware even though policy allows and it is healthy', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'INTERNAL',
+      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12,
+      preferredMode: COMPUTE_MODES.QUANTUM_SIMULATOR,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_SIMULATOR);
+    expect(decision.reason).toBe('user_selected_simulator_skips_hardware');
+  });
+
+  it('preferredMode=QUANTUM_SIMULATOR still cascades to QUANTUM_INSPIRED when the simulator itself is unavailable (real fallback, not a hard stop)', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'INTERNAL',
+      providerHealthById: { quantum_simulator: NOT_CONFIGURED, ibm_quantum: AVAILABLE, quantum_inspired: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12, quantumInspiredMaxSize: 500,
+      preferredMode: COMPUTE_MODES.QUANTUM_SIMULATOR,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_INSPIRED);
+  });
+
+  it('preferredMode=QUANTUM_HARDWARE is the same as no preference at all (top of the chain)', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'INTERNAL',
+      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12,
+      preferredMode: COMPUTE_MODES.QUANTUM_HARDWARE,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.QUANTUM_HARDWARE);
+  });
+
+  it('preferredMode never bypasses org policy -- a preference for hardware still falls through when policy denies quantum entirely', () => {
+    const decision = decideExecutionMode({
+      problemSize: 4, policy: DENY_ALL_POLICY, dataClassification: 'PUBLIC',
+      providerHealthById: { quantum_simulator: AVAILABLE, ibm_quantum: AVAILABLE },
+      simulatorMaxSize: 10, hardwareMaxSize: 12,
+      preferredMode: COMPUTE_MODES.QUANTUM_HARDWARE,
+    });
+    expect(decision.mode).toBe(COMPUTE_MODES.CLASSICAL);
+    expect(decision.reason).toBe('org_policy_denies_quantum');
+  });
+
   it('an unrecognized data classification fails closed (never treated as low-sensitivity)', () => {
     const decision = decideExecutionMode({
       problemSize: 4, policy: HARDWARE_POLICY, dataClassification: 'NOT_A_REAL_CLASSIFICATION',
