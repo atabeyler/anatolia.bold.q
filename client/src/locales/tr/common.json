@@ -320,5 +320,9 @@
   "errPushUnsupported": "Bu tarayıcı push bildirimlerini desteklemiyor",
   "errPushNotConfigured": "Sunucuda push bildirimleri yapılandırılmamış",
   "errPushPermissionNotGranted": "Bildirim izni verilmedi",
-  "errPushPermissionDenied": "Bildirim izni engellenmiş — tarayıcı ayarlarından etkinleştirin"
+  "errPushPermissionDenied": "Bildirim izni engellenmiş — tarayıcı ayarlarından etkinleştirin",
+  "cyberAnalysisRefresh": "Yenile",
+  "cyberAnalysisNotConfigured": "BCI entegrasyonu henüz yapılandırılmamış. Yönetici BCI_BASE_URL / BCI_GATEWAY_SECRET ayarlamalı.",
+  "cyberAnalysisNoFindings": "Açık bulgu yok.",
+  "cyberAnalysisUnavailable": "Cyber Analysis şu anda kullanılamıyor"
 }

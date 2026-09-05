@@ -320,5 +320,9 @@
   "errPushUnsupported": "Ce navigateur ne prend pas en charge les notifications push",
   "errPushNotConfigured": "Les notifications push ne sont pas configurées sur le serveur",
   "errPushPermissionNotGranted": "L'autorisation de notification n'a pas été accordée",
-  "errPushPermissionDenied": "L'autorisation de notification est bloquée — activez-la dans les paramètres du navigateur"
+  "errPushPermissionDenied": "L'autorisation de notification est bloquée — activez-la dans les paramètres du navigateur",
+  "cyberAnalysisRefresh": "Actualiser",
+  "cyberAnalysisNotConfigured": "L'intégration BCI n'est pas encore configurée. Un administrateur doit définir BCI_BASE_URL / BCI_GATEWAY_SECRET.",
+  "cyberAnalysisNoFindings": "Aucune découverte ouverte.",
+  "cyberAnalysisUnavailable": "Cyber Analysis est actuellement indisponible"
 }

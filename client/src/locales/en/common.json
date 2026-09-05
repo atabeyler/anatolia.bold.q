@@ -320,5 +320,9 @@
   "errPushUnsupported": "This browser does not support push notifications",
   "errPushNotConfigured": "Push notifications are not configured on the server",
   "errPushPermissionNotGranted": "Notification permission was not granted",
-  "errPushPermissionDenied": "Notification permission is blocked — enable it in your browser settings"
+  "errPushPermissionDenied": "Notification permission is blocked — enable it in your browser settings",
+  "cyberAnalysisRefresh": "Refresh",
+  "cyberAnalysisNotConfigured": "BCI integration is not yet configured. An administrator must set BCI_BASE_URL / BCI_GATEWAY_SECRET.",
+  "cyberAnalysisNoFindings": "No open findings.",
+  "cyberAnalysisUnavailable": "Cyber Analysis is currently unavailable"
 }

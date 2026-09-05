@@ -320,5 +320,9 @@
   "errPushUnsupported": "Dieser Browser unterstützt keine Push-Benachrichtigungen",
   "errPushNotConfigured": "Push-Benachrichtigungen sind auf dem Server nicht konfiguriert",
   "errPushPermissionNotGranted": "Benachrichtigungsberechtigung wurde nicht erteilt",
-  "errPushPermissionDenied": "Benachrichtigungsberechtigung ist blockiert — aktivieren Sie sie in den Browsereinstellungen"
+  "errPushPermissionDenied": "Benachrichtigungsberechtigung ist blockiert — aktivieren Sie sie in den Browsereinstellungen",
+  "cyberAnalysisRefresh": "Aktualisieren",
+  "cyberAnalysisNotConfigured": "Die BCI-Integration ist noch nicht konfiguriert. Ein Administrator muss BCI_BASE_URL / BCI_GATEWAY_SECRET festlegen.",
+  "cyberAnalysisNoFindings": "Keine offenen Befunde.",
+  "cyberAnalysisUnavailable": "Cyber Analysis ist derzeit nicht verfügbar"
 }

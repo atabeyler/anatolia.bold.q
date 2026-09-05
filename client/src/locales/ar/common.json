@@ -320,5 +320,9 @@
   "errPushUnsupported": "هذا المتصفح لا يدعم إشعارات الدفع",
   "errPushNotConfigured": "إشعارات الدفع غير مُهيأة على الخادم",
   "errPushPermissionNotGranted": "لم يتم منح إذن الإشعارات",
-  "errPushPermissionDenied": "إذن الإشعارات محظور — يرجى تفعيله من إعدادات المتصفح"
+  "errPushPermissionDenied": "إذن الإشعارات محظور — يرجى تفعيله من إعدادات المتصفح",
+  "cyberAnalysisRefresh": "تحديث",
+  "cyberAnalysisNotConfigured": "لم يتم تكوين تكامل BCI بعد. يجب على المسؤول ضبط BCI_BASE_URL / BCI_GATEWAY_SECRET.",
+  "cyberAnalysisNoFindings": "لا توجد نتائج مفتوحة.",
+  "cyberAnalysisUnavailable": "خدمة Cyber Analysis غير متاحة حاليًا"
 }

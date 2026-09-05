@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ShieldAlert, ShieldCheck, RefreshCw } from 'lucide-react';
 import { api } from '../services/api.js';
+import { useLang } from '../services/langContext.jsx';
 
 // Cyber Analysis -- ANATOLIA-Q's surface for BCI (BOLD Cyber Intelligence),
 // a separately deployed product (see bci/ and server/src/routes/cyberAnalysis.js).
@@ -24,6 +25,7 @@ function scoreTone(score) {
 }
 
 export default function CyberAnalysisPage() {
+  const { t } = useLang();
   const [status, setStatus] = useState(null);
   const [overview, setOverview] = useState(null);
   const [findings, setFindings] = useState(null);
@@ -42,7 +44,7 @@ export default function CyberAnalysisPage() {
         setFindings(f.findings || []);
       }
     } catch (err) {
-      setError(err.message || 'Cyber Analysis şu anda kullanılamıyor');
+      setError(err.message || t('cyberAnalysisUnavailable'));
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,7 @@ export default function CyberAnalysisPage() {
               className="border border-cyan-300/35 text-cyan-100 px-3 py-2 rounded flex items-center gap-2 hover:bg-cyan-400/10"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Yenile
+              {t('cyberAnalysisRefresh')}
             </button>
             <Link
               to="/"
@@ -83,7 +85,7 @@ export default function CyberAnalysisPage() {
         {status && !status.available && (
           <div className="hud-panel rounded-xl p-4 flex items-center gap-3 text-cyan-100/70">
             <ShieldAlert className="w-5 h-5 text-gold" />
-            <span>BCI entegrasyonu henüz yapılandırılmamış. Yönetici BCI_BASE_URL / BCI_GATEWAY_SECRET ayarlamalı.</span>
+            <span>{t('cyberAnalysisNotConfigured')}</span>
           </div>
         )}
 
@@ -101,7 +103,7 @@ export default function CyberAnalysisPage() {
               Findings ({findings.length})
             </h2>
             {findings.length === 0 ? (
-              <p className="text-cyan-100/50 text-sm">Açık bulgu yok.</p>
+              <p className="text-cyan-100/50 text-sm">{t('cyberAnalysisNoFindings')}</p>
             ) : (
               <div className="space-y-2">
                 {findings.map((f) => (
