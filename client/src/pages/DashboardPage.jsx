@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { History, LogOut, Mic, X, Bell, CalendarDays, Clock3, Thermometer, Menu as MenuIcon, Settings as SettingsIcon, Users } from 'lucide-react';
 import EmergencyButton from '../components/EmergencyButton.jsx';
 import CategorySidebar from '../components/CategorySidebar.jsx';
@@ -35,6 +36,7 @@ const DAYS_SHORT = {
 };
 
 export default function DashboardPage({ user, onLogout }) {
+  const navigate = useNavigate();
   const { t, lang, setLang } = useLang();
   const [view, setView] = useState('home');
   const [activeCategory, setActiveCategory] = useState(null);
@@ -521,7 +523,17 @@ export default function DashboardPage({ user, onLogout }) {
     return () => window.removeEventListener('aq:logout', onLogoutCmd);
   }, []);
 
-  const startAnalysis = (cat) => { setActiveCategory(cat); setView('analysis'); };
+  // "siber" is the one category whose content is a full admin panel
+  // (Assets/Scopes/Scans/Findings/Reports/Engines/Quantum tabs, see
+  // CyberAnalysisContent.jsx) rather than the generic analysis wizard --
+  // too much for AnalysisView's centered, narrower container, so it
+  // navigates to the full-width standalone /cyber-analysis route instead
+  // of rendering inline like every other category.
+  const startAnalysis = (cat) => {
+    if (cat === 'siber') { navigate('/cyber-analysis'); return; }
+    setActiveCategory(cat);
+    setView('analysis');
+  };
 
   // item 8's native session refactor moved the persisted JWT out of
   // localStorage into the platform's own secure store (Electron's
