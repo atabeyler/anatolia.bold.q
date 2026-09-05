@@ -20,6 +20,7 @@ import { graphRouter } from './routes/graph.js';
 import { reportsRouter } from './routes/reports.js';
 import { gatewayRouter } from './routes/gateway.js';
 import { quantumRouter } from './routes/quantum.js';
+import { cryptoRouter } from './routes/crypto.js';
 
 export function createApp() {
   const app = express();
@@ -69,6 +70,7 @@ export function createApp() {
   app.use('/api/v1/reports', reportsRouter);
   app.use('/api/v1/gateway', gatewayRouter);
   app.use('/api/v1/quantum', quantumRouter);
+  app.use('/api/v1/crypto', cryptoRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'not_found', requestId: req.id });

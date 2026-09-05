@@ -417,20 +417,75 @@ in an air-gapped Sovereign deployment — with quantum entirely absent.
 - **`GET/PUT /api/v1/quantum/policy`, `GET /api/v1/quantum/providers`,
   `POST /api/v1/quantum/remediation-optimize`, `GET /api/v1/quantum/benchmarks(/:id)`,
   `GET /api/v1/quantum/jobs`** — RBAC-gated (`system:manage` to change
-  policy, `remediation:propose` to run the optimizer), cross-tenant
+  policy, `finding:update` to run the optimizer), cross-tenant
   isolation enforced (org A gets 404 on org B's benchmark)
-- **Not yet built** (PLANNED): Post-Quantum Security Engine (crypto
-  discovery/inventory, CBOM, harvest-now-decrypt-later migration
-  readiness), a dedicated Security Graph attack-path/patch-ordering
-  optimizer beyond the blast-radius weighting above, a Quantum
-  Intelligence page in `bci/ui/`, and closer ANATOLIA-Q gateway
-  convergence (today ANATOLIA-Q and BCI intentionally run fully separate
-  quantum stacks — BCI never depends on ANATOLIA-Q's)
 
 36 new tests (knapsack, all four providers, execution policy including the
 data-classification and fail-closed edge cases, benchmark integration
-against a real database, remediation optimizer, and API RBAC/isolation),
-234/234 total BCI tests green, no ANATOLIA-Q files touched.
+against a real database, remediation optimizer, and API RBAC/isolation).
+
+### Post-Quantum Security Engine (IMPLEMENTED, real TLS discovery)
+
+Separate from quantum *compute* usage above — this is about cryptographic
+algorithms in use today that a future quantum computer could break, and
+getting ahead of that migration. Every claim here is deliberately hedged the
+way the spec demands: no "encryption is broken today," no marketing names,
+a version-stamped classification table instead of a hardcoded judgment.
+
+- **Crypto Discovery** (`src/services/cryptoDiscovery.js`) — a real TLS
+  handshake (`node:tls` + `node:crypto`'s `X509Certificate`) against an
+  authorized target, never a mock parser. Goes through the exact same
+  `evaluateScopeAuthorization` gate as starting a scan (`scan:create`) —
+  there is no weaker authorization path for "just reading a certificate".
+  Extracts the real negotiated protocol/cipher and the certificate's actual
+  public-key algorithm, key size (or named curve), subject/issuer, and
+  validity window. Verified against two real local TLS servers stood up in
+  tests with freshly-generated RSA-2048 and P-256 certificates (`openssl
+  req -x509`) — not fixture data
+- **PQC classification** (`src/quantum/pqcClassification.js`, data-driven,
+  `PQC_CLASSIFICATION_VERSION` stamped onto every finding it produces) —
+  RSA/DSA/ECDSA/ECDH/EdDSA/X25519 marked quantum-vulnerable (broken by
+  Shor's algorithm on a sufficiently large fault-tolerant quantum computer
+  — a statement about the algorithm's math, not a claim such a machine
+  exists); ML-KEM/ML-DSA/SLH-DSA marked quantum-safe, cited by NIST
+  standard number (FIPS 203/204/205) rather than a vendor product name. An
+  algorithm this table doesn't recognize is classified `quantumVulnerable:
+  null` (UNKNOWN) — **never** silently reported as safe
+- **Crypto Inventory** (`crypto_findings` table, `GET
+  /api/v1/crypto/inventory`) — one row per real discovery, optionally
+  linked to an `assets` row
+- **CBOM** (`src/services/cbom.js`, `GET /api/v1/crypto/cbom`) —
+  Asset → Algorithm → Key → Certificate → Protocol, built only from what
+  Crypto Discovery actually observed
+- **PQC Migration Readiness** (`src/services/pqcReadiness.js`, `GET
+  /api/v1/crypto/readiness`) — a readiness percentage over *classified*
+  findings only (UNKNOWN findings are excluded from the denominator and
+  reported separately, never silently counted as safe); `readinessScore`
+  is `null`, not a fabricated number, when there's no inventory yet. A
+  migration roadmap ranks vulnerable findings by a documented heuristic
+  (asset criticality + cert-expiry urgency + internet exposure) — stated
+  in code and here as a relative-ordering aid, not a precise cost model
+- **Harvest-Now-Decrypt-Later** flag on high/critical-criticality
+  vulnerable findings: labeled `FUTURE_CONFIDENTIALITY_EXPOSURE` with an
+  explicit "not a claim that the data is decryptable today" note, and its
+  criticality-as-proxy basis stated plainly since BCI has no direct
+  data-retention signal from a bare TLS probe
+- **Not yet built** (PLANNED): SSH/code-signing/JWT crypto discovery
+  (today: TLS only), a dedicated Security Graph attack-path/patch-ordering
+  optimizer beyond the blast-radius weighting in the Remediation
+  Optimizer above, a Quantum Intelligence / PQC page in `bci/ui/`, and
+  closer ANATOLIA-Q gateway convergence (today ANATOLIA-Q and BCI
+  intentionally run fully separate quantum stacks — BCI never depends on
+  ANATOLIA-Q's)
+
+20 new tests (classification table incl. fail-closed/unknown-algorithm
+cases, real-TLS-handshake discovery against two live local servers, CBOM,
+readiness scoring and prioritization, harvest-now-decrypt-later, and API
+RBAC/cross-tenant isolation).
+
+**254/254 total BCI tests green** (2 unrelated `engines.test.js` timeouts
+seen once under load, confirmed as pre-existing system-load flakiness by
+rerunning that file alone: 6/6 clean), no ANATOLIA-Q files touched.
 
 ## Development
 

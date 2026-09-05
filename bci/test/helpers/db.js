@@ -7,6 +7,7 @@ import { query } from '../../src/db/client.js';
 export async function resetDatabase() {
   await query(`
     TRUNCATE TABLE
+      crypto_findings,
       quantum_jobs,
       quantum_benchmarks,
       quantum_policies,
