@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/findings', label: 'Findings' },
   { to: '/reports', label: 'Reports' },
   { to: '/engines', label: 'Engines' },
+  { to: '/quantum', label: 'Quantum & PQC' },
 ];
 
 export default function Layout() {

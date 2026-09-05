@@ -9,6 +9,7 @@ import ScansPage from './pages/ScansPage.jsx';
 import FindingsPage from './pages/FindingsPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
 import EnginesPage from './pages/EnginesPage.jsx';
+import QuantumPage from './pages/QuantumPage.jsx';
 
 function RequireAuth({ children }) {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="findings" element={<FindingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="engines" element={<EnginesPage />} />
+        <Route path="quantum" element={<QuantumPage />} />
       </Route>
     </Routes>
   );

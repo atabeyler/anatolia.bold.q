@@ -22,6 +22,15 @@ proves the pattern end to end so those areas can be added the same way.
 - **Reports** — generate any of the four report types (report:export-gated)
   and view one, including its integrity status (`integrityValid`)
 - **Engines** — health table + a manual health-check trigger (system:manage-gated)
+- **Quantum & PQC** — Quantum Compute Gateway provider health, the org's
+  quantum execution policy (system:manage-gated to edit), a Remediation
+  Optimizer trigger with its benchmark verdict (finding:update-gated),
+  recent benchmarks and quantum job history; a Crypto Discovery trigger
+  (scan:create-gated — it makes a real, authorized-scope-checked TLS
+  connection) plus the resulting Crypto Inventory, PQC Readiness score,
+  CBOM component count, and migration roadmap. Deliberately never shows a
+  "Quantum Powered Security" style claim — only genuinely measured
+  provider health, benchmark verdicts, and discovery results
 
 RBAC is enforced server-side as always (M2) — the UI only hides actions a
 user's token doesn't carry the permission for; every button still goes
@@ -39,4 +48,8 @@ npm test --prefix bci/ui
 Verified end-to-end during development with a real BCI API + a headless
 browser: login, dashboard scores loading from real data, creating an asset
 through the UI and seeing it land in the database, and logout all worked
-against the actual running stack, not mocks.
+against the actual running stack, not mocks. The Quantum & PQC page was
+verified the same way against a live BCI API: an approved scope, a real
+Crypto Discovery TLS handshake against `example.com` returning
+RSA-2048/quantum-vulnerable, and provider health/policy/inventory/readiness
+all rendering the real response data end to end.

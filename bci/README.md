@@ -317,6 +317,13 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   the UI and seeing it land in the database → logout)
 - RBAC stays server-side: the UI only hides actions a token lacks
   permission for, never the only check
+- Later extended with a **Quantum & PQC** page (Quantum Compute Gateway
+  provider health, execution policy, the Remediation Optimizer, benchmark
+  results and quantum job history, Crypto Discovery, Crypto Inventory,
+  PQC Readiness, and Migration Roadmap) once the Quantum Compute Gateway
+  and Post-Quantum Security Engine below existed to display — verified
+  end-to-end the same way against a real running BCI API and a real TLS
+  discovery against `example.com`
 
 **M16 — Enterprise / Sovereign**
 - **Offline Intelligence Bundle** (spec section 53): Ed25519-signed exports
@@ -471,10 +478,10 @@ a version-stamped classification table instead of a hardcoded judgment.
   criticality-as-proxy basis stated plainly since BCI has no direct
   data-retention signal from a bare TLS probe
 - **Not yet built** (PLANNED): SSH/code-signing/JWT crypto discovery
-  (today: TLS only), a Quantum Intelligence / PQC page in `bci/ui/`, and
-  closer ANATOLIA-Q gateway convergence (today ANATOLIA-Q and BCI
-  intentionally run fully separate quantum stacks — BCI never depends on
-  ANATOLIA-Q's)
+  (today: TLS only), and closer ANATOLIA-Q gateway convergence (today
+  ANATOLIA-Q and BCI intentionally run fully separate quantum stacks — BCI
+  never depends on ANATOLIA-Q's). A Quantum & PQC page now exists in
+  `bci/ui/` (see below) covering everything else already IMPLEMENTED above
 
 20 new tests (classification table incl. fail-closed/unknown-algorithm
 cases, real-TLS-handshake discovery against two live local servers, CBOM,

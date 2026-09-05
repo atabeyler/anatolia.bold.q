@@ -72,4 +72,16 @@ export const api = {
   runEngineHealthCheck: () => request('/engines/health-check', { method: 'POST' }),
 
   listAudit: () => request('/audit'),
+
+  listQuantumProviders: () => request('/quantum/providers'),
+  getQuantumPolicy: () => request('/quantum/policy'),
+  setQuantumPolicy: (policy) => request('/quantum/policy', { method: 'PUT', body: policy }),
+  runRemediationOptimize: (effortBudget) => request('/quantum/remediation-optimize', { method: 'POST', body: { effortBudget } }),
+  listQuantumBenchmarks: () => request('/quantum/benchmarks'),
+  listQuantumJobs: () => request('/quantum/jobs'),
+
+  discoverCrypto: (target, port) => request('/crypto/discover', { method: 'POST', body: port ? { target, port } : { target } }),
+  listCryptoInventory: () => request('/crypto/inventory'),
+  getCbom: () => request('/crypto/cbom'),
+  getPqcReadiness: () => request('/crypto/readiness'),
 };
