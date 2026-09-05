@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { pool } from './db/client.js';
 import { logger } from './logger.js';
-import { claimNextJob, completeJob, failJob, sweepTimedOutJobs, heartbeatWorker } from './services/jobQueue.js';
+import { claimNextJob, completeJob, markNoCoverage, failJob, sweepTimedOutJobs, heartbeatWorker } from './services/jobQueue.js';
 import { runAnalysisPipeline } from './services/analysisPipeline.js';
 
 const POLL_INTERVAL_MS = Number(process.env.BCI_WORKER_POLL_MS) || 1000;
@@ -34,8 +34,13 @@ async function workerLoop(workerId, signal) {
     await heartbeatWorker(workerId, 'BUSY', job.id);
     try {
       const result = await runAnalysisPipeline(job);
-      await completeJob(job.id, result);
-      logger.info({ workerId, jobId: job.id, ...result }, 'Job completed');
+      if (result.enginesRun.length === 0) {
+        await markNoCoverage(job.id, result);
+        logger.warn({ workerId, jobId: job.id, ...result }, 'Job finished with no engine coverage');
+      } else {
+        await completeJob(job.id, result);
+        logger.info({ workerId, jobId: job.id, ...result }, 'Job completed');
+      }
     } catch (err) {
       await failJob(job.id, String(err?.message || err));
       logger.error({ err, workerId, jobId: job.id }, 'Job failed');

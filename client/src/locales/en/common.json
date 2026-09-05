@@ -459,5 +459,18 @@
   "cyberTechnologies": "Technologies",
   "cyberNoIdentifiers": "None",
   "cyberArchivedBadge": "ARCHIVED",
-  "cyberEditAsset": "Edit Asset"
+  "cyberEditAsset": "Edit Asset",
+  "cyberScanNoCoverage": "NO COVERAGE",
+  "cyberScanNoCoverageDetail": "No engine actually ran for this target/class combination -- this is not a clean result, it means nothing was analyzed.",
+  "cyberCommandCenter": "Command Center",
+  "cyberActiveAssets": "Active Assets",
+  "cyberCriticalHighRisks": "Critical/High Risks",
+  "cyberInProgressAnalyses": "In Progress",
+  "cyberRecentAnalyses": "Recently Completed",
+  "cyberRecentReports": "Recent Reports",
+  "cyberSystemOperational": "BCI SYSTEM — OPERATIONAL",
+  "cyberSystemDegraded": "{{count}} analysis engine(s) unavailable -- some analysis capacity is reduced.",
+  "cyberNewAnalysis": "NEW ANALYSIS",
+  "cyberNoneYet": "None yet",
+  "cyberTechnicalGroup": "TECHNICAL"
 }

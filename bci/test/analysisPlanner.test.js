@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planEngines } from '../src/services/analysisPlanner.js';
+import { planEngines, candidateEnginesForTargetType } from '../src/services/analysisPlanner.js';
 
 describe('planEngines (pure)', () => {
   it('plans the full SAST/SCA/secrets triad for a REPOSITORY, even at PASSIVE', () => {
@@ -33,5 +33,15 @@ describe('planEngines (pure)', () => {
 
   it('a higher authorized class than an engine needs still includes that engine', () => {
     expect(planEngines('DOMAIN', 'RESTRICTED').map((p) => p.engineId)).toEqual(['nuclei']);
+  });
+});
+
+describe('candidateEnginesForTargetType (compatibility, independent of requested class)', () => {
+  it('lists nuclei for DOMAIN even though it would not be recommended at PASSIVE', () => {
+    expect(candidateEnginesForTargetType('DOMAIN').map((p) => p.engineId)).toEqual(['nuclei']);
+  });
+
+  it('is empty for target types with no engine adapter yet', () => {
+    expect(candidateEnginesForTargetType('CLOUD_ACCOUNT')).toEqual([]);
   });
 });

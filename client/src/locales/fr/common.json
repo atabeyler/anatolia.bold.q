@@ -459,5 +459,18 @@
   "cyberTechnologies": "Technologies",
   "cyberNoIdentifiers": "Aucun",
   "cyberArchivedBadge": "ARCHIVÉ",
-  "cyberEditAsset": "Modifier l'actif"
+  "cyberEditAsset": "Modifier l'actif",
+  "cyberScanNoCoverage": "AUCUNE COUVERTURE",
+  "cyberScanNoCoverageDetail": "Aucun moteur n'a réellement fonctionné pour cette combinaison cible/classe -- ce n'est pas un résultat propre, cela signifie que rien n'a été analysé.",
+  "cyberCommandCenter": "Centre de commande",
+  "cyberActiveAssets": "Actifs actifs",
+  "cyberCriticalHighRisks": "Risques critiques/élevés",
+  "cyberInProgressAnalyses": "En cours",
+  "cyberRecentAnalyses": "Récemment terminé",
+  "cyberRecentReports": "Rapports récents",
+  "cyberSystemOperational": "SYSTÈME BCI — OPÉRATIONNEL",
+  "cyberSystemDegraded": "{{count}} moteur(s) d'analyse indisponible(s) -- capacité d'analyse réduite.",
+  "cyberNewAnalysis": "NOUVELLE ANALYSE",
+  "cyberNoneYet": "Aucun pour le moment",
+  "cyberTechnicalGroup": "TECHNIQUE"
 }

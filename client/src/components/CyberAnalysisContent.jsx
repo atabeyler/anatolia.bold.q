@@ -16,15 +16,21 @@ import { useLang } from '../services/langContext.jsx';
 // orchestrates underneath (spec section 56). All strings route through the
 // existing i18n system (useLang/t) -- no hardcoded text.
 
+// "flow" is the real operational journey (Command Center -> Assets ->
+// Scans -> Findings -> Reports) -- Enter/Esc/Prev/Next only ever step
+// through this group. "technical" (Engines, Quantum & PQC) are standalone
+// status/config panels with no sequence to them; reachable from the
+// sidebar but outside the guided flow, matching the product rule that
+// Motorlar/Quantum must never look like analysis steps in the main nav.
 function useTabs(t) {
   return [
-    { id: 'dashboard', navKey: 'cyberNavDashboard', titleKey: 'cyberNavDashboard' },
-    { id: 'assets', navKey: 'cyberNavAssets', titleKey: 'cyberNavAssets' },
-    { id: 'scans', navKey: 'cyberNavScans', titleKey: 'cyberNavScans' },
-    { id: 'findings', navKey: 'cyberNavFindings', titleKey: 'cyberNavFindings' },
-    { id: 'reports', navKey: 'cyberNavReports', titleKey: 'cyberNavReports' },
-    { id: 'engines', navKey: 'cyberNavEngines', titleKey: 'cyberNavEngines' },
-    { id: 'quantum', navKey: 'cyberNavQuantum', titleKey: 'cyberTitleQuantum' },
+    { id: 'dashboard', navKey: 'cyberCommandCenter', titleKey: 'cyberCommandCenter', group: 'flow' },
+    { id: 'assets', navKey: 'cyberNavAssets', titleKey: 'cyberNavAssets', group: 'flow' },
+    { id: 'scans', navKey: 'cyberNavScans', titleKey: 'cyberNavScans', group: 'flow' },
+    { id: 'findings', navKey: 'cyberNavFindings', titleKey: 'cyberNavFindings', group: 'flow' },
+    { id: 'reports', navKey: 'cyberNavReports', titleKey: 'cyberNavReports', group: 'flow' },
+    { id: 'engines', navKey: 'cyberNavEngines', titleKey: 'cyberNavEngines', group: 'technical' },
+    { id: 'quantum', navKey: 'cyberNavQuantum', titleKey: 'cyberTitleQuantum', group: 'technical' },
   ].map((tb) => ({ ...tb, label: t(tb.navKey), title: t(tb.titleKey) }));
 }
 
@@ -82,23 +88,56 @@ function Badge({ tone, children }) {
   return <span className={tones[tone] || tones.muted}>{children}</span>;
 }
 
-// ─── Dashboard ──────────────────────────────────────────────────────────
-function DashboardTab({ t }) {
+// ─── Komuta Merkezi (Command Center) ───────────────────────────────────
+// Every number here comes from an existing, already-real endpoint --
+// nothing new is fabricated for this screen. Aggregation (counts, "in
+// progress" vs "recently completed", critical/high vs everything else)
+// happens client-side over real list responses (assets/scans/findings/
+// reports/engines), the same data every other tab already reads.
+const IN_PROGRESS_SCAN_STATUSES = ['QUEUED', 'DISCOVERY', 'ANALYZING', 'NORMALIZING', 'VERIFYING', 'CORRELATING', 'SCORING', 'REPORTING'];
+const HIGH_PRIORITY_LEVELS = ['IMMEDIATE', '24_HOURS', 'HIGH_PRIORITY'];
+
+function DashboardTab({ t, onNewAnalysis }) {
   const [security, setSecurity] = useState(null);
   const [coverage, setCoverage] = useState(null);
+  const [activeAssetCount, setActiveAssetCount] = useState(null);
+  const [criticalHighCount, setCriticalHighCount] = useState(null);
+  const [inProgressScans, setInProgressScans] = useState(null);
+  const [recentScans, setRecentScans] = useState(null);
+  const [recentReports, setRecentReports] = useState(null);
+  const [offlineEngineCount, setOfflineEngineCount] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     api.cyberAnalysisOverview()
       .then((o) => { setSecurity(o.securityScore); setCoverage(o.coverageScore); })
       .catch((err) => setError(err.message));
+    cyberAnalysisApi.listAssets('ACTIVE').then((r) => setActiveAssetCount(r.assets.length)).catch(() => {});
+    api.cyberAnalysisFindings().then((r) => {
+      setCriticalHighCount(r.findings.filter((f) => HIGH_PRIORITY_LEVELS.includes(f.priority)).length);
+    }).catch(() => {});
+    cyberAnalysisApi.listScans().then((r) => {
+      setInProgressScans(r.jobs.filter((j) => IN_PROGRESS_SCAN_STATUSES.includes(j.status)));
+      setRecentScans(r.jobs.filter((j) => j.status === 'COMPLETED').slice(0, 5));
+    }).catch(() => {});
+    cyberAnalysisApi.listReports().then((r) => setRecentReports(r.reports.slice(0, 5))).catch(() => {});
+    cyberAnalysisApi.listEngines().then((r) => {
+      setOfflineEngineCount(r.engines.filter((e) => e.status === 'OFFLINE' || e.status === 'DEGRADED').length);
+    }).catch(() => {});
   }, []);
 
   return (
     <div className="space-y-4">
-      <PageTitle>{t('cyberNavDashboard')}</PageTitle>
+      <PageTitle>{t('cyberCommandCenter')}</PageTitle>
       <ErrorNote error={error} />
-      <div className="grid grid-cols-3 gap-4">
+
+      {offlineEngineCount === 0 ? (
+        <div className="hud-panel rounded-xl p-3 text-emerald-300 text-[13px] tracking-wide text-center">{t('cyberSystemOperational')}</div>
+      ) : offlineEngineCount > 0 ? (
+        <div className="hud-panel rounded-xl p-3 border border-gold/30 text-gold text-[13px] text-center">{t('cyberSystemDegraded', { count: offlineEngineCount })}</div>
+      ) : null}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <Tile label={t('cyberSecurityScore')} value={security?.score} tone={scoreTone(security?.score)} />
         <div className="hud-panel rounded-xl p-4 flex flex-col items-center gap-1">
           <span className="text-cyan-100/60 text-xs tracking-widest uppercase">{t('cyberCoverageScore')}</span>
@@ -106,7 +145,55 @@ function DashboardTab({ t }) {
           {coverage?.reason && <span className="text-cyan-100/40 text-[11px]">{coverage.reason}</span>}
         </div>
         <Tile label={t('cyberOpenFindings')} value={security?.openFindingCount} />
+        <Tile label={t('cyberActiveAssets')} value={activeAssetCount} />
+        <Tile label={t('cyberCriticalHighRisks')} value={criticalHighCount} tone={criticalHighCount > 0 ? 'text-red-400' : undefined} />
+        <Tile label={t('cyberInProgressAnalyses')} value={inProgressScans?.length} />
       </div>
+
+      <button onClick={onNewAnalysis} className={`${btnPrimaryCls} w-full text-center py-3 text-sm tracking-widest`}>
+        {t('cyberNewAnalysis')}
+      </button>
+
+      <Panel title={t('cyberRecentAnalyses')}>
+        {recentScans && (recentScans.length === 0 ? (
+          <p className="text-cyan-100/40 text-sm">{t('cyberNoneYet')}</p>
+        ) : (
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead><tr><th className={th}>{t('cyberColTarget')}</th><th className={th}>{t('cyberColClass')}</th><th className={th}>{t('cyberColStatus')}</th></tr></thead>
+              <tbody>
+                {recentScans.map((j) => (
+                  <tr key={j.id}>
+                    <td className={td}>{j.target}</td>
+                    <td className={td}>{j.requested_class}</td>
+                    <td className={td}><Badge tone={scanStatusTone(j.status)}>{scanStatusLabel(t, j.status)}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </Panel>
+
+      <Panel title={t('cyberRecentReports')}>
+        {recentReports && (recentReports.length === 0 ? (
+          <p className="text-cyan-100/40 text-sm">{t('cyberNoneYet')}</p>
+        ) : (
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead><tr><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColGenerated')}</th></tr></thead>
+              <tbody>
+                {recentReports.map((r) => (
+                  <tr key={r.id}>
+                    <td className={td}>{r.report_type}</td>
+                    <td className={td}>{new Date(r.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </Panel>
     </div>
   );
 }
@@ -254,7 +341,7 @@ function AssetDetail({ id, t, onClose, onChanged, onStartScan }) {
         <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-1">{t('cyberLastScan')}</h4>
         {summary?.lastScan ? (
           <p className="text-cyan-100/80 text-[13px]">
-            {new Date(summary.lastScan.created_at).toLocaleString()} · <Badge tone={scanStatusTone(summary.lastScan.status)}>{summary.lastScan.status}</Badge>
+            {new Date(summary.lastScan.created_at).toLocaleString()} · <Badge tone={scanStatusTone(summary.lastScan.status)}>{scanStatusLabel(t, summary.lastScan.status)}</Badge>
           </p>
         ) : (
           <p className="text-cyan-100/40 text-[13px]">{t('cyberNeverScanned')}</p>
@@ -436,13 +523,25 @@ function AssetsTab({ t, onValidityChange, onStartScan }) {
 // ─── Scans ──────────────────────────────────────────────────────────────
 const SCAN_CLASSES = ['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED'];
 
+// NO_COVERAGE is its own real backend status (see bci/src/worker.js) --
+// the job function finished without error, but analysisPlanner.js selected
+// zero engines for this target type/class (e.g. DOMAIN + PASSIVE), so
+// nothing was actually analyzed. It must never render the same as
+// COMPLETED (which now only ever means at least one engine really ran) --
+// "0 findings because nothing ran" and "0 findings because a real scan
+// found nothing" are different facts and must look different.
 function scanStatusTone(status) {
   if (status === 'COMPLETED') return 'ok';
+  if (status === 'NO_COVERAGE') return 'warn';
   if (['FAILED', 'TIMED_OUT', 'CANCELLED'].includes(status)) return 'danger';
   return 'warn';
 }
 
-const SCAN_TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED'];
+function scanStatusLabel(t, status) {
+  return status === 'NO_COVERAGE' ? t('cyberScanNoCoverage') : status;
+}
+
+const SCAN_TERMINAL_STATUSES = ['COMPLETED', 'NO_COVERAGE', 'FAILED', 'TIMED_OUT', 'CANCELLED'];
 const SCAN_POLL_INTERVAL_MS = 3000;
 const SCAN_POLL_MAX_ATTEMPTS = 60; // ~3 minutes
 
@@ -545,12 +644,21 @@ function ScansTab({ t, onScanCompleted, onValidityChange, initialTarget, onIniti
               <thead><tr><th className={th}>{t('cyberColTarget')}</th><th className={th}>{t('cyberColClass')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberColAttempts')}</th></tr></thead>
               <tbody>
                 {jobs.map((j) => (
-                  <tr key={j.id}>
-                    <td className={td}>{j.target}</td>
-                    <td className={td}>{j.requested_class}</td>
-                    <td className={td}><Badge tone={scanStatusTone(j.status)}>{j.status}</Badge></td>
-                    <td className={td}>{j.attempts}</td>
-                  </tr>
+                  <React.Fragment key={j.id}>
+                    <tr>
+                      <td className={td}>{j.target}</td>
+                      <td className={td}>{j.requested_class}</td>
+                      <td className={td}><Badge tone={scanStatusTone(j.status)}>{scanStatusLabel(t, j.status)}</Badge></td>
+                      <td className={td}>{j.attempts}</td>
+                    </tr>
+                    {j.status === 'NO_COVERAGE' && (
+                      <tr>
+                        <td className={td} colSpan={4}>
+                          <p className="text-gold/70 text-[11px] normal-case">{t('cyberScanNoCoverageDetail')}</p>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -1131,12 +1239,21 @@ export default function CyberAnalysisContent() {
     changeTab('scans');
   };
 
-  const activeIndex = TABS.findIndex((tb) => tb.id === tab);
-  const goPrev = () => { if (activeIndex > 0) changeTab(TABS[activeIndex - 1].id); };
-  const goNext = () => { if (activeIndex < TABS.length - 1 && canAdvance) changeTab(TABS[activeIndex + 1].id); };
+  // Prev/Next/Enter/Esc only ever step through the flow group (Command
+  // Center -> Assets -> Scans -> Findings -> Reports) -- Engines and
+  // Quantum & PQC are standalone technical panels with no sequence, not
+  // steps 6/7 of an analysis. Landing on one of them (via the sidebar)
+  // hides the Prev/Next row entirely rather than pretending they fit a
+  // position in the flow.
+  const flowTabs = TABS.filter((tb) => tb.group === 'flow');
+  const activeFlowIndex = flowTabs.findIndex((tb) => tb.id === tab);
+  const isFlowTab = activeFlowIndex !== -1;
+  const goPrev = () => { if (activeFlowIndex > 0) changeTab(flowTabs[activeFlowIndex - 1].id); };
+  const goNext = () => { if (activeFlowIndex < flowTabs.length - 1 && canAdvance) changeTab(flowTabs[activeFlowIndex + 1].id); };
   const activeTabProps = {
     t,
     onValidityChange: setCanAdvance,
+    ...(tab === 'dashboard' ? { onNewAnalysis: () => changeTab('assets') } : {}),
     ...(tab === 'assets' ? { onStartScan: startScanFor } : {}),
     ...(tab === 'scans' ? {
       onScanCompleted: () => changeTab('findings'),
@@ -1150,9 +1267,10 @@ export default function CyberAnalysisContent() {
   // inside these single-line inputs (no textarea, no native form submit),
   // so both work everywhere with no need to click an empty area first.
   // Enter still respects canAdvance -- pressing it while a required field
-  // is empty does nothing, same as the disabled Next button.
+  // is empty does nothing, same as the disabled Next button. Inert outside
+  // the flow group (Engines/Quantum), same as the hidden Prev/Next row.
   useEffect(() => {
-    if (!status?.available) return undefined;
+    if (!status?.available || !isFlowTab) return undefined;
     function onKeyDown(e) {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (e.key === 'Enter') {
@@ -1166,7 +1284,7 @@ export default function CyberAnalysisContent() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [status?.available, activeIndex, TABS.length, canAdvance]);
+  }, [status?.available, isFlowTab, activeFlowIndex, flowTabs.length, canAdvance]);
 
   return (
     <div className="space-y-4">
@@ -1196,37 +1314,47 @@ export default function CyberAnalysisContent() {
       ) : status?.available ? (
         <div className="flex flex-col sm:flex-row gap-4">
           <nav className="hud-panel rounded-xl p-2 flex sm:flex-col gap-1 sm:w-48 shrink-0 overflow-x-auto sm:overflow-visible">
-            {TABS.map((tb) => (
-              <button
-                key={tb.id}
-                onClick={() => changeTab(tb.id)}
-                className={`px-3 py-2 rounded text-[12px] tracking-wide uppercase transition text-left whitespace-nowrap ${
-                  tab === tb.id ? 'bg-cyan-400/15 text-cyan-100 border border-cyan-300/40' : 'text-cyan-100/50 hover:text-cyan-100/80'
-                }`}
-              >
-                {tb.label}
-              </button>
+            {TABS.map((tb, i) => (
+              <React.Fragment key={tb.id}>
+                {tb.group === 'technical' && TABS[i - 1]?.group === 'flow' && (
+                  <div className="hidden sm:block border-t border-cyan-300/10 my-1 pt-1">
+                    <span className="text-cyan-100/30 text-[10px] tracking-widest uppercase px-3">{t('cyberTechnicalGroup')}</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => changeTab(tb.id)}
+                  className={`px-3 py-2 rounded text-[12px] tracking-wide uppercase transition text-left whitespace-nowrap ${
+                    tab === tb.id ? 'bg-cyan-400/15 text-cyan-100 border border-cyan-300/40' : 'text-cyan-100/50 hover:text-cyan-100/80'
+                  }`}
+                >
+                  {tb.label}
+                </button>
+              </React.Fragment>
             ))}
           </nav>
 
           <div className="flex-1 min-w-0 space-y-3">
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={goPrev}
-                disabled={activeIndex <= 0}
-                className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" /> {t('cyberPrevTab')}
-              </button>
-              <button
-                onClick={goNext}
-                disabled={activeIndex >= TABS.length - 1 || !canAdvance}
-                className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {t('cyberNextTab')} <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <p className="text-cyan-100/30 text-[11px] text-right -mt-2">{t('cyberKeyboardHint')}</p>
+            {isFlowTab && (
+              <>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={goPrev}
+                    disabled={activeFlowIndex <= 0}
+                    className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> {t('cyberPrevTab')}
+                  </button>
+                  <button
+                    onClick={goNext}
+                    disabled={activeFlowIndex >= flowTabs.length - 1 || !canAdvance}
+                    className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {t('cyberNextTab')} <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-cyan-100/30 text-[11px] text-right -mt-2">{t('cyberKeyboardHint')}</p>
+              </>
+            )}
             <ActiveTab {...activeTabProps} />
           </div>
         </div>

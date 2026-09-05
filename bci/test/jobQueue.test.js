@@ -5,6 +5,7 @@ import {
   enqueueScan,
   claimNextJob,
   completeJob,
+  markNoCoverage,
   failJob,
   cancelJob,
   sweepTimedOutJobs,
@@ -79,6 +80,20 @@ describe('job queue', () => {
     const { rows } = await query('SELECT status, result FROM scan_jobs WHERE id = $1', [job.id]);
     expect(rows[0].status).toBe('COMPLETED');
     expect(rows[0].result).toEqual({ ok: true });
+  });
+
+  it('markNoCoverage marks the job NO_COVERAGE, distinct from COMPLETED, when the pipeline ran zero engines', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, 'example.com');
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    await claimNextJob('worker-1');
+
+    await markNoCoverage(job.id, { enginesRun: [], note: 'no engine coverage for target type DOMAIN' });
+    const { rows } = await query('SELECT status, result FROM scan_jobs WHERE id = $1', [job.id]);
+    expect(rows[0].status).toBe('NO_COVERAGE');
+    expect(rows[0].status).not.toBe('COMPLETED');
+    expect(rows[0].result.note).toMatch(/no engine coverage/);
   });
 
   it('failJob requeues until max_attempts, then marks FAILED for good', async () => {

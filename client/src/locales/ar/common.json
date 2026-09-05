@@ -459,5 +459,18 @@
   "cyberTechnologies": "التقنيات",
   "cyberNoIdentifiers": "لا يوجد",
   "cyberArchivedBadge": "مؤرشف",
-  "cyberEditAsset": "تعديل الأصل"
+  "cyberEditAsset": "تعديل الأصل",
+  "cyberScanNoCoverage": "لا تغطية",
+  "cyberScanNoCoverageDetail": "لم يعمل أي محرك فعليًا لهذا المزيج من الهدف والفئة -- هذه ليست نتيجة نظيفة، بل تعني أنه لم يتم تحليل أي شيء.",
+  "cyberCommandCenter": "مركز القيادة",
+  "cyberActiveAssets": "الأصول النشطة",
+  "cyberCriticalHighRisks": "المخاطر الحرجة/العالية",
+  "cyberInProgressAnalyses": "قيد التنفيذ",
+  "cyberRecentAnalyses": "المكتملة مؤخراً",
+  "cyberRecentReports": "التقارير الأخيرة",
+  "cyberSystemOperational": "نظام BCI — يعمل",
+  "cyberSystemDegraded": "{{count}} من محركات التحليل غير متاح -- بعض قدرة التحليل منخفضة.",
+  "cyberNewAnalysis": "تحليل جديد",
+  "cyberNoneYet": "لا يوجد بعد",
+  "cyberTechnicalGroup": "تقني"
 }

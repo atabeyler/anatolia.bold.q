@@ -65,3 +65,29 @@ export async function getEngineStatus() {
   );
   return rows;
 }
+
+// Full engine catalog straight from code (listAdapters()), not from
+// engine_registry -- that table is only populated once runHealthChecks()
+// has run at least once, and a fresh/unseeded deployment must still show
+// every engine BCI actually has, not an empty or partial list. Health is
+// still real when present (engine_health), UNKNOWN when a health check has
+// never run for that engine yet -- never assumed HEALTHY by default.
+export async function getEngineCatalog() {
+  const { rows: health } = await query('SELECT engine_id, status, version, detail, last_checked_at FROM engine_health');
+  const healthById = new Map(health.map((h) => [h.engine_id, h]));
+  return [...adapters.values()].map((a) => {
+    const h = healthById.get(a.id);
+    return {
+      id: a.id,
+      name: a.name,
+      intrusiveness: a.intrusiveness,
+      supportedTargetTypes: a.supportedTargetTypes,
+      supportedAnalysisTypes: a.supportedAnalysisTypes,
+      license: a.license,
+      status: h?.status ?? 'UNKNOWN',
+      version: h?.version ?? null,
+      detail: h?.detail ?? null,
+      lastCheckedAt: h?.last_checked_at ?? null,
+    };
+  });
+}

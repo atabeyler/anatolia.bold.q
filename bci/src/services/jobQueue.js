@@ -114,6 +114,18 @@ export async function completeJob(jobId, result) {
   );
 }
 
+// A distinct terminal status from COMPLETED: the pipeline function ran
+// without throwing, but analysisPlanner produced zero engines for this
+// target type/class, so nothing was actually analyzed. Never call this
+// with a result that ran at least one engine -- see runAnalysisPipeline's
+// caller in worker.js.
+export async function markNoCoverage(jobId, result) {
+  await query(
+    `UPDATE scan_jobs SET status = 'NO_COVERAGE', result = $1, locked_by = NULL, updated_at = now() WHERE id = $2`,
+    [JSON.stringify(result ?? {}), jobId]
+  );
+}
+
 // Bounded, idempotent retry: a job gets max_attempts tries total, then it's
 // FAILED for good -- never retried forever, never silently dropped.
 export async function failJob(jobId, errorMessage) {

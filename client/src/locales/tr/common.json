@@ -459,5 +459,18 @@
   "cyberTechnologies": "Teknolojiler",
   "cyberNoIdentifiers": "Yok",
   "cyberArchivedBadge": "ARŞİVLENDİ",
-  "cyberEditAsset": "Varlığı Düzenle"
+  "cyberEditAsset": "Varlığı Düzenle",
+  "cyberScanNoCoverage": "KAPSAM YOK",
+  "cyberScanNoCoverageDetail": "Bu hedef/sınıf kombinasyonu için hiçbir motor gerçekten çalışmadı -- bu temiz bir sonuç değil, hiçbir şeyin analiz edilmediği anlamına gelir.",
+  "cyberCommandCenter": "Komuta Merkezi",
+  "cyberActiveAssets": "Aktif Varlıklar",
+  "cyberCriticalHighRisks": "Kritik/Yüksek Riskler",
+  "cyberInProgressAnalyses": "Devam Eden Analizler",
+  "cyberRecentAnalyses": "Son Tamamlanan Analizler",
+  "cyberRecentReports": "Son Raporlar",
+  "cyberSystemOperational": "BCI SİSTEMİ — ÇALIŞIYOR",
+  "cyberSystemDegraded": "{{count}} analiz motoru kullanılamıyor -- bazı analiz kapasitesi düşük.",
+  "cyberNewAnalysis": "YENİ ANALİZ",
+  "cyberNoneYet": "Henüz yok",
+  "cyberTechnicalGroup": "TEKNİK"
 }

@@ -191,8 +191,11 @@ describe('CyberAnalysisContent', () => {
     await waitFor(() => expect(cyberAnalysisApi.listAssets).toHaveBeenCalled());
 
     expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
+    const listScansCallsBefore = cyberAnalysisApi.listScans.mock.calls.length;
     fireEvent.keyDown(window, { key: 'Enter' });
-    expect(cyberAnalysisApi.listScans).not.toHaveBeenCalled();
+    // Still on Assets -- Enter must not have advanced to Scans.
+    expect(cyberAnalysisApi.listScans.mock.calls.length).toBe(listScansCallsBefore);
+    expect(screen.getByRole('button', { name: /Add asset/i })).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('Name'), { target: { value: 'example.com' } });
     expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
@@ -237,5 +240,40 @@ describe('CyberAnalysisContent', () => {
     // actually started, which is the step's real completion condition.
     expect(screen.getByPlaceholderText(/example.com/i)).toHaveValue('');
     expect(screen.getByRole('button', { name: /Next/ })).not.toBeDisabled();
+  });
+
+  it('shows the Command Center with real aggregated metrics and a Next Analysis CTA that jumps to Assets', async () => {
+    cyberAnalysisApi.listAssets.mockResolvedValue({ assets: [{ id: 'a1', name: 'x', asset_type: 'DOMAIN', criticality: 'HIGH', status: 'ACTIVE', target: 'x.com' }] });
+    cyberAnalysisApi.listScans.mockResolvedValue({
+      jobs: [{ id: 's1', target: 'x.com', requested_class: 'PASSIVE', status: 'ANALYZING', attempts: 1 }],
+    });
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+
+    expect(screen.getAllByText(/Command Center/i).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByText('Active Assets')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /New Analysis/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Add asset/i })).toBeInTheDocument());
+  });
+
+  it('never shows Prev/Next on the technical panels (Engines, Quantum & PQC) -- they are not analysis steps', async () => {
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    fireEvent.click(screen.getByRole('button', { name: 'Engines' }));
+    await waitFor(() => expect(cyberAnalysisApi.listEngines).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Previous/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Next/ })).not.toBeInTheDocument();
+  });
+
+  it('renders a scan with NO_COVERAGE status distinctly from COMPLETED, never as a clean zero-finding result', async () => {
+    cyberAnalysisApi.listScans.mockResolvedValue({
+      jobs: [{ id: 's1', target: 'boldkimya.com.tr', requested_class: 'PASSIVE', status: 'NO_COVERAGE', attempts: 1 }],
+    });
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    fireEvent.click(screen.getByRole('button', { name: 'Scans' }));
+    await waitFor(() => expect(screen.getByText('NO COVERAGE')).toBeInTheDocument());
+    expect(screen.queryByText('COMPLETED')).not.toBeInTheDocument();
   });
 });
