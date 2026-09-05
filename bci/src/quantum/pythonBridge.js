@@ -7,12 +7,24 @@ export const QUANTUM_SCRIPTS_DIR = path.join(__dirname, '..', '..', 'quantum');
 
 const PYTHON_BIN = process.env.BCI_PYTHON_BIN || 'python3';
 
+// Every script this bridge is allowed to run, named explicitly rather than
+// accepting any path under QUANTUM_SCRIPTS_DIR. No caller today passes a
+// non-literal scriptName, but this makes "only these two scripts, ever"
+// an enforced invariant rather than something that merely happens to be
+// true of today's call sites -- a future caller bug (e.g. building
+// scriptName from a request field) can't turn this into arbitrary script
+// execution.
+const ALLOWED_SCRIPTS = new Set(['optimize_knapsack_qaoa.py', 'ibm_backend.py']);
+
 // Same safe-spawn shape as src/engines/execFileAsync.js (argv array, stdin
 // closed by default elsewhere isn't applicable here since these scripts
 // read their payload FROM stdin by design) -- payload never touches a
 // shell, and the process is killed outright on timeout rather than left to
 // linger.
 export function runPythonQuantumScript(scriptName, payload, { timeoutMs = 60_000 } = {}) {
+  if (!ALLOWED_SCRIPTS.has(scriptName)) {
+    return Promise.reject(new Error(`refusing to run non-allowlisted quantum script: ${scriptName}`));
+  }
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(QUANTUM_SCRIPTS_DIR, scriptName);
     const child = spawn(PYTHON_BIN, [scriptPath], { stdio: ['pipe', 'pipe', 'pipe'] });

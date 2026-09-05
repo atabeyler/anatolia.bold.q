@@ -39,6 +39,18 @@ from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
 from _qubo import build_qubo, qubo_to_ising, qaoa_circuit, best_feasible_from_counts
 
 
+def redact_secret(text, secret):
+    """Defense in depth: never trust an upstream SDK's exception message not
+    to echo back a credential it was just handed (e.g. an "invalid token:
+    <token>" style auth error). Applied to every exception string before it
+    is written to stdout, regardless of whether qiskit_ibm_runtime is known
+    to do this today -- a secret must never depend on a third-party
+    library's error-formatting behavior staying the same across versions."""
+    if not text or not secret:
+        return text
+    return text.replace(secret, "[REDACTED]")
+
+
 def main():
     payload = json.loads(sys.stdin.read())
     items = payload["items"]
@@ -62,7 +74,7 @@ def main():
         service = QiskitRuntimeService(channel="ibm_quantum_platform", token=token, instance=instance)
         backend = service.backend(backend_name) if backend_name else service.least_busy(operational=True, min_num_qubits=n_qubits)
     except Exception as exc:  # noqa: BLE001 -- any auth/network/availability failure is reported, never silently swallowed
-        print(json.dumps({"error": f"IBM Quantum connection failed: {exc}"}))
+        print(json.dumps({"error": redact_secret(f"IBM Quantum connection failed: {exc}", token)}))
         return
 
     rng = np.random.default_rng(seed)
@@ -82,7 +94,7 @@ def main():
         result = job.result()
         counts = result[0].data.meas.get_counts()
     except Exception as exc:  # noqa: BLE001
-        print(json.dumps({"error": f"IBM Quantum job failed: {exc}"}))
+        print(json.dumps({"error": redact_secret(f"IBM Quantum job failed: {exc}", token)}))
         return
 
     selected_ids, best_value, best_feasible = best_feasible_from_counts(counts, items, budget, n_items)
