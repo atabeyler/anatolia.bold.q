@@ -345,6 +345,7 @@ export const cyberAnalysisApi = {
   updateAsset: (id, patch) => bciProxy(`/assets/${id}`, { method: 'PATCH', body: patch }),
   getAssetSummary: (id) => bciProxy(`/assets/${id}/summary`),
   addAssetIdentifier: (id, identifier) => bciProxy(`/assets/${id}/identifiers`, { method: 'POST', body: identifier }),
+  findAssetByTarget: (value) => bciProxy(`/assets/find-by-target?value=${encodeURIComponent(value)}`),
 
   createScope: (scope) => bciProxy('/scopes', { method: 'POST', body: scope }),
   evaluateScope: (target, requestedClass) => bciProxy('/scopes/evaluate', { method: 'POST', body: { target, requestedClass } }),
@@ -352,6 +353,8 @@ export const cyberAnalysisApi = {
   listScans: () => bciProxy('/scans'),
   createScan: (scan) => bciProxy('/scans', { method: 'POST', body: scan }),
   getScan: (id) => bciProxy(`/scans/${id}`),
+  getScanEngineRuns: (id) => bciProxy(`/scans/${id}/engine-runs`),
+  getEnginePlan: (targetType, requestedClass) => bciProxy(`/engines/plan?targetType=${encodeURIComponent(targetType)}&requestedClass=${encodeURIComponent(requestedClass)}`),
 
   getFinding: (id) => bciProxy(`/findings/${id}`),
   explainFinding: (id) => bciProxy(`/findings/${id}/explain`),

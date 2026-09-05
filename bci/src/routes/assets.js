@@ -56,6 +56,30 @@ assetsRouter.get('/', requirePermission('asset:view'), async (req, res) => {
   res.json({ assets: rows });
 });
 
+// Duplicate-target check for the new-asset flow (spec: don't let a second
+// asset get created for a target already in the inventory) -- a real
+// lookup against asset_identifiers.value, case-insensitive exact match,
+// never a guess from the target string's shape. Declared before GET /:id
+// so this literal path is never swallowed by that param route.
+const findByTargetQuerySchema = z.object({ value: z.string().min(1) });
+
+assetsRouter.get('/find-by-target', requirePermission('asset:view'), async (req, res) => {
+  const parsed = findByTargetQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten(), requestId: req.id });
+  }
+
+  const { rows } = await query(
+    `SELECT a.id, a.name, a.asset_type, a.criticality, a.status, a.created_at, a.updated_at, ai.value AS target
+       FROM assets a
+       JOIN asset_identifiers ai ON ai.asset_id = a.id
+      WHERE a.org_id = $1 AND lower(ai.value) = lower($2)
+      LIMIT 1`,
+    [req.auth.orgId, parsed.data.value]
+  );
+  res.json({ asset: rows[0] ?? null });
+});
+
 assetsRouter.post('/', requirePermission('asset:create'), async (req, res) => {
   const parsed = createAssetSchema.safeParse(req.body);
   if (!parsed.success) {

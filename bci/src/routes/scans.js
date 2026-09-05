@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
+import { query } from '../db/client.js';
 import { enqueueScan, getJob, listJobs, cancelJob } from '../services/jobQueue.js';
 
 export const scansRouter = Router();
@@ -45,6 +46,22 @@ scansRouter.get('/:id', requirePermission('scan:view'), async (req, res) => {
   const job = await getJob(req.auth.orgId, req.params.id);
   if (!job) return res.status(404).json({ error: 'job_not_found', requestId: req.id });
   res.json({ job });
+});
+
+// Real per-engine execution status for a job (spec: "Motor Çalışma
+// Durumu") -- straight from scan_job_engine_runs, the same table
+// analysisPipeline.js writes to as each planned engine finishes. Never a
+// derived/fake progress percentage: only what's actually been recorded.
+scansRouter.get('/:id/engine-runs', requirePermission('scan:view'), async (req, res) => {
+  const job = await getJob(req.auth.orgId, req.params.id);
+  if (!job) return res.status(404).json({ error: 'job_not_found', requestId: req.id });
+
+  const { rows } = await query(
+    `SELECT engine_id, status, detail, observation_count, started_at, finished_at
+       FROM scan_job_engine_runs WHERE job_id = $1 ORDER BY started_at`,
+    [req.params.id]
+  );
+  res.json({ engineRuns: rows });
 });
 
 scansRouter.post('/:id/cancel', requirePermission('scan:cancel'), async (req, res) => {

@@ -242,7 +242,7 @@ describe('CyberAnalysisContent', () => {
     expect(screen.getByRole('button', { name: /Next/ })).not.toBeDisabled();
   });
 
-  it('shows the Command Center with real aggregated metrics and a Next Analysis CTA that jumps to Assets', async () => {
+  it('shows the Command Center with real aggregated metrics and a New Analysis CTA that opens the dedicated wizard overlay', async () => {
     cyberAnalysisApi.listAssets.mockResolvedValue({ assets: [{ id: 'a1', name: 'x', asset_type: 'DOMAIN', criticality: 'HIGH', status: 'ACTIVE', target: 'x.com' }] });
     cyberAnalysisApi.listScans.mockResolvedValue({
       jobs: [{ id: 's1', target: 'x.com', requested_class: 'PASSIVE', status: 'ANALYZING', attempts: 1 }],
@@ -254,7 +254,9 @@ describe('CyberAnalysisContent', () => {
     await waitFor(() => expect(screen.getByText('Active Assets')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /New Analysis/i }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Add asset/i })).toBeInTheDocument());
+    // The wizard overlay, not the persistent Assets tab -- it has its own
+    // Existing/New Asset toggle, distinct from AssetsTab's "Add Asset" panel.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Existing Asset/i })).toBeInTheDocument());
   });
 
   it('never shows Prev/Next on the technical panels (Engines, Quantum & PQC) -- they are not analysis steps', async () => {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ShieldAlert, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api, cyberAnalysisApi } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
+import CyberNewAnalysisWizard from './CyberNewAnalysisWizard.jsx';
 
 // Cyber Analysis content -- a faithful, in-app port of BCI's own standalone
 // admin UI (bci/ui: Dashboard/Assets/Scans/Findings/Reports/Engines/
@@ -1187,6 +1188,7 @@ export default function CyberAnalysisContent() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   async function loadStatus() {
     setLoading(true);
@@ -1253,7 +1255,7 @@ export default function CyberAnalysisContent() {
   const activeTabProps = {
     t,
     onValidityChange: setCanAdvance,
-    ...(tab === 'dashboard' ? { onNewAnalysis: () => changeTab('assets') } : {}),
+    ...(tab === 'dashboard' ? { onNewAnalysis: () => setWizardOpen(true) } : {}),
     ...(tab === 'assets' ? { onStartScan: startScanFor } : {}),
     ...(tab === 'scans' ? {
       onScanCompleted: () => changeTab('findings'),
@@ -1359,6 +1361,13 @@ export default function CyberAnalysisContent() {
           </div>
         </div>
       ) : null}
+
+      {wizardOpen && (
+        <CyberNewAnalysisWizard
+          onClose={() => setWizardOpen(false)}
+          onGoToFindings={() => { setWizardOpen(false); changeTab('findings'); }}
+        />
+      )}
     </div>
   );
 }

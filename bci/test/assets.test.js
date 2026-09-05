@@ -114,6 +114,53 @@ describe('asset inventory', () => {
     expect(get.body.relationships[0].relationship_type).toBe('HOSTS');
   });
 
+  it('GET /find-by-target finds an existing asset by its real identifier, case-insensitively, and null when there is none', async () => {
+    const orgId = await createOrg();
+    const token = await tokenFor(orgId, 'operator');
+    const create = await request(app)
+      .post('/api/v1/assets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Bold Kimya Web', assetType: 'DOMAIN' });
+    await request(app)
+      .post(`/api/v1/assets/${create.body.asset.id}/identifiers`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ identifierType: 'DOMAIN', value: 'www.boldkimya.com.tr' });
+
+    const found = await request(app)
+      .get('/api/v1/assets/find-by-target')
+      .query({ value: 'WWW.BOLDKIMYA.COM.TR' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(found.status).toBe(200);
+    expect(found.body.asset.id).toBe(create.body.asset.id);
+
+    const notFound = await request(app)
+      .get('/api/v1/assets/find-by-target')
+      .query({ value: 'nowhere.example' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(notFound.body.asset).toBeNull();
+  });
+
+  it('find-by-target never leaks a match from a different org', async () => {
+    const orgA = await createOrg('A', 'org-a');
+    const orgB = await createOrg('B', 'org-b');
+    const bToken = await tokenFor(orgB, 'operator', 'op@b.test');
+    const aToken = await tokenFor(orgA, 'operator', 'op@a.test');
+    const created = await request(app)
+      .post('/api/v1/assets')
+      .set('Authorization', `Bearer ${bToken}`)
+      .send({ name: 'b-secret', assetType: 'DOMAIN' });
+    await request(app)
+      .post(`/api/v1/assets/${created.body.asset.id}/identifiers`)
+      .set('Authorization', `Bearer ${bToken}`)
+      .send({ identifierType: 'DOMAIN', value: 'shared-name.example' });
+
+    const found = await request(app)
+      .get('/api/v1/assets/find-by-target')
+      .query({ value: 'shared-name.example' })
+      .set('Authorization', `Bearer ${aToken}`);
+    expect(found.body.asset).toBeNull();
+  });
+
   it('creates ACTIVE by default, lists it under the target it registered, and archives/restores without deleting it', async () => {
     const orgId = await createOrg();
     const token = await tokenFor(orgId, 'operator');

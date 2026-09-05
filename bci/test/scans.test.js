@@ -66,6 +66,29 @@ describe('POST /api/v1/scans', () => {
     expect(cancel.body.job.status).toBe('CANCELLED');
   });
 
+  it('GET /:id/engine-runs returns real scan_job_engine_runs rows, never a fake progress percentage', async () => {
+    const orgId = await createOrg();
+    const { userId, token } = await tokenFor(orgId, 'operator');
+    await approveScope(orgId, userId, 'example.com');
+    const create = await request(app)
+      .post('/api/v1/scans')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ target: 'example.com', requestedClass: 'PASSIVE' });
+
+    await query(
+      `INSERT INTO scan_job_engine_runs (job_id, engine_id, status, observation_count, finished_at)
+       VALUES ($1, 'nuclei', 'COMPLETED', 3, now())`,
+      [create.body.job.id]
+    );
+
+    const res = await request(app)
+      .get(`/api/v1/scans/${create.body.job.id}/engine-runs`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.engineRuns).toHaveLength(1);
+    expect(res.body.engineRuns[0]).toMatchObject({ engine_id: 'nuclei', status: 'COMPLETED', observation_count: 3 });
+  });
+
   it("org A cannot view or cancel org B's scan job", async () => {
     const orgA = await createOrg('A', 'org-a');
     const orgB = await createOrg('B', 'org-b');
