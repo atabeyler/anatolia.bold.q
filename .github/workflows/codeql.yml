@@ -22,6 +22,11 @@ on:
 permissions:
   contents: read
   security-events: write
+  # codeql-action's analyze step reads workflow-run metadata for its own
+  # status/telemetry reporting; without this it fails with "Resource not
+  # accessible by integration" even though the scan itself completes and
+  # exports SARIF successfully -- a config error, not a finding.
+  actions: read
 
 jobs:
   analyze:
