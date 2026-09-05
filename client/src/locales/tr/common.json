@@ -428,5 +428,8 @@
   "cyberMigrationRoadmap": "Geçiş Yol Haritası",
   "cyberColHarvestNowDecryptLater": "Şimdi topla sonra çöz",
   "cyberFutureExposure": "gelecekteki risk",
-  "cyberUnknown": "BİLİNMİYOR"
+  "cyberUnknown": "BİLİNMİYOR",
+  "cyberPrevTab": "Önceki",
+  "cyberNextTab": "Sonraki",
+  "cyberScanWatching": "Bu tarama izleniyor — tamamlanınca Bulgular paneli otomatik açılacak."
 }

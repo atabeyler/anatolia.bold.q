@@ -428,5 +428,8 @@
   "cyberMigrationRoadmap": "خارطة طريق الترحيل",
   "cyberColHarvestNowDecryptLater": "الجمع الآن وفك التشفير لاحقاً",
   "cyberFutureExposure": "تعرض مستقبلي",
-  "cyberUnknown": "غير معروف"
+  "cyberUnknown": "غير معروف",
+  "cyberPrevTab": "السابق",
+  "cyberNextTab": "التالي",
+  "cyberScanWatching": "تتم مراقبة هذا الفحص — سيتم فتح النتائج تلقائياً عند الانتهاء."
 }

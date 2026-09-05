@@ -15,6 +15,7 @@ vi.mock('../services/api.js', () => ({
     createAsset: vi.fn(),
     listScans: vi.fn(async () => ({ jobs: [] })),
     createScan: vi.fn(),
+    getScan: vi.fn(),
     listReports: vi.fn(async () => ({ reports: [] })),
     generateReport: vi.fn(),
     listEngines: vi.fn(async () => ({ engines: [] })),
@@ -74,4 +75,36 @@ describe('CyberAnalysisContent', () => {
     expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
   });
+
+  it('steps through tabs with Previous/Next, disabling at both ends', async () => {
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+    expect(screen.getByRole('button', { name: /Previous/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+    await waitFor(() => expect(cyberAnalysisApi.listAssets).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /Previous/ })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Previous/ }));
+    await waitFor(() => screen.getByText('82'));
+    expect(screen.getByRole('button', { name: /Previous/ })).toBeDisabled();
+  });
+
+  it('auto-advances from Scans to Findings once a started scan actually reaches COMPLETED on the backend', async () => {
+    cyberAnalysisApi.createScan.mockResolvedValue({ job: { id: 'job-1', status: 'QUEUED' } });
+    cyberAnalysisApi.getScan.mockResolvedValue({ job: { id: 'job-1', status: 'COMPLETED' } });
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scans' }));
+    await waitFor(() => expect(cyberAnalysisApi.listScans).toHaveBeenCalled());
+    fireEvent.change(screen.getByPlaceholderText(/example.com/i), { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
+
+    await waitFor(() => expect(cyberAnalysisApi.createScan).toHaveBeenCalledWith({ target: 'example.com', requestedClass: 'PASSIVE' }));
+    // Real polling against the actual job -- not a fabricated percentage --
+    // is what drives the tab switch once the job's real status is terminal.
+    await waitFor(() => expect(cyberAnalysisApi.getScan).toHaveBeenCalledWith('job-1'), { timeout: 6000 });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Findings' })).toHaveClass('bg-cyan-400/15'), { timeout: 6000 });
+  }, 10000);
 });

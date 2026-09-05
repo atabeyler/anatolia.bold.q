@@ -428,5 +428,8 @@
   "cyberMigrationRoadmap": "Migration Roadmap",
   "cyberColHarvestNowDecryptLater": "Harvest-now-decrypt-later",
   "cyberFutureExposure": "future exposure",
-  "cyberUnknown": "UNKNOWN"
+  "cyberUnknown": "UNKNOWN",
+  "cyberPrevTab": "Previous",
+  "cyberNextTab": "Next",
+  "cyberScanWatching": "Watching this scan — Findings will open automatically when it completes."
 }

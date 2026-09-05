@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, RefreshCw } from 'lucide-react';
+import { ShieldAlert, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api, cyberAnalysisApi } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 
@@ -185,26 +185,60 @@ function scanStatusTone(status) {
   return 'warn';
 }
 
-function ScansTab({ t }) {
+const SCAN_TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED'];
+const SCAN_POLL_INTERVAL_MS = 3000;
+const SCAN_POLL_MAX_ATTEMPTS = 60; // ~3 minutes
+
+function ScansTab({ t, onScanCompleted }) {
   const [jobs, setJobs] = useState(null);
   const [target, setTarget] = useState('');
   const [requestedClass, setRequestedClass] = useState('PASSIVE');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingJobId, setPendingJobId] = useState(null);
 
   function load() {
     cyberAnalysisApi.listScans().then((r) => setJobs(r.jobs)).catch((err) => setError(err.message));
   }
   useEffect(load, []);
 
+  // Only real backend statuses drive this -- no fabricated progress bars.
+  // Polling (and the eventual auto-advance to Findings) stops the moment
+  // this tab unmounts, i.e. the moment the user navigates elsewhere, so a
+  // scan finishing never yanks a user's attention away from something else.
+  useEffect(() => {
+    if (!pendingJobId) return;
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      try {
+        const { job } = await cyberAnalysisApi.getScan(pendingJobId);
+        load();
+        if (SCAN_TERMINAL_STATUSES.includes(job.status)) {
+          clearInterval(interval);
+          setPendingJobId(null);
+          if (job.status === 'COMPLETED') onScanCompleted?.();
+        } else if (attempts >= SCAN_POLL_MAX_ATTEMPTS) {
+          clearInterval(interval);
+          setPendingJobId(null);
+        }
+      } catch {
+        clearInterval(interval);
+        setPendingJobId(null);
+      }
+    }, SCAN_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [pendingJobId]);
+
   async function onCreate() {
     if (!target.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
-      await cyberAnalysisApi.createScan({ target: target.trim(), requestedClass });
+      const { job } = await cyberAnalysisApi.createScan({ target: target.trim(), requestedClass });
       setTarget('');
       load();
+      if (job && !SCAN_TERMINAL_STATUSES.includes(job.status)) setPendingJobId(job.id);
     } catch (err) {
       setError(err.data?.reason ? `${err.message}: ${err.data.reason}` : err.message);
     } finally {
@@ -225,6 +259,7 @@ function ScansTab({ t }) {
           <button className={btnCls} onClick={onCreate} disabled={submitting || !target.trim()}>{t('cyberStartScanBtn')}</button>
         </div>
         <p className="text-cyan-100/40 text-xs">{t('cyberScanScopeNote')}</p>
+        {pendingJobId && <p className="text-cyan-100/50 text-xs mt-2">{t('cyberScanWatching')}</p>}
       </Panel>
       <Panel title={t('cyberScansPanelTitle')}>
         {jobs && (
@@ -793,6 +828,11 @@ export default function CyberAnalysisContent() {
     quantum: QuantumTab,
   }[tab];
 
+  const activeIndex = TABS.findIndex((tb) => tb.id === tab);
+  const goPrev = () => { if (activeIndex > 0) setTab(TABS[activeIndex - 1].id); };
+  const goNext = () => { if (activeIndex < TABS.length - 1) setTab(TABS[activeIndex + 1].id); };
+  const activeTabProps = tab === 'scans' ? { t, onScanCompleted: () => setTab('findings') } : { t };
+
   return (
     <div className="space-y-4">
       <header className="hud-panel rounded-xl p-4 sm:p-5 flex items-center justify-between gap-3">
@@ -834,8 +874,24 @@ export default function CyberAnalysisContent() {
             ))}
           </nav>
 
-          <div className="flex-1 min-w-0">
-            <ActiveTab t={t} />
+          <div className="flex-1 min-w-0 space-y-3">
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={goPrev}
+                disabled={activeIndex <= 0}
+                className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> {t('cyberPrevTab')}
+              </button>
+              <button
+                onClick={goNext}
+                disabled={activeIndex >= TABS.length - 1}
+                className="border border-cyan-300/35 text-cyan-100 px-3 py-1.5 rounded flex items-center gap-1 text-[12px] hover:bg-cyan-400/10 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {t('cyberNextTab')} <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <ActiveTab {...activeTabProps} />
           </div>
         </div>
       ) : null}
