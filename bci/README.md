@@ -385,14 +385,18 @@ in an air-gapped Sovereign deployment — with quantum entirely absent.
     stack, so upgrading one can never break the other). The budget
     constraint is encoded exactly via binary slack qubits, not an
     approximate penalty. Health = OFFLINE if `qiskit_aer` isn't importable
-  - **ibm_quantum** (EXPERIMENTAL — code complete, never run against a live
-    IBM account: no token available in this environment) —
-    `bci/quantum/ibm_backend.py`, written against the **current** IBM
-    Quantum Platform SDK (`channel="ibm_quantum_platform"`,
-    `SamplerV2(mode=backend)`), not copied from ANATOLIA-Q's older pinned
-    adapter. Fixed-angle QAOA (no classical optimization loop against paid
-    QPU time) as a deliberate cost guard. Reports NOT_CONFIGURED with no
-    token, never crashes the gateway
+  - **ibm_quantum** — `IBM QUANTUM: EXPERIMENTAL — LIVE QPU VALIDATION PENDING`.
+    Code complete against the **current** IBM Quantum Platform SDK
+    (`channel="ibm_quantum_platform"`, `SamplerV2(mode=backend)`,
+    `bci/quantum/ibm_backend.py`), not copied from ANATOLIA-Q's older
+    pinned adapter, but never run against a live IBM account — no token
+    is available in any environment this work has run in. Fixed-angle
+    QAOA (no classical optimization loop against paid QPU time) as a
+    deliberate cost guard. Reports NOT_CONFIGURED with no token, never
+    crashes the gateway. This status alone does not block using BCI:
+    every other provider (classical, quantum-inspired, local simulator)
+    is fully implemented and independently sufficient — BCI does not
+    depend on quantum hardware to function
 - **Execution Policy** (`src/quantum/executionPolicy.js`, IMPLEMENTED) —
   per-org `quantum_policies` row (`allowQuantumSimulator`,
   `allowQuantumHardware`, `maxExternalDataClassification`), default
@@ -561,6 +565,33 @@ never-propose-an-endpoint guarantee), all read-only endpoints gated at
 timeout under system load was confirmed as pre-existing flakiness by
 rerunning that file alone, clean both before and after this change), no
 ANATOLIA-Q files touched.
+
+## Current status (feature-status framework: IMPLEMENTED / EXPERIMENTAL / PLANNED / DISABLED)
+
+The counts above are per-section, as-of-that-commit deltas (this file is
+written incrementally, milestone by milestone) — this section is the one
+number to trust as current. Last verified by actually running every suite
+below, not assumed:
+
+- **294/294 BCI tests green** (`npm test --prefix bci`), **9/9 bci/ui tests
+  green** (`npm test --prefix bci/ui`), both lint clean, both typecheck
+  clean, `bci/ui` production build clean
+- **IBM Quantum: EXPERIMENTAL — LIVE QPU VALIDATION PENDING.** Every other
+  provider (classical, quantum-inspired, local simulator) is IMPLEMENTED
+  and independently sufficient — this status does not block using BCI
+- **PLANNED, not implemented**: SSH/code-signing/JWT crypto discovery are
+  IMPLEMENTED (see Post-Quantum Security Engine above); still PLANNED are
+  closer ANATOLIA-Q Quantum Gateway convergence beyond the read-only path
+  already verified, and a dedicated CBOM/Quantum Intelligence deep-link UI
+  beyond the existing Quantum & PQC page
+- **CI**: `.github/workflows/ci.yml` runs `bci` and `bci-ui` jobs (real
+  Postgres, real scanner engines, real SSH server, lint/typecheck/test/
+  build) on every push; `security` job (gitleaks secret scan + informational
+  `npm audit` + SBOM generation) and `codeql.yml` (SAST) both cover the
+  whole repository tree, `bci/` included
+- **ANATOLIA-Q regression**: server 544/544 tests + lint + typecheck green,
+  client 589/589 tests + lint green, production build clean — no
+  ANATOLIA-Q source file has been modified by any BCI work on this branch
 
 ## Development
 
