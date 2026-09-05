@@ -90,6 +90,23 @@ describe('CyberAnalysisContent', () => {
     expect(screen.getByRole('button', { name: /Previous/ })).toBeDisabled();
   });
 
+  it('steps to the next tab on Enter and back on Backspace, but not while focus is inside a form field', async () => {
+    renderContent();
+    await waitFor(() => screen.getByText('82'));
+
+    fireEvent.keyDown(window, { key: 'Enter' });
+    await waitFor(() => expect(cyberAnalysisApi.listAssets).toHaveBeenCalled());
+
+    const nameInput = screen.getByPlaceholderText('Name');
+    fireEvent.keyDown(nameInput, { key: 'Backspace' });
+    // Still on Assets -- Backspace inside a text field must never navigate away.
+    expect(screen.getByPlaceholderText('Name')).toBeInTheDocument();
+    expect(cyberAnalysisApi.listScans).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    await waitFor(() => screen.getByText('82'));
+  });
+
   it('auto-advances from Scans to Findings once a started scan actually reaches COMPLETED on the backend', async () => {
     cyberAnalysisApi.createScan.mockResolvedValue({ job: { id: 'job-1', status: 'QUEUED' } });
     cyberAnalysisApi.getScan.mockResolvedValue({ job: { id: 'job-1', status: 'COMPLETED' } });

@@ -833,6 +833,32 @@ export default function CyberAnalysisContent() {
   const goNext = () => { if (activeIndex < TABS.length - 1) setTab(TABS[activeIndex + 1].id); };
   const activeTabProps = tab === 'scans' ? { t, onScanCompleted: () => setTab('findings') } : { t };
 
+  // Enter = next tab, Backspace = previous tab, same physical keys on every
+  // desktop OS/keyboard layout (unlike PageUp/PageDown or Alt+Arrow, which
+  // vary or collide with browser/OS bindings). Guarded so typing, submitting
+  // a form with Enter, deleting text with Backspace, or activating a
+  // focused button/link with Enter (e.g. "Start scan") never also triggers
+  // tab navigation on top of its own action -- only unmodified keypresses
+  // outside any interactive control step the wizard.
+  useEffect(() => {
+    if (!status?.available) return undefined;
+    function onKeyDown(e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      const el = e.target;
+      const isInteractive = el?.closest?.('input, textarea, select, button, a, [role="button"], [contenteditable="true"]');
+      if (isInteractive) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        goNext();
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        goPrev();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [status?.available, activeIndex, TABS.length]);
+
   return (
     <div className="space-y-4">
       <header className="hud-panel rounded-xl p-4 sm:p-5 flex items-center justify-between gap-3">
