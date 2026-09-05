@@ -33,12 +33,13 @@ RUN GOEXPERIMENT=jsonv2 go install github.com/aquasecurity/trivy/cmd/trivy@v0.74
 # Verify all four binaries actually landed in GOBIN before the final stage's
 # COPY --from tries to read them. A real Northflank build of this Dockerfile
 # hit "COPY --from=engines ... /root/go/bin/trivy: not found" with the
-# preceding trivy install step reporting success (DONE, no error) -- this
-# turns that into a loud, immediate failure in the *same* stage instead of
-# a confusing checksum error two stages later, and the intervening RUN also
-# forces BuildKit to commit this layer before the multi-source COPY reads
-# it, which is a known workaround for that class of stale-snapshot issue.
-RUN ls -la /root/go/bin/osv-scanner /root/go/bin/nuclei /root/go/bin/naabu /root/go/bin/trivy
+# preceding install steps all reporting success (DONE, no error) -- this ls
+# check proved the real cause: the official golang Docker images set
+# GOPATH=/go (not the Go-default $HOME/go=/root/go), so `go install` was
+# writing every binary to /go/bin the whole time and /root/go/bin never
+# existed at all. Fixed by pointing both this check and the COPY below at
+# /go/bin instead.
+RUN ls -la /go/bin/osv-scanner /go/bin/nuclei /go/bin/naabu /go/bin/trivy
 
 FROM node:22-bookworm-slim
 
@@ -50,7 +51,7 @@ RUN apt-get update \
 # Dockerfile for the quantum subprocess's pip install.
 RUN pip3 install --break-system-packages --ignore-installed --no-cache-dir semgrep
 
-COPY --from=engines /root/go/bin/osv-scanner /root/go/bin/nuclei /root/go/bin/naabu /root/go/bin/trivy /usr/local/bin/
+COPY --from=engines /go/bin/osv-scanner /go/bin/nuclei /go/bin/naabu /go/bin/trivy /usr/local/bin/
 
 WORKDIR /app
 COPY package.json package-lock.json ./
