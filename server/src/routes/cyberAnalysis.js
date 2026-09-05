@@ -1,18 +1,18 @@
 /**
- * Cyber Analysis module -- ANATOLIA-Q's user-facing surface for BCI (BOLD
- * Cyber Intelligence). Every route here proxies to the separately deployed
- * BCI service (see services/bciClient.js); nothing in this file talks to
- * BCI's database or reimplements any of its logic. Per spec section 56,
- * users see "BCI Vulnerability Analysis"/"BCI Risk Analysis" language here,
- * never the names of the third-party scanners BCI orchestrates underneath.
+ * Cyber Analysis module -- ANATOLIA-Q's entry point into BCI (BOLD Cyber
+ * Intelligence), a separately deployed product with its own database,
+ * users, and RBAC. Rather than reimplementing any of BCI's own screens
+ * here, this just tells the client where BCI's real admin UI (bci/ui) is
+ * -- see services/bciClient.js for the server-to-server gateway trust flow
+ * that isn't used by this file directly but backs BCI_BASE_URL's sibling
+ * config, and bci/ui/src/api.js for BCI's own API client.
  */
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole, ROLES } from '../lib/rbac.js';
-import { callBci, isBciConfigured } from '../services/bciClient.js';
+import { isBciConfigured } from '../services/bciClient.js';
 
 const router = express.Router();
-const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 // Viewer role is intentionally excluded: Cyber Analysis surfaces
 // organization-wide risk data, not the kind of thing every ANATOLIA-Q
@@ -25,52 +25,19 @@ router.get('/status', (_req, res) => {
   res.json({ available: isBciConfigured() });
 });
 
-router.get('/overview', asyncRoute(async (req, res) => {
-  const [security, coverage] = await Promise.all([
-    callBci(req.user, '/api/v1/risk/security-score'),
-    callBci(req.user, '/api/v1/risk/coverage-score'),
-  ]);
-
-  if (!security.ok || !coverage.ok) {
-    return res.status(503).json({ error: 'bci_unavailable' });
-  }
-  res.json({ securityScore: security.data, coverageScore: coverage.data });
-}));
-
-router.get('/findings', asyncRoute(async (req, res) => {
-  const result = await callBci(req.user, '/api/v1/findings');
-  if (!result.ok) return res.status(503).json({ error: 'bci_unavailable' });
-  res.json(result.data);
-}));
-
-router.get('/findings/:id', asyncRoute(async (req, res) => {
-  const result = await callBci(req.user, `/api/v1/findings/${encodeURIComponent(req.params.id)}`);
-  if (!result.ok) {
-    return res.status(result.status === 404 ? 404 : 503).json({ error: 'bci_unavailable' });
-  }
-  res.json(result.data);
-}));
-
-// Generic passthrough for the rest of BCI's API surface (assets, scopes,
-// scans, reports, engines, quantum, crypto) -- hand-writing a proxy route
-// per BCI endpoint here would just re-describe BCI's own route table.
-// BCI still independently enforces its own fine-grained RBAC
-// (requirePermission(...) on every one of these paths on BCI's side); this
-// only adds the ADMIN/ANALYST gate above (router.use, already applied) and
-// the same never-throws BCI-outage degradation as every other route here.
-router.all('/proxy/*', asyncRoute(async (req, res) => {
-  const bciPath = `/api/v1/${req.params[0]}`;
-  const result = await callBci(req.user, bciPath, {
-    method: req.method,
-    body: ['POST', 'PATCH', 'PUT'].includes(req.method) ? req.body : undefined,
-  });
-  if (!result.ok) {
-    if (result.reason === 'bci_error') {
-      return res.status(result.status || 503).json(result.data || { error: 'bci_error' });
-    }
-    return res.status(503).json({ error: 'bci_unavailable' });
-  }
-  res.json(result.data);
-}));
+// Points the browser at BCI's own real admin UI (bci/ui -- a separate SPA,
+// its own login, talking to bci-api directly) instead of ANATOLIA-Q
+// reimplementing any of BCI's screens. Returns the URL as JSON (not an HTTP
+// redirect) so both the web build (cookie auth) and the desktop/mobile
+// shells (bearer-token auth, via the same req() helper as every other API
+// call) can fetch it identically before opening it themselves. Kept
+// server-side -- never baked into the client bundle -- for the same reason
+// BCI_BASE_URL never is: it's deployment-specific and can change without a
+// client rebuild.
+router.get('/ui', (_req, res) => {
+  const uiUrl = process.env.BCI_UI_URL;
+  if (!uiUrl) return res.status(404).json({ error: 'bci_ui_not_configured' });
+  res.json({ url: uiUrl });
+});
 
 export default router;

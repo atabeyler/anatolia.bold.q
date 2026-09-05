@@ -523,12 +523,10 @@ export default function DashboardPage({ user, onLogout }) {
     return () => window.removeEventListener('aq:logout', onLogoutCmd);
   }, []);
 
-  // "siber" is the one category whose content is a full admin panel
-  // (Assets/Scopes/Scans/Findings/Reports/Engines/Quantum tabs, see
-  // CyberAnalysisContent.jsx) rather than the generic analysis wizard --
-  // too much for AnalysisView's centered, narrower container, so it
-  // navigates to the full-width standalone /cyber-analysis route instead
-  // of rendering inline like every other category.
+  // "siber" doesn't reimplement any of BCI's own screens -- selecting it
+  // routes to /cyber-analysis, which opens BCI's real admin UI (bci/ui) in
+  // a new tab (see CyberAnalysisPage.jsx) rather than rendering inline
+  // like every other category.
   const startAnalysis = (cat) => {
     if (cat === 'siber') { navigate('/cyber-analysis'); return; }
     setActiveCategory(cat);

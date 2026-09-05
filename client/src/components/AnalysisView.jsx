@@ -15,7 +15,6 @@ import { base64ToBlob, downloadBlob, shareOrDownloadBlob } from '../services/sha
 import { buildLocalDocxBlob, buildLocalPdfBlob } from '../services/localExport.js';
 import VoiceButton from './VoiceButton.jsx';
 import ConsultChat from './ConsultChat.jsx';
-import CyberAnalysisContent from './CyberAnalysisContent.jsx';
 import FileAttach, { describeStructuredUpload } from './FileAttach.jsx';
 import { ScenarioComparisonChart, FraudRiskChart, OptimizerChart } from './QuantumCharts.jsx';
 import { AnalysisWorkflow, ResultProvenance, ResultSourceBadge, DecisionPipelinePanel } from './AnalysisWorkflow.jsx';
@@ -191,6 +190,26 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
   const cat = CATEGORIES.find(c => c.id === category);
   const isConsult = category === 'danisma';
   const isCyber = category === 'siber';
+  // "siber" isn't a generic-wizard category or an inline one like
+  // "danisma" -- it doesn't reimplement any of BCI's own screens, it opens
+  // BCI's real admin UI (bci/ui) in a new tab and immediately bounces back
+  // to the category picker so this view never renders anything for it.
+  useEffect(() => {
+    if (!isCyber) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await api.cyberAnalysisStatus();
+        if (status.available) {
+          const { url } = await api.cyberAnalysisUiUrl();
+          if (!cancelled) window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      } finally {
+        if (!cancelled) onCategoryChange(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isCyber, onCategoryChange]);
   const isFraudCategory = category === 'bddk' || category === 'btk';
   const categoryLabel = cat ? t(cat.nameKey) : '';
   // Informational only -- the server's own classifyData() re-derives and
@@ -401,7 +420,7 @@ export default function AnalysisView({ category, onCategoryChange, pendingAnalys
 
   if (!category) return <CategoryPicker onSelect={onCategoryChange} />;
   if (isConsult) return <div className="max-w-4xl mx-auto"><ConsultChat /></div>;
-  if (isCyber) return <div className="max-w-5xl mx-auto"><CyberAnalysisContent /></div>;
+  if (isCyber) return null;
 
   const sourceCount = documentContexts.length + imageFiles.length + (realTransactions ? 1 : 0) + (realScenarios ? 1 : 0) + (realOptimization ? 1 : 0);
   const hasData = sourceCount > 0;
