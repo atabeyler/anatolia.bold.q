@@ -71,8 +71,19 @@ describe('runAnalysisPipeline — REPOSITORY (real clone + real engines, skips i
     expect(result.enginesRun.length).toBeGreaterThan(0);
     expect(result.findingIds.length).toBeGreaterThan(0);
 
+    // The guard above only requires at least one of the three real SAST/SCA
+    // binaries to be healthy -- not all three -- so a planned-but-unhealthy
+    // engine here is legitimately SKIPPED, never FAILED, matching the
+    // "one engine unavailable never masks as job-level success" contract
+    // tested explicitly below. Only the engines that actually ran must be
+    // COMPLETED; asserting it of every planned engine would fail on any
+    // real environment (this one included) that doesn't have every one of
+    // osv-scanner/semgrep/trivy installed.
     const { rows: runs } = await query('SELECT engine_id, status FROM scan_job_engine_runs WHERE job_id = $1', [job.id]);
-    expect(runs.every((r) => r.status === 'COMPLETED')).toBe(true);
+    const ranRuns = runs.filter((r) => result.enginesRun.includes(r.engine_id));
+    const notRanRuns = runs.filter((r) => !result.enginesRun.includes(r.engine_id));
+    expect(ranRuns.every((r) => r.status === 'COMPLETED')).toBe(true);
+    expect(notRanRuns.every((r) => r.status === 'SKIPPED')).toBe(true);
 
     const { rows: findings } = await query('SELECT * FROM findings WHERE id = ANY($1)', [result.findingIds]);
     expect(findings.every((f) => f.risk_score !== null)).toBe(true);
