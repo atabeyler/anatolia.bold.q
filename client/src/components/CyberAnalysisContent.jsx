@@ -113,30 +113,243 @@ function DashboardTab({ t }) {
 
 // ─── Assets ─────────────────────────────────────────────────────────────
 const ASSET_TYPES = ['DOMAIN', 'HOST', 'WEB_APP', 'API', 'REPOSITORY', 'CONTAINER', 'CLOUD_RESOURCE', 'IDENTITY', 'SERVICE'];
+// Real target strings go into asset_identifiers (bci/src/routes/assets.js),
+// not a column on assets itself -- risk.js/coverageScore.js/securityGraph.js
+// etc. already find "which asset does this scan/finding belong to" by
+// matching asset_identifiers.value against the target string, so this
+// identifier_type is just a readable label alongside that value, never
+// consulted by the matching itself. Loosely mirrors the identifier_type
+// examples in 0004_assets.sql's own comment (DOMAIN/IP/CIDR/REPO_URL/
+// CLOUD_ACCOUNT_ID).
+const IDENTIFIER_TYPE_BY_ASSET_TYPE = {
+  DOMAIN: 'DOMAIN',
+  HOST: 'IP',
+  WEB_APP: 'URL',
+  API: 'URL',
+  REPOSITORY: 'REPO_URL',
+  CONTAINER: 'IMAGE',
+  CLOUD_RESOURCE: 'CLOUD_ACCOUNT_ID',
+  IDENTITY: 'IDENTITY',
+  SERVICE: 'SERVICE',
+};
 
-function AssetsTab({ t, onValidityChange }) {
+// priorityTone is defined once, below, in the Findings section -- reused
+// here too (function declarations hoist) since asset detail's priority
+// breakdown uses BCI's same priority scale.
+
+// Inline confirm bar rather than a native window.confirm() -- consistent
+// with the rest of this UI (no browser-chrome dialogs anywhere else) and
+// keeps the "reversible, no data lost" wording directly next to the action
+// instead of a terse browser prompt.
+function ConfirmBar({ body, confirmLabel, cancelLabel, onConfirm, onCancel }) {
+  return (
+    <div className="border border-gold/30 rounded p-3 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+      <p className="text-cyan-100/80 text-[13px]">{body}</p>
+      <div className="flex gap-2 shrink-0">
+        <button className={btnPrimaryCls} onClick={onConfirm}>{confirmLabel}</button>
+        <button className={btnCls} onClick={onCancel}>{cancelLabel}</button>
+      </div>
+    </div>
+  );
+}
+
+function AssetDetail({ id, t, onClose, onChanged, onStartScan }) {
+  const [asset, setAsset] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCriticality, setEditCriticality] = useState('MEDIUM');
+  const [saving, setSaving] = useState(false);
+  const [confirmingStatus, setConfirmingStatus] = useState(null); // 'ARCHIVED' | 'ACTIVE' | null
+
+  function load() {
+    Promise.all([cyberAnalysisApi.getAsset(id), cyberAnalysisApi.getAssetSummary(id)])
+      .then(([a, s]) => {
+        setAsset(a);
+        setSummary(s.summary);
+        setEditName(a.asset.name);
+        setEditCriticality(a.asset.criticality);
+      })
+      .catch((err) => setError(err.message));
+  }
+  useEffect(load, [id]);
+
+  async function saveEdit() {
+    if (!editName.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await cyberAnalysisApi.updateAsset(id, { name: editName.trim(), criticality: editCriticality });
+      setEditing(false);
+      load();
+      onChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function applyStatus(status) {
+    setSaving(true);
+    setError(null);
+    try {
+      await cyberAnalysisApi.updateAsset(id, { status });
+      setConfirmingStatus(null);
+      load();
+      onChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!asset) return <div className="hud-panel rounded-xl p-4 text-cyan-100/60 text-sm">{t('cyberLoading')}</div>;
+  const { asset: a, identifiers, technologies } = asset;
+  const primaryTarget = identifiers[0]?.value ?? null;
+
+  return (
+    <div className="hud-panel rounded-xl p-4 sm:p-5 space-y-3">
+      <div className="flex justify-between items-start gap-3">
+        <div>
+          <h3 className="text-cyan-100 text-sm flex items-center gap-2">
+            {a.name}
+            {a.status === 'ARCHIVED' && <Badge tone="warn">{t('cyberArchivedBadge')}</Badge>}
+          </h3>
+          <p className="text-cyan-100/50 text-xs">{a.asset_type} · {t('cyberColCreated')}: {new Date(a.created_at).toLocaleString()}</p>
+        </div>
+        <button className={btnCls} onClick={onClose}>{t('cyberClose')}</button>
+      </div>
+      <ErrorNote error={error} />
+
+      {editing ? (
+        <div className="grid sm:grid-cols-3 gap-2 items-end border border-cyan-300/15 rounded p-3">
+          <div>
+            <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberColName')}</label>
+            <input className={inputCls} value={editName} onChange={(e) => setEditName(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberColCriticality')}</label>
+            <select className={inputCls} value={editCriticality} onChange={(e) => setEditCriticality(e.target.value)}>
+              {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button className={btnPrimaryCls} disabled={saving || !editName.trim()} onClick={saveEdit}>{t('cyberSaveChanges')}</button>
+            <button className={btnCls} onClick={() => setEditing(false)}>{t('cyberCancel')}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <Tile label={t('cyberColCriticality')} value={a.criticality} />
+          <Tile label={t('cyberFindingCount')} value={summary?.findingCount ?? '—'} />
+          <Tile label={t('cyberOpenFindings')} value={summary?.openFindingCount ?? '—'} />
+          <Tile label={t('cyberRiskScoreLabel')} value={summary?.riskScore ?? '—'} tone={scoreTone(summary?.riskScore)} />
+        </div>
+      )}
+
+      <div>
+        <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-1">{t('cyberLastScan')}</h4>
+        {summary?.lastScan ? (
+          <p className="text-cyan-100/80 text-[13px]">
+            {new Date(summary.lastScan.created_at).toLocaleString()} · <Badge tone={scanStatusTone(summary.lastScan.status)}>{summary.lastScan.status}</Badge>
+          </p>
+        ) : (
+          <p className="text-cyan-100/40 text-[13px]">{t('cyberNeverScanned')}</p>
+        )}
+      </div>
+
+      {summary && Object.keys(summary.priorityBreakdown).length > 0 && (
+        <div>
+          <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-1">{t('cyberPriorityBreakdown')}</h4>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(summary.priorityBreakdown).map(([priority, count]) => (
+              <Badge key={priority} tone={priorityTone(priority)}>{priority}: {count}</Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-1">{t('cyberIdentifiers')}</h4>
+        <p className="text-cyan-100/80 text-[13px]">{identifiers.length ? identifiers.map((i) => `${i.identifier_type}: ${i.value}`).join(' · ') : t('cyberNoIdentifiers')}</p>
+      </div>
+      {technologies.length > 0 && (
+        <div>
+          <h4 className="text-cyan-100/70 text-xs tracking-widest uppercase mb-1">{t('cyberTechnologies')}</h4>
+          <p className="text-cyan-100/80 text-[13px]">{technologies.map((tc) => tc.version ? `${tc.name} ${tc.version}` : tc.name).join(' · ')}</p>
+        </div>
+      )}
+
+      {confirmingStatus && (
+        <ConfirmBar
+          body={confirmingStatus === 'ARCHIVED' ? t('cyberConfirmArchiveBody') : t('cyberConfirmRestoreBody')}
+          confirmLabel={confirmingStatus === 'ARCHIVED' ? t('cyberYesArchive') : t('cyberYesRestore')}
+          cancelLabel={t('cyberCancel')}
+          onConfirm={() => applyStatus(confirmingStatus)}
+          onCancel={() => setConfirmingStatus(null)}
+        />
+      )}
+
+      <div className="flex gap-2 flex-wrap pt-2 border-t border-cyan-300/10">
+        <button
+          className={btnPrimaryCls}
+          disabled={!primaryTarget}
+          title={primaryTarget ? undefined : t('cyberNoTargetYet')}
+          onClick={() => primaryTarget && onStartScan(primaryTarget)}
+        >
+          {t('cyberStartScanBtn')}
+        </button>
+        {!editing && <button className={btnCls} onClick={() => setEditing(true)}>{t('cyberEdit')}</button>}
+        {a.status === 'ACTIVE' ? (
+          <button className={btnCls} onClick={() => setConfirmingStatus('ARCHIVED')}>{t('cyberArchive')}</button>
+        ) : (
+          <button className={btnCls} onClick={() => setConfirmingStatus('ACTIVE')}>{t('cyberRestore')}</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AssetsTab({ t, onValidityChange, onStartScan }) {
   const [assets, setAssets] = useState(null);
   const [error, setError] = useState(null);
   const [name, setName] = useState('');
+  const [target, setTarget] = useState('');
   const [assetType, setAssetType] = useState(ASSET_TYPES[0]);
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
 
   function load() {
-    cyberAnalysisApi.listAssets().then((r) => setAssets(r.assets)).catch((err) => setError(err.message));
+    cyberAnalysisApi.listAssets(showArchived ? 'ARCHIVED' : 'ACTIVE').then((r) => setAssets(r.assets)).catch((err) => setError(err.message));
   }
-  useEffect(load, []);
+  useEffect(load, [showArchived]);
 
-  // The wizard's Next/Enter only unlocks once this step's required field
-  // (the asset name) is actually filled in.
-  useEffect(() => { onValidityChange?.(name.trim().length > 0); }, [name]);
+  // The wizard's Next/Enter only unlocks once this step's required fields
+  // (name + a real target to register as the asset's first identifier) are
+  // actually filled in.
+  useEffect(() => { onValidityChange?.(name.trim().length > 0 && target.trim().length > 0); }, [name, target]);
 
   async function onCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || !target.trim()) return;
     setCreating(true);
     setError(null);
     try {
-      await cyberAnalysisApi.createAsset({ name: name.trim(), assetType });
+      const { asset } = await cyberAnalysisApi.createAsset({ name: name.trim(), assetType });
+      // A real target/identifier is what lets risk scoring, coverage score,
+      // the security graph, and "Start Scan" below all find this asset --
+      // without it the asset would just be an inert name+type row, invisible
+      // to the rest of BCI's intelligence pipeline (see IDENTIFIER_TYPE_BY_
+      // ASSET_TYPE above).
+      await cyberAnalysisApi.addAssetIdentifier(asset.id, {
+        identifierType: IDENTIFIER_TYPE_BY_ASSET_TYPE[assetType] || assetType,
+        value: target.trim(),
+      });
       setName('');
+      setTarget('');
       load();
     } catch (err) {
       setError(err.message);
@@ -149,26 +362,66 @@ function AssetsTab({ t, onValidityChange }) {
     <div className="space-y-4">
       <PageTitle>{t('cyberNavAssets')}</PageTitle>
       <ErrorNote error={error} />
+      {selectedId && (
+        <AssetDetail
+          id={selectedId}
+          t={t}
+          onClose={() => setSelectedId(null)}
+          onChanged={load}
+          onStartScan={(startTarget) => { setSelectedId(null); onStartScan(startTarget); }}
+        />
+      )}
       <Panel title={t('cyberAddAsset')}>
-        <div className="grid sm:grid-cols-3 gap-2">
+        <div className="grid sm:grid-cols-4 gap-2">
           <input className={inputCls} placeholder={t('cyberNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} />
+          <input className={inputCls} placeholder={t('cyberAssetTargetPlaceholder')} value={target} onChange={(e) => setTarget(e.target.value)} />
           <select className={inputCls} value={assetType} onChange={(e) => setAssetType(e.target.value)}>
             {ASSET_TYPES.map((at) => <option key={at} value={at}>{at}</option>)}
           </select>
-          <button className={btnCls} onClick={onCreate} disabled={creating || !name.trim()}>{t('cyberAddAssetBtn')}</button>
+          <button className={btnCls} onClick={onCreate} disabled={creating || !name.trim() || !target.trim()}>{t('cyberAddAssetBtn')}</button>
         </div>
       </Panel>
-      <Panel title={t('cyberAssetsPanelTitle')}>
+      <Panel
+        title={t('cyberAssetsPanelTitle')}
+        actions={
+          <label className="flex items-center gap-2 text-[12px] text-cyan-100/60">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            {t('cyberShowArchived')}
+          </label>
+        }
+      >
         {assets && (
           <div className={tableWrap}>
             <table className="w-full">
-              <thead><tr><th className={th}>{t('cyberColName')}</th><th className={th}>{t('cyberColType')}</th><th className={th}>{t('cyberColCriticality')}</th></tr></thead>
+              <thead>
+                <tr>
+                  <th className={th}>{t('cyberColName')}</th>
+                  <th className={th}>{t('cyberColTarget')}</th>
+                  <th className={th}>{t('cyberColType')}</th>
+                  <th className={th}>{t('cyberColCriticality')}</th>
+                  <th className={th}>{t('cyberColActions')}</th>
+                </tr>
+              </thead>
               <tbody>
                 {assets.map((a) => (
                   <tr key={a.id}>
                     <td className={td}>{a.name}</td>
+                    <td className={`${td} text-cyan-100/60`}>{a.target || '—'}</td>
                     <td className={td}>{a.asset_type}</td>
                     <td className={td}>{a.criticality}</td>
+                    <td className={td}>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button className={btnCls} onClick={() => setSelectedId(a.id)}>{t('cyberSelect')}</button>
+                        <button
+                          className={btnCls}
+                          disabled={!a.target}
+                          title={a.target ? undefined : t('cyberNoTargetYet')}
+                          onClick={() => a.target && onStartScan(a.target)}
+                        >
+                          {t('cyberStartScanBtn')}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -193,13 +446,22 @@ const SCAN_TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'TIMED_OUT', 'CANCELLED']
 const SCAN_POLL_INTERVAL_MS = 3000;
 const SCAN_POLL_MAX_ATTEMPTS = 60; // ~3 minutes
 
-function ScansTab({ t, onScanCompleted, onValidityChange }) {
+function ScansTab({ t, onScanCompleted, onValidityChange, initialTarget, onInitialTargetConsumed }) {
   const [jobs, setJobs] = useState(null);
-  const [target, setTarget] = useState('');
+  // Lazy initializer: reads the asset's target exactly once, at the moment
+  // "Start Scan" on an asset remounts this tab -- a manual sidebar switch
+  // back to Scans later must not keep re-prefilling a stale asset target
+  // over whatever the user is now typing, see onInitialTargetConsumed below.
+  const [target, setTarget] = useState(() => initialTarget || '');
   const [requestedClass, setRequestedClass] = useState('PASSIVE');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingJobId, setPendingJobId] = useState(null);
+
+  useEffect(() => {
+    if (initialTarget) onInitialTargetConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function load() {
     cyberAnalysisApi.listScans().then((r) => setJobs(r.jobs)).catch((err) => setError(err.message));
@@ -851,13 +1113,29 @@ export default function CyberAnalysisContent() {
     setTab(id);
   }
 
+  // Handoff from Assets' "Start Scan" -- the target of the selected asset,
+  // carried over to Scans so the user never retypes a target that's already
+  // registered on a real asset. Cleared the instant ScansTab reads it (see
+  // its onInitialTargetConsumed), so a later plain sidebar switch to Scans
+  // (not via "Start Scan") never re-prefills a stale target.
+  const [pendingScanTarget, setPendingScanTarget] = useState(null);
+  const startScanFor = (target) => {
+    setPendingScanTarget(target);
+    changeTab('scans');
+  };
+
   const activeIndex = TABS.findIndex((tb) => tb.id === tab);
   const goPrev = () => { if (activeIndex > 0) changeTab(TABS[activeIndex - 1].id); };
   const goNext = () => { if (activeIndex < TABS.length - 1 && canAdvance) changeTab(TABS[activeIndex + 1].id); };
   const activeTabProps = {
     t,
     onValidityChange: setCanAdvance,
-    ...(tab === 'scans' ? { onScanCompleted: () => changeTab('findings') } : {}),
+    ...(tab === 'assets' ? { onStartScan: startScanFor } : {}),
+    ...(tab === 'scans' ? {
+      onScanCompleted: () => changeTab('findings'),
+      initialTarget: pendingScanTarget,
+      onInitialTargetConsumed: () => setPendingScanTarget(null),
+    } : {}),
   };
 
   // Esc = previous step, Enter = next step -- the same physical keys on

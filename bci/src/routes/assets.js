@@ -4,6 +4,7 @@ import { query } from '../db/client.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
 import { recordAuditEvent } from '../services/audit.js';
+import { computeAssetSummary } from '../services/assetSummary.js';
 
 export const assetsRouter = Router();
 
@@ -12,6 +13,7 @@ assetsRouter.use(requireAuth);
 const ASSET_TYPES = ['DOMAIN', 'HOST', 'WEB_APP', 'API', 'REPOSITORY', 'CONTAINER', 'CLOUD_RESOURCE', 'IDENTITY', 'SERVICE'];
 const CRITICALITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const RELATIONSHIP_TYPES = ['HOSTS', 'DEPENDS_ON', 'CONNECTS_TO', 'CONTAINS', 'RUNS', 'EXPOSES'];
+const ASSET_STATUSES = ['ACTIVE', 'ARCHIVED'];
 
 // Every route below trusts org scoping to a WHERE org_id = $orgId clause,
 // never to the caller-supplied :id alone -- an id from another tenant
@@ -28,11 +30,28 @@ const createAssetSchema = z.object({
   criticality: z.enum(CRITICALITIES).default('MEDIUM'),
 });
 
+// `target` is the asset's first-registered identifier (asset_identifiers.value)
+// -- there is no `target` column on assets itself (see 0004_assets.sql); an
+// asset can carry several identifiers (DOMAIN + IP, say), but the
+// inventory list needs one representative string to show and to hand off
+// to "Start Scan". Optional ?status= filters to ACTIVE or ARCHIVED; with
+// no filter, every asset (any status) comes back so the UI can offer an
+// "show archived" toggle without a second round trip.
+const listAssetsQuerySchema = z.object({ status: z.enum(ASSET_STATUSES).optional() });
+
 assetsRouter.get('/', requirePermission('asset:view'), async (req, res) => {
+  const parsed = listAssetsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten(), requestId: req.id });
+  }
+
   const { rows } = await query(
-    `SELECT id, name, asset_type, criticality, created_at, updated_at
-       FROM assets WHERE org_id = $1 ORDER BY created_at DESC`,
-    [req.auth.orgId]
+    `SELECT a.id, a.name, a.asset_type, a.criticality, a.status, a.created_at, a.updated_at,
+            (SELECT ai.value FROM asset_identifiers ai WHERE ai.asset_id = a.id ORDER BY ai.id LIMIT 1) AS target
+       FROM assets a
+      WHERE a.org_id = $1 AND ($2::text IS NULL OR a.status = $2)
+      ORDER BY a.created_at DESC`,
+    [req.auth.orgId, parsed.data.status ?? null]
   );
   res.json({ assets: rows });
 });
@@ -46,7 +65,7 @@ assetsRouter.post('/', requirePermission('asset:create'), async (req, res) => {
 
   const { rows } = await query(
     `INSERT INTO assets (org_id, name, asset_type, criticality, created_by)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id, name, asset_type, criticality, created_at, updated_at`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING id, name, asset_type, criticality, status, created_at, updated_at`,
     [req.auth.orgId, name, assetType, criticality, req.auth.userId]
   );
 
@@ -68,7 +87,7 @@ assetsRouter.get('/:id', requirePermission('asset:view'), async (req, res) => {
   if (!asset) return res.status(404).json({ error: 'asset_not_found', requestId: req.id });
 
   const [{ rows: full }, { rows: identifiers }, { rows: technologies }, { rows: relationships }] = await Promise.all([
-    query('SELECT id, name, asset_type, criticality, created_at, updated_at FROM assets WHERE id = $1', [req.params.id]),
+    query('SELECT id, name, asset_type, criticality, status, created_at, updated_at FROM assets WHERE id = $1', [req.params.id]),
     query('SELECT id, identifier_type, value FROM asset_identifiers WHERE asset_id = $1', [req.params.id]),
     query('SELECT id, name, version, detected_at FROM asset_technologies WHERE asset_id = $1', [req.params.id]),
     query(
@@ -81,9 +100,16 @@ assetsRouter.get('/:id', requirePermission('asset:view'), async (req, res) => {
   res.json({ asset: full[0], identifiers, technologies, relationships });
 });
 
+// status is the archive/unarchive lever (see 0021_asset_status.sql) --
+// deliberately folded into the same PATCH as name/criticality rather than
+// a separate DELETE or /archive endpoint: it's just another field update,
+// same permission (asset:update), and it never touches asset_identifiers/
+// asset_technologies/asset_relationships or any scan_jobs/findings row, so
+// archiving and later restoring an asset is fully non-destructive.
 const updateAssetSchema = z.object({
   name: z.string().min(1).optional(),
   criticality: z.enum(CRITICALITIES).optional(),
+  status: z.enum(ASSET_STATUSES).optional(),
 });
 
 assetsRouter.patch('/:id', requirePermission('asset:update'), async (req, res) => {
@@ -102,10 +128,11 @@ assetsRouter.patch('/:id', requirePermission('asset:update'), async (req, res) =
     `UPDATE assets SET
         name = COALESCE($1, name),
         criticality = COALESCE($2, criticality),
+        status = COALESCE($3, status),
         updated_at = now()
-      WHERE id = $3
-      RETURNING id, name, asset_type, criticality, created_at, updated_at`,
-    [parsed.data.name ?? null, parsed.data.criticality ?? null, req.params.id]
+      WHERE id = $4
+      RETURNING id, name, asset_type, criticality, status, created_at, updated_at`,
+    [parsed.data.name ?? null, parsed.data.criticality ?? null, parsed.data.status ?? null, req.params.id]
   );
 
   await recordAuditEvent({
@@ -119,6 +146,17 @@ assetsRouter.patch('/:id', requirePermission('asset:update'), async (req, res) =
   });
 
   res.json({ asset: rows[0] });
+});
+
+// Real, derived data only -- see services/assetSummary.js for exactly what
+// this is computed from and why it never fabricates a number the backend
+// doesn't actually have.
+assetsRouter.get('/:id/summary', requirePermission('asset:view'), async (req, res) => {
+  const asset = await loadOwnedAsset(req.auth.orgId, req.params.id);
+  if (!asset) return res.status(404).json({ error: 'asset_not_found', requestId: req.id });
+
+  const summary = await computeAssetSummary(req.auth.orgId, req.params.id);
+  res.json({ summary });
 });
 
 const identifierSchema = z.object({

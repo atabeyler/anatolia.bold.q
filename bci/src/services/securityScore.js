@@ -8,7 +8,10 @@ import { query } from '../db/client.js';
 // by asset separately.
 export const SECURITY_SCORE_MODEL_VERSION = 1;
 
-const CLOSED_STATUSES = ['FALSE_POSITIVE', 'VERIFIED_FIXED', 'ACCEPTED_RISK', 'MITIGATED'];
+// Exported so anything else needing "is this finding still live" (e.g.
+// services/assetSummary.js) shares this exact definition instead of
+// re-declaring its own, possibly-diverging list.
+export const CLOSED_STATUSES = ['FALSE_POSITIVE', 'VERIFIED_FIXED', 'ACCEPTED_RISK', 'MITIGATED'];
 
 function deductionFor(riskScore) {
   if (riskScore >= 90) return 20;

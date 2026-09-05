@@ -339,8 +339,12 @@ function bciProxy(path, options = {}) {
 }
 
 export const cyberAnalysisApi = {
-  listAssets: () => bciProxy('/assets'),
+  listAssets: (status) => bciProxy(status ? `/assets?status=${status}` : '/assets'),
   createAsset: (asset) => bciProxy('/assets', { method: 'POST', body: asset }),
+  getAsset: (id) => bciProxy(`/assets/${id}`),
+  updateAsset: (id, patch) => bciProxy(`/assets/${id}`, { method: 'PATCH', body: patch }),
+  getAssetSummary: (id) => bciProxy(`/assets/${id}/summary`),
+  addAssetIdentifier: (id, identifier) => bciProxy(`/assets/${id}/identifiers`, { method: 'POST', body: identifier }),
 
   createScope: (scope) => bciProxy('/scopes', { method: 'POST', body: scope }),
   evaluateScope: (target, requestedClass) => bciProxy('/scopes/evaluate', { method: 'POST', body: { target, requestedClass } }),
