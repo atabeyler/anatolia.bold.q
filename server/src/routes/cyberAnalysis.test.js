@@ -66,3 +66,57 @@ describe('GET /api/cyber-analysis/*', () => {
     expect(callBci).not.toHaveBeenCalled();
   });
 });
+
+describe('/api/cyber-analysis/proxy/* (generic BCI passthrough)', () => {
+  beforeEach(() => {
+    callBci.mockReset();
+    isBciConfigured.mockReset().mockReturnValue(true);
+  });
+
+  it('forwards a GET to the corresponding BCI path and returns its data', async () => {
+    callBci.mockResolvedValueOnce({ ok: true, data: { assets: [{ id: 'a1' }] } });
+    const app = buildApp();
+    const res = await request(app).get('/api/cyber-analysis/proxy/assets').set('Authorization', `Bearer ${tokenFor('analyst')}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ assets: [{ id: 'a1' }] });
+    expect(callBci).toHaveBeenCalledWith(expect.anything(), '/api/v1/assets', { method: 'GET', body: undefined });
+  });
+
+  it('forwards a POST body to the corresponding BCI path', async () => {
+    callBci.mockResolvedValueOnce({ ok: true, data: { asset: { id: 'a2' } } });
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/cyber-analysis/proxy/assets')
+      .set('Authorization', `Bearer ${tokenFor('analyst')}`)
+      .send({ name: 'example.com', assetType: 'DOMAIN' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ asset: { id: 'a2' } });
+    expect(callBci).toHaveBeenCalledWith(expect.anything(), '/api/v1/assets', {
+      method: 'POST',
+      body: { name: 'example.com', assetType: 'DOMAIN' },
+    });
+  });
+
+  it('relays a real BCI error status/body instead of masking it as 503', async () => {
+    callBci.mockResolvedValueOnce({ ok: false, reason: 'bci_error', status: 403, data: { error: 'forbidden' } });
+    const app = buildApp();
+    const res = await request(app).get('/api/cyber-analysis/proxy/engines').set('Authorization', `Bearer ${tokenFor('analyst')}`);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'forbidden' });
+  });
+
+  it('degrades to 503 when BCI is unreachable', async () => {
+    callBci.mockResolvedValueOnce({ ok: false, reason: 'bci_unreachable' });
+    const app = buildApp();
+    const res = await request(app).get('/api/cyber-analysis/proxy/scans').set('Authorization', `Bearer ${tokenFor('admin')}`);
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ error: 'bci_unavailable' });
+  });
+
+  it('rejects a viewer-role user the same as every other route in this file', async () => {
+    const app = buildApp();
+    const res = await request(app).get('/api/cyber-analysis/proxy/assets').set('Authorization', `Bearer ${tokenFor('viewer')}`);
+    expect(res.status).toBe(403);
+    expect(callBci).not.toHaveBeenCalled();
+  });
+});

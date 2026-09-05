@@ -51,4 +51,26 @@ router.get('/findings/:id', asyncRoute(async (req, res) => {
   res.json(result.data);
 }));
 
+// Generic passthrough for the rest of BCI's API surface (assets, scopes,
+// scans, reports, engines, quantum, crypto) -- hand-writing a proxy route
+// per BCI endpoint here would just re-describe BCI's own route table.
+// BCI still independently enforces its own fine-grained RBAC
+// (requirePermission(...) on every one of these paths on BCI's side); this
+// only adds the ADMIN/ANALYST gate above (router.use, already applied) and
+// the same never-throws BCI-outage degradation as every other route here.
+router.all('/proxy/*', asyncRoute(async (req, res) => {
+  const bciPath = `/api/v1/${req.params[0]}`;
+  const result = await callBci(req.user, bciPath, {
+    method: req.method,
+    body: ['POST', 'PATCH', 'PUT'].includes(req.method) ? req.body : undefined,
+  });
+  if (!result.ok) {
+    if (result.reason === 'bci_error') {
+      return res.status(result.status || 503).json(result.data || { error: 'bci_error' });
+    }
+    return res.status(503).json({ error: 'bci_unavailable' });
+  }
+  res.json(result.data);
+}));
+
 export default router;
