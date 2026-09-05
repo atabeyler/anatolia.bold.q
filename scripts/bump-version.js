@@ -1,7 +1,12 @@
 #!/usr/bin/env node
-// Bumps the patch version in root/client/server package.json files together,
-// keeps the corresponding package-lock.json headers aligned, and updates the
-// README version badge to the same release.
+// Bumps the patch version in root/client/server package.json files together
+// (one shared ANATOLIA-Q release number), keeps the corresponding
+// package-lock.json headers aligned, and updates the README version badge
+// to the same release. Also bumps bci/ and bci/ui/ each on their OWN
+// independent patch counter -- BCI is a separately deployed product (see
+// bci/README.md), so its version line is deliberately never synced to
+// ANATOLIA-Q's, even though this same script (and the same pre-commit hook)
+// advances both on every commit, whichever side actually changed.
 // Run automatically by .husky/pre-commit before every commit; the updated
 // files are then staged into that same commit.
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -51,3 +56,29 @@ if (existsSync(readmePath)) {
 }
 
 console.log(`Version bumped: ${rootPkg.version} -> ${nextVersion}`);
+
+// BCI's own independent release line -- bumped every commit too, but
+// starting from BCI's own current version, not ANATOLIA-Q's.
+function bumpIndependent(pkgRelPath, lockRelPath) {
+  const pkgPath = path.join(root, pkgRelPath);
+  if (!existsSync(pkgPath)) return;
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  const previous = pkg.version;
+  const [maj, min, pat] = pkg.version.split('.').map(Number);
+  const next = `${maj}.${min}.${pat + 1}`;
+  pkg.version = next;
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+
+  const lockPath = path.join(root, lockRelPath);
+  if (existsSync(lockPath)) {
+    const lock = JSON.parse(readFileSync(lockPath, 'utf-8'));
+    lock.version = next;
+    if (lock.packages?.['']) lock.packages[''].version = next;
+    writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+  }
+
+  console.log(`Version bumped (${pkgRelPath}): ${previous} -> ${next}`);
+}
+
+bumpIndependent('bci/package.json', 'bci/package-lock.json');
+bumpIndependent('bci/ui/package.json', 'bci/ui/package-lock.json');

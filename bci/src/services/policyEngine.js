@@ -12,7 +12,31 @@ import { targetMatchesTyped } from '../lib/targetMatcher.js';
 // parser/matcher (src/lib/targetMatcher.js) -- a CIDR is never matched by
 // string suffix, a URL's path is never confused with a bare domain.
 
+// TEMPORARY, explicitly requested bypass -- defaults to disabled (normal
+// fail-closed enforcement) so a deployment that never sets this env var
+// behaves exactly as before. When set, EVERY scope check across the whole
+// app (this function backs both POST /scopes/evaluate and scan creation
+// via jobQueue.js) returns ALLOW without consulting authorized_scopes at
+// all. This is a real, audited security bypass, not a UI-only shortcut --
+// remove BCI_DISABLE_SCOPE_ENFORCEMENT (or delete this block) the moment
+// it's no longer needed. Never set it in a production deployment.
+const SCOPE_ENFORCEMENT_DISABLED = process.env.BCI_DISABLE_SCOPE_ENFORCEMENT === 'true';
+
 export async function evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass }) {
+  if (SCOPE_ENFORCEMENT_DISABLED) {
+    const decision = { decision: 'ALLOW', reason: 'scope_enforcement_temporarily_disabled' };
+    await recordAuditEvent({
+      orgId,
+      actorUserId,
+      action: 'policy.evaluate',
+      targetType: 'scope',
+      targetId: target,
+      result: decision.decision,
+      metadata: { requestedClass, reason: decision.reason, bypass: true },
+    });
+    return decision;
+  }
+
   const decision = await computeDecision({ orgId, target, requestedClass });
 
   await recordAuditEvent({
