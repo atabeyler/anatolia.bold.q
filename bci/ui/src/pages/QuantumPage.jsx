@@ -39,7 +39,11 @@ export default function QuantumPage() {
 
   const [discoverTarget, setDiscoverTarget] = useState('');
   const [discoverPort, setDiscoverPort] = useState('');
+  const [discoverProtocol, setDiscoverProtocol] = useState('TLS');
   const [discovering, setDiscovering] = useState(false);
+
+  const [jwtToken, setJwtToken] = useState('');
+  const [jwtDiscovering, setJwtDiscovering] = useState(false);
 
   function load() {
     Promise.all([
@@ -95,7 +99,7 @@ export default function QuantumPage() {
     setDiscovering(true);
     setError(null);
     try {
-      await api.discoverCrypto(discoverTarget, discoverPort ? Number(discoverPort) : undefined);
+      await api.discoverCrypto(discoverTarget, discoverPort ? Number(discoverPort) : undefined, discoverProtocol);
       setDiscoverTarget('');
       setDiscoverPort('');
       load();
@@ -103,6 +107,21 @@ export default function QuantumPage() {
       setError(err.data?.reason ? `${err.message}: ${err.data.reason}` : err.message);
     } finally {
       setDiscovering(false);
+    }
+  }
+
+  async function onDiscoverJwt(e) {
+    e.preventDefault();
+    setJwtDiscovering(true);
+    setError(null);
+    try {
+      await api.discoverJwtCrypto(jwtToken);
+      setJwtToken('');
+      load();
+    } catch (err) {
+      setError(err.data?.reason ? `${err.message}: ${err.data.reason}` : err.message);
+    } finally {
+      setJwtDiscovering(false);
     }
   }
 
@@ -232,20 +251,37 @@ export default function QuantumPage() {
       {hasPermission('scan:create') && (
         <form className="stack card" onSubmit={onDiscover} style={{ flexDirection: 'row', alignItems: 'end', maxWidth: 'none' }}>
           <div>
-            <label htmlFor="cryptoTarget">Target (TLS)</label>
+            <label htmlFor="cryptoProtocol">Protocol</label>
+            <select id="cryptoProtocol" value={discoverProtocol} onChange={(e) => setDiscoverProtocol(e.target.value)}>
+              <option value="TLS">TLS</option>
+              <option value="SSH">SSH</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="cryptoTarget">Target</label>
             <input id="cryptoTarget" value={discoverTarget} onChange={(e) => setDiscoverTarget(e.target.value)} required placeholder="example.com" />
           </div>
           <div>
             <label htmlFor="cryptoPort">Port</label>
-            <input id="cryptoPort" type="number" value={discoverPort} onChange={(e) => setDiscoverPort(e.target.value)} placeholder="443" />
+            <input id="cryptoPort" type="number" value={discoverPort} onChange={(e) => setDiscoverPort(e.target.value)} placeholder={discoverProtocol === 'SSH' ? '22' : '443'} />
           </div>
           <button type="submit" disabled={discovering}>{discovering ? 'Probing…' : 'Discover crypto'}</button>
         </form>
       )}
       <p style={{ color: 'var(--muted)', fontSize: 13 }}>
-        Discovery only runs against a target covered by an APPROVED authorized scope — the same
-        authorization bar as starting a scan.
+        TLS/SSH discovery only runs against a target covered by an APPROVED authorized scope — the
+        same authorization bar as starting a scan.
       </p>
+
+      {hasPermission('scan:create') && (
+        <form className="stack card" onSubmit={onDiscoverJwt} style={{ flexDirection: 'row', alignItems: 'end', maxWidth: 'none' }}>
+          <div style={{ flex: 1 }}>
+            <label htmlFor="jwtToken">JWT signing algorithm (paste a token — header only is decoded, never verified)</label>
+            <input id="jwtToken" value={jwtToken} onChange={(e) => setJwtToken(e.target.value)} required placeholder="eyJhbGciOi..." style={{ width: '100%' }} />
+          </div>
+          <button type="submit" disabled={jwtDiscovering}>{jwtDiscovering ? 'Decoding…' : 'Discover JWT alg'}</button>
+        </form>
+      )}
 
       <div className="grid">
         <div className="card tile">

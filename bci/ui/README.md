@@ -26,11 +26,14 @@ proves the pattern end to end so those areas can be added the same way.
   quantum execution policy (system:manage-gated to edit), a Remediation
   Optimizer trigger with its benchmark verdict (finding:update-gated),
   recent benchmarks and quantum job history; a Crypto Discovery trigger
-  (scan:create-gated — it makes a real, authorized-scope-checked TLS
-  connection) plus the resulting Crypto Inventory, PQC Readiness score,
-  CBOM component count, and migration roadmap. Deliberately never shows a
-  "Quantum Powered Security" style claim — only genuinely measured
-  provider health, benchmark verdicts, and discovery results
+  with a TLS/SSH protocol selector (scan:create-gated — both make a real,
+  authorized-scope-checked network connection) plus a separate JWT
+  algorithm decoder (no network call, no scope needed — it only decodes a
+  token the user pastes in), and the resulting Crypto Inventory, PQC
+  Readiness score, CBOM component count, and migration roadmap.
+  Deliberately never shows a "Quantum Powered Security" style claim — only
+  genuinely measured provider health, benchmark verdicts, and discovery
+  results
 
 RBAC is enforced server-side as always (M2) — the UI only hides actions a
 user's token doesn't carry the permission for; every button still goes

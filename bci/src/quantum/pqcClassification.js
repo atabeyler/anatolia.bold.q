@@ -23,13 +23,30 @@ const CLASSIFICATIONS = [
   { keyTypes: ['ml-kem', 'kyber'], id: 'ML-KEM', quantumVulnerable: false, standard: 'NIST FIPS 203' },
   { keyTypes: ['ml-dsa', 'dilithium'], id: 'ML-DSA', quantumVulnerable: false, standard: 'NIST FIPS 204' },
   { keyTypes: ['slh-dsa', 'sphincs+'], id: 'SLH-DSA', quantumVulnerable: false, standard: 'NIST FIPS 205' },
+  // Symmetric primitives (HMAC) are a different threat model entirely --
+  // Grover's algorithm gives only a quadratic speedup against a symmetric
+  // key, not the polynomial-time break Shor's algorithm gives against RSA/
+  // EC. NIST guidance treats a sufficiently long symmetric key (>=256-bit)
+  // as remaining adequate post-quantum -- this is NOT the same claim as
+  // "quantum-safe" for an asymmetric algorithm, and is scored separately
+  // from the RSA/EC/PQC table above rather than folded into it.
+  { keyTypes: ['hmac'], id: 'HMAC', quantumVulnerable: false, standard: "not Shor-vulnerable; Grover's algorithm only quadratically weakens a symmetric key" },
 ];
+
+// alg=none is not a cryptographic algorithm at all -- the JWT is unsigned.
+// That's a distinct (and more urgent) security problem than a PQC
+// migration question, so it's reported as its own case rather than folded
+// into "quantum-vulnerable: true/false/unknown".
+const JWT_NONE_KEY_TYPE = 'jwt-none';
 
 export function classifyKeyType(asymmetricKeyType) {
   if (!asymmetricKeyType) {
     return { algorithmId: 'UNKNOWN', quantumVulnerable: null, note: 'no key type observed during discovery' };
   }
   const normalized = String(asymmetricKeyType).toLowerCase();
+  if (normalized === JWT_NONE_KEY_TYPE) {
+    return { algorithmId: 'NONE', quantumVulnerable: null, note: 'alg=none: token is unsigned -- not a cryptographic algorithm, a signature-missing issue' };
+  }
   const match = CLASSIFICATIONS.find((c) => c.keyTypes.includes(normalized));
   if (!match) {
     // Fail closed toward caution: an algorithm this table has never heard of

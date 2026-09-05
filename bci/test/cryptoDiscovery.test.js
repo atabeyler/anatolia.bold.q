@@ -1,15 +1,29 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import tls from 'node:tls';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { query } from '../src/db/client.js';
 import { resetDatabase, createOrg, createUser } from './helpers/db.js';
-import { runCryptoDiscovery, probeTlsEndpoint } from '../src/services/cryptoDiscovery.js';
+import { runCryptoDiscovery, probeTlsEndpoint, probeSshHostKeys, discoverJwtAlgorithm, discoverCodeSigningCertificate } from '../src/services/cryptoDiscovery.js';
 
 const execFileAsync = promisify(execFile);
+
+// describe.skipIf needs its condition known at collection time (before any
+// beforeAll runs), so binary presence is checked synchronously here, up
+// front -- exit code doesn't matter (bad-usage exits are still "installed"),
+// only ENOENT means "not installed".
+function binaryExists(bin, args) {
+  try {
+    execFileSync(bin, args, { stdio: 'ignore' });
+    return true;
+  } catch (err) {
+    return err.code !== 'ENOENT';
+  }
+}
+const SSH_TOOLING_AVAILABLE = binaryExists('ssh-keyscan', []) && binaryExists('/usr/sbin/sshd', ['-V']) && binaryExists('ssh-keygen', ['--help']);
 
 beforeEach(resetDatabase);
 
@@ -63,6 +77,141 @@ afterAll(async () => {
   await new Promise((resolve) => rsaServer.close(resolve));
   await new Promise((resolve) => ecServer.close(resolve));
   await rm(workDir, { recursive: true, force: true });
+});
+
+// Real sshd, real freshly generated RSA/Ed25519 host keys -- same "spin up
+// the real service" discipline as the TLS servers above. Skips gracefully
+// (never a hard failure) if openssh-server/ssh-keyscan aren't installed in
+// this environment, mirroring the engine adapters' OFFLINE-not-a-crash
+// pattern; SSH_TOOLING_AVAILABLE was computed synchronously above the
+// describe blocks below, where describe.skipIf needs it.
+let sshProcess;
+let sshPort;
+let sshWorkDir;
+
+beforeAll(async () => {
+  if (!SSH_TOOLING_AVAILABLE) return;
+
+  sshWorkDir = await mkdtemp(path.join(os.tmpdir(), 'bci-ssh-fixture-'));
+  await mkdir('/run/sshd', { recursive: true });
+
+  await execFileAsync('ssh-keygen', ['-t', 'rsa', '-b', '2048', '-f', path.join(sshWorkDir, 'hostkey_rsa'), '-N', '', '-q']);
+  await execFileAsync('ssh-keygen', ['-t', 'ed25519', '-f', path.join(sshWorkDir, 'hostkey_ed25519'), '-N', '', '-q']);
+
+  sshPort = 20000 + Math.floor(Math.random() * 10000);
+  const configPath = path.join(sshWorkDir, 'sshd_config');
+  await writeFile(
+    configPath,
+    [
+      `Port ${sshPort}`,
+      'ListenAddress 127.0.0.1',
+      `HostKey ${path.join(sshWorkDir, 'hostkey_rsa')}`,
+      `HostKey ${path.join(sshWorkDir, 'hostkey_ed25519')}`,
+      `PidFile ${path.join(sshWorkDir, 'sshd.pid')}`,
+      'StrictModes no',
+      'UsePAM no',
+      'PasswordAuthentication no',
+      'AuthorizedKeysFile /dev/null',
+    ].join('\n')
+  );
+
+  sshProcess = spawn('/usr/sbin/sshd', ['-f', configPath, '-D', '-e'], { stdio: 'ignore' });
+  await new Promise((resolve) => setTimeout(resolve, 1000)); // real process startup, not a mock
+}, 30_000);
+
+afterAll(async () => {
+  if (sshProcess) sshProcess.kill('SIGTERM');
+  if (sshWorkDir) await rm(sshWorkDir, { recursive: true, force: true });
+});
+
+describe.skipIf(!SSH_TOOLING_AVAILABLE)('probeSshHostKeys (real SSH host key retrieval)', () => {
+  it('discovers both the RSA and Ed25519 host keys with real, decoded key sizes', async () => {
+    const keys = await probeSshHostKeys('127.0.0.1', sshPort);
+    const rsa = keys.find((k) => k.keyType === 'rsa');
+    const ed = keys.find((k) => k.keyType === 'ed25519');
+    expect(rsa.keySizeBits).toBe(2048);
+    expect(ed.keySizeBits).toBe(255);
+  });
+
+  it('rejects when nothing is listening', async () => {
+    await expect(probeSshHostKeys('127.0.0.1', 1)).rejects.toThrow();
+  });
+});
+
+describe.skipIf(!SSH_TOOLING_AVAILABLE)('runCryptoDiscovery (SSH protocol, integration)', () => {
+  it('discovers and stores one crypto_findings row per host key, all marked quantum-vulnerable', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, '127.0.0.1', 'IP');
+
+    const result = await runCryptoDiscovery({ orgId, actorUserId: userId, target: '127.0.0.1', port: sshPort, protocol: 'SSH' });
+    expect(result.accepted).toBe(true);
+    expect(result.discovered).toBe(true);
+    expect(result.findings.length).toBe(2);
+    expect(result.findings.every((f) => f.source === 'SSH')).toBe(true);
+    expect(result.findings.every((f) => f.quantum_vulnerable === true)).toBe(true);
+  });
+
+  it('still enforces scope authorization for SSH discovery, same as TLS', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const result = await runCryptoDiscovery({ orgId, actorUserId: userId, target: '127.0.0.1', port: sshPort, protocol: 'SSH' });
+    expect(result.accepted).toBe(false);
+  });
+});
+
+describe('discoverJwtAlgorithm (no network, header inspection only)', () => {
+  function makeJwt(header) {
+    const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    return `${b64(header)}.${b64({ sub: 'x' })}.fakesignature`;
+  }
+
+  it('classifies an RS256 JWT as RSA, quantum-vulnerable', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const finding = await discoverJwtAlgorithm({ orgId, actorUserId: userId, token: makeJwt({ alg: 'RS256', typ: 'JWT' }) });
+    expect(finding.algorithm_id).toBe('RSA');
+    expect(finding.quantum_vulnerable).toBe(true);
+  });
+
+  it('classifies an HS256 JWT as HMAC, not Shor-vulnerable', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const finding = await discoverJwtAlgorithm({ orgId, actorUserId: userId, token: makeJwt({ alg: 'HS256' }) });
+    expect(finding.algorithm_id).toBe('HMAC');
+    expect(finding.quantum_vulnerable).toBe(false);
+  });
+
+  it('flags alg=none as unsigned, never as "safe"', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const finding = await discoverJwtAlgorithm({ orgId, actorUserId: userId, token: makeJwt({ alg: 'none' }) });
+    expect(finding.quantum_vulnerable).toBeNull();
+    expect(finding.classification_note).toMatch(/unsigned/);
+  });
+
+  it('rejects a malformed token', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await expect(discoverJwtAlgorithm({ orgId, actorUserId: userId, token: 'not-a-jwt' })).rejects.toThrow();
+  });
+});
+
+describe('discoverCodeSigningCertificate (no network, caller-supplied certificate)', () => {
+  it('classifies a real RSA code-signing-shaped certificate as RSA, quantum-vulnerable', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const pem = await readFile(path.join(workDir, 'rsa.crt'), 'utf8');
+    const finding = await discoverCodeSigningCertificate({ orgId, actorUserId: userId, pem, label: 'my-app.exe' });
+    expect(finding.algorithm_id).toBe('RSA');
+    expect(finding.target).toBe('my-app.exe');
+  });
+
+  it('rejects invalid certificate material', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await expect(discoverCodeSigningCertificate({ orgId, actorUserId: userId, pem: 'not a cert' })).rejects.toThrow();
+  });
 });
 
 describe('probeTlsEndpoint (real TLS handshake)', () => {

@@ -439,16 +439,33 @@ getting ahead of that migration. Every claim here is deliberately hedged the
 way the spec demands: no "encryption is broken today," no marketing names,
 a version-stamped classification table instead of a hardcoded judgment.
 
-- **Crypto Discovery** (`src/services/cryptoDiscovery.js`) — a real TLS
-  handshake (`node:tls` + `node:crypto`'s `X509Certificate`) against an
-  authorized target, never a mock parser. Goes through the exact same
-  `evaluateScopeAuthorization` gate as starting a scan (`scan:create`) —
-  there is no weaker authorization path for "just reading a certificate".
-  Extracts the real negotiated protocol/cipher and the certificate's actual
-  public-key algorithm, key size (or named curve), subject/issuer, and
-  validity window. Verified against two real local TLS servers stood up in
-  tests with freshly-generated RSA-2048 and P-256 certificates (`openssl
-  req -x509`) — not fixture data
+- **Crypto Discovery** (`src/services/cryptoDiscovery.js`) — four real
+  discovery paths, never a mock parser:
+  - **TLS** — a real handshake (`node:tls` + `node:crypto`'s
+    `X509Certificate`) extracting the negotiated protocol/cipher and the
+    certificate's actual public-key algorithm, key size (or curve),
+    subject/issuer, and validity window. Verified against real local TLS
+    servers with freshly-generated RSA-2048 and P-256 certificates
+    (`openssl req -x509`)
+  - **SSH** — real host keys via `ssh-keyscan` (OpenSSH), with the RSA/DSA
+    key's actual modulus length decoded from the SSH wire-format key blob
+    ourselves (`parseSshWireFields`/`mpintBitLength`) rather than just
+    reporting the algorithm name — verified against a real local `sshd`
+    with freshly-generated RSA-2048 and Ed25519 host keys
+  - **JWT** — decodes a caller-supplied token's header only (`alg`, never
+    verifies the signature) and classifies it; `HS*` is scored separately
+    from the RSA/EC/PQC table as HMAC (Grover-affected, not Shor-broken —
+    a materially different, much less severe threat model, never conflated
+    with "quantum-safe"); `alg=none` is flagged as **unsigned**, its own
+    distinct problem, never silently scored as safe or unknown
+  - **Code-signing certificates** — classifies an X.509 certificate the
+    caller already extracted from a signed artifact (PE/JAR/APK), reusing
+    the same `X509Certificate` parsing path as TLS
+  - TLS and SSH make a real active network connection, so both go through
+    the exact same `evaluateScopeAuthorization` gate as starting a scan
+    (`scan:create`) — no weaker path for "just reading a public key". JWT
+    and code-signing inspect material the caller already possesses, so
+    neither makes a network call and neither needs scope authorization
 - **PQC classification** (`src/quantum/pqcClassification.js`, data-driven,
   `PQC_CLASSIFICATION_VERSION` stamped onto every finding it produces) —
   RSA/DSA/ECDSA/ECDH/EdDSA/X25519 marked quantum-vulnerable (broken by
@@ -477,11 +494,24 @@ a version-stamped classification table instead of a hardcoded judgment.
   explicit "not a claim that the data is decryptable today" note, and its
   criticality-as-proxy basis stated plainly since BCI has no direct
   data-retention signal from a bare TLS probe
-- **Not yet built** (PLANNED): SSH/code-signing/JWT crypto discovery
-  (today: TLS only), and closer ANATOLIA-Q gateway convergence (today
-  ANATOLIA-Q and BCI intentionally run fully separate quantum stacks — BCI
-  never depends on ANATOLIA-Q's). A Quantum & PQC page now exists in
-  `bci/ui/` (see below) covering everything else already IMPLEMENTED above
+- **Quantum Compute Gateway convergence with ANATOLIA-Q** (IMPLEMENTED,
+  read-only today): the long-term target architecture has both
+  ANATOLIA-Q and BCI routing through one shared Quantum Compute Gateway.
+  Reaching that safely — with zero changes to ANATOLIA-Q's own quantum
+  code — turns out to need no new BCI code at all: a gateway session
+  (`POST /api/v1/gateway/session`, M14) already carries normal role
+  permissions, so ANATOLIA-Q can already call `GET /api/v1/quantum/*`
+  through the exact same trusted session this repo's gateway integration
+  already tests, rather than a second parallel trust mechanism. Verified
+  directly: a gateway-issued session reading BCI's provider health and
+  quantum policy (`test/gateway.test.js`). ANATOLIA-Q does not yet call
+  this in its own code — that adoption, and any two-way flow (BCI
+  submitting a workload through ANATOLIA-Q's quantum stack) remain
+  PLANNED, deliberately outside this pass's scope given the explicit
+  instruction to never risk ANATOLIA-Q's own working quantum behavior
+- A Quantum & PQC page exists in `bci/ui/` (see below) covering
+  everything above — including a protocol selector (TLS/SSH) and a JWT
+  algorithm decoder — IMPLEMENTED end to end
 
 20 new tests (classification table incl. fail-closed/unknown-algorithm
 cases, real-TLS-handshake discovery against two live local servers, CBOM,

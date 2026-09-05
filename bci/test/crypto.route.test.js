@@ -48,6 +48,27 @@ describe('crypto API', () => {
     expect(res.body.error).toBe('scope_denied');
   });
 
+  it('discovers a JWT signing algorithm with no scope needed (no network connection made)', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const token = signAccessToken({ userId, orgId });
+    const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const jwt = `${b64({ alg: 'RS256' })}.${b64({ sub: 'x' })}.sig`;
+
+    const res = await request(app).post('/api/v1/crypto/discover/jwt').set('Authorization', `Bearer ${token}`).send({ token: jwt });
+    expect(res.status).toBe(201);
+    expect(res.body.finding.algorithm_id).toBe('RSA');
+  });
+
+  it('rejects a malformed JWT with 400, not a 500', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const token = signAccessToken({ userId, orgId });
+
+    const res = await request(app).post('/api/v1/crypto/discover/jwt').set('Authorization', `Bearer ${token}`).send({ token: 'garbage' });
+    expect(res.status).toBe(400);
+  });
+
   it("org A cannot read org B's crypto inventory", async () => {
     const orgA = await createOrg('A', 'org-a');
     const orgB = await createOrg('B', 'org-b');

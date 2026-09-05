@@ -80,7 +80,8 @@ export const api = {
   listQuantumBenchmarks: () => request('/quantum/benchmarks'),
   listQuantumJobs: () => request('/quantum/jobs'),
 
-  discoverCrypto: (target, port) => request('/crypto/discover', { method: 'POST', body: port ? { target, port } : { target } }),
+  discoverCrypto: (target, port, protocol = 'TLS') => request('/crypto/discover', { method: 'POST', body: { target, protocol, ...(port ? { port } : {}) } }),
+  discoverJwtCrypto: (token, label) => request('/crypto/discover/jwt', { method: 'POST', body: { token, ...(label ? { label } : {}) } }),
   listCryptoInventory: () => request('/crypto/inventory'),
   getCbom: () => request('/crypto/cbom'),
   getPqcReadiness: () => request('/crypto/readiness'),

@@ -103,6 +103,29 @@ describe('POST /api/v1/gateway/session', () => {
     expect(loginAttempt.status).toBe(401);
   });
 
+  // Quantum Compute Gateway convergence (spec section 32): the long-term
+  // target has ANATOLIA-Q and BCI sharing one quantum gateway. Reusing
+  // BCI's REST API over the same trusted gateway session this file already
+  // tests -- rather than a second, parallel trust mechanism -- is the safe
+  // way to get there with zero changes to ANATOLIA-Q's own quantum code.
+  // No new BCI code was needed for this: a gateway-issued session already
+  // carries normal role permissions (rule:view for a viewer/analyst), so it
+  // already reaches these endpoints today.
+  it('a gateway-issued session (as ANATOLIA-Q would hold) can read BCI Quantum Compute Gateway provider health and policy', async () => {
+    // Real provider health checks spawn Python subprocesses (qiskit_aer
+    // import) -- slower than the default 5s test timeout, not flaky.
+    const token = signGatewayToken({ sub: 'anatolia-quantum-caller', email: 'anatolia-quantum-caller@x.com', role: 'analyst' });
+    const session = await request(app).post('/api/v1/gateway/session').set('Authorization', `Bearer ${token}`);
+    expect(session.status).toBe(200);
+
+    const providers = await request(app).get('/api/v1/quantum/providers').set('Authorization', `Bearer ${session.body.token}`);
+    expect(providers.status).toBe(200);
+    expect(providers.body.providers.map((p) => p.id).sort()).toEqual(['classical', 'ibm_quantum', 'quantum_inspired', 'quantum_simulator']);
+
+    const policy = await request(app).get('/api/v1/quantum/policy').set('Authorization', `Bearer ${session.body.token}`);
+    expect(policy.status).toBe(200);
+  }, 15_000);
+
   it('reuses the same BCI org/user across repeat gateway sessions for the same external identity', async () => {
     const token = signGatewayToken({ sub: 'anatolia-user-2', email: 'anatolia-user-2@x.com', role: 'viewer' });
 

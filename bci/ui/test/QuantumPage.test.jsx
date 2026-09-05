@@ -12,6 +12,7 @@ const mockApi = {
   getCbom: vi.fn(),
   runRemediationOptimize: vi.fn(),
   discoverCrypto: vi.fn(),
+  discoverJwtCrypto: vi.fn(),
   setQuantumPolicy: vi.fn(),
 };
 vi.mock('../src/api.js', () => ({ api: mockApi }));

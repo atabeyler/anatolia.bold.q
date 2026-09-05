@@ -21,6 +21,19 @@ describe('classifyKeyType', () => {
     expect(result.note).toMatch(/unrecognized/);
   });
 
+  it('classifies HMAC as not Shor-vulnerable, distinct from the RSA/EC quantum-vulnerable table', () => {
+    const result = classifyKeyType('hmac');
+    expect(result.algorithmId).toBe('HMAC');
+    expect(result.quantumVulnerable).toBe(false);
+  });
+
+  it('flags jwt-none as unsigned, never as safe or unknown-but-maybe-vulnerable', () => {
+    const result = classifyKeyType('jwt-none');
+    expect(result.algorithmId).toBe('NONE');
+    expect(result.quantumVulnerable).toBeNull();
+    expect(result.note).toMatch(/unsigned/);
+  });
+
   it('reports UNKNOWN, not a guess, when no key type was observed at all', () => {
     const result = classifyKeyType(null);
     expect(result.algorithmId).toBe('UNKNOWN');

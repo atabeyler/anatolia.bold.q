@@ -28,6 +28,7 @@ export const config = {
     semgrep: process.env.BCI_SEMGREP_BIN || 'semgrep',
     nuclei: process.env.BCI_NUCLEI_BIN || 'nuclei',
     naabu: process.env.BCI_NAABU_BIN || 'naabu',
+    sshKeyscan: process.env.BCI_SSH_KEYSCAN_BIN || 'ssh-keyscan',
   },
   // AI Decision Support (spec section 41-43): AI_DISABLED is the safe
   // default -- BCI's own security analysis never depends on it being
