@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { query } from '../src/db/client.js';
 import { resetDatabase, createOrg, createUser } from './helpers/db.js';
-import { enqueueScan, claimNextJob } from '../src/services/jobQueue.js';
+import { enqueueScan, claimNextJob, completeJob } from '../src/services/jobQueue.js';
 import { runAnalysisPipeline } from '../src/services/analysisPipeline.js';
 import { getAdapter } from '../src/engines/registry.js';
 
@@ -76,6 +76,48 @@ describe('runAnalysisPipeline — REPOSITORY (real clone + real engines, skips i
 
     const { rows: findings } = await query('SELECT * FROM findings WHERE id = ANY($1)', [result.findingIds]);
     expect(findings.every((f) => f.risk_score !== null)).toBe(true);
+  }, 60_000);
+});
+
+describe('runAnalysisPipeline — one engine unavailable never masks as job-level success (spec section 2)', () => {
+  const trivyAdapter = getAdapter('trivy');
+  const originalTrivyHealthCheck = trivyAdapter.healthCheck;
+  afterEach(() => {
+    trivyAdapter.healthCheck = originalTrivyHealthCheck;
+  });
+
+  it('records trivy as SKIPPED, other engines as COMPLETED, and the job still finishes (never a silent full-coverage lie)', async () => {
+    if (!(await ifHealthy('osv-scanner')) && !(await ifHealthy('semgrep'))) return;
+
+    trivyAdapter.healthCheck = async () => ({ status: 'OFFLINE', detail: 'binary not found (simulated)' });
+
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, repoDir, 'REPOSITORY');
+
+    const { job, accepted } = await enqueueScan({ orgId, actorUserId: userId, target: repoDir, requestedClass: 'PASSIVE' });
+    expect(accepted).toBe(true);
+
+    const claimed = await claimNextJob('test-worker-skip');
+    const result = await runAnalysisPipeline(claimed);
+
+    expect(result.enginesSkipped.some((s) => s.engineId === 'trivy')).toBe(true);
+
+    const { rows: runs } = await query('SELECT engine_id, status FROM scan_job_engine_runs WHERE job_id = $1', [job.id]);
+    const trivyRun = runs.find((r) => r.engine_id === 'trivy');
+    expect(trivyRun.status).toBe('SKIPPED');
+    // A skipped engine is a real, visible fact -- never silently absorbed
+    // into a run that then looks like every engine succeeded.
+    expect(runs.some((r) => r.engine_id !== 'trivy' && r.status === 'COMPLETED')).toBe(true);
+
+    // Job-level status (set by worker.js's completeJob(), mirrored here) is
+    // honestly about pipeline orchestration completing, not "every engine
+    // succeeded" -- that distinction lives in scan_job_engine_runs above
+    // and in the Coverage Score, never hidden by collapsing both into one
+    // flag.
+    await completeJob(job.id, result);
+    const { rows: jobRows } = await query('SELECT status FROM scan_jobs WHERE id = $1', [job.id]);
+    expect(jobRows[0].status).toBe('COMPLETED');
   }, 60_000);
 });
 
