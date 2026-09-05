@@ -4,25 +4,29 @@
 # BCI Core. Installs the M5 engine adapters' binaries using each project's
 # own documented method.
 #
-# NOTE: this Dockerfile was written and reviewed but its build could not be
-# verified end-to-end in the sandbox this was developed in -- that sandbox's
-# network policy blocks the GitHub API calls a couple of these install steps
-# make (`nuclei -update-templates` hit the same block; ordinary `go install`
-# and `pip install` worked fine). Build and smoke-test this image before
-# relying on it.
+# Pinned, not @latest: same class of failure ci.yml's bci job hit and fixed
+# for trivy -- nuclei/v3@latest resolves to a version whose go.mod requires
+# go >= 1.26, and this base image's GOTOOLCHAIN is "local" (no automatic
+# toolchain download), so an unpinned install fails outright with "requires
+# go >= 1.26 (running go 1.24.x; GOTOOLCHAIN=local)". Reproduced on a real
+# Northflank build of this exact Dockerfile. Pinning to the same versions
+# already verified in .github/workflows/ci.yml's bci job avoids that
+# entirely; GOEXPERIMENT=jsonv2 stays scoped to just the trivy line for the
+# same reason documented there (osv-scanner/naabu/nuclei's resolved
+# toolchain doesn't recognize "jsonv2" as a valid experiment name).
 FROM golang:1.24-bookworm AS engines
 
 # osv-scanner, nuclei, naabu: all Apache-2.0/MIT, official `go install` path
 # per each project's own README.
 RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN go install github.com/google/osv-scanner/cmd/osv-scanner@latest \
-    && go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest \
-    && go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+RUN go install github.com/google/osv-scanner/cmd/osv-scanner@v1.9.2 \
+    && go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.11.1 \
+    && go install github.com/projectdiscovery/naabu/v2/cmd/naabu@v2.6.1
 
-# Trivy's go.mod currently requires the jsonv2 stdlib experiment; see
+# Trivy's go.mod requires the jsonv2 stdlib experiment; see
 # aquasecurity/trivy's own install docs for the current recommended method.
-RUN GOEXPERIMENT=jsonv2 go install github.com/aquasecurity/trivy/cmd/trivy@latest
+RUN GOEXPERIMENT=jsonv2 go install github.com/aquasecurity/trivy/cmd/trivy@v0.74.0
 
 FROM node:22-bookworm-slim
 
