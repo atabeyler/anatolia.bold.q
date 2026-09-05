@@ -4,17 +4,19 @@
 # BCI Core. Installs the M5 engine adapters' binaries using each project's
 # own documented method.
 #
-# Pinned, not @latest: same class of failure ci.yml's bci job hit and fixed
-# for trivy -- nuclei/v3@latest resolves to a version whose go.mod requires
-# go >= 1.26, and this base image's GOTOOLCHAIN is "local" (no automatic
-# toolchain download), so an unpinned install fails outright with "requires
-# go >= 1.26 (running go 1.24.x; GOTOOLCHAIN=local)". Reproduced on a real
-# Northflank build of this exact Dockerfile. Pinning to the same versions
-# already verified in .github/workflows/ci.yml's bci job avoids that
-# entirely; GOEXPERIMENT=jsonv2 stays scoped to just the trivy line for the
-# same reason documented there (osv-scanner/naabu/nuclei's resolved
-# toolchain doesn't recognize "jsonv2" as a valid experiment name).
+# Pinned, not @latest: nuclei/v3@v3.11.1's go.mod requires go >= 1.26, newer
+# than this image's go 1.24. GitHub Actions' setup-go defaults GOTOOLCHAIN
+# to "auto" (ci.yml's bci job relies on exactly this to transparently fetch
+# a newer toolchain for trivy), but the plain golang:1.24-bookworm image
+# defaults it to "local" -- no automatic toolchain download -- so the same
+# install fails outright here with "requires go >= 1.26 (running go 1.24.x;
+# GOTOOLCHAIN=local)" even with the version pinned. Reproduced on a real
+# Northflank build of this exact Dockerfile. Setting GOTOOLCHAIN=auto
+# restores the GitHub-Actions-equivalent behavior: go transparently
+# downloads and uses go1.26.x for this one install step, same as ci.yml's
+# job already does for trivy.
 FROM golang:1.24-bookworm AS engines
+ENV GOTOOLCHAIN=auto
 
 # osv-scanner, nuclei, naabu: all Apache-2.0/MIT, official `go install` path
 # per each project's own README.
