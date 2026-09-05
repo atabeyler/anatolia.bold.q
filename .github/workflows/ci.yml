@@ -112,12 +112,24 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install scanner engines (real binaries, not mocks)
+        # Pinned, not @latest: trivy's go.mod now requires go >= 1.26.3, which
+        # triggers Go's automatic toolchain download (GOTOOLCHAIN=auto) --
+        # that auto-downloaded golang.org/toolchain@go1.26.8 build does not
+        # ship encoding/json/v2 or encoding/json/jsontext (Go's newer JSON
+        # API, still gated behind GOEXPERIMENT=jsonv2) enabled by default,
+        # which trivy's own dependency tree now imports, so an unpinned
+        # `@latest` install fails outright. Reproduced and fixed locally:
+        # GOEXPERIMENT=jsonv2 scoped to just the trivy install (the other
+        # three resolve an older toolchain that doesn't even recognize
+        # "jsonv2" as a valid experiment name, so it can't be set globally
+        # for this whole step). Pinning all four also avoids the exact
+        # class of "worked yesterday, breaks today" failure this was.
         run: |
           set -euo pipefail
-          go install github.com/aquasecurity/trivy/cmd/trivy@latest
-          go install github.com/google/osv-scanner/cmd/osv-scanner@latest
-          go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+          GOEXPERIMENT=jsonv2 go install github.com/aquasecurity/trivy/cmd/trivy@v0.74.0
+          go install github.com/google/osv-scanner/cmd/osv-scanner@v1.9.2
+          go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.11.1
+          go install github.com/projectdiscovery/naabu/v2/cmd/naabu@v2.6.1
           pip install semgrep
           echo "$HOME/go/bin" >> "$GITHUB_PATH"
       - name: Install OpenSSH server/client (for real SSH crypto discovery tests)
