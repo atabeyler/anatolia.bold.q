@@ -20,6 +20,10 @@ vi.mock('../services/api.js', () => ({
 // delegates to it wholesale).
 vi.mock('./ConsultChat.jsx', () => ({ default: () => <div>ConsultChat stub</div> }));
 
+// CyberAnalysisWizard (BCI) has its own test coverage (CyberAnalysisWizard.
+// test.jsx) -- stub it here too, same reasoning as ConsultChat above.
+vi.mock('./CyberAnalysisWizard.jsx', () => ({ default: () => <div>CyberAnalysisWizard stub</div> }));
+
 function renderView(props = {}) {
   return render(<LangProvider><AnalysisView category={null} onCategoryChange={vi.fn()} {...props} /></LangProvider>);
 }
@@ -52,6 +56,15 @@ describe('AnalysisView', () => {
   it('delegates to ConsultChat for the "danisma" category', () => {
     renderView({ category: 'danisma' });
     expect(screen.getByText('ConsultChat stub')).toBeInTheDocument();
+  });
+
+  it('delegates to the dedicated CyberAnalysisWizard for "siber", never the generic wizard, and never opens a new tab/window', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderView({ category: 'siber' });
+    expect(screen.getByText('CyberAnalysisWizard stub')).toBeInTheDocument();
+    expect(screen.queryByText('Yeni Analiz Başlat')).not.toBeInTheDocument();
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
   });
 
   it('opens the new-analysis wizard for a selected category, with the generate button disabled until a prompt is entered', () => {
