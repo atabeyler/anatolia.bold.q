@@ -7,6 +7,7 @@
  * never the names of the third-party scanners BCI orchestrates underneath.
  */
 import express from 'express';
+import { URLSearchParams } from 'node:url';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole, ROLES } from '../lib/rbac.js';
 import { callBci, isBciConfigured } from '../services/bciClient.js';
