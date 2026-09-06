@@ -1,8 +1,9 @@
 import { pool, query } from '../db/client.js';
 import { evaluateScopeAuthorization } from './policyEngine.js';
 import { recordAuditEvent } from './audit.js';
-import { planEngines } from './analysisPlanner.js';
+import { availableCapabilitiesForTargetType, planEngines } from './analysisPlanner.js';
 import { getEngineCatalog } from '../engines/registry.js';
+import { getCapability } from '../engines/capabilities.js';
 import { resolveExecutionMode } from '../quantum/executionPolicy.js';
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -15,25 +16,55 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 // (skip an engine it doesn't want run) but can never add an incompatible
 // or unhealthy one. Omitted entirely (the pre-existing quick-scan path),
 // it defaults to the full recommended plan, identical to today's behavior.
-export async function enqueueScan({ orgId, actorUserId, target, requestedClass, selectedEngineIds, selectedComputeMode }) {
+export async function enqueueScan({ orgId, actorUserId, target, requestedClass, selectedEngineIds, selectedCapabilities, selectedComputeMode }) {
   const { targetType } = await evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass });
 
+  const catalog = await getEngineCatalog();
+  const healthyIds = new Set(catalog.filter((engine) => engine.status === 'HEALTHY').map((engine) => engine.id));
   const recommended = planEngines(targetType, requestedClass);
-  const recommendedIds = recommended.map((p) => p.engineId);
+  const recommendedIds = recommended.map((plan) => plan.engineId);
+  const recommendedCapabilityIds = [...new Set(recommended.flatMap((plan) => plan.capabilities))];
+  const availableCapabilityIds = availableCapabilitiesForTargetType(targetType, requestedClass, catalog)
+    .filter((capability) => capability.available)
+    .map((capability) => capability.id);
 
-  let selected = recommendedIds;
+  if (!recommended.some((plan) => healthyIds.has(plan.engineId))) {
+    return { accepted: false, decision: { decision: 'DENY', reason: 'no_executable_engine', targetType, requestedClass } };
+  }
+
+  let selectedCapabilityIds = availableCapabilityIds;
+  if (selectedCapabilities !== undefined) {
+    if (!Array.isArray(selectedCapabilities) || selectedCapabilities.length === 0) {
+      return { accepted: false, decision: { decision: 'DENY', reason: 'at_least_one_capability_required' } };
+    }
+    selectedCapabilityIds = [...new Set(selectedCapabilities.map((id) => String(id).toUpperCase()))];
+    const unknown = selectedCapabilityIds.filter((id) => !getCapability(id));
+    if (unknown.length > 0) return { accepted: false, decision: { decision: 'DENY', reason: 'unknown_capability', invalidCapabilities: unknown } };
+    const unavailable = selectedCapabilityIds.filter((id) => !availableCapabilityIds.includes(id));
+    if (unavailable.length > 0) return { accepted: false, decision: { decision: 'DENY', reason: 'capability_unavailable', unavailableCapabilities: unavailable } };
+  }
+
+  const compatibleCapabilityPlan = planEngines(targetType, requestedClass, selectedCapabilityIds);
+  const capabilityPlan = compatibleCapabilityPlan.filter((plan) => healthyIds.has(plan.engineId));
+  const capabilityPlanIds = capabilityPlan.map((plan) => plan.engineId);
+
+  let selected = capabilityPlanIds;
   if (selectedEngineIds !== undefined) {
     if (!Array.isArray(selectedEngineIds) || selectedEngineIds.length === 0) {
       return { accepted: false, decision: { decision: 'DENY', reason: 'at_least_one_engine_required' } };
     }
-    const invalid = selectedEngineIds.filter((id) => !recommendedIds.includes(id));
+    const compatibleCapabilityPlanIds = compatibleCapabilityPlan.map((plan) => plan.engineId);
+    const invalid = selectedEngineIds.filter((id) => !compatibleCapabilityPlanIds.includes(id));
     if (invalid.length > 0) {
       return { accepted: false, decision: { decision: 'DENY', reason: 'engine_not_compatible_or_recommended', invalidEngineIds: invalid } };
     }
-    const catalog = await getEngineCatalog();
     const unhealthy = selectedEngineIds.filter((id) => catalog.find((e) => e.id === id)?.status !== 'HEALTHY');
     if (unhealthy.length > 0) {
       return { accepted: false, decision: { decision: 'DENY', reason: 'engine_not_healthy', unhealthyEngineIds: unhealthy } };
+    }
+    const uncovered = selectedCapabilityIds.filter((capabilityId) => !selectedEngineIds.some((engineId) => compatibleCapabilityPlan.find((plan) => plan.engineId === engineId)?.capabilities.includes(capabilityId)));
+    if (uncovered.length > 0) {
+      return { accepted: false, decision: { decision: 'DENY', reason: 'selected_engines_do_not_cover_capabilities', uncoveredCapabilities: uncovered } };
     }
     selected = selectedEngineIds;
   }
@@ -51,10 +82,12 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass, 
   const { rows } = await query(
     `INSERT INTO scan_jobs (
        org_id, requested_by, target, requested_class, scope_id, target_type,
-       recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     RETURNING id, status, created_at, recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode`,
-    [orgId, actorUserId, target, requestedClass, null, targetType, recommendedIds, selected, recommendedComputeMode, selectedComputeMode ?? null]
+       recommended_engine_ids, selected_engine_ids, recommended_capability_ids, selected_capability_ids,
+       recommended_compute_mode, selected_compute_mode
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id, status, created_at, recommended_engine_ids, selected_engine_ids,
+       recommended_capability_ids, selected_capability_ids, recommended_compute_mode, selected_compute_mode`,
+    [orgId, actorUserId, target, requestedClass, null, targetType, recommendedIds, selected, recommendedCapabilityIds, selectedCapabilityIds, recommendedComputeMode, selectedComputeMode ?? null]
   );
 
   await recordAuditEvent({
@@ -64,7 +97,7 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass, 
     targetType: 'scan_job',
     targetId: rows[0].id,
     result: 'SUCCESS',
-    metadata: { target, requestedClass, recommendedEngineIds: recommendedIds, selectedEngineIds: selected, recommendedComputeMode, selectedComputeMode: selectedComputeMode ?? null },
+    metadata: { target, requestedClass, recommendedEngineIds: recommendedIds, selectedEngineIds: selected, recommendedCapabilities: recommendedCapabilityIds, selectedCapabilities: selectedCapabilityIds, recommendedComputeMode, selectedComputeMode: selectedComputeMode ?? null },
   });
 
   return { accepted: true, job: rows[0] };

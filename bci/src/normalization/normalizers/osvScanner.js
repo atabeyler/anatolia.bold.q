@@ -6,6 +6,7 @@ export function normalizeOsvScanner(raw) {
         const cvssEntry = (vuln.severity || []).find((s) => s.type === 'CVSS_V3') || (vuln.severity || [])[0];
         observations.push({
           category: 'SCA',
+          capabilityId: 'SCA',
           ruleId: vuln.id,
           title: vuln.summary || vuln.id,
           description: vuln.details,

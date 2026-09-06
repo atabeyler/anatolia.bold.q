@@ -12,19 +12,12 @@
 // this suite ran against a genuinely fresh database. Seeding all five
 // engines here, once, up front, makes the guarantee explicit and
 // order-independent instead of accidental.
-const KNOWN_ENGINES = [
-  { id: 'trivy', intrusiveness: 'PASSIVE', license: 'Apache-2.0' },
-  { id: 'osv-scanner', intrusiveness: 'PASSIVE', license: 'Apache-2.0' },
-  { id: 'semgrep', intrusiveness: 'PASSIVE', license: 'LGPL-2.1' },
-  { id: 'nuclei', intrusiveness: 'SAFE_ACTIVE', license: 'MIT' },
-  { id: 'naabu', intrusiveness: 'SAFE_ACTIVE', license: 'MIT' },
-];
-
 export async function setup() {
   const { runMigrations } = await import('../src/db/migrate.js');
   const { query, pool } = await import('../src/db/client.js');
+  const { listAdapters } = await import('../src/engines/registry.js');
   await runMigrations();
-  for (const engine of KNOWN_ENGINES) {
+  for (const engine of listAdapters()) {
     await query(
       `INSERT INTO engine_registry (id, name, intrusiveness, license) VALUES ($1, $1, $2, $3)
        ON CONFLICT (id) DO NOTHING`,

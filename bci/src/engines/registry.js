@@ -11,8 +11,13 @@ import { intrusiveValidationAdapter } from './adapters/intrusiveValidation.js';
 import { availabilityProbeAdapter } from './adapters/availabilityProbe.js';
 
 const adapters = new Map();
-function register(adapter) { assertValidAdapter(adapter); adapters.set(adapter.id, adapter); }
-[trivyAdapter, osvScannerAdapter, semgrepAdapter, nucleiAdapter, naabuAdapter, httpFuzzAdapter, intrusiveValidationAdapter, availabilityProbeAdapter].forEach(register);
+export function registerAdapter(adapter) {
+  assertValidAdapter(adapter);
+  adapters.set(adapter.id, adapter);
+  return adapter;
+}
+export function unregisterAdapter(id) { return adapters.delete(id); }
+[trivyAdapter, osvScannerAdapter, semgrepAdapter, nucleiAdapter, naabuAdapter, httpFuzzAdapter, intrusiveValidationAdapter, availabilityProbeAdapter].forEach(registerAdapter);
 export function getAdapter(id) { return adapters.get(id) || null; }
 export function listAdapters() { return [...adapters.values()]; }
 export function getCapabilityCatalog() { return listCapabilities(); }

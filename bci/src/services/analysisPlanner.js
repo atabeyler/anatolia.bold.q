@@ -1,43 +1,59 @@
-import { getAdapter } from '../engines/registry.js';
+import { listAdapters } from '../engines/registry.js';
 import { getCapability, listCapabilities } from '../engines/capabilities.js';
+import { intrusivenessAllows } from '../engines/EngineAdapter.js';
 
-const INTRUSIVENESS_ORDER = ['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED'];
-function allowedUpTo(requestedClass) {
-  const idx = INTRUSIVENESS_ORDER.indexOf(requestedClass);
-  return new Set(INTRUSIVENESS_ORDER.slice(0, idx + 1));
+function normalizeCapabilities(requestedCapabilities) {
+  if (!requestedCapabilities) return [];
+  return (Array.isArray(requestedCapabilities) ? requestedCapabilities : [requestedCapabilities])
+    .map((id) => String(id).toUpperCase());
 }
-const WEB_ANALYSIS = [
-  { engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' },
-  { engineId: 'http-fuzz', intrusiveness: 'SAFE_ACTIVE', mode: 'url' },
-  { engineId: 'intrusive-validation', intrusiveness: 'RESTRICTED', mode: 'url' },
-  { engineId: 'availability-probe', intrusiveness: 'RESTRICTED', mode: 'url' },
-];
-const ENGINE_PLAN_BY_TARGET_TYPE = {
-  REPOSITORY: [
-    { engineId: 'semgrep', intrusiveness: 'PASSIVE', mode: 'fs' },
-    { engineId: 'osv-scanner', intrusiveness: 'PASSIVE', mode: 'fs' },
-    { engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'fs' },
-  ],
-  CONTAINER: [{ engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'image' }],
-  DOMAIN: WEB_ANALYSIS, SUBDOMAIN: WEB_ANALYSIS, URL: WEB_ANALYSIS, API: WEB_ANALYSIS,
-  IP: [{ engineId: 'naabu', intrusiveness: 'SAFE_ACTIVE', mode: 'host' }],
-  CIDR: [{ engineId: 'naabu', intrusiveness: 'SAFE_ACTIVE', mode: 'host' }],
-  CLOUD_ACCOUNT: [], KUBERNETES_CLUSTER: [],
-};
-export function planEngines(targetType, requestedClass, requestedCapability = null) {
-  const candidates = ENGINE_PLAN_BY_TARGET_TYPE[targetType] || [];
-  const allowed = allowedUpTo(requestedClass);
-  let planned = candidates.filter((c) => allowed.has(c.intrusiveness));
-  if (requestedCapability) {
-    const capability = String(requestedCapability).toUpperCase();
-    if (!getCapability(capability)) return [];
-    planned = planned.filter((c) => getAdapter(c.engineId)?.capabilities?.includes(capability));
-  }
-  return planned;
+
+function executionMode(adapter, targetType) {
+  if (targetType === 'CONTAINER') return 'image';
+  if (targetType === 'REPOSITORY') return 'fs';
+  if (targetType === 'IP' || targetType === 'CIDR') return 'host';
+  return 'url';
 }
-export function candidateEnginesForTargetType(targetType) { return ENGINE_PLAN_BY_TARGET_TYPE[targetType] || []; }
-export function availableCapabilitiesForTargetType(targetType) {
-  const ids = new Set();
-  for (const candidate of candidateEnginesForTargetType(targetType)) for (const capability of getAdapter(candidate.engineId)?.capabilities || []) ids.add(capability);
-  return listCapabilities().map((capability) => ({ ...capability, supported: ids.has(capability.id) }));
+
+function capabilitiesForTarget(adapter, targetType) {
+  return adapter.capabilitiesByTargetType?.[targetType] ?? adapter.capabilities;
+}
+
+export function planEngines(targetType, requestedClass, requestedCapabilities = null) {
+  const selected = normalizeCapabilities(requestedCapabilities);
+  if (selected.some((id) => !getCapability(id))) return [];
+  return listAdapters()
+    .filter((adapter) => adapter.supportedTargetTypes.includes(targetType))
+    .filter((adapter) => intrusivenessAllows(requestedClass, adapter.intrusiveness))
+    .filter((adapter) => selected.length === 0 || capabilitiesForTarget(adapter, targetType).some((id) => selected.includes(id)))
+    .map((adapter) => ({
+      engineId: adapter.id,
+      intrusiveness: adapter.intrusiveness,
+      mode: executionMode(adapter, targetType),
+      capabilities: selected.length === 0 ? capabilitiesForTarget(adapter, targetType) : capabilitiesForTarget(adapter, targetType).filter((id) => selected.includes(id)),
+    }));
+}
+
+export function candidateEnginesForTargetType(targetType) {
+  return listAdapters()
+    .filter((adapter) => adapter.supportedTargetTypes.includes(targetType))
+    .map((adapter) => ({ engineId: adapter.id, intrusiveness: adapter.intrusiveness, mode: executionMode(adapter, targetType), capabilities: capabilitiesForTarget(adapter, targetType) }));
+}
+
+export function availableCapabilitiesForTargetType(targetType, requestedClass = 'RESTRICTED', engineCatalog = null) {
+  const candidates = candidateEnginesForTargetType(targetType);
+  return listCapabilities().map((capability) => {
+    const supporting = candidates.filter((candidate) => candidate.capabilities.includes(capability.id));
+    const compatible = supporting.filter((candidate) => intrusivenessAllows(requestedClass, candidate.intrusiveness));
+    const executable = engineCatalog
+      ? compatible.filter((candidate) => engineCatalog.find((engine) => engine.id === candidate.engineId)?.status === 'HEALTHY')
+      : compatible;
+    return {
+      ...capability,
+      supported: supporting.length > 0,
+      available: executable.length > 0,
+      engineIds: supporting.map((candidate) => candidate.engineId),
+      executableEngineIds: executable.map((candidate) => candidate.engineId),
+    };
+  });
 }

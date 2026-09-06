@@ -6,8 +6,9 @@ const BIN = config.engineBins.nuclei;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLED_TEMPLATES_DIR = path.join(__dirname, '..', 'templates', 'nuclei');
 export const nucleiAdapter = {
-  id: 'nuclei', name: 'Nuclei', license: 'MIT', intrusiveness: 'SAFE_ACTIVE', capabilities: ['SAFE_ACTIVE'],
-  supportedTargetTypes: ['WEB_APP', 'API', 'HOST'], supportedAnalysisTypes: ['WEB', 'API'],
+  id: 'nuclei', name: 'Nuclei', license: 'MIT', intrusiveness: 'SAFE_ACTIVE', capabilities: ['WEB', 'API'],
+  supportedTargetTypes: ['DOMAIN', 'SUBDOMAIN', 'URL', 'API'], supportedAnalysisTypes: ['WEB', 'API'],
+  capabilitiesByTargetType: { DOMAIN: ['WEB'], SUBDOMAIN: ['WEB'], URL: ['WEB'], API: ['API'] },
   async healthCheck() { try { const { stdout, stderr } = await runBinary(BIN, ['-version'], { timeoutMs: 15_000 }); const version = (stdout + stderr).match(/Nuclei Engine Version:\s*(\S+)/)?.[1] || 'unknown'; return { status: 'HEALTHY', version }; } catch (err) { return { status: 'OFFLINE', detail: String(err.message || err) }; } },
   async execute({ target, timeoutMs = 120_000, rateLimit = 10, templatesDir = BUNDLED_TEMPLATES_DIR, templateId }) {
     const args = ['-target', target, '-templates', templatesDir, '-jsonl', '-silent', '-etags', 'dos,fuzz,intrusive', '-rate-limit', String(rateLimit), '-no-interactsh', '-disable-update-check'];

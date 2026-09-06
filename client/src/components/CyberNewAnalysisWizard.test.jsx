@@ -69,7 +69,8 @@ describe('CyberNewAnalysisWizard', () => {
   it('blocks proceeding past step 2 when the real engine plan has zero executable engines (DOMAIN + PASSIVE)', async () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
     cyberAnalysisApi.getEnginePlan.mockResolvedValue({
-      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: false }],
+      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: false, capabilities: ['WEB'] }],
+      capabilities: [],
       hasExecutableEngine: false,
     });
     renderWizard();
@@ -80,7 +81,7 @@ describe('CyberNewAnalysisWizard', () => {
     await waitFor(() => expect(cyberAnalysisApi.createAsset).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
-    await waitFor(() => expect(cyberAnalysisApi.getEnginePlan).toHaveBeenCalledWith('DOMAIN', 'PASSIVE'));
+    await waitFor(() => expect(cyberAnalysisApi.getEnginePlan).toHaveBeenCalledWith('DOMAIN', 'PASSIVE', []));
     await waitFor(() => expect(screen.getByText(/No executable analysis engine/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
   });
@@ -88,7 +89,8 @@ describe('CyberNewAnalysisWizard', () => {
   it('lets the user proceed once a real, healthy, recommended engine exists for the chosen class', async () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
     cyberAnalysisApi.getEnginePlan.mockResolvedValue({
-      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true }],
+      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true, capabilities: ['WEB'] }],
+      capabilities: [{ id: 'WEB', name: 'Web Security Analysis', available: true }],
       hasExecutableEngine: true,
     });
     renderWizard();
@@ -105,7 +107,8 @@ describe('CyberNewAnalysisWizard', () => {
   it('never lets the user go back to step 1 once a scan job has actually been created (immutable plan)', async () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
     cyberAnalysisApi.getEnginePlan.mockResolvedValue({
-      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true }],
+      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true, capabilities: ['WEB'] }],
+      capabilities: [{ id: 'WEB', name: 'Web Security Analysis', available: true }],
       hasExecutableEngine: true,
     });
     cyberAnalysisApi.createScan.mockResolvedValue({ job: { id: 'job-1', status: 'QUEUED', target: 'example.com' } });
@@ -124,7 +127,7 @@ describe('CyberNewAnalysisWizard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Start Analysis/i }));
     await waitFor(() => expect(cyberAnalysisApi.createScan).toHaveBeenCalledWith({
-      target: 'example.com', requestedClass: 'PASSIVE', selectedEngineIds: ['nuclei'], selectedComputeMode: 'CLASSICAL',
+      target: 'example.com', requestedClass: 'PASSIVE', selectedEngineIds: ['nuclei'], selectedCapabilities: ['WEB'], selectedComputeMode: 'CLASSICAL',
     }));
 
     // Previous is disabled once a job exists -- no going back to change the plan.
@@ -135,9 +138,9 @@ describe('CyberNewAnalysisWizard', () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
     cyberAnalysisApi.getEnginePlan.mockImplementation(async (targetType, requestedClass) => {
       if (requestedClass === 'PASSIVE') {
-        return { engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: false }], hasExecutableEngine: false };
+        return { engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: false, capabilities: ['WEB'] }], capabilities: [], hasExecutableEngine: false };
       }
-      return { engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true }], hasExecutableEngine: true };
+      return { engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true, capabilities: ['WEB'] }], capabilities: [{ id: 'WEB', name: 'Web Security Analysis', available: true }], hasExecutableEngine: true };
     });
     renderWizard();
     fireEvent.click(screen.getByRole('button', { name: 'New Asset' }));
@@ -156,10 +159,11 @@ describe('CyberNewAnalysisWizard', () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'REPOSITORY' });
     cyberAnalysisApi.getEnginePlan.mockResolvedValue({
       engines: [
-        { id: 'semgrep', name: 'semgrep', status: 'HEALTHY', compatible: true, recommended: true },
-        { id: 'osv-scanner', name: 'osv-scanner', status: 'HEALTHY', compatible: true, recommended: true },
-        { id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: false, recommended: false },
+        { id: 'semgrep', name: 'semgrep', status: 'HEALTHY', compatible: true, recommended: true, capabilities: ['SAST'] },
+        { id: 'osv-scanner', name: 'osv-scanner', status: 'HEALTHY', compatible: true, recommended: true, capabilities: ['SCA'] },
+        { id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: false, recommended: false, capabilities: ['WEB'] },
       ],
+      capabilities: [{ id: 'SAST', name: 'SAST', available: true }, { id: 'SCA', name: 'SCA', available: true }],
       hasExecutableEngine: true,
     });
     renderWizard();
@@ -175,7 +179,7 @@ describe('CyberNewAnalysisWizard', () => {
 
     // Both real engines checked by default -- uncheck one, then both, and
     // confirm zero-selected blocks Next with the honest reason shown.
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes = screen.getAllByRole('checkbox', { name: /engine /i });
     expect(checkboxes.filter((c) => c.checked)).toHaveLength(2);
     fireEvent.click(checkboxes[0]);
     fireEvent.click(checkboxes[1]);
@@ -187,7 +191,8 @@ describe('CyberNewAnalysisWizard', () => {
   it('shows the real optimization verdict and provenance once a completed scan is reached', async () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
     cyberAnalysisApi.getEnginePlan.mockResolvedValue({
-      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true }],
+      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true, capabilities: ['WEB'] }],
+      capabilities: [{ id: 'WEB', name: 'Web Security Analysis', available: true }],
       hasExecutableEngine: true,
     });
     cyberAnalysisApi.createScan.mockResolvedValue({ job: { id: 'job-1', status: 'COMPLETED', target: 'example.com', result: { findingIds: ['f1'] } } });

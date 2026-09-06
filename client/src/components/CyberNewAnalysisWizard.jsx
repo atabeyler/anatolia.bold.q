@@ -182,6 +182,7 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
   const [enginePlan, setEnginePlan] = useState(null); // { engines, hasExecutableEngine }
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [selectedEngineIds, setSelectedEngineIds] = useState([]);
+  const [selectedCapabilities, setSelectedCapabilities] = useState([]);
   // Whether the user has manually touched the class dropdown for the
   // current asset -- once true, BCI never overrides their choice.
   const [classTouchedByUser, setClassTouchedByUser] = useState(false);
@@ -193,6 +194,7 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
   useEffect(() => {
     setClassTouchedByUser(false);
     setAutoSuggestedClass(null);
+    setSelectedCapabilities([]);
     autoSuggestedForRef.current = null;
   }, [resolvedAsset?.target]);
 
@@ -207,7 +209,7 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
         if (!alive) return;
         setScopeDecision(decision);
         if (decision.decision === 'ALLOW') {
-          const plan = await cyberAnalysisApi.getEnginePlan(decision.targetType, requestedClass);
+          const plan = await cyberAnalysisApi.getEnginePlan(decision.targetType, requestedClass, selectedCapabilities);
           if (!alive) return;
 
           // BCI recommends a scan class too, not just engines: a target
@@ -226,12 +228,20 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
               if (!alive) return;
               if (candidatePlan.hasExecutableEngine) {
                 setAutoSuggestedClass(candidateClass);
+                setSelectedCapabilities([]);
                 setRequestedClass(candidateClass);
                 return; // re-runs this effect with the better class
               }
             }
           }
 
+          if (selectedCapabilities.length === 0) {
+            const defaults = plan.capabilities.filter((capability) => capability.available).map((capability) => capability.id);
+            if (defaults.length > 0) {
+              setSelectedCapabilities(defaults);
+              return;
+            }
+          }
           setEnginePlan(plan);
           // Default selection: every recommended engine that is also
           // actually HEALTHY right now -- the real, immediately runnable
@@ -242,10 +252,16 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoadingPlan(false));
     return () => { alive = false; };
-  }, [step, resolvedAsset, requestedClass, classTouchedByUser]);
+  }, [step, resolvedAsset, requestedClass, classTouchedByUser, selectedCapabilities]);
 
   function toggleEngine(engineId) {
     setSelectedEngineIds((ids) => (ids.includes(engineId) ? ids.filter((id) => id !== engineId) : [...ids, engineId]));
+  }
+
+  function toggleCapability(capabilityId) {
+    setSelectedCapabilities((ids) => ids.includes(capabilityId)
+      ? (ids.length > 1 ? ids.filter((id) => id !== capabilityId) : ids)
+      : [...ids, capabilityId]);
   }
 
   // Step 3 -- Quantum: a real preference among the modes the org's policy
@@ -324,6 +340,7 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
         target: resolvedAsset.target,
         requestedClass,
         selectedEngineIds,
+        selectedCapabilities,
         selectedComputeMode,
       });
       setJob(created);
@@ -368,7 +385,11 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
   const stepLabels = [t('cyberWizStepAsset'), t('cyberWizStepEngines'), t('cyberWizStepQuantum'), t('cyberWizStepScan'), t('cyberWizStepResult')];
 
   const canProceedFromAsset = !!resolvedAsset?.target;
-  const canProceedFromEngines = scopeDecision?.decision === 'ALLOW' && !!enginePlan?.hasExecutableEngine && selectedEngineIds.length > 0;
+  const selectedCapabilitiesCovered = selectedCapabilities.every((capabilityId) => selectedEngineIds.some((engineId) => {
+    const engine = enginePlan?.engines.find((candidate) => candidate.id === engineId);
+    return (engine?.targetCapabilities || engine?.capabilities || []).includes(capabilityId);
+  }));
+  const canProceedFromEngines = scopeDecision?.decision === 'ALLOW' && !!enginePlan?.hasExecutableEngine && selectedEngineIds.length > 0 && selectedCapabilities.length > 0 && selectedCapabilitiesCovered;
   const canProceedFromQuantum = !!selectedComputeMode;
 
   return (
@@ -475,7 +496,7 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
           <Panel title={t('cyberWizStepEngines')}>
             <div className="mb-3">
               <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberColClass')}</label>
-              <select className={inputCls} value={requestedClass} onChange={(e) => { setClassTouchedByUser(true); setRequestedClass(e.target.value); }}>
+              <select className={inputCls} value={requestedClass} onChange={(e) => { setClassTouchedByUser(true); setSelectedCapabilities([]); setRequestedClass(e.target.value); }}>
                 {SCAN_CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               {autoSuggestedClass === requestedClass && (
@@ -491,21 +512,38 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
 
             {enginePlan && (
               <>
+                <p className="text-cyan-100/40 text-xs mb-2">Capabilities — BCI önerir, kullanıcı seçer</p>
+                <div className="grid sm:grid-cols-2 gap-2 mb-4">
+                  {enginePlan.capabilities.map((capability) => (
+                    <label key={capability.id} className={`border border-cyan-300/15 rounded p-2 text-[12px] ${capability.available ? 'cursor-pointer' : 'opacity-45'}`}>
+                      <input
+                        type="checkbox"
+                        className="mr-2"
+                        checked={selectedCapabilities.includes(capability.id)}
+                        disabled={!capability.available}
+                        onChange={() => toggleCapability(capability.id)}
+                      />
+                      <span className="text-cyan-100">{capability.name}</span>
+                      <span className="block ml-5 text-cyan-100/45">{capability.id} · {capability.available ? 'KULLANILABİLİR' : 'KULLANILAMIYOR'}</span>
+                    </label>
+                  ))}
+                </div>
                 <p className="text-cyan-100/40 text-xs mb-2">{t('cyberWizSelectEngines')}</p>
                 <div className={tableWrap}>
                   <table className="w-full">
-                    <thead><tr><th className={th}></th><th className={th}>{t('cyberColEngine')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberWizCompatible')}</th><th className={th}>{t('cyberWizRecommendation')}</th></tr></thead>
+                    <thead><tr><th className={th}></th><th className={th}>{t('cyberColEngine')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberWizCompatible')}</th><th className={th}>Capabilities / Sınıf</th><th className={th}>{t('cyberWizRecommendation')}</th></tr></thead>
                     <tbody>
                       {enginePlan.engines.map((e) => {
                         const selectable = e.compatible && e.recommended && e.status === 'HEALTHY';
                         return (
                           <tr key={e.id} className={selectable ? 'cursor-pointer hover:bg-cyan-400/5' : 'opacity-50'} onClick={() => selectable && toggleEngine(e.id)}>
                             <td className={td}>
-                              <input type="checkbox" checked={selectedEngineIds.includes(e.id)} disabled={!selectable} readOnly />
+                              <input aria-label={`engine ${e.id}`} type="checkbox" checked={selectedEngineIds.includes(e.id)} disabled={!selectable} readOnly />
                             </td>
-                            <td className={td}>{e.name}</td>
+                            <td className={td}><span className="block">{e.name}</span>{e.reasons?.length > 0 && <span className="text-cyan-100/35 text-[10px]">{e.reasons.join(', ')}</span>}</td>
                             <td className={td}><Badge tone={engineStatusTone(e.status)}>{e.status}</Badge></td>
                             <td className={td}>{e.compatible ? <Badge tone="ok">{t('cyberWizYes')}</Badge> : <Badge tone="muted">{t('cyberWizNo')}</Badge>}</td>
+                            <td className={td}><span className="block">{(e.targetCapabilities || e.capabilities).join(', ')}</span><span className="text-cyan-100/40">{e.intrusiveness}</span></td>
                             <td className={td}>{e.recommended ? <Badge tone="ok">{t('cyberWizRecommended')}</Badge> : <Badge tone="muted">—</Badge>}</td>
                           </tr>
                         );
@@ -526,6 +564,9 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
                 )}
                 {enginePlan.hasExecutableEngine && selectedEngineIds.length === 0 && (
                   <div className="border border-gold/30 rounded p-3 text-gold text-[13px] mt-2">{t('cyberWizEngineRequired')}</div>
+                )}
+                {!selectedCapabilitiesCovered && (
+                  <div className="border border-gold/30 rounded p-3 text-gold text-[13px] mt-2">Seçilen motorlar seçili capability’lerin tamamını kapsamıyor.</div>
                 )}
               </>
             )}

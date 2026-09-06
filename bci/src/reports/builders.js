@@ -71,7 +71,7 @@ export async function buildTechnicalReport(orgId, { targets } = {}) {
 
   for (const finding of findings) {
     const { rows: sources } = await query(
-      `SELECT fs.engine_id, no.rule_id, no.location, no.engine_severity
+      `SELECT fs.engine_id, no.capability_id, no.job_id AS scan_job_id, no.rule_id, no.location, no.engine_severity, no.evidence
          FROM finding_sources fs JOIN normalized_observations no ON no.id = fs.normalized_observation_id
         WHERE fs.finding_id = $1`,
       [finding.id]
@@ -79,7 +79,17 @@ export async function buildTechnicalReport(orgId, { targets } = {}) {
     finding.sources = sources;
   }
 
-  return { scopedToTargets: targets ?? null, findingCount: findings.length, findings };
+  const provenanceFilter = targetFilterClause(targets, 2);
+  const { rows: executionProvenance } = await query(
+    `SELECT id AS scan_job_id, target, recommended_capability_ids, selected_capability_ids,
+            recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode,
+            result->'actualExecutedCapabilities' AS actual_executed_capabilities,
+            result->'enginesRun' AS actual_executed_engines
+       FROM scan_jobs WHERE org_id = $1${provenanceFilter.clause} ORDER BY created_at DESC`,
+    provenanceFilter.param ? [orgId, provenanceFilter.param] : [orgId]
+  );
+
+  return { scopedToTargets: targets ?? null, findingCount: findings.length, findings, executionProvenance };
 }
 
 // Remediation Report (spec section 45): for developers/DevOps -- what to
@@ -135,5 +145,9 @@ export async function buildFullReport(orgId, options = {}) {
     buildRemediationReport(orgId, options),
     buildAuditReport(orgId, options),
   ]);
-  return { scopedToTargets: options.targets ?? null, executive, technical, remediation, audit };
+  return {
+    scopedToTargets: options.targets ?? null,
+    sectionScopes: { executive: options.targets ? 'ASSET' : 'ORG_WIDE', technical: options.targets ? 'ASSET' : 'ORG_WIDE', remediation: options.targets ? 'ASSET' : 'ORG_WIDE', audit: 'ORG_WIDE' },
+    executive, technical, remediation, audit,
+  };
 }

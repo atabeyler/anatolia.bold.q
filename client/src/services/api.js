@@ -354,7 +354,10 @@ export const cyberAnalysisApi = {
   createScan: (scan) => bciProxy('/scans', { method: 'POST', body: scan }),
   getScan: (id) => bciProxy(`/scans/${id}`),
   getScanEngineRuns: (id) => bciProxy(`/scans/${id}/engine-runs`),
-  getEnginePlan: (targetType, requestedClass) => bciProxy(`/engines/plan?targetType=${encodeURIComponent(targetType)}&requestedClass=${encodeURIComponent(requestedClass)}`),
+  getEnginePlan: (targetType, requestedClass, capabilities = []) => {
+    const selected = capabilities.length ? `&capabilities=${encodeURIComponent(capabilities.join(','))}` : '';
+    return bciProxy(`/engines/plan?targetType=${encodeURIComponent(targetType)}&requestedClass=${encodeURIComponent(requestedClass)}${selected}`);
+  },
 
   getFinding: (id) => bciProxy(`/findings/${id}`),
   explainFinding: (id) => bciProxy(`/findings/${id}/explain`),

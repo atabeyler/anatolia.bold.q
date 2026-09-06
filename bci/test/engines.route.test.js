@@ -25,17 +25,20 @@ describe('GET /engines/plan -- real engine selection preview (analysis wizard st
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    // All 5 real adapters, not a hardcoded subset -- listAdapters() is the
+    // All real adapters, not a hardcoded subset -- listAdapters() is the
     // source of truth, so a 6th engine registered in code would show up
     // here with zero frontend changes.
-    expect(res.body.engines).toHaveLength(5);
+    expect(res.body.engines).toHaveLength(8);
     // UNKNOWN if no health check has ever run for that engine in this test
     // database, otherwise a real HEALTHY/DEGRADED/OFFLINE from engine_health
     // -- never assumed, never a 4th made-up value.
     expect(res.body.engines.every((e) => ['UNKNOWN', 'HEALTHY', 'DEGRADED', 'OFFLINE'].includes(e.status))).toBe(true);
 
     const nuclei = res.body.engines.find((e) => e.id === 'nuclei');
-    expect(nuclei.compatible).toBe(true); // nuclei supports DOMAIN
+    expect(nuclei.targetCompatible).toBe(true); // nuclei supports DOMAIN
+    expect(nuclei.compatible).toBe(false); // but SAFE_ACTIVE exceeds PASSIVE
+    expect(nuclei.compatibilityStatus).toBe('INCOMPATIBLE');
+    expect(nuclei.reasons).toContain('INTRUSIVENESS_EXCEEDS_REQUEST');
     // DOMAIN's only engine plan entry (nuclei) is SAFE_ACTIVE -- a PASSIVE
     // request must not recommend it (this is exactly the real bug: DOMAIN +
     // PASSIVE produces zero recommended engines).
@@ -78,5 +81,20 @@ describe('GET /engines/plan -- real engine selection preview (analysis wizard st
       .query({ targetType: 'DOMAIN', requestedClass: 'NOT_A_REAL_CLASS' })
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(400);
+  });
+
+  it('publishes canonical capability metadata and rejects unknown selections', async () => {
+    const orgId = await createOrg();
+    const token = await tokenFor(orgId, 'operator');
+    const catalog = await request(app).get('/api/v1/engines/capabilities').set('Authorization', `Bearer ${token}`);
+    expect(catalog.status).toBe(200);
+    expect(catalog.body.capabilities.find((capability) => capability.id === 'FUZZ')).toMatchObject({ category: 'ACTIVE_VALIDATION', requiredIntrusiveness: 'SAFE_ACTIVE' });
+    expect(catalog.body.capabilities.some((capability) => capability.id === 'PASSIVE')).toBe(false);
+
+    const invalid = await request(app).get('/api/v1/engines/plan')
+      .query({ targetType: 'DOMAIN', requestedClass: 'RESTRICTED', capabilities: 'NOT_REAL' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error).toBe('unknown_capability');
   });
 });

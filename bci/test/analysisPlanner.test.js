@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { planEngines, candidateEnginesForTargetType, availableCapabilitiesForTargetType } from '../src/services/analysisPlanner.js';
 import { getCapability, listCapabilities, registerCapability } from '../src/engines/capabilities.js';
+import { registerAdapter, unregisterAdapter } from '../src/engines/registry.js';
 
 describe('planEngines (pure)', () => {
   it('plans passive repository engines', () => expect(planEngines('REPOSITORY', 'PASSIVE').map((p) => p.engineId).sort()).toEqual(['osv-scanner','semgrep','trivy']));
@@ -20,14 +21,28 @@ describe('planEngines (pure)', () => {
 
 describe('dynamic capability registry', () => {
   it('ships the advanced capabilities', () => expect(listCapabilities().map((c)=>c.id)).toEqual(expect.arrayContaining(['FUZZ','INTRUSIVE','DOS'])));
-  it('accepts future capabilities without planner rewrites', () => {
+  it('keeps intrusiveness classes out of the capability registry', () => {
+    for (const id of ['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED']) expect(getCapability(id)).toBeNull();
+  });
+  it('accepts future capabilities and adapters without planner rewrites', () => {
     registerCapability({ id:'CUSTOM_ANALYSIS', name:'Custom Analysis' });
     expect(getCapability('CUSTOM_ANALYSIS')?.name).toBe('Custom Analysis');
-    expect(planEngines('DOMAIN','RESTRICTED','CUSTOM_ANALYSIS')).toEqual([]);
+    registerAdapter({
+      id: 'custom-test-engine', name: 'Custom test engine', license: 'TEST', intrusiveness: 'PASSIVE',
+      capabilities: ['CUSTOM_ANALYSIS'], supportedAnalysisTypes: ['CUSTOM_ANALYSIS'], supportedTargetTypes: ['CLOUD_ACCOUNT'],
+      async healthCheck() { return { status: 'HEALTHY' }; }, async execute() { return { raw: [] }; },
+    });
+    try {
+      expect(planEngines('CLOUD_ACCOUNT','PASSIVE','CUSTOM_ANALYSIS').map((plan) => plan.engineId)).toEqual(['custom-test-engine']);
+    } finally {
+      unregisterAdapter('custom-test-engine');
+    }
   });
   it('reports real target support', () => {
     const caps=availableCapabilitiesForTargetType('DOMAIN');
-    for (const id of ['SAFE_ACTIVE','FUZZ','INTRUSIVE','DOS']) expect(caps.find((c)=>c.id===id)?.supported).toBe(true);
+    for (const id of ['WEB','FUZZ','INTRUSIVE','DOS']) expect(caps.find((c)=>c.id===id)?.supported).toBe(true);
+    expect(caps.find((c)=>c.id==='API')?.supported).toBe(false);
+    expect(availableCapabilitiesForTargetType('API').find((c)=>c.id==='API')?.supported).toBe(true);
   });
 });
 

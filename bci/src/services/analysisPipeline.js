@@ -24,7 +24,7 @@ async function recordEngineRun(jobId, engineId, status, detail, observationCount
 //   verification + confidence + risk, M7/M9) -> SECURITY GRAPH
 // Reporting is on-demand (M12), not generated automatically per job.
 export async function runAnalysisPipeline(job) {
-  const recommendedPlan = planEngines(job.target_type, job.requested_class);
+  const recommendedPlan = planEngines(job.target_type, job.requested_class, job.selected_capability_ids);
   // job.selected_engine_ids (set at enqueueScan time, jobQueue.js) is
   // always a validated subset of recommendedPlan's engine ids -- never an
   // arbitrary list -- so this only ever narrows what runs, it can't smuggle
@@ -38,7 +38,15 @@ export async function runAnalysisPipeline(job) {
 
   if (plan.length === 0) {
     logger.warn({ jobId: job.id, targetType: job.target_type }, 'No engine coverage for this target type');
-    return { enginesRun: [], enginesSkipped: [], findingIds: [], note: `no engine coverage for target type ${job.target_type}` };
+    return {
+      recommendedCapabilities: job.recommended_capability_ids ?? [],
+      selectedCapabilities: job.selected_capability_ids ?? [],
+      actualExecutedCapabilities: [],
+      recommendedEngines: job.recommended_engine_ids ?? [],
+      selectedEngines: job.selected_engine_ids ?? [],
+      enginesRun: [], enginesSkipped: [], findingIds: [],
+      note: `no engine coverage for target type ${job.target_type}`,
+    };
   }
 
   const { executionTarget, cleanup } = await prepareExecutionTarget(job.target_type, job.target);
@@ -88,5 +96,17 @@ export async function runAnalysisPipeline(job) {
   const findingIds = await correlateJobObservations(job.org_id, job.id);
   await syncSecurityGraph(job.org_id).catch((err) => logger.warn({ err, jobId: job.id }, 'Security graph sync failed'));
 
-  return { enginesRun: ran, enginesSkipped: skipped, findingIds };
+  const actualExecutedCapabilities = [...new Set(plan
+    .filter((enginePlan) => ran.includes(enginePlan.engineId))
+    .flatMap((enginePlan) => enginePlan.capabilities))];
+  return {
+    recommendedCapabilities: job.recommended_capability_ids ?? [],
+    selectedCapabilities: job.selected_capability_ids ?? [],
+    actualExecutedCapabilities,
+    recommendedEngines: job.recommended_engine_ids ?? recommendedPlan.map((enginePlan) => enginePlan.engineId),
+    selectedEngines: job.selected_engine_ids ?? recommendedPlan.map((enginePlan) => enginePlan.engineId),
+    enginesRun: ran,
+    enginesSkipped: skipped,
+    findingIds,
+  };
 }

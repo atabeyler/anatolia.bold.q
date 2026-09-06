@@ -8,9 +8,13 @@ export const trivyAdapter = {
   name: 'Trivy',
   license: 'Apache-2.0',
   intrusiveness: 'PASSIVE',
-  capabilities: ['PASSIVE'],
+  capabilities: ['SCA', 'SECRETS', 'IAC', 'CONFIG'],
   supportedTargetTypes: ['REPOSITORY', 'CONTAINER'],
   supportedAnalysisTypes: ['SCA', 'SECRETS', 'IAC', 'CONFIG'],
+  capabilitiesByTargetType: {
+    REPOSITORY: ['SCA', 'SECRETS', 'IAC', 'CONFIG'],
+    CONTAINER: ['SCA', 'SECRETS', 'CONFIG'],
+  },
 
   async healthCheck() {
     try {
@@ -22,9 +26,13 @@ export const trivyAdapter = {
     }
   },
 
-  async execute({ target, mode = 'fs', timeoutMs = 120_000 }) {
+  async execute({ target, mode = 'fs', capabilities = this.capabilities, timeoutMs = 120_000 }) {
     const subcommand = mode === 'image' ? 'image' : 'fs';
-    const { stdout } = await runBinary(BIN, [subcommand, '--scanners', 'vuln,secret,misconfig', '--format', 'json', '--quiet', target], { timeoutMs, allowedExitCodes: [0, 1] });
+    const scanners = [];
+    if (capabilities.includes('SCA')) scanners.push('vuln');
+    if (capabilities.includes('SECRETS')) scanners.push('secret');
+    if (capabilities.includes('IAC') || capabilities.includes('CONFIG')) scanners.push('misconfig');
+    const { stdout } = await runBinary(BIN, [subcommand, '--scanners', [...new Set(scanners)].join(','), '--format', 'json', '--quiet', target], { timeoutMs, allowedExitCodes: [0, 1] });
     return { raw: JSON.parse(stdout) };
   },
 };

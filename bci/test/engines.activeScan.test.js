@@ -42,4 +42,21 @@ describe('active engines against a self-owned localhost target', () => {
     const { raw } = await adapter.execute({ target: `http://127.0.0.1:${port}`, timeoutMs: 60_000 });
     expect(Array.isArray(raw)).toBe(true);
   }, 60_000);
+
+  it.each([
+    ['http-fuzz', 5],
+    ['intrusive-validation', 2],
+    ['availability-probe', 3],
+  ])('%s performs only its bounded probe set against localhost', async (engineId, expectedSamples) => {
+    const { adapter, healthy } = await ifHealthy(engineId);
+    if (!healthy) return;
+    const { raw } = await adapter.execute({ target: `http://127.0.0.1:${port}`, timeoutMs: 30_000 });
+    expect(raw).toHaveLength(expectedSamples);
+    expect(raw.every((observation) => observation && typeof observation === 'object')).toBe(true);
+  }, 45_000);
+
+  it.each(['http-fuzz', 'intrusive-validation', 'availability-probe'])('%s rejects a non-HTTP target before spawning probes', async (engineId) => {
+    const adapter = listAdapters().find((candidate) => candidate.id === engineId);
+    await expect(adapter.execute({ target: 'file:///etc/passwd' })).rejects.toThrow(/unsupported URL protocol/);
+  });
 });

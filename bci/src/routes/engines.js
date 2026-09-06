@@ -23,6 +23,7 @@ const planQuerySchema = z.object({
   targetType: z.string().min(1),
   requestedClass: z.enum(['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED']),
   capability: z.string().min(1).optional(),
+  capabilities: z.string().optional(),
 });
 
 enginesRouter.get('/plan', requirePermission('rule:view'), async (req, res) => {
@@ -30,27 +31,43 @@ enginesRouter.get('/plan', requirePermission('rule:view'), async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'invalid_request', details: parsed.error.flatten(), requestId: req.id });
   }
-  const { targetType, requestedClass, capability } = parsed.data;
-  const requestedCapability = capability?.toUpperCase() || null;
+  const { targetType, requestedClass, capability, capabilities } = parsed.data;
+  const selectedCapabilities = [...new Set((capabilities ? capabilities.split(',') : capability ? [capability] : []).filter(Boolean).map((id) => id.toUpperCase()))];
   const capabilityCatalog = getCapabilityCatalog();
-  if (requestedCapability && !capabilityCatalog.some((c) => c.id === requestedCapability)) {
-    return res.status(400).json({ error: 'unknown_capability', capability: requestedCapability, requestId: req.id });
+  const unknownCapabilities = selectedCapabilities.filter((id) => !capabilityCatalog.some((c) => c.id === id));
+  if (unknownCapabilities.length > 0) {
+    return res.status(400).json({ error: 'unknown_capability', capabilities: unknownCapabilities, requestId: req.id });
   }
 
   const catalog = await getEngineCatalog();
-  const compatibleIds = new Set(candidateEnginesForTargetType(targetType).map((p) => p.engineId));
-  const recommendedIds = new Set(planEngines(targetType, requestedClass, requestedCapability).map((p) => p.engineId));
-  const engines = catalog.map((e) => ({
-    ...e,
-    compatible: compatibleIds.has(e.id),
-    capabilityCompatible: !requestedCapability || e.capabilities.includes(requestedCapability),
-    recommended: recommendedIds.has(e.id),
-  }));
+  const targetIds = new Set(candidateEnginesForTargetType(targetType).map((p) => p.engineId));
+  const targetCapabilitiesById = new Map(candidateEnginesForTargetType(targetType).map((plan) => [plan.engineId, plan.capabilities]));
+  const plannedIds = new Set(planEngines(targetType, requestedClass, selectedCapabilities).map((p) => p.engineId));
+  const engines = catalog.map((e) => {
+    const targetCompatible = targetIds.has(e.id);
+    const intrusivenessCompatible = targetCompatible && planEngines(targetType, requestedClass).some((p) => p.engineId === e.id);
+    const targetCapabilities = targetCapabilitiesById.get(e.id) ?? [];
+    const capabilityCompatible = selectedCapabilities.length === 0 || targetCapabilities.some((id) => selectedCapabilities.includes(id));
+    const compatible = targetCompatible && intrusivenessCompatible && capabilityCompatible;
+    const reasons = [];
+    if (!targetCompatible) reasons.push('TARGET_TYPE_UNSUPPORTED');
+    else if (!intrusivenessCompatible) reasons.push('INTRUSIVENESS_EXCEEDS_REQUEST');
+    if (!capabilityCompatible) reasons.push('CAPABILITY_UNSUPPORTED');
+    if (e.status !== 'HEALTHY') reasons.push('ENGINE_UNAVAILABLE');
+    const recommended = plannedIds.has(e.id);
+    return {
+      ...e, targetCapabilities, targetCompatible, intrusivenessCompatible, capabilityCompatible, compatible, recommended,
+      compatibilityStatus: compatible ? 'COMPATIBLE' : 'INCOMPATIBLE',
+      availabilityStatus: e.status === 'HEALTHY' ? 'AVAILABLE' : 'UNAVAILABLE',
+      decision: e.status !== 'HEALTHY' ? 'UNAVAILABLE' : recommended ? 'RECOMMENDED' : compatible ? 'COMPATIBLE' : 'INCOMPATIBLE',
+      reasons,
+    };
+  });
 
   res.json({
     engines,
-    capabilities: availableCapabilitiesForTargetType(targetType),
-    requestedCapability,
+    capabilities: availableCapabilitiesForTargetType(targetType, requestedClass, catalog),
+    selectedCapabilities,
     hasExecutableEngine: engines.some((e) => e.recommended && e.status === 'HEALTHY'),
   });
 });

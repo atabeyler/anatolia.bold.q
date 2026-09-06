@@ -17,6 +17,7 @@ const createScanSchema = z.object({
   // validated against the real recommendation in jobQueue.js#enqueueScan.
   // Omitted entirely = the full recommended plan, same as before this existed.
   selectedEngineIds: z.array(z.string().min(1)).optional(),
+  selectedCapabilities: z.array(z.string().min(1)).optional(),
   // The wizard's Quantum-step choice, stored for later use once this job's
   // findings exist -- see routes/quantum.js's remediation-optimize, which
   // is where a compute method actually ever executes.
@@ -39,6 +40,7 @@ scansRouter.post('/', requirePermission('scan:create'), async (req, res) => {
     target: parsed.data.target,
     requestedClass: parsed.data.requestedClass,
     selectedEngineIds: parsed.data.selectedEngineIds,
+    selectedCapabilities: parsed.data.selectedCapabilities,
     selectedComputeMode: parsed.data.selectedComputeMode,
   });
 

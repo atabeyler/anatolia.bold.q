@@ -14,6 +14,7 @@ export function normalizeTrivy(raw) {
       const { cvssVector, cvssScore } = pickCvss(vuln.CVSS);
       observations.push({
         category: 'SCA',
+        capabilityId: 'SCA',
         ruleId: vuln.VulnerabilityID,
         title: vuln.Title || vuln.VulnerabilityID,
         description: vuln.Description,
@@ -32,6 +33,7 @@ export function normalizeTrivy(raw) {
     for (const secret of result.Secrets || []) {
       observations.push({
         category: 'SECRETS',
+        capabilityId: 'SECRETS',
         ruleId: secret.RuleID,
         title: secret.Title || secret.RuleID,
         description: `Possible secret (${secret.Category}) detected`,
@@ -44,6 +46,7 @@ export function normalizeTrivy(raw) {
     for (const misconfig of result.Misconfigurations || []) {
       observations.push({
         category: 'IAC',
+        capabilityId: 'IAC',
         ruleId: misconfig.ID,
         title: misconfig.Title || misconfig.ID,
         description: misconfig.Description,

@@ -10,9 +10,16 @@ beforeEach(resetDatabase);
 async function seedOrgWithOneKevFinding() {
   const orgId = await createOrg();
   const userId = await createUser(orgId, { roleId: 'operator' });
-  const jobId = (await query(`INSERT INTO scan_jobs (org_id, requested_by, target, requested_class) VALUES ($1,$2,'t1','PASSIVE') RETURNING id`, [orgId, userId])).rows[0].id;
+  const jobId = (await query(
+    `INSERT INTO scan_jobs (
+       org_id, requested_by, target, requested_class, recommended_capability_ids,
+       selected_capability_ids, recommended_engine_ids, selected_engine_ids, result
+     ) VALUES ($1,$2,'t1','PASSIVE',ARRAY['SAST','SCA'],ARRAY['SCA'],ARRAY['semgrep','trivy'],ARRAY['trivy'],
+       '{"actualExecutedCapabilities":["SCA"],"enginesRun":["trivy"]}') RETURNING id`,
+    [orgId, userId]
+  )).rows[0].id;
   await upsertVulnerability({ cveId: 'CVE-2099-30001', cvssScore: 9.5, kev: true });
-  await insertNormalizedObservation(orgId, jobId, { engineId: 'trivy', cveIds: ['CVE-2099-30001'], target: 't1' });
+  await insertNormalizedObservation(orgId, jobId, { engineId: 'trivy', capabilityId: 'SCA', evidence: { package: 'example' }, cveIds: ['CVE-2099-30001'], target: 't1' });
   await correlateJobObservations(orgId, jobId);
   return { orgId, userId };
 }
@@ -36,6 +43,11 @@ describe('TECHNICAL report', () => {
     const report = await generateReport(orgId, userId, 'TECHNICAL');
     expect(report.content.findingCount).toBe(1);
     expect(report.content.findings[0].sources[0].engine_id).toBe('trivy');
+    expect(report.content.findings[0].sources[0]).toMatchObject({ capability_id: 'SCA', scan_job_id: expect.any(String), evidence: { package: 'example' } });
+    expect(report.content.executionProvenance[0]).toMatchObject({
+      recommended_capability_ids: ['SAST', 'SCA'], selected_capability_ids: ['SCA'],
+      actual_executed_capabilities: ['SCA'], actual_executed_engines: ['trivy'],
+    });
   });
 });
 
@@ -131,6 +143,7 @@ describe('FULL report', () => {
     expect(full.content.technical.findingCount).toBe(1);
     expect(full.content.remediation.items.length).toBeGreaterThan(0);
     expect(full.content.audit.eventCount).toBeGreaterThan(0);
+    expect(full.content.sectionScopes.audit).toBe('ORG_WIDE');
 
     // The standalone types still work exactly as before.
     const standaloneExec = await generateReport(orgId, userId, 'EXECUTIVE');
