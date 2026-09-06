@@ -7,10 +7,12 @@ import { semgrepAdapter } from './adapters/semgrep.js';
 import { nucleiAdapter } from './adapters/nuclei.js';
 import { naabuAdapter } from './adapters/naabu.js';
 import { httpFuzzAdapter } from './adapters/httpFuzz.js';
+import { intrusiveValidationAdapter } from './adapters/intrusiveValidation.js';
+import { availabilityProbeAdapter } from './adapters/availabilityProbe.js';
 
 const adapters = new Map();
 function register(adapter) { assertValidAdapter(adapter); adapters.set(adapter.id, adapter); }
-[trivyAdapter, osvScannerAdapter, semgrepAdapter, nucleiAdapter, naabuAdapter, httpFuzzAdapter].forEach(register);
+[trivyAdapter, osvScannerAdapter, semgrepAdapter, nucleiAdapter, naabuAdapter, httpFuzzAdapter, intrusiveValidationAdapter, availabilityProbeAdapter].forEach(register);
 export function getAdapter(id) { return adapters.get(id) || null; }
 export function listAdapters() { return [...adapters.values()]; }
 export function getCapabilityCatalog() { return listCapabilities(); }
@@ -27,12 +29,10 @@ export async function runHealthChecks() {
   }
   return results;
 }
-
 export async function getEngineStatus() {
   const { rows } = await query(`SELECT r.id, r.name, r.intrusiveness, r.supported_target_types, r.supported_analysis_types, r.license, h.status, h.version, h.detail, h.last_checked_at FROM engine_registry r LEFT JOIN engine_health h ON h.engine_id=r.id ORDER BY r.id`);
   return rows.map((r) => ({ ...r, capabilities: getAdapter(r.id)?.capabilities ?? [] }));
 }
-
 export async function getEngineCatalog() {
   const { rows: health } = await query('SELECT engine_id, status, version, detail, last_checked_at FROM engine_health');
   const healthById = new Map(health.map((h) => [h.engine_id, h]));
