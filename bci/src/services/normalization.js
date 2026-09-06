@@ -16,7 +16,11 @@ export async function storeRawObservation({ orgId, jobId, engineId, target, payl
 // is lost, only that it hasn't been turned into normalized observations yet
 // (spec section 15's Observation != Finding split, one level earlier).
 export async function normalizeStoredObservation(rawObservationId) {
-  const { rows } = await query('SELECT * FROM raw_observations WHERE id = $1', [rawObservationId]);
+  const { rows } = await query(
+    `SELECT ro.*, sj.target_type FROM raw_observations ro
+       LEFT JOIN scan_jobs sj ON sj.id = ro.job_id WHERE ro.id = $1`,
+    [rawObservationId]
+  );
   const raw = rows[0];
   if (!raw) throw new Error(`raw_observations row not found: ${rawObservationId}`);
 
@@ -31,8 +35,8 @@ export async function normalizeStoredObservation(rawObservationId) {
       `INSERT INTO normalized_observations (
          org_id, raw_observation_id, job_id, engine_id, engine_version, rule_id, target,
          category, title, description, engine_severity, cve_ids, cwe_ids, cvss_vector,
-         cvss_score, component, component_version, location, evidence, "references"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         cvss_score, component, component_version, location, evidence, "references", capability_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING id`,
       [
         raw.org_id,
@@ -55,6 +59,7 @@ export async function normalizeStoredObservation(rawObservationId) {
         obs.location ?? null,
         JSON.stringify(obs.evidence ?? {}),
         obs.references ?? [],
+        raw.target_type === 'API' && raw.engine_id === 'nuclei' ? 'API' : (obs.capabilityId ?? null),
       ]
     );
     inserted.push(insertedRows[0].id);

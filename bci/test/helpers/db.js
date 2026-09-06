@@ -84,8 +84,8 @@ export async function insertNormalizedObservation(orgId, jobId, overrides = {}) 
   const { rows } = await query(
     `INSERT INTO normalized_observations (
        org_id, raw_observation_id, job_id, engine_id, rule_id, target, category, title,
-       cve_ids, cwe_ids, component, component_version, location
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+       cve_ids, cwe_ids, component, component_version, location, capability_id, evidence
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
     [
       orgId,
       raw.rows[0].id,
@@ -100,6 +100,8 @@ export async function insertNormalizedObservation(orgId, jobId, overrides = {}) 
       overrides.component || null,
       overrides.componentVersion || null,
       overrides.location || 'example.com',
+      overrides.capabilityId || null,
+      JSON.stringify(overrides.evidence || {}),
     ]
   );
   return rows[0];

@@ -1,47 +1,51 @@
 import { describe, it, expect } from 'vitest';
-import { planEngines, candidateEnginesForTargetType } from '../src/services/analysisPlanner.js';
+import { planEngines, candidateEnginesForTargetType, availableCapabilitiesForTargetType } from '../src/services/analysisPlanner.js';
+import { getCapability, listCapabilities, registerCapability } from '../src/engines/capabilities.js';
+import { registerAdapter, unregisterAdapter } from '../src/engines/registry.js';
 
 describe('planEngines (pure)', () => {
-  it('plans the full SAST/SCA/secrets triad for a REPOSITORY, even at PASSIVE', () => {
-    const plan = planEngines('REPOSITORY', 'PASSIVE');
-    expect(plan.map((p) => p.engineId).sort()).toEqual(['osv-scanner', 'semgrep', 'trivy']);
+  it('plans passive repository engines', () => expect(planEngines('REPOSITORY', 'PASSIVE').map((p) => p.engineId).sort()).toEqual(['osv-scanner','semgrep','trivy']));
+  it('withholds active web engines at PASSIVE', () => expect(planEngines('DOMAIN', 'PASSIVE')).toEqual([]));
+  it('plans safe-active web engines without restricted engines', () => expect(planEngines('DOMAIN', 'SAFE_ACTIVE').map((p) => p.engineId).sort()).toEqual(['http-fuzz','nuclei']));
+  it('maps every advanced capability to its real adapter', () => {
+    expect(planEngines('DOMAIN','SAFE_ACTIVE','FUZZ').map((p)=>p.engineId)).toEqual(['http-fuzz']);
+    expect(planEngines('DOMAIN','RESTRICTED','INTRUSIVE').map((p)=>p.engineId)).toEqual(['intrusive-validation']);
+    expect(planEngines('DOMAIN','RESTRICTED','DOS').map((p)=>p.engineId)).toEqual(['availability-probe']);
   });
-
-  it('plans Trivy in image mode for a CONTAINER', () => {
-    const plan = planEngines('CONTAINER', 'PASSIVE');
-    expect(plan).toEqual([{ engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'image' }]);
+  it('does not run restricted adapters below RESTRICTED', () => {
+    expect(planEngines('DOMAIN','SAFE_ACTIVE','INTRUSIVE')).toEqual([]);
+    expect(planEngines('DOMAIN','AUTHENTICATED','DOS')).toEqual([]);
   });
+  it('returns no plan for unknown capabilities', () => expect(planEngines('DOMAIN','RESTRICTED','DOES_NOT_EXIST')).toEqual([]));
+});
 
-  it('withholds Nuclei for a DOMAIN target at PASSIVE (it needs SAFE_ACTIVE)', () => {
-    expect(planEngines('DOMAIN', 'PASSIVE')).toEqual([]);
+describe('dynamic capability registry', () => {
+  it('ships the advanced capabilities', () => expect(listCapabilities().map((c)=>c.id)).toEqual(expect.arrayContaining(['FUZZ','INTRUSIVE','DOS'])));
+  it('keeps intrusiveness classes out of the capability registry', () => {
+    for (const id of ['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED']) expect(getCapability(id)).toBeNull();
   });
-
-  it('plans Nuclei for a DOMAIN target once SAFE_ACTIVE is authorized', () => {
-    const plan = planEngines('DOMAIN', 'SAFE_ACTIVE');
-    expect(plan.map((p) => p.engineId)).toEqual(['nuclei']);
+  it('accepts future capabilities and adapters without planner rewrites', () => {
+    registerCapability({ id:'CUSTOM_ANALYSIS', name:'Custom Analysis' });
+    expect(getCapability('CUSTOM_ANALYSIS')?.name).toBe('Custom Analysis');
+    registerAdapter({
+      id: 'custom-test-engine', name: 'Custom test engine', license: 'TEST', intrusiveness: 'PASSIVE',
+      capabilities: ['CUSTOM_ANALYSIS'], supportedAnalysisTypes: ['CUSTOM_ANALYSIS'], supportedTargetTypes: ['CLOUD_ACCOUNT'],
+      async healthCheck() { return { status: 'HEALTHY' }; }, async execute() { return { raw: [] }; },
+    });
+    try {
+      expect(planEngines('CLOUD_ACCOUNT','PASSIVE','CUSTOM_ANALYSIS').map((plan) => plan.engineId)).toEqual(['custom-test-engine']);
+    } finally {
+      unregisterAdapter('custom-test-engine');
+    }
   });
-
-  it('plans naabu for IP/CIDR only at SAFE_ACTIVE or above', () => {
-    expect(planEngines('IP', 'PASSIVE')).toEqual([]);
-    expect(planEngines('CIDR', 'SAFE_ACTIVE').map((p) => p.engineId)).toEqual(['naabu']);
-  });
-
-  it('has no plan (honest zero coverage) for target types with no engine adapter yet', () => {
-    expect(planEngines('CLOUD_ACCOUNT', 'RESTRICTED')).toEqual([]);
-    expect(planEngines('KUBERNETES_CLUSTER', 'RESTRICTED')).toEqual([]);
-  });
-
-  it('a higher authorized class than an engine needs still includes that engine', () => {
-    expect(planEngines('DOMAIN', 'RESTRICTED').map((p) => p.engineId)).toEqual(['nuclei']);
+  it('reports real target support', () => {
+    const caps=availableCapabilitiesForTargetType('DOMAIN');
+    for (const id of ['WEB','FUZZ','INTRUSIVE','DOS']) expect(caps.find((c)=>c.id===id)?.supported).toBe(true);
+    expect(caps.find((c)=>c.id==='API')?.supported).toBe(false);
+    expect(availableCapabilitiesForTargetType('API').find((c)=>c.id==='API')?.supported).toBe(true);
   });
 });
 
-describe('candidateEnginesForTargetType (compatibility, independent of requested class)', () => {
-  it('lists nuclei for DOMAIN even though it would not be recommended at PASSIVE', () => {
-    expect(candidateEnginesForTargetType('DOMAIN').map((p) => p.engineId)).toEqual(['nuclei']);
-  });
-
-  it('is empty for target types with no engine adapter yet', () => {
-    expect(candidateEnginesForTargetType('CLOUD_ACCOUNT')).toEqual([]);
-  });
+describe('candidateEnginesForTargetType', () => {
+  it('lists all registered DOMAIN candidates', () => expect(candidateEnginesForTargetType('DOMAIN').map((p)=>p.engineId).sort()).toEqual(['availability-probe','http-fuzz','intrusive-validation','nuclei']));
 });

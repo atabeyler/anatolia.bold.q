@@ -569,13 +569,14 @@ ANATOLIA-Q files touched.
 ## Current status (feature-status framework: IMPLEMENTED / EXPERIMENTAL / PLANNED / DISABLED)
 
 The counts above are per-section, as-of-that-commit deltas (this file is
-written incrementally, milestone by milestone) — this section is the one
-number to trust as current. Last verified by actually running every suite
-below, not assumed:
+written incrementally, milestone by milestone). Current verification state
+and required gates are recorded below:
 
-- **294/294 BCI tests green** (`npm test --prefix bci`), **9/9 bci/ui tests
-  green** (`npm test --prefix bci/ui`), both lint clean, both typecheck
-  clean, `bci/ui` production build clean
+- The preceding branch baseline recorded **294/294 BCI tests green**. The
+  dynamic-capability change adds registry/planner/normalization coverage; its
+  database-backed suite is run by CI with PostgreSQL 16. The database-free BCI
+  checks and **9/9 bci/ui tests** can also run locally. BCI/UI lint, BCI
+  typecheck, and the `bci/ui` production build remain required gates.
 - **IBM Quantum: EXPERIMENTAL — LIVE QPU VALIDATION PENDING.** Every other
   provider (classical, quantum-inspired, local simulator) is IMPLEMENTED
   and independently sufficient — this status does not block using BCI
@@ -592,6 +593,61 @@ below, not assumed:
 - **ANATOLIA-Q regression**: server 544/544 tests + lint + typecheck green,
   client 589/589 tests + lint green, production build clean — no
   ANATOLIA-Q source file has been modified by any BCI work on this branch
+
+## Dynamic Capability Architecture
+
+BCI keeps **intrusiveness** and **capability** as separate dimensions.
+`PASSIVE`, `SAFE_ACTIVE`, `AUTHENTICATED`, and `RESTRICTED` describe how
+invasive an execution may be; they are not capabilities. Capabilities describe
+the work an engine really performs: `SAST`, `SCA`, `SECRETS`, `IAC`, `CONFIG`,
+`SUPPLY_CHAIN`, `NETWORK_DISCOVERY`, `WEB`, `API`, `FUZZ`, `INTRUSIVE`, and
+`DOS` (the bounded Availability / Resilience analysis).
+
+`src/engines/capabilities.js` is the canonical metadata registry. Every engine
+adapter declares `intrusiveness`, `capabilities`, `supportedTargetTypes`, and
+the legacy-compatible `supportedAnalysisTypes` mirror. Adapter validation
+rejects unknown capability IDs or a divergent legacy mirror. The engine
+registry, planner, `/api/v1/engines/capabilities`, `/api/v1/engines/plan`, and
+the existing five-step New Analysis wizard all consume this registry; they do
+not maintain separate capability lists.
+
+The planner derives candidates from registered adapter metadata and evaluates
+target type, requested intrusiveness, selected capabilities, and live engine
+health. The plan API returns every registered engine, including unavailable or
+incompatible engines, with explicit decision/reason metadata. Scan preflight
+then rejects unknown engines, unavailable engines, unsupported targets,
+intrusiveness mismatches, unsupported capabilities, and selections that leave
+a requested capability uncovered. A zero-executable-engine request is rejected
+before queueing; legacy jobs are still protected by the worker's `NO_COVERAGE`
+terminal state.
+
+Current advanced native adapters are deliberately bounded:
+
+- `http-fuzz` (`FUZZ`) sends a fixed input-robustness probe set.
+- `intrusive-validation` (`INTRUSIVE`) validates limited HTTP method behavior
+  without automatic exploitation.
+- `availability-probe` (`DOS`) sends three sequential samples for availability
+  and latency observations; it is not a load generator.
+
+All three report `HEALTHY` only when their real `curl` runtime dependency is
+available. Their anomalous observations enter the normal raw observation →
+normalization → correlation → finding chain and carry engine, capability,
+evidence, and scan/job provenance. Reports expose the same execution
+provenance. In an asset-scoped `FULL` report, Executive, Technical, and
+Remediation sections are asset-scoped while Audit remains explicitly
+organization-wide.
+
+To add a capability, register its metadata once in `capabilities.js`, declare
+it on a real adapter with matching target support and normalization, and
+register that adapter. Planner/API/wizard discovery is automatic. Do not
+register a capability until an engine genuinely executes it, and do not add a
+parallel planner or wizard.
+
+Quantum compute selection remains independent. `CLASSICAL`,
+`QUANTUM_INSPIRED`, `QUANTUM_SIMULATOR`, and `QUANTUM_HARDWARE` keep their
+existing policy/fallback provenance, and IBM Quantum remains **EXPERIMENTAL —
+LIVE QPU VALIDATION PENDING**. With no real optimization problem the result is
+`NOT_APPLICABLE`; no synthetic quantum execution is created.
 
 ## Development
 

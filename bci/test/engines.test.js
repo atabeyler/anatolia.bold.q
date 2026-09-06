@@ -12,10 +12,10 @@ const SCA_FIXTURE = path.join(__dirname, 'fixtures/sca-sample');
 beforeEach(resetDatabase);
 
 describe('engine registry', () => {
-  it('registers exactly the five M5 adapters, each conforming to the adapter contract', () => {
+  it('registers all real adapters, each conforming to the adapter contract', () => {
     const adapters = listAdapters();
     const ids = adapters.map((a) => a.id).sort();
-    expect(ids).toEqual(['naabu', 'nuclei', 'osv-scanner', 'semgrep', 'trivy']);
+    expect(ids).toEqual(['availability-probe', 'http-fuzz', 'intrusive-validation', 'naabu', 'nuclei', 'osv-scanner', 'semgrep', 'trivy']);
     adapters.forEach((a) => expect(() => assertValidAdapter(a)).not.toThrow());
   });
 
@@ -28,7 +28,7 @@ describe('engine registry', () => {
   // used below for the real-engine-execution tests.
   it('healthCheck() never throws, even if a binary is missing (fail visible, not fail crash)', async () => {
     const results = await runHealthChecks();
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(8);
     for (const r of results) {
       expect(['HEALTHY', 'DEGRADED', 'OFFLINE']).toContain(r.status);
     }
@@ -37,7 +37,7 @@ describe('engine registry', () => {
   it('persists registry + health so GET /api/v1/engines has something to read', async () => {
     await runHealthChecks();
     const status = await getEngineStatus();
-    expect(status).toHaveLength(5);
+    expect(status).toHaveLength(8);
     expect(status.every((e) => e.last_checked_at)).toBe(true);
   }, 60_000);
 });

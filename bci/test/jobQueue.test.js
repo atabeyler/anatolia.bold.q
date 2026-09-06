@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { query } from '../src/db/client.js';
 import { resetDatabase, createOrg, createUser } from './helpers/db.js';
 import {
@@ -10,19 +10,19 @@ import {
   cancelJob,
   sweepTimedOutJobs,
 } from '../src/services/jobQueue.js';
-import { runHealthChecks } from '../src/engines/registry.js';
 
-// enqueueScan()'s selectedEngineIds health check reads engine_health, which
-// only real runHealthChecks() ever populates -- resetDatabase() never
-// truncates it (it's a live-status table, not per-test data), so relying on
-// some earlier test file happening to have called runHealthChecks() first
-// is exactly the file-execution-order fragility this suite explicitly
-// avoids elsewhere (see globalSetup.js's engine_registry seeding comment).
-// Running it once here, up front, makes this file's healthy-selection
-// tests correct regardless of run order.
-beforeAll(runHealthChecks, 30_000);
-
-beforeEach(resetDatabase);
+// Preflight reads live engine_health. Seed deterministic statuses here so
+// queue-policy tests do not depend on which scanner binaries are installed.
+beforeEach(async () => {
+  await resetDatabase();
+  for (const engineId of ['semgrep', 'osv-scanner', 'trivy', 'nuclei', 'http-fuzz']) {
+    await query(
+      `INSERT INTO engine_health (engine_id, status, last_checked_at) VALUES ($1, 'HEALTHY', now())
+       ON CONFLICT (engine_id) DO UPDATE SET status = 'HEALTHY', last_checked_at = now()`,
+      [engineId]
+    );
+  }
+});
 
 async function approveScope(orgId, userId, target, allowedScanClasses = ['PASSIVE'], targetType = 'DOMAIN') {
   const { rows } = await query(
@@ -34,13 +34,13 @@ async function approveScope(orgId, userId, target, allowedScanClasses = ['PASSIV
 }
 
 describe('job queue', () => {
-  it('enqueues a QUEUED job with no authorized scope at all (scope enforcement removed)', async () => {
+  it('rejects before queueing when target/class has no executable engine', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
 
     const outcome = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
-    expect(outcome.accepted).toBe(true);
-    expect(outcome.job.status).toBe('QUEUED');
+    expect(outcome.accepted).toBe(false);
+    expect(outcome.decision.reason).toBe('no_executable_engine');
   });
 
   it('with no selectedEngineIds, defaults selected_engine_ids to the full real recommended plan (unchanged pre-existing behavior)', async () => {
@@ -60,7 +60,7 @@ describe('job queue', () => {
     await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
 
     const outcome = await enqueueScan({
-      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['semgrep'],
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['semgrep'], selectedCapabilities: ['SAST'],
     });
     expect(outcome.accepted).toBe(true);
     expect(outcome.job.selected_engine_ids).toEqual(['semgrep']);
@@ -74,7 +74,7 @@ describe('job queue', () => {
 
     // nuclei is a DOMAIN/WEB engine, never recommended for REPOSITORY.
     const outcome = await enqueueScan({
-      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['nuclei'],
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['nuclei'], selectedCapabilities: ['SAST'],
     });
     expect(outcome.accepted).toBe(false);
     expect(outcome.decision.reason).toBe('engine_not_compatible_or_recommended');
@@ -89,7 +89,7 @@ describe('job queue', () => {
     await approveScope(orgId, userId, '/tmp/some-repo', ['PASSIVE'], 'REPOSITORY');
 
     const outcome = await enqueueScan({
-      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: [],
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: [], selectedCapabilities: ['SAST'],
     });
     expect(outcome.accepted).toBe(false);
     expect(outcome.decision.reason).toBe('at_least_one_engine_required');
@@ -105,17 +105,42 @@ describe('job queue', () => {
     );
 
     const outcome = await enqueueScan({
-      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['semgrep'],
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedEngineIds: ['semgrep'], selectedCapabilities: ['SAST'],
     });
     expect(outcome.accepted).toBe(false);
     expect(outcome.decision.reason).toBe('engine_not_healthy');
+  });
+
+  it('rejects unknown or unavailable capabilities before creating a job', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const unknown = await enqueueScan({ orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedCapabilities: ['NOT_REAL'] });
+    expect(unknown.accepted).toBe(false);
+    expect(unknown.decision.reason).toBe('unknown_capability');
+
+    const unavailable = await enqueueScan({ orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE', selectedCapabilities: ['FUZZ'] });
+    expect(unavailable.accepted).toBe(false);
+    expect(unavailable.decision.reason).toBe('capability_unavailable');
+    expect((await query('SELECT count(*)::int AS n FROM scan_jobs')).rows[0].n).toBe(0);
+  });
+
+  it('rejects an engine subset that does not cover every selected capability', async () => {
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    const outcome = await enqueueScan({
+      orgId, actorUserId: userId, target: '/tmp/some-repo', requestedClass: 'PASSIVE',
+      selectedCapabilities: ['SAST', 'SCA'], selectedEngineIds: ['semgrep'],
+    });
+    expect(outcome.accepted).toBe(false);
+    expect(outcome.decision.reason).toBe('selected_engines_do_not_cover_capabilities');
+    expect(outcome.decision.uncoveredCapabilities).toEqual(['SCA']);
   });
 
   it('claimNextJob moves a job to ANALYZING and stamps a timeout', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
 
     const claimed = await claimNextJob('worker-1');
     expect(claimed.id).toBe(job.id);
@@ -128,7 +153,7 @@ describe('job queue', () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
 
     const [a, b] = await Promise.all([claimNextJob('worker-a'), claimNextJob('worker-b')]);
     const claimed = [a, b].filter(Boolean);
@@ -139,7 +164,7 @@ describe('job queue', () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     await claimNextJob('worker-1');
 
     await completeJob(job.id, { ok: true });
@@ -152,7 +177,7 @@ describe('job queue', () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     await claimNextJob('worker-1');
 
     await markNoCoverage(job.id, { enginesRun: [], note: 'no engine coverage for target type DOMAIN' });
@@ -166,7 +191,7 @@ describe('job queue', () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     await query('UPDATE scan_jobs SET max_attempts = 2 WHERE id = $1', [job.id]);
 
     await claimNextJob('worker-1'); // attempt 1
@@ -185,7 +210,7 @@ describe('job queue', () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
 
     const cancelled = await cancelJob({ orgId, actorUserId: userId, jobId: job.id });
     expect(cancelled.status).toBe('CANCELLED');
@@ -198,7 +223,7 @@ describe('job queue', () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, 'example.com');
-    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
+    const { job } = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     await query('UPDATE scan_jobs SET max_attempts = 1 WHERE id = $1', [job.id]);
 
     await claimNextJob('worker-1');

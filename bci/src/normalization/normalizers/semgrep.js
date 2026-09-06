@@ -7,6 +7,7 @@ function extractCweId(cweEntry) {
 export function normalizeSemgrep(raw) {
   return (raw.results || []).map((r) => ({
     category: 'SAST',
+    capabilityId: 'SAST',
     ruleId: r.check_id,
     title: r.check_id,
     description: r.extra?.message,

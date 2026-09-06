@@ -111,7 +111,7 @@ describe('runAnalysisPipeline — real per-job engine selection actually narrows
     // actually executes, proving the selection is honored by the real
     // pipeline, not just recorded and ignored.
     const { job, accepted } = await enqueueScan({
-      orgId, actorUserId: userId, target: repoDir, requestedClass: 'PASSIVE', selectedEngineIds: ['trivy'],
+      orgId, actorUserId: userId, target: repoDir, requestedClass: 'PASSIVE', selectedEngineIds: ['trivy'], selectedCapabilities: ['SCA'],
     });
     expect(accepted).toBe(true);
     expect(job.recommended_engine_ids.sort()).toEqual(['osv-scanner', 'semgrep', 'trivy']);
@@ -195,20 +195,14 @@ describe('runAnalysisPipeline — DOMAIN/URL via Nuclei against a self-owned loc
   }, 60_000);
 });
 
-describe('runAnalysisPipeline — no engine coverage for an unsupported target type', () => {
-  it('completes honestly with zero engines run rather than pretending to scan', async () => {
+describe('scan preflight — no engine coverage for an unsupported target type', () => {
+  it('rejects before queueing rather than creating a zero-engine job', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     await approveScope(orgId, userId, '123456789012', 'CLOUD_ACCOUNT', ['PASSIVE']);
 
     const { accepted } = await enqueueScan({ orgId, actorUserId: userId, target: '123456789012', requestedClass: 'PASSIVE' });
-    expect(accepted).toBe(true);
-
-    const claimed = await claimNextJob('test-worker-3');
-    const result = await runAnalysisPipeline(claimed);
-
-    expect(result.enginesRun).toEqual([]);
-    expect(result.findingIds).toEqual([]);
-    expect(result.note).toMatch(/no engine coverage/);
+    expect(accepted).toBe(false);
+    expect((await query('SELECT count(*)::int AS n FROM scan_jobs')).rows[0].n).toBe(0);
   });
 });

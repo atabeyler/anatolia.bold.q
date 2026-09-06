@@ -11,6 +11,9 @@ import { getAdapter } from '../engines/registry.js';
 // the difference -- adapters themselves stay ignorant of where their input
 // came from.
 export async function prepareExecutionTarget(targetType, target) {
+  if (targetType === 'DOMAIN' || targetType === 'SUBDOMAIN') {
+    return { executionTarget: `https://${target}`, cleanup: async () => {} };
+  }
   if (targetType !== 'REPOSITORY') {
     return { executionTarget: target, cleanup: async () => {} };
   }
@@ -42,6 +45,6 @@ export async function runPlannedEngine(plan, executionTarget) {
     throw err;
   }
 
-  const { raw } = await adapter.execute({ target: executionTarget, mode: plan.mode });
+  const { raw } = await adapter.execute({ target: executionTarget, mode: plan.mode, capabilities: plan.capabilities });
   return raw;
 }

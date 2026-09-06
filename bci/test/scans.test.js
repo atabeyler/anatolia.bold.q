@@ -7,7 +7,16 @@ import { resetDatabase, createOrg, createUser } from './helpers/db.js';
 
 const app = createApp();
 
-beforeEach(resetDatabase);
+beforeEach(async () => {
+  await resetDatabase();
+  for (const engineId of ['nuclei', 'http-fuzz']) {
+    await query(
+      `INSERT INTO engine_health (engine_id, status, last_checked_at) VALUES ($1, 'HEALTHY', now())
+       ON CONFLICT (engine_id) DO UPDATE SET status = 'HEALTHY', last_checked_at = now()`,
+      [engineId]
+    );
+  }
+});
 
 async function tokenFor(orgId, roleId, email = `${roleId}@test.local`) {
   const userId = await createUser(orgId, { email, roleId });
@@ -29,7 +38,7 @@ describe('POST /api/v1/scans', () => {
     const res = await request(app)
       .post('/api/v1/scans')
       .set('Authorization', `Bearer ${token}`)
-      .send({ target: 'example.com', requestedClass: 'PASSIVE' });
+      .send({ target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     expect(res.status).toBe(403);
   });
 
@@ -39,7 +48,7 @@ describe('POST /api/v1/scans', () => {
     const res = await request(app)
       .post('/api/v1/scans')
       .set('Authorization', `Bearer ${token}`)
-      .send({ target: 'example.com', requestedClass: 'PASSIVE' });
+      .send({ target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     expect(res.status).toBe(201);
   });
 
@@ -51,7 +60,7 @@ describe('POST /api/v1/scans', () => {
     const create = await request(app)
       .post('/api/v1/scans')
       .set('Authorization', `Bearer ${token}`)
-      .send({ target: 'example.com', requestedClass: 'PASSIVE' });
+      .send({ target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
     expect(create.status).toBe(201);
     expect(create.body.job.status).toBe('QUEUED');
 
@@ -72,7 +81,7 @@ describe('POST /api/v1/scans', () => {
     const create = await request(app)
       .post('/api/v1/scans')
       .set('Authorization', `Bearer ${token}`)
-      .send({ target: 'example.com', requestedClass: 'PASSIVE' });
+      .send({ target: 'example.com', requestedClass: 'SAFE_ACTIVE' });
 
     await query(
       `INSERT INTO scan_job_engine_runs (job_id, engine_id, status, observation_count, finished_at)
@@ -96,7 +105,7 @@ describe('POST /api/v1/scans', () => {
     const created = await request(app)
       .post('/api/v1/scans')
       .set('Authorization', `Bearer ${b.token}`)
-      .send({ target: 'b-internal.example', requestedClass: 'PASSIVE' });
+      .send({ target: 'b-internal.example', requestedClass: 'SAFE_ACTIVE' });
 
     const a = await tokenFor(orgA, 'operator', 'op@a.test');
     const get = await request(app).get(`/api/v1/scans/${created.body.job.id}`).set('Authorization', `Bearer ${a.token}`);

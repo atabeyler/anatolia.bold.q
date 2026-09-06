@@ -3,6 +3,7 @@ import { redactHttpText } from '../redact.js';
 export function normalizeNuclei(rawLines) {
   return (rawLines || []).map((finding) => ({
     category: 'WEB',
+    capabilityId: 'WEB',
     ruleId: finding['template-id'],
     title: finding.info?.name || finding['template-id'],
     description: finding.info?.description,
