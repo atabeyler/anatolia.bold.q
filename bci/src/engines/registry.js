@@ -6,10 +6,11 @@ import { osvScannerAdapter } from './adapters/osvScanner.js';
 import { semgrepAdapter } from './adapters/semgrep.js';
 import { nucleiAdapter } from './adapters/nuclei.js';
 import { naabuAdapter } from './adapters/naabu.js';
+import { httpFuzzAdapter } from './adapters/httpFuzz.js';
 
 const adapters = new Map();
 function register(adapter) { assertValidAdapter(adapter); adapters.set(adapter.id, adapter); }
-[trivyAdapter, osvScannerAdapter, semgrepAdapter, nucleiAdapter, naabuAdapter].forEach(register);
+[trivyAdapter, osvScannerAdapter, semgrepAdapter, nucleiAdapter, naabuAdapter, httpFuzzAdapter].forEach(register);
 export function getAdapter(id) { return adapters.get(id) || null; }
 export function listAdapters() { return [...adapters.values()]; }
 export function getCapabilityCatalog() { return listCapabilities(); }
