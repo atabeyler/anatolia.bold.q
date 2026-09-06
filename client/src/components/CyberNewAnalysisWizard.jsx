@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { api, cyberAnalysisApi } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
@@ -182,6 +182,19 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
   const [enginePlan, setEnginePlan] = useState(null); // { engines, hasExecutableEngine }
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [selectedEngineIds, setSelectedEngineIds] = useState([]);
+  // Whether the user has manually touched the class dropdown for the
+  // current asset -- once true, BCI never overrides their choice.
+  const [classTouchedByUser, setClassTouchedByUser] = useState(false);
+  // Which asset.target the auto-suggestion below has already run for, so
+  // it only ever probes once per asset rather than on every class change.
+  const autoSuggestedForRef = useRef(null);
+  const [autoSuggestedClass, setAutoSuggestedClass] = useState(null);
+
+  useEffect(() => {
+    setClassTouchedByUser(false);
+    setAutoSuggestedClass(null);
+    autoSuggestedForRef.current = null;
+  }, [resolvedAsset?.target]);
 
   useEffect(() => {
     if (step !== 1 || !resolvedAsset?.target) return;
@@ -195,19 +208,41 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
         setScopeDecision(decision);
         if (decision.decision === 'ALLOW') {
           const plan = await cyberAnalysisApi.getEnginePlan(decision.targetType, requestedClass);
-          if (alive) {
-            setEnginePlan(plan);
-            // Default selection: every recommended engine that is also
-            // actually HEALTHY right now -- the real, immediately runnable
-            // subset of BCI's recommendation. The user can narrow further.
-            setSelectedEngineIds(plan.engines.filter((e) => e.recommended && e.status === 'HEALTHY').map((e) => e.id));
+          if (!alive) return;
+
+          // BCI recommends a scan class too, not just engines: a target
+          // type can genuinely have zero executable engines at one class
+          // (e.g. a DOMAIN target has no engine that can run PASSIVE-only,
+          // since even a missing-HSTS check is a real HTTP request) while
+          // a higher, still-real class does. Probe classes in order once
+          // per asset and jump straight to the lowest one that actually
+          // has something to run, rather than leaving the user stuck on a
+          // default that was never going to work for this target type.
+          if (!classTouchedByUser && !plan.hasExecutableEngine && autoSuggestedForRef.current !== resolvedAsset.target) {
+            autoSuggestedForRef.current = resolvedAsset.target;
+            for (const candidateClass of SCAN_CLASSES) {
+              if (candidateClass === requestedClass) continue;
+              const candidatePlan = await cyberAnalysisApi.getEnginePlan(decision.targetType, candidateClass);
+              if (!alive) return;
+              if (candidatePlan.hasExecutableEngine) {
+                setAutoSuggestedClass(candidateClass);
+                setRequestedClass(candidateClass);
+                return; // re-runs this effect with the better class
+              }
+            }
           }
+
+          setEnginePlan(plan);
+          // Default selection: every recommended engine that is also
+          // actually HEALTHY right now -- the real, immediately runnable
+          // subset of BCI's recommendation. The user can narrow further.
+          setSelectedEngineIds(plan.engines.filter((e) => e.recommended && e.status === 'HEALTHY').map((e) => e.id));
         }
       })
       .catch((err) => alive && setError(err.message))
       .finally(() => alive && setLoadingPlan(false));
     return () => { alive = false; };
-  }, [step, resolvedAsset, requestedClass]);
+  }, [step, resolvedAsset, requestedClass, classTouchedByUser]);
 
   function toggleEngine(engineId) {
     setSelectedEngineIds((ids) => (ids.includes(engineId) ? ids.filter((id) => id !== engineId) : [...ids, engineId]));
@@ -440,9 +475,12 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
           <Panel title={t('cyberWizStepEngines')}>
             <div className="mb-3">
               <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberColClass')}</label>
-              <select className={inputCls} value={requestedClass} onChange={(e) => setRequestedClass(e.target.value)}>
+              <select className={inputCls} value={requestedClass} onChange={(e) => { setClassTouchedByUser(true); setRequestedClass(e.target.value); }}>
                 {SCAN_CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
+              {autoSuggestedClass === requestedClass && (
+                <p className="text-cyan-100/40 text-xs mt-1">{t('cyberWizClassAutoSuggested', { class: autoSuggestedClass })}</p>
+              )}
             </div>
 
             {loadingPlan && <p className="text-cyan-100/50 text-sm">{t('cyberLoading')}</p>}

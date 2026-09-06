@@ -131,6 +131,27 @@ describe('CyberNewAnalysisWizard', () => {
     expect(screen.getByRole('button', { name: /Previous/i })).toBeDisabled();
   });
 
+  it('auto-suggests a higher scan class when PASSIVE has zero executable engines for this target type', async () => {
+    cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
+    cyberAnalysisApi.getEnginePlan.mockImplementation(async (targetType, requestedClass) => {
+      if (requestedClass === 'PASSIVE') {
+        return { engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: false }], hasExecutableEngine: false };
+      }
+      return { engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true }], hasExecutableEngine: true };
+    });
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'New Asset' }));
+    fireEvent.change(screen.getByPlaceholderText('Name'), { target: { value: 'x' } });
+    fireEvent.change(screen.getByPlaceholderText(/Target/), { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add asset/i }));
+    await waitFor(() => expect(cyberAnalysisApi.createAsset).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('SAFE_ACTIVE'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled());
+    expect(screen.getByText(/switched to SAFE_ACTIVE/i)).toBeInTheDocument();
+  });
+
   it('defaults engine selection to the recommended+healthy subset and lets the user narrow it, blocking Next at zero', async () => {
     cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'REPOSITORY' });
     cyberAnalysisApi.getEnginePlan.mockResolvedValue({

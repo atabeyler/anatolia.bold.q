@@ -522,5 +522,6 @@
   "cyberWizNotApplicable": "Nicht zutreffend — keine offenen Befunde zu optimieren",
   "cyberWizEngineRequired": "Wählen Sie mindestens eine Engine aus, um fortzufahren",
   "cyberEnginesGuideNote": "Referenzbereich — der vollständige Engine-Katalog und sein Live-Status, kein Scan-Einrichtungsbildschirm. Um Engines für einen echten Scan auszuwählen, verwenden Sie Neue Analyse.",
-  "cyberQuantumGuideNote": "Referenzbereich — Anbieterstatus und Organisationsrichtlinie, kein Auswahlbildschirm pro Scan. Um eine Berechnungsmethode für einen echten Scan auszuwählen, verwenden Sie Neue Analyse."
+  "cyberQuantumGuideNote": "Referenzbereich — Anbieterstatus und Organisationsrichtlinie, kein Auswahlbildschirm pro Scan. Um eine Berechnungsmethode für einen echten Scan auszuwählen, verwenden Sie Neue Analyse.",
+  "cyberWizClassAutoSuggested": "BCI ist zu {{class}} gewechselt -- für dieses Ziel gibt es bei einer niedrigeren Klasse keine echte Engine-Abdeckung."
 }

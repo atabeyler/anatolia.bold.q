@@ -522,5 +522,6 @@
   "cyberWizNotApplicable": "Non applicable — aucun résultat ouvert à optimiser",
   "cyberWizEngineRequired": "Sélectionnez au moins un moteur pour continuer",
   "cyberEnginesGuideNote": "Panneau de référence — le catalogue complet des moteurs et leur état en direct, pas un écran de configuration d'analyse. Pour choisir des moteurs pour une analyse réelle, utilisez Nouvelle analyse.",
-  "cyberQuantumGuideNote": "Panneau de référence — état des fournisseurs et politique de l'organisation, pas un écran de sélection par analyse. Pour choisir une méthode de calcul pour une analyse réelle, utilisez Nouvelle analyse."
+  "cyberQuantumGuideNote": "Panneau de référence — état des fournisseurs et politique de l'organisation, pas un écran de sélection par analyse. Pour choisir une méthode de calcul pour une analyse réelle, utilisez Nouvelle analyse.",
+  "cyberWizClassAutoSuggested": "BCI est passé à {{class}} -- cette cible n'a aucune couverture réelle de moteur à une classe inférieure."
 }

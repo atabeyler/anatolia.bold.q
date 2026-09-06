@@ -522,5 +522,6 @@
   "cyberWizNotApplicable": "Not applicable — no open findings to optimize",
   "cyberWizEngineRequired": "Select at least one engine to continue",
   "cyberEnginesGuideNote": "Reference panel — the full engine catalog and its live health, not a scan setup screen. To pick engines for an actual scan, use New Analysis.",
-  "cyberQuantumGuideNote": "Reference panel — provider health and org policy, not a per-scan selection screen. To pick a compute method for an actual scan, use New Analysis."
+  "cyberQuantumGuideNote": "Reference panel — provider health and org policy, not a per-scan selection screen. To pick a compute method for an actual scan, use New Analysis.",
+  "cyberWizClassAutoSuggested": "BCI switched to {{class}} -- this target has no real engine coverage at a lower class."
 }
