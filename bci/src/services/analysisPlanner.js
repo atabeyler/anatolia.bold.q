@@ -7,6 +7,10 @@ function allowedUpTo(requestedClass) {
   return new Set(INTRUSIVENESS_ORDER.slice(0, idx + 1));
 }
 
+const WEB_ACTIVE = [
+  { engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' },
+  { engineId: 'http-fuzz', intrusiveness: 'SAFE_ACTIVE', mode: 'url' },
+];
 const ENGINE_PLAN_BY_TARGET_TYPE = {
   REPOSITORY: [
     { engineId: 'semgrep', intrusiveness: 'PASSIVE', mode: 'fs' },
@@ -14,10 +18,10 @@ const ENGINE_PLAN_BY_TARGET_TYPE = {
     { engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'fs' },
   ],
   CONTAINER: [{ engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'image' }],
-  DOMAIN: [{ engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' }],
-  SUBDOMAIN: [{ engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' }],
-  URL: [{ engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' }],
-  API: [{ engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' }],
+  DOMAIN: WEB_ACTIVE,
+  SUBDOMAIN: WEB_ACTIVE,
+  URL: WEB_ACTIVE,
+  API: WEB_ACTIVE,
   IP: [{ engineId: 'naabu', intrusiveness: 'SAFE_ACTIVE', mode: 'host' }],
   CIDR: [{ engineId: 'naabu', intrusiveness: 'SAFE_ACTIVE', mode: 'host' }],
   CLOUD_ACCOUNT: [], KUBERNETES_CLUSTER: [],
