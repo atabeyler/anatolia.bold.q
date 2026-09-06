@@ -12,6 +12,15 @@ scansRouter.use(requireAuth);
 const createScanSchema = z.object({
   target: z.string().min(1),
   requestedClass: z.enum(['PASSIVE', 'SAFE_ACTIVE', 'AUTHENTICATED', 'RESTRICTED']),
+  // Real per-job engine selection (spec: BCI recommends, the caller
+  // chooses among the recommendation, selected engines actually run) --
+  // validated against the real recommendation in jobQueue.js#enqueueScan.
+  // Omitted entirely = the full recommended plan, same as before this existed.
+  selectedEngineIds: z.array(z.string().min(1)).optional(),
+  // The wizard's Quantum-step choice, stored for later use once this job's
+  // findings exist -- see routes/quantum.js's remediation-optimize, which
+  // is where a compute method actually ever executes.
+  selectedComputeMode: z.enum(['CLASSICAL', 'QUANTUM_INSPIRED', 'QUANTUM_SIMULATOR', 'QUANTUM_HARDWARE']).optional(),
 });
 
 // This is the one place a scan actually starts. It never bypasses the
@@ -29,10 +38,12 @@ scansRouter.post('/', requirePermission('scan:create'), async (req, res) => {
     actorUserId: req.auth.userId,
     target: parsed.data.target,
     requestedClass: parsed.data.requestedClass,
+    selectedEngineIds: parsed.data.selectedEngineIds,
+    selectedComputeMode: parsed.data.selectedComputeMode,
   });
 
   if (!outcome.accepted) {
-    return res.status(403).json({ error: 'scope_denied', reason: outcome.decision.reason, requestId: req.id });
+    return res.status(403).json({ error: 'scope_denied', reason: outcome.decision.reason, requestId: req.id, ...outcome.decision });
   }
 
   res.status(201).json({ job: outcome.job });

@@ -45,6 +45,11 @@ quantumRouter.put('/policy', requirePermission('system:manage'), async (req, res
 const optimizeSchema = z.object({
   effortBudget: z.number().int().positive(),
   dataClassification: z.enum(['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'SECRET']).default('INTERNAL'),
+  // All optional and additive -- omitting them keeps the pre-existing
+  // org-wide, no-preference behavior byte-identical.
+  findingIds: z.array(z.string().uuid()).optional(),
+  preferredMode: z.enum(['CLASSICAL', 'QUANTUM_INSPIRED', 'QUANTUM_SIMULATOR', 'QUANTUM_HARDWARE']).optional(),
+  scanJobId: z.string().uuid().optional(),
 });
 
 quantumRouter.post('/remediation-optimize', requirePermission('finding:update'), async (req, res) => {
@@ -56,6 +61,9 @@ quantumRouter.post('/remediation-optimize', requirePermission('finding:update'),
     actorUserId: req.auth.userId,
     effortBudget: parsed.data.effortBudget,
     dataClassification: parsed.data.dataClassification,
+    findingIds: parsed.data.findingIds,
+    preferredMode: parsed.data.preferredMode,
+    scanJobId: parsed.data.scanJobId,
   });
   res.json(result);
 });

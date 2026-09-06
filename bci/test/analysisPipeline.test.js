@@ -71,11 +71,50 @@ describe('runAnalysisPipeline — REPOSITORY (real clone + real engines, skips i
     expect(result.enginesRun.length).toBeGreaterThan(0);
     expect(result.findingIds.length).toBeGreaterThan(0);
 
+    // The guard above only requires at least one of the three real SAST/SCA
+    // binaries to be healthy -- not all three -- so a planned-but-unhealthy
+    // engine here is legitimately SKIPPED, never FAILED, matching the
+    // "one engine unavailable never masks as job-level success" contract
+    // tested explicitly below. Only the engines that actually ran must be
+    // COMPLETED; asserting it of every planned engine would fail on any
+    // real environment (this one included) that doesn't have every one of
+    // osv-scanner/semgrep/trivy installed.
     const { rows: runs } = await query('SELECT engine_id, status FROM scan_job_engine_runs WHERE job_id = $1', [job.id]);
-    expect(runs.every((r) => r.status === 'COMPLETED')).toBe(true);
+    const ranRuns = runs.filter((r) => result.enginesRun.includes(r.engine_id));
+    const notRanRuns = runs.filter((r) => !result.enginesRun.includes(r.engine_id));
+    expect(ranRuns.every((r) => r.status === 'COMPLETED')).toBe(true);
+    expect(notRanRuns.every((r) => r.status === 'SKIPPED')).toBe(true);
 
     const { rows: findings } = await query('SELECT * FROM findings WHERE id = ANY($1)', [result.findingIds]);
     expect(findings.every((f) => f.risk_score !== null)).toBe(true);
+  }, 60_000);
+});
+
+describe('runAnalysisPipeline — real per-job engine selection actually narrows what runs', () => {
+  it('only runs the user-selected engine, not the other recommended ones, when selectedEngineIds narrows the plan', async () => {
+    if (!(await ifHealthy('trivy'))) return;
+
+    const orgId = await createOrg();
+    const userId = await createUser(orgId, { roleId: 'operator' });
+    await approveScope(orgId, userId, repoDir, 'REPOSITORY');
+
+    // REPOSITORY's real recommended plan is semgrep+osv-scanner+trivy
+    // (analysisPlanner.js) -- selecting only trivy must mean only trivy
+    // actually executes, proving the selection is honored by the real
+    // pipeline, not just recorded and ignored.
+    const { job, accepted } = await enqueueScan({
+      orgId, actorUserId: userId, target: repoDir, requestedClass: 'PASSIVE', selectedEngineIds: ['trivy'],
+    });
+    expect(accepted).toBe(true);
+    expect(job.recommended_engine_ids.sort()).toEqual(['osv-scanner', 'semgrep', 'trivy']);
+    expect(job.selected_engine_ids).toEqual(['trivy']);
+
+    const claimed = await claimNextJob('test-worker-selection');
+    const result = await runAnalysisPipeline(claimed);
+    expect(result.enginesRun).toEqual(['trivy']);
+
+    const { rows: runs } = await query('SELECT engine_id FROM scan_job_engine_runs WHERE job_id = $1', [job.id]);
+    expect(runs.map((r) => r.engine_id)).toEqual(['trivy']);
   }, 60_000);
 });
 

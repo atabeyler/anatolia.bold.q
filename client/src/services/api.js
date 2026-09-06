@@ -374,6 +374,13 @@ export const cyberAnalysisApi = {
   getQuantumPolicy: () => bciProxy('/quantum/policy'),
   setQuantumPolicy: (policy) => bciProxy('/quantum/policy', { method: 'PUT', body: policy }),
   runRemediationOptimize: (effortBudget) => bciProxy('/quantum/remediation-optimize', { method: 'POST', body: { effortBudget } }),
+  // Real per-scan optimization (New Analysis wizard step 5): scopes to the
+  // job's own findings and carries the wizard's real compute-method choice
+  // through to executionPolicy.js's actual fallback chain -- see
+  // bci/src/routes/quantum.js's remediation-optimize schema for the exact
+  // real options this accepts (effortBudget, dataClassification,
+  // findingIds, preferredMode, scanJobId), all optional/additive.
+  optimizeRemediationForScan: (options) => bciProxy('/quantum/remediation-optimize', { method: 'POST', body: options }),
   listQuantumBenchmarks: () => bciProxy('/quantum/benchmarks'),
   listQuantumJobs: () => bciProxy('/quantum/jobs'),
 

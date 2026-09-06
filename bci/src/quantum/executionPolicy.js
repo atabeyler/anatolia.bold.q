@@ -55,12 +55,36 @@ function classificationAllowed(dataClassification, maxAllowed) {
 // carries the real reason the step above it wasn't used, so a resolved
 // mode is never mislabeled as CLASSICAL when quantum-inspired was actually
 // what ran.
-export function decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize, quantumInspiredMaxSize }) {
+// preferredMode (optional) is the wizard's real per-run compute-method
+// choice (spec: BCI recommends, the user decides which method to START
+// the real fallback chain from). It never bypasses policy/health/size --
+// it only picks where in the existing HARDWARE -> SIMULATOR -> INSPIRED ->
+// CLASSICAL chain to enter: CLASSICAL returns immediately (always
+// available, nothing to fall back from); QUANTUM_INSPIRED enters at the
+// quantum-inspired check (skips simulator/hardware entirely, still allowed
+// to fall to classical if quantum-inspired itself is unavailable);
+// QUANTUM_SIMULATOR enters at the simulator check (skips hardware, still
+// cascades down through inspired/classical on failure); QUANTUM_HARDWARE
+// (or no preference at all) is today's existing top-of-chain behavior,
+// unchanged. A caller that never passes preferredMode gets byte-identical
+// behavior to before this parameter existed.
+export function decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize, quantumInspiredMaxSize, preferredMode }) {
+  if (preferredMode === COMPUTE_MODES.CLASSICAL) {
+    return { mode: COMPUTE_MODES.CLASSICAL, reason: 'user_selected_classical' };
+  }
+
   if (!policy.allowQuantumSimulator && !policy.allowQuantumHardware) {
     return { mode: COMPUTE_MODES.CLASSICAL, reason: 'org_policy_denies_quantum' };
   }
 
   const ctx = { policy, problemSize, providerHealthById, simulatorMaxSize, quantumInspiredMaxSize };
+
+  if (preferredMode === COMPUTE_MODES.QUANTUM_INSPIRED) {
+    return fallBackFromSimulator(ctx, 'user_selected_quantum_inspired');
+  }
+  if (preferredMode === COMPUTE_MODES.QUANTUM_SIMULATOR) {
+    return fallBackFromHardware(ctx, 'user_selected_simulator_skips_hardware');
+  }
 
   // Real IBM hardware is tried first (when allowed) since it's the only
   // mode that actually runs on a physical QPU -- but a block at any one of
@@ -121,7 +145,7 @@ function fallBackFromSimulator(ctx, reasonIfQuantumInspiredUsed) {
   return { mode: COMPUTE_MODES.CLASSICAL, reason: classicalReason };
 }
 
-export async function resolveExecutionMode({ orgId, problemSize, dataClassification = 'INTERNAL' }) {
+export async function resolveExecutionMode({ orgId, problemSize, dataClassification = 'INTERNAL', preferredMode }) {
   const policy = await getQuantumPolicy(orgId);
   const providerHealthById = {};
   for (const id of ['quantum_simulator', 'ibm_quantum', 'quantum_inspired']) {
@@ -131,5 +155,5 @@ export async function resolveExecutionMode({ orgId, problemSize, dataClassificat
   const hardwareMaxSize = getQuantumProvider('ibm_quantum').getCapabilities().maxProblemSize;
   const quantumInspiredMaxSize = getQuantumProvider('quantum_inspired').getCapabilities().maxProblemSize;
 
-  return decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize, quantumInspiredMaxSize });
+  return decideExecutionMode({ problemSize, policy, dataClassification, providerHealthById, simulatorMaxSize, hardwareMaxSize, quantumInspiredMaxSize, preferredMode });
 }

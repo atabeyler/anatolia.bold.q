@@ -505,5 +505,20 @@
   "cyberAnalysisHistory": "Analiz Geçmişi",
   "cyberNoHistoryYet": "Henüz tamamlanmış analiz yok",
   "cyberColReportsForAsset": "Raporlar",
-  "cyberGenerateReportForAsset": "Bu Varlık İçin Rapor Oluştur"
+  "cyberGenerateReportForAsset": "Bu Varlık İçin Rapor Oluştur",
+  "cyberWizSelectEngines": "Çalıştırılacak motorları seçin",
+  "cyberWizComputeMethod": "Hesaplama yöntemi",
+  "cyberWizNotConfigured": "Bu kuruluş için yapılandırılmamış",
+  "cyberWizPolicyDenied": "Kuruluşun kuantum politikası tarafından devre dışı bırakıldı",
+  "cyberWizOptimizationParams": "Optimizasyon parametreleri",
+  "cyberEffortBudgetLabel": "Efor bütçesi",
+  "cyberDataClassificationLabel": "Veri sınıflandırması",
+  "cyberWizProvenanceTitle": "Seçim kökeni",
+  "cyberWizBciRecommended": "BCI önerisi",
+  "cyberWizYouSelected": "Seçiminiz",
+  "cyberWizActuallyUsed": "Fiilen kullanılan",
+  "cyberWizFallbackOccurred": "Yedek yönteme geçildi",
+  "cyberWizOptimizationVerdict": "Optimizasyon sonucu",
+  "cyberWizNotApplicable": "Uygulanamaz — optimize edilecek açık bulgu yok",
+  "cyberWizEngineRequired": "Devam etmek için en az bir motor seçin"
 }

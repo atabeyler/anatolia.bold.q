@@ -1,6 +1,9 @@
 import { pool, query } from '../db/client.js';
 import { evaluateScopeAuthorization } from './policyEngine.js';
 import { recordAuditEvent } from './audit.js';
+import { planEngines } from './analysisPlanner.js';
+import { getEngineCatalog } from '../engines/registry.js';
+import { resolveExecutionMode } from '../quantum/executionPolicy.js';
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -8,17 +11,58 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 // the database as a job row -- there is no "create job now, check policy
 // later" path, because that would be the AI-changes-the-authorization-
 // decision bug in table form.
-export async function enqueueScan({ orgId, actorUserId, target, requestedClass }) {
+//
+// selectedEngineIds (optional) is the wizard's real per-job engine choice
+// (spec: "BCI ÖNERİR -> KULLANICI SEÇER -> SEÇİLEN MOTORLAR GERÇEKTEN
+// ÇALIŞIR"). It is validated against analysisPlanner.js's own real
+// recommendation for this target type + class -- never trusted as an
+// arbitrary engine id list -- so a caller can narrow the recommended plan
+// (skip an engine it doesn't want run) but can never add an incompatible
+// or unhealthy one. Omitted entirely (the pre-existing quick-scan path),
+// it defaults to the full recommended plan, identical to today's behavior.
+export async function enqueueScan({ orgId, actorUserId, target, requestedClass, selectedEngineIds, selectedComputeMode }) {
   const decision = await evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass });
   if (decision.decision !== 'ALLOW') {
     return { accepted: false, decision };
   }
 
+  const recommended = planEngines(decision.targetType, requestedClass);
+  const recommendedIds = recommended.map((p) => p.engineId);
+
+  let selected = recommendedIds;
+  if (selectedEngineIds !== undefined) {
+    if (!Array.isArray(selectedEngineIds) || selectedEngineIds.length === 0) {
+      return { accepted: false, decision: { decision: 'DENY', reason: 'at_least_one_engine_required' } };
+    }
+    const invalid = selectedEngineIds.filter((id) => !recommendedIds.includes(id));
+    if (invalid.length > 0) {
+      return { accepted: false, decision: { decision: 'DENY', reason: 'engine_not_compatible_or_recommended', invalidEngineIds: invalid } };
+    }
+    const catalog = await getEngineCatalog();
+    const unhealthy = selectedEngineIds.filter((id) => catalog.find((e) => e.id === id)?.status !== 'HEALTHY');
+    if (unhealthy.length > 0) {
+      return { accepted: false, decision: { decision: 'DENY', reason: 'engine_not_healthy', unhealthyEngineIds: unhealthy } };
+    }
+    selected = selectedEngineIds;
+  }
+
+  // Real policy+health-driven recommendation (executionPolicy.js's actual
+  // fallback chain), just without a real problem size yet -- findings don't
+  // exist until the scan itself runs, so this can only reflect current
+  // policy/provider health, not a size-aware decision. The real,
+  // size-aware actual_mode + fallback_reason are only known once
+  // remediation-optimize genuinely runs against this job's findings (see
+  // quantum/benchmark.js) -- this is BCI's informational suggestion at
+  // Wizard step 3, not a claim about what will execute.
+  const recommendedComputeMode = (await resolveExecutionMode({ orgId, problemSize: 1, dataClassification: 'INTERNAL' })).mode;
+
   const { rows } = await query(
-    `INSERT INTO scan_jobs (org_id, requested_by, target, requested_class, scope_id, target_type)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, status, created_at`,
-    [orgId, actorUserId, target, requestedClass, decision.scopeId, decision.targetType]
+    `INSERT INTO scan_jobs (
+       org_id, requested_by, target, requested_class, scope_id, target_type,
+       recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     RETURNING id, status, created_at, recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode`,
+    [orgId, actorUserId, target, requestedClass, decision.scopeId, decision.targetType, recommendedIds, selected, recommendedComputeMode, selectedComputeMode ?? null]
   );
 
   await recordAuditEvent({
@@ -28,7 +72,7 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass }
     targetType: 'scan_job',
     targetId: rows[0].id,
     result: 'SUCCESS',
-    metadata: { target, requestedClass },
+    metadata: { target, requestedClass, recommendedEngineIds: recommendedIds, selectedEngineIds: selected, recommendedComputeMode, selectedComputeMode: selectedComputeMode ?? null },
   });
 
   return { accepted: true, job: rows[0] };

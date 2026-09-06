@@ -24,7 +24,17 @@ async function recordEngineRun(jobId, engineId, status, detail, observationCount
 //   verification + confidence + risk, M7/M9) -> SECURITY GRAPH
 // Reporting is on-demand (M12), not generated automatically per job.
 export async function runAnalysisPipeline(job) {
-  const plan = planEngines(job.target_type, job.requested_class);
+  const recommendedPlan = planEngines(job.target_type, job.requested_class);
+  // job.selected_engine_ids (set at enqueueScan time, jobQueue.js) is
+  // always a validated subset of recommendedPlan's engine ids -- never an
+  // arbitrary list -- so this only ever narrows what runs, it can't smuggle
+  // in an incompatible/unhealthy engine the planner didn't recommend. A
+  // null/empty selection (every job created before this existed, and the
+  // default when a caller never specifies one) runs the full recommended
+  // plan, identical to the pre-selection behavior.
+  const plan = job.selected_engine_ids?.length
+    ? recommendedPlan.filter((p) => job.selected_engine_ids.includes(p.engineId))
+    : recommendedPlan;
 
   if (plan.length === 0) {
     logger.warn({ jobId: job.id, targetType: job.target_type }, 'No engine coverage for this target type');

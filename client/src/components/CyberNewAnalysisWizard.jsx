@@ -11,23 +11,38 @@ import { useLang } from '../services/langContext.jsx';
 // going back after that would let a user silently change what an
 // in-flight job is analyzing, so the wizard simply doesn't allow it.
 //
-// Two real backend constraints, discovered by reading bci/src before
-// writing this (not assumed), shape what this wizard can honestly offer:
-//   1. analysisPlanner.js's engine selection is a pure function of
-//      (target type, requested scan class) -- there is no per-job
-//      parameter to override which specific engines run. So step 2 shows
-//      real compatibility/recommendation/health for every registered
-//      engine, but the only lever the user actually has is the requested
-//      class (which the planner is genuinely sensitive to); it does not
-//      offer a per-engine "custom selection" checkbox set, because nothing
-//      on the backend would honor it.
-//   2. Quantum/optimization (bci/src/quantum) is the Remediation
-//      Optimizer -- it runs later, across existing org findings, and is
-//      never invoked by analysisPipeline.js as part of a scan job. Step 3
-//      is therefore an honest, informational step (real provider health),
-//      not a "pick a compute method for this scan" step -- there is no
-//      real per-scan quantum execution to select or run.
+// Real backend contract this UI honors (BCI recommends, the user decides,
+// only the real selection ever executes):
+//   1. Step 2 (Engines): analysisPlanner.js still computes the real
+//      recommended+compatible+healthy plan for (target type, requested
+//      class), but jobQueue.js's enqueueScan() now accepts a real
+//      selectedEngineIds -- a non-empty subset of that recommendation,
+//      each entry independently required to be HEALTHY. Anything outside
+//      the recommendation, or unhealthy, is rejected server-side; the UI
+//      only lets the user narrow the checked set, never widen it.
+//   2. Step 3 (Quantum): the Remediation Optimizer (bci/src/quantum) is
+//      still the only thing that ever runs a quantum/quantum-inspired
+//      computation, and it still only runs post-scan over real findings
+//      -- so the mode picked here is a real *preference* carried forward
+//      (scan_jobs.selected_compute_mode at creation, then passed as
+//      preferredMode to the optimizer in step 5), never an execution that
+//      happens during the scan itself. decideExecutionMode() in
+//      executionPolicy.js is the sole authority on what actually runs --
+//      org policy and live provider health can still force a fallback,
+//      which step 5 reports honestly (selected vs. actual mode, and why).
+//   3. Only genuinely backend-supported optimize parameters are exposed:
+//      effortBudget and dataClassification (quantum.js's optimizeSchema).
+//      No frontend-only parameter is invented.
 const STEPS = ['asset', 'engines', 'quantum', 'scan', 'result'];
+const COMPUTE_MODES = ['CLASSICAL', 'QUANTUM_INSPIRED', 'QUANTUM_SIMULATOR', 'QUANTUM_HARDWARE'];
+const DATA_CLASSIFICATIONS = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'SECRET'];
+// Provider id that implements each compute mode (bci/src/quantum/registry.js).
+const PROVIDER_ID_BY_MODE = {
+  CLASSICAL: 'classical',
+  QUANTUM_INSPIRED: 'quantum_inspired',
+  QUANTUM_SIMULATOR: 'quantum_simulator',
+  QUANTUM_HARDWARE: 'ibm_quantum',
+};
 const ASSET_TYPES = ['DOMAIN', 'HOST', 'WEB_APP', 'API', 'REPOSITORY', 'CONTAINER', 'CLOUD_RESOURCE', 'IDENTITY', 'SERVICE'];
 const IDENTIFIER_TYPE_BY_ASSET_TYPE = {
   DOMAIN: 'DOMAIN', HOST: 'IP', WEB_APP: 'URL', API: 'URL', REPOSITORY: 'REPO_URL',
@@ -160,11 +175,13 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
     setResolvedAsset(asset);
   }
 
-  // Step 2 -- Engines
+  // Step 2 -- Engines: BCI recommends, the user narrows the checked set --
+  // never widens it (server enforces the same bound independently).
   const [requestedClass, setRequestedClass] = useState('PASSIVE');
   const [scopeDecision, setScopeDecision] = useState(null); // { decision, reason, targetType }
   const [enginePlan, setEnginePlan] = useState(null); // { engines, hasExecutableEngine }
   const [loadingPlan, setLoadingPlan] = useState(false);
+  const [selectedEngineIds, setSelectedEngineIds] = useState([]);
 
   useEffect(() => {
     if (step !== 1 || !resolvedAsset?.target) return;
@@ -178,7 +195,13 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
         setScopeDecision(decision);
         if (decision.decision === 'ALLOW') {
           const plan = await cyberAnalysisApi.getEnginePlan(decision.targetType, requestedClass);
-          if (alive) setEnginePlan(plan);
+          if (alive) {
+            setEnginePlan(plan);
+            // Default selection: every recommended engine that is also
+            // actually HEALTHY right now -- the real, immediately runnable
+            // subset of BCI's recommendation. The user can narrow further.
+            setSelectedEngineIds(plan.engines.filter((e) => e.recommended && e.status === 'HEALTHY').map((e) => e.id));
+          }
         }
       })
       .catch((err) => alive && setError(err.message))
@@ -186,13 +209,51 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
     return () => { alive = false; };
   }, [step, resolvedAsset, requestedClass]);
 
-  // Step 3 -- Quantum (informational only -- see file header)
+  function toggleEngine(engineId) {
+    setSelectedEngineIds((ids) => (ids.includes(engineId) ? ids.filter((id) => id !== engineId) : [...ids, engineId]));
+  }
+
+  // Step 3 -- Quantum: a real preference among the modes the org's policy
+  // and live provider health actually allow right now. The final decision
+  // (with any forced fallback) is always made server-side, at optimize
+  // time in step 5, by decideExecutionMode() -- this is a preference, not
+  // an execution.
   const [quantumProviders, setQuantumProviders] = useState(null);
+  const [quantumPolicy, setQuantumPolicy] = useState(null);
+  const [selectedComputeMode, setSelectedComputeMode] = useState(null);
+  const [effortBudget, setEffortBudget] = useState(5);
+  const [dataClassification, setDataClassification] = useState('INTERNAL');
 
   useEffect(() => {
     if (step !== 2) return;
-    cyberAnalysisApi.listQuantumProviders().then((r) => setQuantumProviders(r.providers)).catch((err) => setError(err.message));
+    Promise.all([cyberAnalysisApi.listQuantumProviders(), cyberAnalysisApi.getQuantumPolicy()])
+      .then(([providersRes, policyRes]) => {
+        setQuantumProviders(providersRes.providers);
+        setQuantumPolicy(policyRes.policy);
+        const usable = (mode) => {
+          const provider = providersRes.providers.find((p) => p.id === PROVIDER_ID_BY_MODE[mode]);
+          if (!provider || provider.status !== 'AVAILABLE') return false;
+          if (mode === 'QUANTUM_SIMULATOR') return policyRes.policy.allowQuantumSimulator;
+          if (mode === 'QUANTUM_HARDWARE') return policyRes.policy.allowQuantumHardware;
+          return true; // CLASSICAL and QUANTUM_INSPIRED are never policy-gated
+        };
+        // Same top-of-chain preference order as decideExecutionMode()'s
+        // default fallback (HARDWARE -> SIMULATOR -> INSPIRED -> CLASSICAL)
+        // -- a suggestion only; the real decision still happens server-side.
+        const recommended = ['QUANTUM_HARDWARE', 'QUANTUM_SIMULATOR', 'QUANTUM_INSPIRED', 'CLASSICAL'].find(usable) || 'CLASSICAL';
+        setSelectedComputeMode(recommended);
+      })
+      .catch((err) => setError(err.message));
   }, [step]);
+
+  function isComputeModeUsable(mode) {
+    if (!quantumProviders || !quantumPolicy) return false;
+    const provider = quantumProviders.find((p) => p.id === PROVIDER_ID_BY_MODE[mode]);
+    if (!provider || provider.status !== 'AVAILABLE') return false;
+    if (mode === 'QUANTUM_SIMULATOR') return quantumPolicy.allowQuantumSimulator;
+    if (mode === 'QUANTUM_HARDWARE') return quantumPolicy.allowQuantumHardware;
+    return true;
+  }
 
   // Step 4 -- Scan (plan freezes the instant the job is created)
   const [job, setJob] = useState(null);
@@ -224,10 +285,16 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
     setStarting(true);
     setError(null);
     try {
-      const { job: created } = await cyberAnalysisApi.createScan({ target: resolvedAsset.target, requestedClass });
+      const { job: created } = await cyberAnalysisApi.createScan({
+        target: resolvedAsset.target,
+        requestedClass,
+        selectedEngineIds,
+        selectedComputeMode,
+      });
       setJob(created);
       const { engineRuns: runs } = await cyberAnalysisApi.getScanEngineRuns(created.id).catch(() => ({ engineRuns: [] }));
       setEngineRuns(runs);
+      if (created.status === 'COMPLETED' || created.status === 'NO_COVERAGE') setStep(4);
     } catch (err) {
       setError(err.data?.reason ? `${err.message}: ${err.data.reason}` : err.message);
     } finally {
@@ -236,22 +303,38 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
   }
 
   // Step 5 -- Result: real findings for this target, aggregated the same
-  // way assetSummary.js does server-side, over api.cyberAnalysisFindings().
+  // way assetSummary.js does server-side, over api.cyberAnalysisFindings(),
+  // plus the real per-scan remediation optimization run against exactly
+  // this job's findings, carrying the wizard's chosen compute-method
+  // preference through to the real fallback chain.
   const [resultFindings, setResultFindings] = useState(null);
+  const [optimization, setOptimization] = useState(null); // real optimizeRemediation() result, or null while pending
+  const [optimizing, setOptimizing] = useState(false);
 
   useEffect(() => {
-    if (step !== 4 || !resolvedAsset?.target) return;
+    if (step !== 4 || !resolvedAsset?.target || !job) return;
     api.cyberAnalysisFindings().then((r) => {
       setResultFindings(r.findings.filter((f) => f.target === resolvedAsset.target));
     }).catch(() => setResultFindings([]));
-  }, [step, resolvedAsset]);
+
+    if (job.status !== 'COMPLETED') return; // NO_COVERAGE/FAILED/etc. have no findings to optimize
+    setOptimizing(true);
+    cyberAnalysisApi.optimizeRemediationForScan({
+      effortBudget,
+      dataClassification,
+      findingIds: job.result?.findingIds || [],
+      preferredMode: selectedComputeMode,
+      scanJobId: job.id,
+    }).then(setOptimization).catch((err) => setError(err.message)).finally(() => setOptimizing(false));
+  }, [step, resolvedAsset, job]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const planFrozen = !!job;
   const canGoBack = step > 0 && step < 3; // never back past a created job (step 3=scan once job exists), never past result
   const stepLabels = [t('cyberWizStepAsset'), t('cyberWizStepEngines'), t('cyberWizStepQuantum'), t('cyberWizStepScan'), t('cyberWizStepResult')];
 
   const canProceedFromAsset = !!resolvedAsset?.target;
-  const canProceedFromEngines = scopeDecision?.decision === 'ALLOW' && !!enginePlan?.hasExecutableEngine;
+  const canProceedFromEngines = scopeDecision?.decision === 'ALLOW' && !!enginePlan?.hasExecutableEngine && selectedEngineIds.length > 0;
+  const canProceedFromQuantum = !!selectedComputeMode;
 
   return (
     <div className="fixed inset-0 z-[99] bg-black/80 overflow-y-auto p-3 sm:p-6">
@@ -370,18 +453,25 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
 
             {enginePlan && (
               <>
+                <p className="text-cyan-100/40 text-xs mb-2">{t('cyberWizSelectEngines')}</p>
                 <div className={tableWrap}>
                   <table className="w-full">
-                    <thead><tr><th className={th}>{t('cyberColEngine')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberWizCompatible')}</th><th className={th}>{t('cyberWizRecommendation')}</th></tr></thead>
+                    <thead><tr><th className={th}></th><th className={th}>{t('cyberColEngine')}</th><th className={th}>{t('cyberColStatus')}</th><th className={th}>{t('cyberWizCompatible')}</th><th className={th}>{t('cyberWizRecommendation')}</th></tr></thead>
                     <tbody>
-                      {enginePlan.engines.map((e) => (
-                        <tr key={e.id}>
-                          <td className={td}>{e.name}</td>
-                          <td className={td}><Badge tone={engineStatusTone(e.status)}>{e.status}</Badge></td>
-                          <td className={td}>{e.compatible ? <Badge tone="ok">{t('cyberWizYes')}</Badge> : <Badge tone="muted">{t('cyberWizNo')}</Badge>}</td>
-                          <td className={td}>{e.recommended ? <Badge tone="ok">{t('cyberWizRecommended')}</Badge> : <Badge tone="muted">—</Badge>}</td>
-                        </tr>
-                      ))}
+                      {enginePlan.engines.map((e) => {
+                        const selectable = e.compatible && e.recommended && e.status === 'HEALTHY';
+                        return (
+                          <tr key={e.id} className={selectable ? 'cursor-pointer hover:bg-cyan-400/5' : 'opacity-50'} onClick={() => selectable && toggleEngine(e.id)}>
+                            <td className={td}>
+                              <input type="checkbox" checked={selectedEngineIds.includes(e.id)} disabled={!selectable} readOnly />
+                            </td>
+                            <td className={td}>{e.name}</td>
+                            <td className={td}><Badge tone={engineStatusTone(e.status)}>{e.status}</Badge></td>
+                            <td className={td}>{e.compatible ? <Badge tone="ok">{t('cyberWizYes')}</Badge> : <Badge tone="muted">{t('cyberWizNo')}</Badge>}</td>
+                            <td className={td}>{e.recommended ? <Badge tone="ok">{t('cyberWizRecommended')}</Badge> : <Badge tone="muted">—</Badge>}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -393,9 +483,11 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
                     recommended: enginePlan.engines.filter((e) => e.recommended).length,
                   })}
                 </p>
-                <p className="text-cyan-100/30 text-[11px] mt-1">{t('cyberWizNoManualOverride')}</p>
                 {!enginePlan.hasExecutableEngine && (
                   <div className="border border-red-400/30 rounded p-3 text-red-300 text-[13px] mt-2">{t('cyberWizNoExecutableEngine')}</div>
+                )}
+                {enginePlan.hasExecutableEngine && selectedEngineIds.length === 0 && (
+                  <div className="border border-gold/30 rounded p-3 text-gold text-[13px] mt-2">{t('cyberWizEngineRequired')}</div>
                 )}
               </>
             )}
@@ -405,20 +497,63 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
         {step === 2 && (
           <Panel title={t('cyberWizStepQuantum')}>
             <p className="text-cyan-100/50 text-[13px] mb-3">{t('cyberWizQuantumExplainer')}</p>
-            {quantumProviders && (
-              <div className={tableWrap}>
-                <table className="w-full">
-                  <thead><tr><th className={th}>{t('cyberColProvider')}</th><th className={th}>{t('cyberColHealth')}</th></tr></thead>
-                  <tbody>
-                    {quantumProviders.map((p) => (
-                      <tr key={p.id}>
-                        <td className={td}>{p.id}{p.id === 'ibm-quantum' && <span className="text-gold text-[10px] ml-2">{t('cyberWizExperimentalQpu')}</span>}</td>
-                        <td className={td}><Badge tone={p.status === 'AVAILABLE' ? 'ok' : p.status === 'NOT_CONFIGURED' ? 'muted' : 'warn'}>{p.status}</Badge></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+
+            {quantumProviders && quantumPolicy && (
+              <>
+                <p className="text-cyan-100/40 text-xs mb-2">{t('cyberWizComputeMethod')}</p>
+                <div className="space-y-2 mb-4">
+                  {COMPUTE_MODES.map((mode) => {
+                    const provider = quantumProviders.find((p) => p.id === PROVIDER_ID_BY_MODE[mode]);
+                    const usable = isComputeModeUsable(mode);
+                    const policyDenied = provider?.status === 'AVAILABLE'
+                      && ((mode === 'QUANTUM_SIMULATOR' && !quantumPolicy.allowQuantumSimulator)
+                        || (mode === 'QUANTUM_HARDWARE' && !quantumPolicy.allowQuantumHardware));
+                    return (
+                      <label
+                        key={mode}
+                        className={`flex items-center gap-2 border rounded p-2.5 text-[13px] ${usable ? 'border-cyan-300/20 cursor-pointer hover:bg-cyan-400/5' : 'border-cyan-300/10 opacity-50'} ${selectedComputeMode === mode ? 'bg-cyan-400/10' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="computeMode"
+                          checked={selectedComputeMode === mode}
+                          disabled={!usable}
+                          onChange={() => setSelectedComputeMode(mode)}
+                        />
+                        <span className="flex-1">{mode}{mode === 'QUANTUM_HARDWARE' && <span className="text-gold text-[10px] ml-2">{t('cyberWizExperimentalQpu')}</span>}</span>
+                        {!provider || provider.status !== 'AVAILABLE' ? (
+                          <Badge tone="muted">{t('cyberWizNotConfigured')}</Badge>
+                        ) : policyDenied ? (
+                          <Badge tone="warn">{t('cyberWizPolicyDenied')}</Badge>
+                        ) : (
+                          <Badge tone="ok">{t('cyberWizYes')}</Badge>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-cyan-100/30 text-[11px] mb-4">{t('cyberWizBciRecommended')}: {['QUANTUM_HARDWARE', 'QUANTUM_SIMULATOR', 'QUANTUM_INSPIRED', 'CLASSICAL'].find((m) => isComputeModeUsable(m)) || 'CLASSICAL'}</p>
+
+                <p className="text-cyan-100/40 text-xs mb-2">{t('cyberWizOptimizationParams')}</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberEffortBudgetLabel')}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className={inputCls}
+                      value={effortBudget}
+                      onChange={(e) => setEffortBudget(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-cyan-100/50 text-xs mb-1">{t('cyberDataClassificationLabel')}</label>
+                    <select className={inputCls} value={dataClassification} onChange={(e) => setDataClassification(e.target.value)}>
+                      {DATA_CLASSIFICATIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </>
             )}
           </Panel>
         )}
@@ -501,6 +636,31 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
                       }, {})).map(([p, c]) => <Badge key={p} tone={HIGH_PRIORITY_LEVELS.includes(p) ? 'danger' : 'muted'}>{p}: {c}</Badge>)}
                     </div>
                   )}
+
+                  {job.status === 'COMPLETED' && (
+                    <div className="border-t border-cyan-300/10 pt-3">
+                      <h3 className="text-cyan-100/60 text-[11px] tracking-widest uppercase mb-2">{t('cyberWizProvenanceTitle')}</h3>
+                      {optimizing && <p className="text-cyan-100/50 text-sm">{t('cyberLoading')}</p>}
+                      {optimization && (
+                        <div className="space-y-2 text-[13px]">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div><span className="text-cyan-100/40 block text-[11px] uppercase">{t('cyberWizBciRecommended')}</span>{optimization.recommendedMode || '—'}</div>
+                            <div><span className="text-cyan-100/40 block text-[11px] uppercase">{t('cyberWizYouSelected')}</span>{optimization.selectedMode || '—'}</div>
+                            <div><span className="text-cyan-100/40 block text-[11px] uppercase">{t('cyberWizActuallyUsed')}</span>{optimization.actualMode || '—'}</div>
+                          </div>
+                          {optimization.fallbackReason && (
+                            <p className="text-gold text-[12px]">{t('cyberWizFallbackOccurred')}: {optimization.fallbackReason}</p>
+                          )}
+                          <p>
+                            {t('cyberWizOptimizationVerdict')}: {optimization.verdict === 'NOT_APPLICABLE'
+                              ? <Badge tone="muted">{t('cyberWizNotApplicable')}</Badge>
+                              : <Badge tone={optimization.verdict === 'QUANTUM_BENEFIT_OBSERVED_FOR_THIS_WORKLOAD' ? 'ok' : 'muted'}>{optimization.verdict}</Badge>}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex gap-2 pt-2 border-t border-cyan-300/10">
                     <button className={btnPrimaryCls} onClick={onGoToFindings}>{t('cyberNavFindings')}</button>
                     <button className={btnCls} onClick={onClose}>{t('cyberClose')}</button>
@@ -517,7 +677,7 @@ export default function CyberNewAnalysisWizard({ onClose, onGoToFindings }) {
             {step < 3 && (
               <button
                 className={btnPrimaryCls}
-                disabled={(step === 0 && !canProceedFromAsset) || (step === 1 && !canProceedFromEngines)}
+                disabled={(step === 0 && !canProceedFromAsset) || (step === 1 && !canProceedFromEngines) || (step === 2 && !canProceedFromQuantum)}
                 onClick={() => setStep((s) => s + 1)}
               >
                 {t('cyberNextTab')}

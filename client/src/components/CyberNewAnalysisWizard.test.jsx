@@ -16,9 +16,11 @@ vi.mock('../services/api.js', () => ({
     evaluateScope: vi.fn(),
     getEnginePlan: vi.fn(),
     listQuantumProviders: vi.fn(async () => ({ providers: [] })),
+    getQuantumPolicy: vi.fn(async () => ({ policy: { allowQuantumSimulator: false, allowQuantumHardware: false, maxExternalDataClassification: 'PUBLIC' } })),
     createScan: vi.fn(),
     getScan: vi.fn(),
     getScanEngineRuns: vi.fn(async () => ({ engineRuns: [] })),
+    optimizeRemediationForScan: vi.fn(async () => ({ verdict: 'NOT_APPLICABLE', recommendedMode: 'CLASSICAL', selectedMode: 'CLASSICAL', actualMode: 'CLASSICAL', fallbackReason: null })),
   },
 }));
 
@@ -117,13 +119,78 @@ describe('CyberNewAnalysisWizard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: /Next/i })); // -> Quantum
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: /Next/i })); // -> Scan
 
     fireEvent.click(screen.getByRole('button', { name: /Start Analysis/i }));
-    await waitFor(() => expect(cyberAnalysisApi.createScan).toHaveBeenCalledWith({ target: 'example.com', requestedClass: 'PASSIVE' }));
+    await waitFor(() => expect(cyberAnalysisApi.createScan).toHaveBeenCalledWith({
+      target: 'example.com', requestedClass: 'PASSIVE', selectedEngineIds: ['nuclei'], selectedComputeMode: 'CLASSICAL',
+    }));
 
     // Previous is disabled once a job exists -- no going back to change the plan.
     expect(screen.getByRole('button', { name: /Previous/i })).toBeDisabled();
+  });
+
+  it('defaults engine selection to the recommended+healthy subset and lets the user narrow it, blocking Next at zero', async () => {
+    cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'REPOSITORY' });
+    cyberAnalysisApi.getEnginePlan.mockResolvedValue({
+      engines: [
+        { id: 'semgrep', name: 'semgrep', status: 'HEALTHY', compatible: true, recommended: true },
+        { id: 'osv-scanner', name: 'osv-scanner', status: 'HEALTHY', compatible: true, recommended: true },
+        { id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: false, recommended: false },
+      ],
+      hasExecutableEngine: true,
+    });
+    renderWizard();
+    fireEvent.click(screen.getByRole('button', { name: 'New Asset' }));
+    fireEvent.change(screen.getByPlaceholderText('Name'), { target: { value: 'x' } });
+    fireEvent.change(screen.getByPlaceholderText(/Target/), { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add asset/i }));
+    await waitFor(() => expect(cyberAnalysisApi.createAsset).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+
+    const semgrepCheckbox = await screen.findByRole('row', { name: /semgrep/i });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled());
+
+    // Both real engines checked by default -- uncheck one, then both, and
+    // confirm zero-selected blocks Next with the honest reason shown.
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes.filter((c) => c.checked)).toHaveLength(2);
+    fireEvent.click(checkboxes[0]);
+    fireEvent.click(checkboxes[1]);
+    await waitFor(() => expect(screen.getByText(/at least one engine/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+    expect(semgrepCheckbox).toBeInTheDocument();
+  });
+
+  it('shows the real optimization verdict and provenance once a completed scan is reached', async () => {
+    cyberAnalysisApi.evaluateScope.mockResolvedValue({ decision: 'ALLOW', targetType: 'DOMAIN' });
+    cyberAnalysisApi.getEnginePlan.mockResolvedValue({
+      engines: [{ id: 'nuclei', name: 'nuclei', status: 'HEALTHY', compatible: true, recommended: true }],
+      hasExecutableEngine: true,
+    });
+    cyberAnalysisApi.createScan.mockResolvedValue({ job: { id: 'job-1', status: 'COMPLETED', target: 'example.com', result: { findingIds: ['f1'] } } });
+    cyberAnalysisApi.optimizeRemediationForScan.mockResolvedValue({
+      verdict: 'NOT_APPLICABLE', recommendedMode: 'CLASSICAL', selectedMode: 'CLASSICAL', actualMode: 'CLASSICAL', fallbackReason: null,
+    });
+    renderWizard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Asset' }));
+    fireEvent.change(screen.getByPlaceholderText('Name'), { target: { value: 'x' } });
+    fireEvent.change(screen.getByPlaceholderText(/Target/), { target: { value: 'example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add asset/i }));
+    await waitFor(() => expect(cyberAnalysisApi.createAsset).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: /Next/i })); // -> Quantum
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: /Next/i })); // -> Scan
+    fireEvent.click(screen.getByRole('button', { name: /Start Analysis/i }));
+
+    await waitFor(() => expect(cyberAnalysisApi.optimizeRemediationForScan).toHaveBeenCalledWith(
+      expect.objectContaining({ findingIds: ['f1'], preferredMode: 'CLASSICAL', scanJobId: 'job-1' })
+    ));
+    await waitFor(() => expect(screen.getByText(/Not applicable/i)).toBeInTheDocument());
   });
 
   it('never opens a new tab/window at any step', async () => {

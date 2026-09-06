@@ -505,5 +505,20 @@
   "cyberAnalysisHistory": "Analysis History",
   "cyberNoHistoryYet": "No completed analyses yet",
   "cyberColReportsForAsset": "Reports",
-  "cyberGenerateReportForAsset": "Generate Report for This Asset"
+  "cyberGenerateReportForAsset": "Generate Report for This Asset",
+  "cyberWizSelectEngines": "Select engines to run",
+  "cyberWizComputeMethod": "Compute method",
+  "cyberWizNotConfigured": "Not configured for this organization",
+  "cyberWizPolicyDenied": "Disabled by organization quantum policy",
+  "cyberWizOptimizationParams": "Optimization parameters",
+  "cyberEffortBudgetLabel": "Effort budget",
+  "cyberDataClassificationLabel": "Data classification",
+  "cyberWizProvenanceTitle": "Selection provenance",
+  "cyberWizBciRecommended": "BCI recommended",
+  "cyberWizYouSelected": "You selected",
+  "cyberWizActuallyUsed": "Actually used",
+  "cyberWizFallbackOccurred": "Fallback occurred",
+  "cyberWizOptimizationVerdict": "Optimization verdict",
+  "cyberWizNotApplicable": "Not applicable — no open findings to optimize",
+  "cyberWizEngineRequired": "Select at least one engine to continue"
 }

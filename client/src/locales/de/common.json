@@ -505,5 +505,20 @@
   "cyberAnalysisHistory": "Analyseverlauf",
   "cyberNoHistoryYet": "Noch keine abgeschlossenen Analysen",
   "cyberColReportsForAsset": "Berichte",
-  "cyberGenerateReportForAsset": "Bericht für dieses Asset erstellen"
+  "cyberGenerateReportForAsset": "Bericht für dieses Asset erstellen",
+  "cyberWizSelectEngines": "Zu verwendende Engines auswählen",
+  "cyberWizComputeMethod": "Berechnungsmethode",
+  "cyberWizNotConfigured": "Für diese Organisation nicht konfiguriert",
+  "cyberWizPolicyDenied": "Durch die Quantenrichtlinie der Organisation deaktiviert",
+  "cyberWizOptimizationParams": "Optimierungsparameter",
+  "cyberEffortBudgetLabel": "Aufwandsbudget",
+  "cyberDataClassificationLabel": "Datenklassifizierung",
+  "cyberWizProvenanceTitle": "Auswahlherkunft",
+  "cyberWizBciRecommended": "BCI-Empfehlung",
+  "cyberWizYouSelected": "Ihre Auswahl",
+  "cyberWizActuallyUsed": "Tatsächlich verwendet",
+  "cyberWizFallbackOccurred": "Fallback aufgetreten",
+  "cyberWizOptimizationVerdict": "Optimierungsergebnis",
+  "cyberWizNotApplicable": "Nicht zutreffend — keine offenen Befunde zu optimieren",
+  "cyberWizEngineRequired": "Wählen Sie mindestens eine Engine aus, um fortzufahren"
 }

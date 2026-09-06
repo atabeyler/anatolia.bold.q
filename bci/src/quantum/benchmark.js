@@ -38,13 +38,21 @@ async function runProvider(providerId, mode, problem, options) {
 // Requires a STRICTLY better feasible objective than the classical
 // baseline -- an equal or worse result is NO_QUANTUM_ADVANTAGE_DEMONSTRATED,
 // full stop, regardless of which provider produced it.
-export async function runBenchmark({ orgId, actorUserId, workloadSource, problem, dataClassification = 'INTERNAL' }) {
+export async function runBenchmark({ orgId, actorUserId, workloadSource, problem, dataClassification = 'INTERNAL', preferredMode, scanJobId }) {
   const benchmarkId = randomUUID();
   const inputHash = canonicalHash(problem);
   const fingerprint = environmentFingerprint();
   const problemSize = problem.items.length;
 
-  const decision = await resolveExecutionMode({ orgId, problemSize, dataClassification });
+  // recommendedDecision is BCI's own suggestion, computed with no
+  // preference -- kept separate from `decision` (which honors
+  // preferredMode) purely for provenance (spec section 5): recording what
+  // BCI would have picked on its own vs. what the caller asked to start
+  // from vs. what actually ran, even when all three end up identical.
+  const recommendedDecision = preferredMode
+    ? await resolveExecutionMode({ orgId, problemSize, dataClassification })
+    : null;
+  const decision = await resolveExecutionMode({ orgId, problemSize, dataClassification, preferredMode });
 
   const attempts = [await runProvider('classical', COMPUTE_MODES.CLASSICAL, problem, {})];
   attempts.push(await runProvider('quantum_inspired', COMPUTE_MODES.QUANTUM_INSPIRED, problem, {}));
@@ -96,10 +104,28 @@ export async function runBenchmark({ orgId, actorUserId, workloadSource, problem
 
   const results = Object.fromEntries(attempts.map((a) => [a.providerId, a.ok ? { ...a.result, wallTimeMs: a.wallTimeMs } : { error: a.error, wallTimeMs: a.wallTimeMs }]));
 
+  const recommendedMode = recommendedDecision?.mode ?? decision.mode;
+  // Only a real divergence between what the user selected and what
+  // actually ran counts as a fallback -- no preference given (the
+  // pre-existing call shape) never has one.
+  const fallbackReason = preferredMode && preferredMode !== decision.mode ? decision.reason : null;
+
   await query(
-    'INSERT INTO quantum_benchmarks (id, org_id, workload_source, results, verdict) VALUES ($1,$2,$3,$4,$5)',
-    [benchmarkId, orgId, workloadSource, JSON.stringify(results), verdict]
+    `INSERT INTO quantum_benchmarks (id, org_id, workload_source, results, verdict, scan_job_id, recommended_mode, selected_mode, actual_mode, fallback_reason)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [benchmarkId, orgId, workloadSource, JSON.stringify(results), verdict, scanJobId ?? null, recommendedMode, preferredMode ?? null, decision.mode, fallbackReason]
   );
 
-  return { benchmarkId, verdict, executionMode: decision.mode, executionReason: decision.reason, results, best: best ? { providerId: best.providerId, mode: best.mode, ...best.result } : null };
+  return {
+    benchmarkId,
+    verdict,
+    executionMode: decision.mode,
+    executionReason: decision.reason,
+    recommendedMode,
+    selectedMode: preferredMode ?? null,
+    actualMode: decision.mode,
+    fallbackReason,
+    results,
+    best: best ? { providerId: best.providerId, mode: best.mode, ...best.result } : null,
+  };
 }
