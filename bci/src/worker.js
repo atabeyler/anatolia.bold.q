@@ -10,9 +10,18 @@ import { logger } from './logger.js';
 import { claimNextJob, completeJob, markNoCoverage, failJob, sweepTimedOutJobs, heartbeatWorker } from './services/jobQueue.js';
 import { runAnalysisPipeline } from './services/analysisPipeline.js';
 import { recordAssetRiskSnapshotsForTarget } from './services/assetRiskHistory.js';
+import { runHealthChecks } from './engines/registry.js';
 
 const POLL_INTERVAL_MS = Number(process.env.BCI_WORKER_POLL_MS) || 1000;
 const SWEEP_INTERVAL_MS = Number(process.env.BCI_WORKER_SWEEP_MS) || 30_000;
+// Real engine_health rows only ever come from runHealthChecks() -- nothing
+// wrote them automatically before this, so a deployment where nobody had
+// yet clicked the manual "run health check" button had every engine stuck
+// at UNKNOWN forever, which enqueueScan()'s real HEALTHY requirement then
+// correctly (but unhelpfully) refused to select. Running it here, once at
+// startup and then on an interval, keeps that live status actually live
+// without depending on an admin remembering a one-time manual step.
+const HEALTHCHECK_INTERVAL_MS = Number(process.env.BCI_WORKER_HEALTHCHECK_MS) || 5 * 60 * 1000;
 const CONCURRENCY = Number(process.env.BCI_WORKER_CONCURRENCY) || 2;
 
 async function workerLoop(workerId, signal) {
@@ -70,9 +79,15 @@ async function main() {
     sweepTimedOutJobs().catch((err) => logger.error({ err }, 'Timeout sweep failed'));
   }, SWEEP_INTERVAL_MS);
 
+  runHealthChecks().catch((err) => logger.error({ err }, 'Startup engine health check failed'));
+  const healthChecker = setInterval(() => {
+    runHealthChecks().catch((err) => logger.error({ err }, 'Periodic engine health check failed'));
+  }, HEALTHCHECK_INTERVAL_MS);
+
   const shutdown = async () => {
     signal.stopped = true;
     clearInterval(sweeper);
+    clearInterval(healthChecker);
     await Promise.all(loops);
     await pool.end();
     process.exit(0);
