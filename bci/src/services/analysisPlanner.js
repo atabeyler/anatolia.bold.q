@@ -6,10 +6,11 @@ function allowedUpTo(requestedClass) {
   const idx = INTRUSIVENESS_ORDER.indexOf(requestedClass);
   return new Set(INTRUSIVENESS_ORDER.slice(0, idx + 1));
 }
-
-const WEB_ACTIVE = [
+const WEB_ANALYSIS = [
   { engineId: 'nuclei', intrusiveness: 'SAFE_ACTIVE', mode: 'url' },
   { engineId: 'http-fuzz', intrusiveness: 'SAFE_ACTIVE', mode: 'url' },
+  { engineId: 'intrusive-validation', intrusiveness: 'RESTRICTED', mode: 'url' },
+  { engineId: 'availability-probe', intrusiveness: 'RESTRICTED', mode: 'url' },
 ];
 const ENGINE_PLAN_BY_TARGET_TYPE = {
   REPOSITORY: [
@@ -18,15 +19,11 @@ const ENGINE_PLAN_BY_TARGET_TYPE = {
     { engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'fs' },
   ],
   CONTAINER: [{ engineId: 'trivy', intrusiveness: 'PASSIVE', mode: 'image' }],
-  DOMAIN: WEB_ACTIVE,
-  SUBDOMAIN: WEB_ACTIVE,
-  URL: WEB_ACTIVE,
-  API: WEB_ACTIVE,
+  DOMAIN: WEB_ANALYSIS, SUBDOMAIN: WEB_ANALYSIS, URL: WEB_ANALYSIS, API: WEB_ANALYSIS,
   IP: [{ engineId: 'naabu', intrusiveness: 'SAFE_ACTIVE', mode: 'host' }],
   CIDR: [{ engineId: 'naabu', intrusiveness: 'SAFE_ACTIVE', mode: 'host' }],
   CLOUD_ACCOUNT: [], KUBERNETES_CLUSTER: [],
 };
-
 export function planEngines(targetType, requestedClass, requestedCapability = null) {
   const candidates = ENGINE_PLAN_BY_TARGET_TYPE[targetType] || [];
   const allowed = allowedUpTo(requestedClass);
@@ -38,15 +35,9 @@ export function planEngines(targetType, requestedClass, requestedCapability = nu
   }
   return planned;
 }
-
-export function candidateEnginesForTargetType(targetType) {
-  return ENGINE_PLAN_BY_TARGET_TYPE[targetType] || [];
-}
-
+export function candidateEnginesForTargetType(targetType) { return ENGINE_PLAN_BY_TARGET_TYPE[targetType] || []; }
 export function availableCapabilitiesForTargetType(targetType) {
   const ids = new Set();
-  for (const candidate of candidateEnginesForTargetType(targetType)) {
-    for (const capability of getAdapter(candidate.engineId)?.capabilities || []) ids.add(capability);
-  }
+  for (const candidate of candidateEnginesForTargetType(targetType)) for (const capability of getAdapter(candidate.engineId)?.capabilities || []) ids.add(capability);
   return listCapabilities().map((capability) => ({ ...capability, supported: ids.has(capability.id) }));
 }
