@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { query } from '../src/db/client.js';
 import { resetDatabase, createOrg, createUser } from './helpers/db.js';
 import {
@@ -10,6 +10,17 @@ import {
   cancelJob,
   sweepTimedOutJobs,
 } from '../src/services/jobQueue.js';
+import { runHealthChecks } from '../src/engines/registry.js';
+
+// enqueueScan()'s selectedEngineIds health check reads engine_health, which
+// only real runHealthChecks() ever populates -- resetDatabase() never
+// truncates it (it's a live-status table, not per-test data), so relying on
+// some earlier test file happening to have called runHealthChecks() first
+// is exactly the file-execution-order fragility this suite explicitly
+// avoids elsewhere (see globalSetup.js's engine_registry seeding comment).
+// Running it once here, up front, makes this file's healthy-selection
+// tests correct regardless of run order.
+beforeAll(runHealthChecks);
 
 beforeEach(resetDatabase);
 

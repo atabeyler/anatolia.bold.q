@@ -9,9 +9,17 @@ import { query } from '../src/db/client.js';
 import { resetDatabase, createOrg, createUser } from './helpers/db.js';
 import { enqueueScan, claimNextJob, completeJob } from '../src/services/jobQueue.js';
 import { runAnalysisPipeline } from '../src/services/analysisPipeline.js';
-import { getAdapter } from '../src/engines/registry.js';
+import { getAdapter, runHealthChecks } from '../src/engines/registry.js';
 
 const execFileAsync = promisify(execFile);
+
+// enqueueScan()'s selectedEngineIds health check reads engine_health, which
+// only real runHealthChecks() ever populates -- resetDatabase() never
+// truncates it (a live-status table, not per-test data), so relying on some
+// earlier test file to have called it first is exactly the file-order
+// fragility this suite avoids elsewhere. Run it once here so the
+// selection-narrowing test below is correct regardless of run order.
+beforeAll(runHealthChecks);
 
 beforeEach(resetDatabase);
 
