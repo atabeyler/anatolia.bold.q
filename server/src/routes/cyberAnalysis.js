@@ -59,7 +59,15 @@ router.get('/findings/:id', asyncRoute(async (req, res) => {
 // only adds the ADMIN/ANALYST gate above (router.use, already applied) and
 // the same never-throws BCI-outage degradation as every other route here.
 router.all('/proxy/*', asyncRoute(async (req, res) => {
-  const bciPath = `/api/v1/${req.params[0]}`;
+  // req.params[0] is only the wildcard path segment -- Express never
+  // includes the query string in it, so a GET with real query params
+  // (e.g. /engines/plan?targetType=...&requestedClass=...) silently lost
+  // them here, and BCI's own zod schema then rejected the request as
+  // missing required fields it was, in fact, sent. Rebuilding it from
+  // req.query (already parsed) forwards it exactly, regardless of how
+  // many params or what shape.
+  const queryString = new URLSearchParams(req.query).toString();
+  const bciPath = `/api/v1/${req.params[0]}${queryString ? `?${queryString}` : ''}`;
   const result = await callBci(req.user, bciPath, {
     method: req.method,
     body: ['POST', 'PATCH', 'PUT'].includes(req.method) ? req.body : undefined,

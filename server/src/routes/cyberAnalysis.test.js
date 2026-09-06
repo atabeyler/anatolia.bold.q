@@ -97,6 +97,20 @@ describe('/api/cyber-analysis/proxy/* (generic BCI passthrough)', () => {
     });
   });
 
+  it('forwards a GET query string to the corresponding BCI path (regression: req.params[0] alone drops it)', async () => {
+    callBci.mockResolvedValueOnce({ ok: true, data: { engines: [] } });
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/cyber-analysis/proxy/engines/plan?targetType=DOMAIN&requestedClass=PASSIVE')
+      .set('Authorization', `Bearer ${tokenFor('analyst')}`);
+    expect(res.status).toBe(200);
+    expect(callBci).toHaveBeenCalledWith(
+      expect.anything(),
+      '/api/v1/engines/plan?targetType=DOMAIN&requestedClass=PASSIVE',
+      { method: 'GET', body: undefined }
+    );
+  });
+
   it('relays a real BCI error status/body instead of masking it as 503', async () => {
     callBci.mockResolvedValueOnce({ ok: false, reason: 'bci_error', status: 403, data: { error: 'forbidden' } });
     const app = buildApp();
