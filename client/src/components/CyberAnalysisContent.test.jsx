@@ -62,6 +62,18 @@ describe('CyberAnalysisContent', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
+  it('counts UNKNOWN engines as unavailable in the dynamic command-center warning', async () => {
+    cyberAnalysisApi.listEngines.mockResolvedValue({
+      engines: [
+        { id: 'healthy', status: 'HEALTHY' },
+        { id: 'offline', status: 'OFFLINE' },
+        { id: 'unknown', status: 'UNKNOWN' },
+      ],
+    });
+    renderContent();
+    await waitFor(() => expect(screen.getByText(/2 analysis engine\(s\) unavailable/i)).toBeInTheDocument());
+  });
+
   it('switches to the Assets tab and lets the user add a real asset with a real target/identifier via the BCI integration API', async () => {
     renderContent();
     await waitFor(() => screen.getByText('82'));

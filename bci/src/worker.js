@@ -5,6 +5,8 @@
 // This process only touches scan_jobs/job_workers -- it has no route
 // handlers and never terminates the API.
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { pool } from './db/client.js';
 import { logger } from './logger.js';
 import { claimNextJob, completeJob, markNoCoverage, failJob, sweepTimedOutJobs, heartbeatWorker } from './services/jobQueue.js';
@@ -98,7 +100,7 @@ async function main() {
   await Promise.all(loops);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   main().catch((err) => {
     logger.error({ err }, 'BCI worker pool crashed');
     process.exit(1);

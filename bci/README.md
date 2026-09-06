@@ -73,7 +73,7 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   `id`, `intrusiveness`, `supportedTargetTypes`, `healthCheck()`,
   `execute()`); today's engine can be swapped for tomorrow's without
   touching anything outside its own adapter module
-- Five adapters, each a thin wrapper around a real CLI via `execFile`-style
+- Eight adapters, each a thin wrapper around a real CLI/runtime via `execFile`-style
   `spawn` (argv array, never a shell string — no command injection surface):
   - **Trivy** (Apache-2.0) — filesystem/container SCA + secrets + IaC, PASSIVE
   - **OSV-Scanner** (Apache-2.0) — lockfile/SBOM vulnerability matching, PASSIVE
@@ -85,9 +85,16 @@ ANATOLIA-Q may call BCI as a service; BCI must never depend on ANATOLIA-Q.
   - **naabu** (MIT) — TCP port discovery, SAFE_ACTIVE; used **instead of
     Nmap**, whose license restricts bundling into a redistributed product
     without a separate license from Insecure.Com LLC (spec section 68)
+  - **http-fuzz**, **intrusive-validation**, and **availability-probe** are
+    BCI-native bounded HTTP adapters backed by the real `curl` runtime
 - `engine_registry` + `engine_health` (`GET /api/v1/engines`) — an engine
   that isn't installed reports OFFLINE, not a crash; a dead engine must
   never make a run silently look fully covered (spec section 48)
+- In the split container deployment the worker owns executable health checks.
+  The API image uses `BCI_ENGINE_HEALTH_MODE=WORKER` and only exposes the
+  worker's persisted snapshot, so it cannot overwrite healthy scanner rows
+  merely because scanner binaries are intentionally absent from the API
+  container. Results older than `BCI_ENGINE_HEALTH_STALE_MS` become `UNKNOWN`.
 - `raw_observations` — engine-native output, stored as-is; turning this
   into BCI's common schema is Normalization's job (M6), not an adapter's
 - Wired into `scan_jobs` execution via `services/analysisPlanner.js` +
