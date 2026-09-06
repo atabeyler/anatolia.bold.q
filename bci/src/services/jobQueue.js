@@ -24,13 +24,13 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass, 
   const recommended = planEngines(targetType, requestedClass);
   const recommendedIds = recommended.map((plan) => plan.engineId);
   const recommendedCapabilityIds = [...new Set(recommended.flatMap((plan) => plan.capabilities))];
-  const availableCapabilityIds = availableCapabilitiesForTargetType(targetType, requestedClass, catalog)
+  const capabilityCatalog = availableCapabilitiesForTargetType(targetType, requestedClass, catalog);
+  const supportedCapabilityIds = capabilityCatalog
+    .filter((capability) => capability.supported)
+    .map((capability) => capability.id);
+  const availableCapabilityIds = capabilityCatalog
     .filter((capability) => capability.available)
     .map((capability) => capability.id);
-
-  if (!recommended.some((plan) => healthyIds.has(plan.engineId))) {
-    return { accepted: false, decision: { decision: 'DENY', reason: 'no_executable_engine', targetType, requestedClass } };
-  }
 
   let selectedCapabilityIds = availableCapabilityIds;
   if (selectedCapabilities !== undefined) {
@@ -40,7 +40,7 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass, 
     selectedCapabilityIds = [...new Set(selectedCapabilities.map((id) => String(id).toUpperCase()))];
     const unknown = selectedCapabilityIds.filter((id) => !getCapability(id));
     if (unknown.length > 0) return { accepted: false, decision: { decision: 'DENY', reason: 'unknown_capability', invalidCapabilities: unknown } };
-    const unavailable = selectedCapabilityIds.filter((id) => !availableCapabilityIds.includes(id));
+    const unavailable = selectedCapabilityIds.filter((id) => !supportedCapabilityIds.includes(id));
     if (unavailable.length > 0) return { accepted: false, decision: { decision: 'DENY', reason: 'capability_unavailable', unavailableCapabilities: unavailable } };
   }
 
@@ -67,6 +67,15 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass, 
       return { accepted: false, decision: { decision: 'DENY', reason: 'selected_engines_do_not_cover_capabilities', uncoveredCapabilities: uncovered } };
     }
     selected = selectedEngineIds;
+  } else {
+    const unavailable = selectedCapabilityIds.filter((capabilityId) => !capabilityPlan.some((plan) => plan.capabilities.includes(capabilityId)));
+    if (unavailable.length > 0) {
+      return { accepted: false, decision: { decision: 'DENY', reason: 'capability_unavailable', unavailableCapabilities: unavailable } };
+    }
+  }
+
+  if (selected.length === 0) {
+    return { accepted: false, decision: { decision: 'DENY', reason: 'no_executable_engine', targetType, requestedClass } };
   }
 
   // Real policy+health-driven recommendation (executionPolicy.js's actual

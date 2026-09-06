@@ -2,7 +2,13 @@ import pg from 'pg';
 import fs from 'node:fs';
 import { config } from '../config.js';
 
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// PostgreSQL DATE has no timezone. node-postgres otherwise materializes it at
+// local midnight, so serializing the same calendar date from a positive UTC
+// offset can incorrectly produce the previous day. Keep date-only values
+// stable across developer machines and deployments by parsing them at UTC.
+types.setTypeParser(1082, (value) => new Date(`${value}T00:00:00.000Z`));
 
 const ssl = config.databaseCaCert
   ? { ca: fs.readFileSync(config.databaseCaCert, 'utf8'), rejectUnauthorized: true }
