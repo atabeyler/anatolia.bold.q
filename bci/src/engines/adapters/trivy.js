@@ -3,15 +3,12 @@ import { config } from '../../config.js';
 
 const BIN = config.engineBins.trivy;
 
-// Trivy (Aqua Security, Apache-2.0). Filesystem/repo/container/IaC scanner
-// for known-CVE dependencies, secrets, and misconfiguration. Purely passive
-// -- it reads files/images, it never sends a request to the target -- so it
-// requires no more than PASSIVE authorization.
 export const trivyAdapter = {
   id: 'trivy',
   name: 'Trivy',
   license: 'Apache-2.0',
   intrusiveness: 'PASSIVE',
+  capabilities: ['PASSIVE'],
   supportedTargetTypes: ['REPOSITORY', 'CONTAINER'],
   supportedAnalysisTypes: ['SCA', 'SECRETS', 'IAC', 'CONFIG'],
 
@@ -25,18 +22,9 @@ export const trivyAdapter = {
     }
   },
 
-  // target: a local filesystem path (repo checkout) when mode is 'fs', or an
-  // image reference (e.g. "registry/app:tag") when mode is 'image'.
-  // Fetching/checking out an 'fs' target is the caller's job, not the
-  // adapter's -- keeps the adapter honest about only ever touching what's
-  // already on disk in workDir.
   async execute({ target, mode = 'fs', timeoutMs = 120_000 }) {
     const subcommand = mode === 'image' ? 'image' : 'fs';
-    const { stdout } = await runBinary(
-      BIN,
-      [subcommand, '--scanners', 'vuln,secret,misconfig', '--format', 'json', '--quiet', target],
-      { timeoutMs, allowedExitCodes: [0, 1] }
-    );
+    const { stdout } = await runBinary(BIN, [subcommand, '--scanners', 'vuln,secret,misconfig', '--format', 'json', '--quiet', target], { timeoutMs, allowedExitCodes: [0, 1] });
     return { raw: JSON.parse(stdout) };
   },
 };
