@@ -5,6 +5,7 @@ import { requirePermission } from '../lib/rbac.js';
 import { getEngineStatus, getEngineCatalog, getCapabilityCatalog, runHealthChecks } from '../engines/registry.js';
 import { planEngines, candidateEnginesForTargetType, availableCapabilitiesForTargetType } from '../services/analysisPlanner.js';
 import { recordAuditEvent } from '../services/audit.js';
+import { config } from '../config.js';
 
 export const enginesRouter = Router();
 enginesRouter.use(requireAuth);
@@ -73,13 +74,18 @@ enginesRouter.get('/plan', requirePermission('rule:view'), async (req, res) => {
 });
 
 enginesRouter.post('/health-check', requirePermission('system:manage'), async (req, res) => {
-  const results = await runHealthChecks();
+  // Scanner binaries live in the isolated worker in the split production
+  // deployment. Probing inside the API image would overwrite truthful worker
+  // health with false OFFLINE results. LOCAL mode remains available for a
+  // deliberately co-located development/runtime setup.
+  const workerManaged = config.engineHealthMode === 'WORKER';
+  const results = workerManaged ? await getEngineStatus() : await runHealthChecks();
   await recordAuditEvent({
     orgId: req.auth.orgId,
     actorUserId: req.auth.userId,
     action: 'engines.health_check',
     result: 'SUCCESS',
-    metadata: { results },
+    metadata: { results, mode: workerManaged ? 'WORKER_SNAPSHOT' : 'LOCAL_EXECUTION' },
   });
-  res.json({ results });
+  res.json({ results, mode: workerManaged ? 'WORKER_SNAPSHOT' : 'LOCAL_EXECUTION' });
 });

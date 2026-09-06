@@ -1,4 +1,5 @@
 import { query } from '../db/client.js';
+import { config } from '../config.js';
 import { assertValidAdapter } from './EngineAdapter.js';
 import { listCapabilities } from './capabilities.js';
 import { trivyAdapter } from './adapters/trivy.js';
@@ -22,6 +23,22 @@ export function getAdapter(id) { return adapters.get(id) || null; }
 export function listAdapters() { return [...adapters.values()]; }
 export function getCapabilityCatalog() { return listCapabilities(); }
 
+function effectiveHealth(health) {
+  if (!health) {
+    return { status: 'UNKNOWN', version: null, detail: 'health check has not run', last_checked_at: null };
+  }
+  const checkedAt = new Date(health.last_checked_at).getTime();
+  if (!Number.isFinite(checkedAt) || Date.now() - checkedAt > config.engineHealthStaleMs) {
+    return {
+      ...health,
+      status: 'UNKNOWN',
+      stored_status: health.status,
+      detail: `health check is stale (last checked ${health.last_checked_at})`,
+    };
+  }
+  return health;
+}
+
 export async function runHealthChecks() {
   const results = [];
   for (const adapter of adapters.values()) {
@@ -36,10 +53,30 @@ export async function runHealthChecks() {
 }
 export async function getEngineStatus() {
   const { rows } = await query(`SELECT r.id, r.name, r.intrusiveness, r.supported_target_types, r.supported_analysis_types, r.license, h.status, h.version, h.detail, h.last_checked_at FROM engine_registry r LEFT JOIN engine_health h ON h.engine_id=r.id ORDER BY r.id`);
-  return rows.map((r) => ({ ...r, capabilities: getAdapter(r.id)?.capabilities ?? [] }));
+  return rows.map((row) => ({
+    ...row,
+    ...effectiveHealth(row.status ? row : null),
+    capabilities: getAdapter(row.id)?.capabilities ?? [],
+  }));
 }
 export async function getEngineCatalog() {
   const { rows: health } = await query('SELECT engine_id, status, version, detail, last_checked_at FROM engine_health');
   const healthById = new Map(health.map((h) => [h.engine_id, h]));
-  return [...adapters.values()].map((a) => { const h=healthById.get(a.id); return { id:a.id, name:a.name, intrusiveness:a.intrusiveness, capabilities:a.capabilities, supportedTargetTypes:a.supportedTargetTypes, supportedAnalysisTypes:a.supportedAnalysisTypes, license:a.license, status:h?.status ?? 'UNKNOWN', version:h?.version ?? null, detail:h?.detail ?? null, lastCheckedAt:h?.last_checked_at ?? null }; });
+  return [...adapters.values()].map((a) => {
+    const h = effectiveHealth(healthById.get(a.id));
+    return {
+      id: a.id,
+      name: a.name,
+      intrusiveness: a.intrusiveness,
+      capabilities: a.capabilities,
+      supportedTargetTypes: a.supportedTargetTypes,
+      supportedAnalysisTypes: a.supportedAnalysisTypes,
+      license: a.license,
+      status: h.status,
+      storedStatus: h.stored_status ?? h.status,
+      version: h.version ?? null,
+      detail: h.detail ?? null,
+      lastCheckedAt: h.last_checked_at ?? null,
+    };
+  });
 }

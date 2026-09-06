@@ -23,4 +23,11 @@ describe('validateEnv', () => {
       validateEnv({ NODE_ENV: 'production', BCI_DATABASE_URL: 'postgres://x', BCI_JWT_SECRET: 'secret' })
     ).not.toThrow();
   });
+
+  it('rejects an unknown engine health execution mode', () => {
+    expect(() => validateEnv({ NODE_ENV: 'development', BCI_ENGINE_HEALTH_MODE: 'API_CONTAINER' }))
+      .toThrow(/BCI_ENGINE_HEALTH_MODE/);
+    expect(() => validateEnv({ NODE_ENV: 'development', BCI_ENGINE_HEALTH_MODE: 'WORKER' }))
+      .not.toThrow();
+  });
 });

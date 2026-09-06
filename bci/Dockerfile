@@ -13,6 +13,10 @@ RUN chown -R node:node /app
 USER node
 
 ENV NODE_ENV=production
+# Scanner binaries live in the isolated worker image. The API must expose the
+# worker's persisted health snapshot instead of probing its own filesystem and
+# overwriting healthy worker results with false OFFLINE statuses.
+ENV BCI_ENGINE_HEALTH_MODE=WORKER
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

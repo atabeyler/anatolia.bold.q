@@ -162,6 +162,24 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  bci-worker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the real deployment worker image
+        run: docker build --file bci/Dockerfile.worker --tag bci-worker:ci bci
+      - name: Verify every runtime binary in the built image
+        run: |
+          docker run --rm --entrypoint sh bci-worker:ci -c '
+            set -eu
+            curl --version
+            trivy --version
+            semgrep --version
+            osv-scanner --version
+            nuclei -version
+            naabu -version
+          '
+
   # Secret scanning + dependency/SBOM reporting (AQ-015). Kept separate from
   # server/client/desktop above so a finding here never blocks those from
   # reporting their own pass/fail independently.

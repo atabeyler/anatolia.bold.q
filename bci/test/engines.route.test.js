@@ -4,6 +4,8 @@ import { createApp } from '../src/app.js';
 import { signAccessToken } from '../src/lib/jwt.js';
 import { resetDatabase, createOrg, createUser } from './helpers/db.js';
 import { runHealthChecks } from '../src/engines/registry.js';
+import { query } from '../src/db/client.js';
+import { config } from '../src/config.js';
 
 const app = createApp();
 
@@ -15,6 +17,28 @@ async function tokenFor(orgId, roleId) {
 }
 
 describe('GET /engines/plan -- real engine selection preview (analysis wizard step 2)', () => {
+
+  it('returns the worker snapshot without probing inside a split API container', async () => {
+    const orgId = await createOrg();
+    const token = await tokenFor(orgId, 'system_admin');
+    await query(
+      `INSERT INTO engine_health (engine_id, status, version, detail, last_checked_at)
+       VALUES ('semgrep', 'HEALTHY', 'worker-sentinel', 'checked by worker', now())
+       ON CONFLICT (engine_id) DO UPDATE SET status = 'HEALTHY', version = 'worker-sentinel', detail = 'checked by worker', last_checked_at = now()`
+    );
+    const previousMode = config.engineHealthMode;
+    config.engineHealthMode = 'WORKER';
+    try {
+      const res = await request(app)
+        .post('/api/v1/engines/health-check')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe('WORKER_SNAPSHOT');
+      expect(res.body.results.find((engine) => engine.id === 'semgrep').version).toBe('worker-sentinel');
+    } finally {
+      config.engineHealthMode = previousMode;
+    }
+  });
   it('shows every registered engine, with independent status/compatible/recommended -- never a hardcoded subset', async () => {
     const orgId = await createOrg();
     const token = await tokenFor(orgId, 'operator');

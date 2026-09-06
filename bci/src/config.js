@@ -13,6 +13,8 @@ export const config = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   logLevel: process.env.LOG_LEVEL || 'info',
+  engineHealthMode: process.env.BCI_ENGINE_HEALTH_MODE || 'LOCAL',
+  engineHealthStaleMs: Number(process.env.BCI_ENGINE_HEALTH_STALE_MS) || 15 * 60 * 1000,
   jwtSecret: process.env.BCI_JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-only-insecure-secret' : ''),
   jwtTtlSeconds: Number(process.env.BCI_JWT_TTL_SECONDS) || 14400,
   // M14: ANATOLIA-Q (or any other future gateway) trust boundary. Deliberately

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resetDatabase } from './helpers/db.js';
+import { query } from '../src/db/client.js';
 import { listAdapters, runHealthChecks, getEngineStatus } from '../src/engines/registry.js';
 import { assertValidAdapter } from '../src/engines/EngineAdapter.js';
 
@@ -40,6 +41,18 @@ describe('engine registry', () => {
     expect(status).toHaveLength(8);
     expect(status.every((e) => e.last_checked_at)).toBe(true);
   }, 60_000);
+
+  it('treats a stale persisted result as UNKNOWN instead of claiming the engine is still healthy', async () => {
+    await query(
+      `UPDATE engine_health SET status = 'HEALTHY', version = 'stale-version', last_checked_at = now() - interval '1 day'
+       WHERE engine_id = 'semgrep'`
+    );
+    const status = await getEngineStatus();
+    const semgrep = status.find((engine) => engine.id === 'semgrep');
+    expect(semgrep.status).toBe('UNKNOWN');
+    expect(semgrep.stored_status).toBe('HEALTHY');
+    expect(semgrep.detail).toMatch(/stale/i);
+  });
 });
 
 // These exercise the real, locally-installed binaries. They degrade

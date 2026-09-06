@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { pool } from './client.js';
 import { logger } from '../logger.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
 async function ensureMigrationsTable(client) {
@@ -48,7 +49,7 @@ export async function runMigrations() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && __filename === path.resolve(process.argv[1])) {
   runMigrations()
     .then(() => {
       logger.info('BCI migrations complete');

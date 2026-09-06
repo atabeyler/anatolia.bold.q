@@ -136,7 +136,7 @@ function DashboardTab({ t, onNewAnalysis }) {
     }).catch(() => {});
     cyberAnalysisApi.listReports().then((r) => setRecentReports(r.reports.slice(0, 5))).catch(() => {});
     cyberAnalysisApi.listEngines().then((r) => {
-      setOfflineEngineCount(r.engines.filter((e) => e.status === 'OFFLINE' || e.status === 'DEGRADED').length);
+      setOfflineEngineCount(r.engines.filter((e) => e.status !== 'HEALTHY').length);
     }).catch(() => {});
   }, []);
 
