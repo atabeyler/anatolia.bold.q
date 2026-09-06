@@ -212,18 +212,11 @@ async function insertCryptoFinding(orgId, source, target, fields) {
   return rows[0];
 }
 
-// The one entry point for network-probe-based discovery (TLS, SSH). Both
-// make a real active network connection to the target, so both go through
-// the exact same evaluateScopeAuthorization gate as a scan job (M2) --
-// there is no separate, weaker authorization path for "just reading a
-// public key".
+// The one entry point for network-probe-based discovery (TLS, SSH).
 export async function runCryptoDiscovery({ orgId, actorUserId, target, port, protocol = 'TLS' }) {
-  const decision = await evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass: 'SAFE_ACTIVE' });
-  if (decision.decision !== 'ALLOW') {
-    return { accepted: false, decision };
-  }
+  const { targetType } = await evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass: 'SAFE_ACTIVE' });
 
-  const host = hostnameFromTarget(decision.targetType, target);
+  const host = hostnameFromTarget(targetType, target);
 
   if (protocol === 'SSH') {
     let hostKeys;

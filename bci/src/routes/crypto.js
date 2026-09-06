@@ -16,10 +16,8 @@ const discoverSchema = z.object({
   protocol: z.enum(['TLS', 'SSH']).default('TLS'),
 });
 
-// Crypto Discovery makes a real, active network connection to the target --
-// the same authorization bar as starting a scan (scan:create), not a mere
-// read. Covers both TLS (certificate) and SSH (host key) probing; both go
-// through the identical scope-authorization gate.
+// Crypto Discovery makes a real, active network connection to the target.
+// Covers both TLS (certificate) and SSH (host key) probing.
 cryptoRouter.post('/discover', requirePermission('scan:create'), async (req, res) => {
   const parsed = discoverSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'invalid_request', requestId: req.id });
@@ -32,9 +30,6 @@ cryptoRouter.post('/discover', requirePermission('scan:create'), async (req, res
     protocol: parsed.data.protocol,
   });
 
-  if (!outcome.accepted) {
-    return res.status(403).json({ error: 'scope_denied', reason: outcome.decision.reason, requestId: req.id });
-  }
   if (!outcome.discovered) {
     return res.status(502).json({ error: 'discovery_failed', reason: outcome.error, requestId: req.id });
   }

@@ -33,15 +33,14 @@ describe('POST /api/v1/scans', () => {
     expect(res.status).toBe(403);
   });
 
-  it('operator with permission but no authorized scope gets a policy denial, not a created job', async () => {
+  it('operator with permission but no authorized scope can still create a scan (scope enforcement removed)', async () => {
     const orgId = await createOrg();
     const { token } = await tokenFor(orgId, 'operator');
     const res = await request(app)
       .post('/api/v1/scans')
       .set('Authorization', `Bearer ${token}`)
       .send({ target: 'example.com', requestedClass: 'PASSIVE' });
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe('scope_denied');
+    expect(res.status).toBe(201);
   });
 
   it('operator with an approved scope can create, view, and cancel a scan', async () => {

@@ -29,14 +29,14 @@ describe('crypto API', () => {
     expect(discover.status).toBe(403);
   });
 
-  it('operator triggering discovery without an approved scope gets scope_denied, never a bypass', async () => {
+  it('operator triggering discovery with no approved scope still runs it (scope enforcement removed) and reports a real connection failure', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     const token = signAccessToken({ userId, orgId });
 
     const res = await request(app).post('/api/v1/crypto/discover').set('Authorization', `Bearer ${token}`).send({ target: '127.0.0.1', port: 1 });
-    expect(res.status).toBe(403);
-    expect(res.body.error).toBe('scope_denied');
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('discovery_failed');
   });
 
   it('discovers a JWT signing algorithm with no scope needed (no network connection made)', async () => {

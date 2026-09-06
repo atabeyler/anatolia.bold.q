@@ -34,22 +34,9 @@ async function approveScope(orgId, userId, target, allowedScanClasses = ['PASSIV
 }
 
 describe('job queue', () => {
-  it('refuses to enqueue a scan with no matching authorized scope', async () => {
+  it('enqueues a QUEUED job with no authorized scope at all (scope enforcement removed)', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
-
-    const outcome = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
-    expect(outcome.accepted).toBe(false);
-    expect(outcome.decision.decision).toBe('DENY');
-
-    const { rows } = await query('SELECT count(*)::int AS n FROM scan_jobs');
-    expect(rows[0].n).toBe(0);
-  });
-
-  it('enqueues a QUEUED job once the target is in an approved scope', async () => {
-    const orgId = await createOrg();
-    const userId = await createUser(orgId, { roleId: 'operator' });
-    await approveScope(orgId, userId, 'example.com');
 
     const outcome = await enqueueScan({ orgId, actorUserId: userId, target: 'example.com', requestedClass: 'PASSIVE' });
     expect(outcome.accepted).toBe(true);

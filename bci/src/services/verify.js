@@ -1,5 +1,4 @@
 import { query } from '../db/client.js';
-import { evaluateScopeAuthorization } from './policyEngine.js';
 import { recordAuditEvent } from './audit.js';
 import { nucleiAdapter } from '../engines/adapters/nuclei.js';
 import { naabuAdapter } from '../engines/adapters/naabu.js';
@@ -37,12 +36,7 @@ async function recordVerificationRun({ orgId, actorUserId, findingId, result, de
   }
 }
 
-async function verifyWebFinding({ orgId, actorUserId, finding, source }) {
-  const decision = await evaluateScopeAuthorization({ orgId, actorUserId, target: finding.target, requestedClass: 'SAFE_ACTIVE' });
-  if (decision.decision !== 'ALLOW') {
-    return { result: 'INCONCLUSIVE', detail: `re-check blocked: ${decision.reason}` };
-  }
-
+async function verifyWebFinding({ finding, source }) {
   const { raw } = await nucleiAdapter.execute({ target: finding.target, templateId: source.rule_id });
   const stillMatches = raw.some((r) => r['template-id'] === source.rule_id && r['matcher-status']);
   return stillMatches
@@ -50,15 +44,10 @@ async function verifyWebFinding({ orgId, actorUserId, finding, source }) {
     : { result: 'FIX_VERIFIED', detail: 'the original template no longer matches' };
 }
 
-async function verifyNetworkFinding({ orgId, actorUserId, source }) {
+async function verifyNetworkFinding({ source }) {
   const [host, portStr] = source.location.split(':');
   const port = Number(portStr);
   if (!host || !port) return { result: 'INCONCLUSIVE', detail: 'could not parse host:port from location' };
-
-  const decision = await evaluateScopeAuthorization({ orgId, actorUserId, target: host, requestedClass: 'SAFE_ACTIVE' });
-  if (decision.decision !== 'ALLOW') {
-    return { result: 'INCONCLUSIVE', detail: `re-check blocked: ${decision.reason}` };
-  }
 
   const { raw } = await naabuAdapter.execute({ target: host, ports: String(port) });
   const stillOpen = raw.some((r) => r.port === port);

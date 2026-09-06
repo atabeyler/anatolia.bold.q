@@ -7,11 +7,6 @@ import { resolveExecutionMode } from '../quantum/executionPolicy.js';
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
-// The only way into the queue. A DENY from the policy engine never reaches
-// the database as a job row -- there is no "create job now, check policy
-// later" path, because that would be the AI-changes-the-authorization-
-// decision bug in table form.
-//
 // selectedEngineIds (optional) is the wizard's real per-job engine choice
 // (spec: "BCI ÖNERİR -> KULLANICI SEÇER -> SEÇİLEN MOTORLAR GERÇEKTEN
 // ÇALIŞIR"). It is validated against analysisPlanner.js's own real
@@ -21,12 +16,9 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 // or unhealthy one. Omitted entirely (the pre-existing quick-scan path),
 // it defaults to the full recommended plan, identical to today's behavior.
 export async function enqueueScan({ orgId, actorUserId, target, requestedClass, selectedEngineIds, selectedComputeMode }) {
-  const decision = await evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass });
-  if (decision.decision !== 'ALLOW') {
-    return { accepted: false, decision };
-  }
+  const { targetType } = await evaluateScopeAuthorization({ orgId, actorUserId, target, requestedClass });
 
-  const recommended = planEngines(decision.targetType, requestedClass);
+  const recommended = planEngines(targetType, requestedClass);
   const recommendedIds = recommended.map((p) => p.engineId);
 
   let selected = recommendedIds;
@@ -62,7 +54,7 @@ export async function enqueueScan({ orgId, actorUserId, target, requestedClass, 
        recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id, status, created_at, recommended_engine_ids, selected_engine_ids, recommended_compute_mode, selected_compute_mode`,
-    [orgId, actorUserId, target, requestedClass, decision.scopeId, decision.targetType, recommendedIds, selected, recommendedComputeMode, selectedComputeMode ?? null]
+    [orgId, actorUserId, target, requestedClass, null, targetType, recommendedIds, selected, recommendedComputeMode, selectedComputeMode ?? null]
   );
 
   await recordAuditEvent({

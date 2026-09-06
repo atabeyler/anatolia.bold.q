@@ -34,8 +34,8 @@ describe('verifyFix on a static finding (no live signal to re-check)', () => {
   });
 });
 
-describe('verifyFix on a WEB finding without an approved SAFE_ACTIVE scope', () => {
-  it('is INCONCLUSIVE, never silently allowed', async () => {
+describe('verifyFix on a WEB finding with no scope check in the way', () => {
+  it('runs the real re-check (scope enforcement removed) and is INCONCLUSIVE only if the recheck itself fails', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     const jobId = (await query(`INSERT INTO scan_jobs (org_id, requested_by, target, requested_class) VALUES ($1,$2,'http://example.invalid','SAFE_ACTIVE') RETURNING id`, [orgId, userId])).rows[0].id;
@@ -46,7 +46,7 @@ describe('verifyFix on a WEB finding without an approved SAFE_ACTIVE scope', () 
 
     const outcome = await verifyFix(orgId, userId, findingId);
     expect(outcome.result).toBe('INCONCLUSIVE');
-    expect(outcome.detail).toMatch(/blocked/);
+    expect(outcome.detail).toMatch(/re-check failed/);
   });
 });
 

@@ -23,10 +23,10 @@ const createScanSchema = z.object({
   selectedComputeMode: z.enum(['CLASSICAL', 'QUANTUM_INSPIRED', 'QUANTUM_SIMULATOR', 'QUANTUM_HARDWARE']).optional(),
 });
 
-// This is the one place a scan actually starts. It never bypasses the
-// policy engine -- see services/jobQueue.js#enqueueScan -- so a DENY here is
-// not a bug to work around, it's the point of the whole authorized-scope
-// model in M2.
+// This is the one place a scan actually starts. Scope is not checked --
+// enqueueScan() can still reject a request over its selectedEngineIds
+// (empty, incompatible, or unhealthy), which is what accepted:false means
+// here now.
 scansRouter.post('/', requirePermission('scan:create'), async (req, res) => {
   const parsed = createScanSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -43,7 +43,7 @@ scansRouter.post('/', requirePermission('scan:create'), async (req, res) => {
   });
 
   if (!outcome.accepted) {
-    return res.status(403).json({ error: 'scope_denied', reason: outcome.decision.reason, requestId: req.id, ...outcome.decision });
+    return res.status(403).json({ error: 'scan_rejected', reason: outcome.decision.reason, requestId: req.id, ...outcome.decision });
   }
 
   res.status(201).json({ job: outcome.job });

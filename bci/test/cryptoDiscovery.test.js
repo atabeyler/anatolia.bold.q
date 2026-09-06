@@ -152,11 +152,11 @@ describe.skipIf(!SSH_TOOLING_AVAILABLE)('runCryptoDiscovery (SSH protocol, integ
     expect(result.findings.every((f) => f.quantum_vulnerable === true)).toBe(true);
   });
 
-  it('still enforces scope authorization for SSH discovery, same as TLS', async () => {
+  it('runs SSH discovery with no authorized scope at all (scope enforcement removed), same as TLS', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
     const result = await runCryptoDiscovery({ orgId, actorUserId: userId, target: '127.0.0.1', port: sshPort, protocol: 'SSH' });
-    expect(result.accepted).toBe(false);
+    expect(result.accepted).toBe(true);
   });
 });
 
@@ -234,13 +234,12 @@ describe('probeTlsEndpoint (real TLS handshake)', () => {
 });
 
 describe('runCryptoDiscovery (integration, real DB + real TLS)', () => {
-  it('denies discovery with no matching authorized scope (fail-closed, same as scan authorization)', async () => {
+  it('accepts discovery even with no authorized scope at all (scope enforcement removed)', async () => {
     const orgId = await createOrg();
     const userId = await createUser(orgId, { roleId: 'operator' });
 
     const result = await runCryptoDiscovery({ orgId, actorUserId: userId, target: '127.0.0.1', port: rsaPort });
-    expect(result.accepted).toBe(false);
-    expect(result.decision.decision).toBe('DENY');
+    expect(result.accepted).toBe(true);
   });
 
   it('discovers and classifies an RSA endpoint as quantum-vulnerable, and stores it in crypto_findings', async () => {

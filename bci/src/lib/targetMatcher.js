@@ -146,3 +146,28 @@ export function targetMatchesTyped(targetType, scopeTarget, requestedTarget) {
 export function isValidTargetType(type) {
   return TARGET_TYPES.includes(type);
 }
+
+// Best-effort classification of a bare target string into one of
+// TARGET_TYPES, used when there is no authorized_scopes row to draw a
+// target_type from (scope enforcement is not consulted at all -- see
+// policyEngine.js). This is a guess from the string's shape, same idea as
+// the client's own guessAssetType(): never authoritative, just enough for
+// analysisPlanner.js to have a real target type to plan engines against.
+export function classifyTarget(target) {
+  const v = (target || '').trim();
+  if (parseCidr(v)) return 'CIDR';
+  if (parseIpv4(v) !== null) return 'IP';
+  // A local clone path (/tmp/some-repo, ./repo) or an SSH git remote
+  // (git@host:group/repo.git) is a REPOSITORY target just as much as an
+  // https://github.com/... URL is -- neither has a domain to speak of.
+  if (
+    /github\.com|gitlab\.com|bitbucket\.org/i.test(v)
+    || /\.git$/i.test(v)
+    || /^git@/i.test(v)
+    || v.startsWith('/')
+    || v.startsWith('./')
+    || v.startsWith('../')
+  ) return 'REPOSITORY';
+  if (/^https?:\/\//i.test(v)) return 'URL';
+  return 'DOMAIN';
+}
