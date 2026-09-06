@@ -472,7 +472,7 @@
   "cyberSystemDegraded": "{{count}} analiz motoru kullanılamıyor -- bazı analiz kapasitesi düşük.",
   "cyberNewAnalysis": "YENİ ANALİZ",
   "cyberNoneYet": "Henüz yok",
-  "cyberTechnicalGroup": "TEKNİK",
+  "cyberTechnicalGroup": "AYARLAR VE ÖZELLİKLER",
   "cyberWizStepAsset": "Varlık",
   "cyberWizStepEngines": "Motorlar",
   "cyberWizStepQuantum": "Quantum",
@@ -520,5 +520,7 @@
   "cyberWizFallbackOccurred": "Yedek yönteme geçildi",
   "cyberWizOptimizationVerdict": "Optimizasyon sonucu",
   "cyberWizNotApplicable": "Uygulanamaz — optimize edilecek açık bulgu yok",
-  "cyberWizEngineRequired": "Devam etmek için en az bir motor seçin"
+  "cyberWizEngineRequired": "Devam etmek için en az bir motor seçin",
+  "cyberEnginesGuideNote": "Bu bir referans panelidir — tüm motor kataloğunu ve canlı sağlık durumunu gösterir, tarama kurulum ekranı değildir. Gerçek bir tarama için motor seçmek üzere Yeni Analiz'i kullanın.",
+  "cyberQuantumGuideNote": "Bu bir referans panelidir — sağlayıcı durumunu ve kuruluş politikasını gösterir, tarama başına seçim ekranı değildir. Gerçek bir tarama için hesaplama yöntemi seçmek üzere Yeni Analiz'i kullanın."
 }

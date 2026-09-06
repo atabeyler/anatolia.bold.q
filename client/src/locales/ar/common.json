@@ -472,7 +472,7 @@
   "cyberSystemDegraded": "{{count}} من محركات التحليل غير متاح -- بعض قدرة التحليل منخفضة.",
   "cyberNewAnalysis": "تحليل جديد",
   "cyberNoneYet": "لا يوجد بعد",
-  "cyberTechnicalGroup": "تقني",
+  "cyberTechnicalGroup": "الإعدادات والميزات",
   "cyberWizStepAsset": "الأصل",
   "cyberWizStepEngines": "المحركات",
   "cyberWizStepQuantum": "الكم",
@@ -520,5 +520,7 @@
   "cyberWizFallbackOccurred": "تم اللجوء إلى بديل",
   "cyberWizOptimizationVerdict": "نتيجة التحسين",
   "cyberWizNotApplicable": "غير قابل للتطبيق — لا توجد نتائج مفتوحة للتحسين",
-  "cyberWizEngineRequired": "اختر محركًا واحدًا على الأقل للمتابعة"
+  "cyberWizEngineRequired": "اختر محركًا واحدًا على الأقل للمتابعة",
+  "cyberEnginesGuideNote": "لوحة مرجعية — كتالوج المحركات الكامل وحالتها الحية، وليست شاشة إعداد فحص. لاختيار المحركات لفحص فعلي، استخدم تحليل جديد.",
+  "cyberQuantumGuideNote": "لوحة مرجعية — حالة المزودين وسياسة المؤسسة، وليست شاشة اختيار لكل فحص. لاختيار طريقة حوسبة لفحص فعلي، استخدم تحليل جديد."
 }

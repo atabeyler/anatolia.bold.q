@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShieldAlert, RefreshCw, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { api, cyberAnalysisApi } from '../services/api.js';
 import { useLang } from '../services/langContext.jsx';
 import CyberNewAnalysisWizard from './CyberNewAnalysisWizard.jsx';
@@ -72,6 +72,19 @@ function Panel({ title, children, actions }) {
 
 function PageTitle({ children }) {
   return <h1 className="text-cyan-100 text-base sm:text-lg tracking-widest uppercase">{children}</h1>;
+}
+
+// A visually distinct "this is a reference panel, not a wizard step"
+// callout for the technical group (Engines, Quantum & PQC) -- these read
+// like settings/documentation, never like another path through the same
+// per-scan choices the New Analysis wizard actually makes.
+function GuideNote({ children }) {
+  return (
+    <div className="flex items-start gap-2 border border-gold/25 bg-gold/5 rounded-lg p-3 text-[12.5px] text-gold/80">
+      <BookOpen className="w-4 h-4 shrink-0 mt-0.5" />
+      <span>{children}</span>
+    </div>
+  );
 }
 
 function ErrorNote({ error }) {
@@ -984,6 +997,7 @@ function EnginesTab({ t }) {
   return (
     <div className="space-y-4">
       <PageTitle>{t('cyberNavEngines')}</PageTitle>
+      <GuideNote>{t('cyberEnginesGuideNote')}</GuideNote>
       <ErrorNote error={error} />
       <Panel title={t('cyberEnginesPanelTitle')} actions={<button className={btnCls} disabled={checking} onClick={onHealthCheck}>{checking ? t('cyberChecking') : t('cyberRunHealthCheck')}</button>}>
         {engines && (
@@ -1114,6 +1128,7 @@ function QuantumTab({ t }) {
   return (
     <div className="space-y-4">
       <PageTitle>{t('cyberTitleQuantum')}</PageTitle>
+      <GuideNote>{t('cyberQuantumGuideNote')}</GuideNote>
       <ErrorNote error={error} />
       <p className="text-cyan-100/50 text-[13px]">{t('cyberQuantumIntro')}</p>
 
@@ -1416,8 +1431,9 @@ export default function CyberAnalysisContent() {
             {TABS.map((tb, i) => (
               <React.Fragment key={tb.id}>
                 {tb.group === 'technical' && TABS[i - 1]?.group === 'flow' && (
-                  <div className="hidden sm:block border-t border-cyan-300/10 my-1 pt-1">
-                    <span className="text-cyan-100/30 text-[10px] tracking-widest uppercase px-3">{t('cyberTechnicalGroup')}</span>
+                  <div className="hidden sm:flex items-center gap-1 border-t border-cyan-300/10 my-1 pt-1 px-3">
+                    <BookOpen className="w-3 h-3 text-cyan-100/30 shrink-0" />
+                    <span className="text-cyan-100/30 text-[10px] tracking-widest uppercase">{t('cyberTechnicalGroup')}</span>
                   </div>
                 )}
                 <button
