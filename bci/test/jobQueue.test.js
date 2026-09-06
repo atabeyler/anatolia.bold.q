@@ -20,7 +20,7 @@ import { runHealthChecks } from '../src/engines/registry.js';
 // avoids elsewhere (see globalSetup.js's engine_registry seeding comment).
 // Running it once here, up front, makes this file's healthy-selection
 // tests correct regardless of run order.
-beforeAll(runHealthChecks);
+beforeAll(runHealthChecks, 30_000);
 
 beforeEach(resetDatabase);
 

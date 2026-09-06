@@ -19,7 +19,7 @@ const execFileAsync = promisify(execFile);
 // earlier test file to have called it first is exactly the file-order
 // fragility this suite avoids elsewhere. Run it once here so the
 // selection-narrowing test below is correct regardless of run order.
-beforeAll(runHealthChecks);
+beforeAll(runHealthChecks, 30_000);
 
 beforeEach(resetDatabase);
 
